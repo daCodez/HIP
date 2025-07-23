@@ -1,0 +1,15 @@
+{
+  "$schema": "https://aka.ms/dotnet/schemas/aspire/component/v1.0.json",
+  "type": "container",
+  "image": "redis:7.4",
+  "args": [
+    "redis-server",
+    "--requirepass",
+    "S6G1WVfTnwhPuNXAT1DZ4m"
+  ],
+  "bindings": {
+    "cache": {
+      "containerPort": 6379
+    }
+  }
+}
