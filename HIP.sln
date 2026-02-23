@@ -1,0 +1,57 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.AppHost", "HIP.AppHost/HIP.AppHost.csproj", "{3C55B31A-9A66-4A17-9F5E-2F7A39A7F001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.ApiService", "HIP.ApiService/HIP.ApiService.csproj", "{3C55B31A-9A66-4A17-9F5E-2F7A39A7F002}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.Web", "HIP.Web/HIP.Web.csproj", "{3C55B31A-9A66-4A17-9F5E-2F7A39A7F003}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.Communication", "HIP.Communication/HIP.Communication.csproj", "{3C55B31A-9A66-4A17-9F5E-2F7A39A7F004}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.Reputation", "HIP.Reputation/HIP.Reputation.csproj", "{3C55B31A-9A66-4A17-9F5E-2F7A39A7F005}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.ServiceDefaults", "HIP.ServiceDefaults/HIP.ServiceDefaults.csproj", "{3C55B31A-9A66-4A17-9F5E-2F7A39A7F006}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.Tests", "HIP.Tests/HIP.Tests.csproj", "{3C55B31A-9A66-4A17-9F5E-2F7A39A7F007}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F001}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F002}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F002}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F002}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F002}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F003}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F003}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F003}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F003}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F004}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F004}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F004}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F004}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F005}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F005}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F005}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F005}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F006}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F006}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F006}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F006}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F007}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F007}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F007}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C55B31A-9A66-4A17-9F5E-2F7A39A7F007}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

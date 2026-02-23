@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="9.1.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\HIP.ApiService\HIP.ApiService.csproj" />
+    <ProjectReference Include="..\HIP.Web\HIP.Web.csproj" />
+  </ItemGroup>
+</Project>
