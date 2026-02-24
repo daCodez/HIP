@@ -82,7 +82,11 @@
   function makeTooltip(lines) {
     const tip = document.createElement('div');
     tip.className = 'hip-tooltip';
-    tip.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+    for (const line of lines) {
+      const row = document.createElement('div');
+      row.textContent = String(line);
+      tip.appendChild(row);
+    }
     return tip;
   }
 
