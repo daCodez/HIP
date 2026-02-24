@@ -18,7 +18,7 @@ builder.Services.AddHttpClient("hip-api", client =>
 
 builder.Services.AddHttpClient("hip-bff", client =>
 {
-    client.BaseAddress = new Uri("https+http://hip-web");
+    client.BaseAddress = new Uri("http://hip-web");
 }).AddServiceDiscovery();
 
 builder.Services.AddSingleton<HipEnvelopeSigner>();
