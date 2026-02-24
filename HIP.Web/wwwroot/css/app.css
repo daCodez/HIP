@@ -531,6 +531,8 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
 .card-head h3, .widget .widget-header h3 { font-family: "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 1.1em; font-weight: 700; margin: 0; line-height: 35px; }
 
 .link-btn { border-radius: 0; background: #626262; border: 1px solid #555; color: #fff; padding: 3px 8px; font-size: 11px; }
+.link-btn.icon-btn { width: 32px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.link-btn.icon-btn i { margin: 0; font-size: 12px; }
 
 @media (max-width: 960px) {
   .left-sidebar { position: static; width: 100%; top: auto; }
