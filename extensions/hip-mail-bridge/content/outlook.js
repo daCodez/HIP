@@ -1,6 +1,7 @@
 (() => {
   const BTN_CLASS = 'hip-sign-btn-outlook';
   const BADGE_CLASS = 'hip-verify-badge-outlook';
+  const verifyCache = new Map();
 
   function findComposeBodies() {
     return Array.from(document.querySelectorAll('div[aria-label="Message body"], div[role="textbox"]'));
@@ -44,21 +45,31 @@
 
   async function verifyIfSigned(bodyEl) {
     if (!bodyEl || bodyEl.dataset.hipVerifyChecked === '1') return;
-    const text = bodyEl.innerText || '';
-    const signed = parseSignedMessage(text);
-    if (!signed) {
+    if (bodyEl.querySelector(`.${BADGE_CLASS}`)) {
       bodyEl.dataset.hipVerifyChecked = '1';
       return;
     }
 
-    const res = await chrome.runtime.sendMessage({ type: 'hip:verify', signedMessage: signed });
-    let badge;
-    if (res?.ok && res?.payload?.isValid) {
-      badge = makeBadge('HIP Signature: VALID', '#0a7b32');
-    } else {
-      const reason = res?.payload?.reason || res?.error || 'unknown';
-      badge = makeBadge(`HIP Signature: INVALID (${reason})`, '#b32727');
+    const text = bodyEl.innerText || '';
+    const signed = parseSignedMessage(text);
+    if (!signed || !signed.id) {
+      bodyEl.dataset.hipVerifyChecked = '1';
+      return;
     }
+
+    let verdict = verifyCache.get(signed.id);
+    if (!verdict) {
+      const res = await chrome.runtime.sendMessage({ type: 'hip:verify', signedMessage: signed });
+      verdict = {
+        ok: !!(res?.ok && res?.payload?.isValid),
+        reason: res?.payload?.reason || res?.error || 'unknown'
+      };
+      verifyCache.set(signed.id, verdict);
+    }
+
+    const badge = verdict.ok
+      ? makeBadge('HIP Signature: VALID', '#0a7b32')
+      : makeBadge(`HIP Signature: INVALID (${verdict.reason})`, '#b32727');
 
     bodyEl.appendChild(badge);
     bodyEl.dataset.hipVerifyChecked = '1';

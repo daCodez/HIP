@@ -43,6 +43,8 @@
     return Array.from(document.querySelectorAll('tr.zA'));
   }
 
+  const verifyCache = new Map();
+
   function parseSignedMessage(text) {
     const marker = 'HIP-Signature:';
     const idx = text.indexOf(marker);
@@ -86,18 +88,30 @@
 
   async function verifyIfSigned(bodyEl) {
     if (!bodyEl || bodyEl.dataset.hipVerifyChecked === '1') return;
-
-    const signed = parseSignedMessage(bodyEl.innerText || '');
-    if (!signed) {
+    if (bodyEl.querySelector(`.${BADGE_CLASS}`)) {
       bodyEl.dataset.hipVerifyChecked = '1';
       return;
     }
 
-    const res = await chrome.runtime.sendMessage({ type: 'hip:verify', signedMessage: signed });
+    const signed = parseSignedMessage(bodyEl.innerText || '');
+    if (!signed || !signed.id) {
+      bodyEl.dataset.hipVerifyChecked = '1';
+      return;
+    }
+
+    let verdict = verifyCache.get(signed.id);
+    if (!verdict) {
+      const res = await chrome.runtime.sendMessage({ type: 'hip:verify', signedMessage: signed });
+      verdict = {
+        ok: !!(res?.ok && res?.payload?.isValid),
+        reason: res?.payload?.reason || res?.error || 'unknown'
+      };
+      verifyCache.set(signed.id, verdict);
+    }
 
     let pill;
     let details;
-    if (res?.ok && res?.payload?.isValid) {
+    if (verdict.ok) {
       pill = makeTrustPill('ok', 'HIP VERIFIED');
       details = makeTooltip([
         `Status: verified`,
@@ -107,7 +121,7 @@
         `MessageId: ${signed.id || '-'}`
       ]);
     } else {
-      const reason = res?.payload?.reason || res?.error || 'unknown';
+      const reason = verdict.reason;
       const badReason = ['replay_detected', 'message_expired', 'invalid_signature'].includes(reason);
       pill = makeTrustPill(badReason ? 'bad' : 'warn', badReason ? 'HIP RISK' : 'HIP REVIEW');
       details = makeTooltip([
