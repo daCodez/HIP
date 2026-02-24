@@ -63,6 +63,17 @@ app.MapGet("/bff/reputation/{id}", async (string id, HipApiClient api, Cancellat
     return Results.Content(body, "application/json", Encoding.UTF8, status);
 });
 
+app.MapGet("/bff/extensions/hip-mail-bridge", () =>
+{
+    var path = "/home/jarvis_bot/.openclaw/workspace/HIP/extensions/hip-mail-bridge.tar.gz";
+    if (!File.Exists(path))
+    {
+        return Results.NotFound(new { code = "extension_not_found" });
+    }
+
+    return Results.File(path, "application/gzip", "hip-mail-bridge.tar.gz");
+});
+
 app.MapDefaultEndpoints();
 
 app.Run();

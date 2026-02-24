@@ -92,6 +92,8 @@ body {
   padding: 6px 10px;
   cursor: pointer;
   font-size: 12px;
+  text-decoration: none;
+  display: inline-block;
 }
 .link-btn:disabled { opacity: .6; cursor: default; }
 .meta-list { margin: 8px 0 0; padding-left: 18px; color: var(--muted); }
