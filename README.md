@@ -108,3 +108,22 @@ Output fields:
 - `toolAccessAllowed`
 - `toolAccessReason`
 
+### Runtime hook wiring (Jarvis pre-dispatch)
+
+A workspace hook is included at:
+
+- `hooks/hip-trust-guard/HOOK.md`
+- `hooks/hip-trust-guard/handler.ts`
+
+Enable and restart gateway:
+
+```bash
+openclaw hooks enable hip-trust-guard
+openclaw gateway restart
+```
+
+Optional env vars for hook runtime:
+- `HIP_API_BASE` (default `http://127.0.0.1:5101`)
+- `HIP_IDENTITY_DEFAULT` (default `hip-system`)
+- `HIP_GUARD_VERBOSE=1` for allow/review notices
+
