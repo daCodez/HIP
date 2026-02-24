@@ -17,3 +17,20 @@ Expected important fields in response:
 - `privateKeyExists` and `publicKeyExists` should both be `true`
 
 > Note: `/api/admin/crypto-config` is mapped only in Development.
+
+## Dev: sign/verify with a rotated key id
+
+You can sign as `from=hip-system` while using versioned key files (e.g. `hip-system-v2.key/.pub`) via `keyId`.
+
+```bash
+SIGNED=$(curl -s -X POST http://127.0.0.1:5101/api/messages/sign \
+  -H "Content-Type: application/json" \
+  -d '{"from":"hip-system","to":"target","body":"hello","keyId":"hip-system-v2"}')
+
+echo "$SIGNED" | jq
+
+echo "$SIGNED" | jq -c '.message' | \
+  curl -s -X POST http://127.0.0.1:5101/api/messages/verify \
+    -H "Content-Type: application/json" \
+    -d @- | jq
+```
