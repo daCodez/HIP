@@ -4,6 +4,7 @@
 @using Microsoft.JSInterop
 @inject IHttpClientFactory HttpClientFactory
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>HIP Admin Dashboard</PageTitle>
 
@@ -76,10 +77,37 @@
         }
     </article>
 
-    <article class="card">
+    <article class="card card-wide">
         <div class="card-head">
             <h3>Audit Feed</h3>
             <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
+        </div>
+
+        <div class="form-grid">
+            <div class="input-row">
+                <label class="field-label">Event Type</label>
+                <select class="text-input" @bind="_auditEventTypeFilter" @bind:after="LoadAuditFeedAsync">
+                    <option value="all">All</option>
+                    <option value="message.sign">message.sign</option>
+                    <option value="message.verify">message.verify</option>
+                    <option value="identity.get">identity.get</option>
+                    <option value="reputation.get">reputation.get</option>
+                </select>
+            </div>
+            <div class="input-row">
+                <label class="field-label">Take</label>
+                <select class="text-input" @bind="_auditTake" @bind:after="LoadAuditFeedAsync">
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <div class="input-row checkbox-row">
+                <label>
+                    <input type="checkbox" @bind="_auditAutoRefresh" @bind:after="OnAuditAutoRefreshChangedAsync" />
+                    Auto-refresh (10s)
+                </label>
+            </div>
         </div>
 
         @if (_loadingAudit)
@@ -90,17 +118,32 @@
         {
             <p class="status-bad">Unavailable: @_auditError</p>
         }
-        else if (_auditEvents is { Count: > 0 })
+        else if (_filteredAuditEvents is { Count: > 0 })
         {
-            <ul class="meta-list">
-                @foreach (var evt in _auditEvents.Take(5))
+            <ul class="meta-list clickable-list">
+                @foreach (var evt in _filteredAuditEvents.Take(5))
                 {
-                    <li>
+                    <li class="clickable-item" @onclick="() => SelectAuditEvent(evt)">
                         <strong>@evt.EventType</strong> · @evt.Subject<br />
                         <small>@evt.CreatedAtUtc.ToString("MM-dd HH:mm:ss 'UTC'") · @evt.Detail</small>
                     </li>
                 }
             </ul>
+
+            @if (_selectedAuditEvent is not null)
+            {
+                <div class="selected-detail">
+                    <strong>Selected Event</strong>
+                    <ul class="meta-list">
+                        <li><strong>Id:</strong> @_selectedAuditEvent.Id</li>
+                        <li><strong>EventType:</strong> @_selectedAuditEvent.EventType</li>
+                        <li><strong>Subject:</strong> @_selectedAuditEvent.Subject</li>
+                        <li><strong>Source:</strong> @_selectedAuditEvent.Source</li>
+                        <li><strong>Detail:</strong> @_selectedAuditEvent.Detail</li>
+                        <li><strong>UTC:</strong> @_selectedAuditEvent.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</li>
+                    </ul>
+                </div>
+            }
         }
         else
         {
@@ -244,6 +287,13 @@
     private bool _loadingCrypto;
 
     private List<AuditEventDto> _auditEvents = new();
+    private List<AuditEventDto> _filteredAuditEvents = new();
+    private AuditEventDto? _selectedAuditEvent;
+    private string _auditEventTypeFilter = "all";
+    private int _auditTake = 50;
+    private bool _auditAutoRefresh;
+    private CancellationTokenSource? _auditLoopCts;
+    private Task? _auditLoopTask;
     private string? _auditError;
     private bool _loadingAudit;
 
@@ -354,17 +404,101 @@
         try
         {
             var client = HttpClientFactory.CreateClient("hip-api");
-            var result = await client.GetFromJsonAsync<List<AuditEventDto>>("/api/admin/audit?take=50");
+            var result = await client.GetFromJsonAsync<List<AuditEventDto>>($"/api/admin/audit?take={_auditTake}");
             _auditEvents = result ?? new List<AuditEventDto>();
+            ApplyAuditFilter();
         }
         catch (Exception ex)
         {
             _auditError = ex.Message;
             _auditEvents = new List<AuditEventDto>();
+            _filteredAuditEvents = new List<AuditEventDto>();
+            _selectedAuditEvent = null;
         }
         finally
         {
             _loadingAudit = false;
+        }
+    }
+
+    private void ApplyAuditFilter()
+    {
+        _filteredAuditEvents = _auditEventTypeFilter == "all"
+            ? _auditEvents
+            : _auditEvents.Where(x => string.Equals(x.EventType, _auditEventTypeFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (_selectedAuditEvent is not null)
+        {
+            _selectedAuditEvent = _filteredAuditEvents.FirstOrDefault(x => x.Id == _selectedAuditEvent.Id);
+        }
+    }
+
+    private void SelectAuditEvent(AuditEventDto evt)
+    {
+        _selectedAuditEvent = evt;
+    }
+
+    private async Task OnAuditAutoRefreshChangedAsync()
+    {
+        if (_auditAutoRefresh)
+        {
+            StartAuditAutoRefresh();
+            await LoadAuditFeedAsync();
+        }
+        else
+        {
+            await StopAuditAutoRefreshAsync();
+        }
+    }
+
+    private void StartAuditAutoRefresh()
+    {
+        _auditLoopCts?.Cancel();
+        _auditLoopCts = new CancellationTokenSource();
+        _auditLoopTask = RunAuditLoopAsync(_auditLoopCts.Token);
+    }
+
+    private async Task RunAuditLoopAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var hasNext = await timer.WaitForNextTickAsync(cancellationToken);
+                if (!hasNext)
+                {
+                    break;
+                }
+
+                await InvokeAsync(LoadAuditFeedAsync);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    private async Task StopAuditAutoRefreshAsync()
+    {
+        if (_auditLoopCts is not null)
+        {
+            _auditLoopCts.Cancel();
+            _auditLoopCts.Dispose();
+            _auditLoopCts = null;
+        }
+
+        if (_auditLoopTask is not null)
+        {
+            try
+            {
+                await _auditLoopTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            _auditLoopTask = null;
         }
     }
 
@@ -577,6 +711,11 @@
         {
             _copyError = $"Copy failed: {ex.Message}";
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopAuditAutoRefreshAsync();
     }
 
     private sealed record ServiceStatusDto(string ServiceName, string AssemblyVersion, DateTimeOffset UtcTimestamp);
