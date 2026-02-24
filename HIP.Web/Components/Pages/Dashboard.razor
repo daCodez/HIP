@@ -103,6 +103,11 @@
         @if (_helpMode)
         {
             <p><small>Replay = same signed message seen again. Expired = signed too old/new. Policy blocked = HIP rejected risky input.</small></p>
+            <ul class="meta-list">
+                <li><strong>Replay detected:</strong> A signed message ID was reused. Usually retry abuse or duplicate processing.</li>
+                <li><strong>Message expired:</strong> Signature timestamp is outside allowed freshness window.</li>
+                <li><strong>Policy blocked:</strong> HIP policy denied high-risk/prompt-injection style input.</li>
+            </ul>
         }
 
         @if (_loadingSecurity)
@@ -125,6 +130,10 @@
 
             <div class="selected-detail">
                 <strong>Recent Security Rejects</strong>
+                @if (_helpMode)
+                {
+                    <p><small>These are the latest denied security events. Use the reason translator below to interpret codes quickly.</small></p>
+                }
                 @if (_securityEvents.Count == 0)
                 {
                     <p>No recent rejects.</p>
@@ -136,7 +145,11 @@
                         {
                             <li>
                                 <strong>@evt.Reason</strong> · @evt.IdentityId<br />
-                                <small>msg=@(evt.MessageId ?? "-") · skew=@(evt.ClockSkewSeconds?.ToString("0.##") ?? "-")s · @evt.UtcTimestamp.ToString("MM-dd HH:mm:ss 'UTC'")</small>
+                                <small>msg=@(evt.MessageId ?? "-") · skew=@(evt.ClockSkewSeconds?.ToString("0.##") ?? "-")s · @evt.UtcTimestamp.ToString("MM-dd HH:mm:ss 'UTC'")</small><br />
+                                @if (_helpMode)
+                                {
+                                    <small><em>@TranslateReason(evt.Reason)</em></small>
+                                }
                             </li>
                         }
                     </ul>
@@ -167,6 +180,7 @@
         @if (_helpMode)
         {
             <p><small>Chronological event log. Use filters to narrow to sign/verify/policy/security events.</small></p>
+            <p><small><strong>Tip:</strong> Click a row to inspect full event fields and details.</small></p>
         }
 
         <div class="form-grid">
@@ -314,6 +328,11 @@
         @if (_helpMode)
         {
             <p><small>Use this to create signed test payloads and validate trust outcomes before integrating clients.</small></p>
+            <ul class="meta-list">
+                <li><strong>Sign:</strong> Creates signed payload from body text + key.</li>
+                <li><strong>Verify Last:</strong> Validates signature and freshness result.</li>
+                <li><strong>Copy JSON:</strong> Paste payload into external API tests quickly.</li>
+            </ul>
         }
 
         <div class="input-row">
@@ -427,6 +446,18 @@
     {
         _helpMode = !_helpMode;
     }
+
+    private static string TranslateReason(string reason) => reason switch
+    {
+        "replay_detected" => "This exact signed message was seen before (possible duplicate/replay).",
+        "message_expired" => "Message timestamp is too old/new for trust window.",
+        "policy_blocked" => "HIP policy blocked unsafe or high-risk input.",
+        "invalid_signature" => "Signature does not match payload/key.",
+        "invalid_format" => "Payload/signature format is malformed.",
+        "policy.lowReputation" => "Identity score below required threshold for this action.",
+        "policy.invalidAudience" => "Token/audience does not match expected target.",
+        _ => "No translator yet for this reason code."
+    };
 
     protected override async Task OnInitializedAsync()
     {
