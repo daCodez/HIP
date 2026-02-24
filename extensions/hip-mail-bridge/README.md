@@ -8,8 +8,10 @@ MV3 extension for Gmail + Outlook Web that signs email body content using HIP.
   - **Send via Gmail API (HIP headers)** (adds `X-HIP-*` headers)
 - Outlook compose:
   - **Attach HIP Signature** (body-stamp fallback)
-- Read mode verification from `HIP-Signature` block with trust badge
-  - `✅ Verified by HIP` / `❌ HIP verify failed(...)`
+- Read mode verification from `HIP-Signature` block with creative trust UI
+  - Trust pill: `HIP VERIFIED` / `HIP REVIEW` / `HIP RISK`
+  - Hover card details (identity, key, issued time, message id)
+- Inbox row hint chip when snippet contains HIP signature marker
 
 ## Load unpacked
 1. Open `chrome://extensions` (or `edge://extensions`)

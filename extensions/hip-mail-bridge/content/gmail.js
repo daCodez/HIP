@@ -1,7 +1,35 @@
 (() => {
   const BTN_CLASS = 'hip-sign-btn-gmail';
   const API_BTN_CLASS = 'hip-send-api-btn-gmail';
-  const BADGE_CLASS = 'hip-verify-badge-gmail';
+  const BADGE_CLASS = 'hip-trust-pill-gmail';
+
+  function injectStyles() {
+    if (document.getElementById('hip-mail-bridge-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'hip-mail-bridge-styles';
+    style.textContent = `
+      .${BADGE_CLASS} {
+        display:inline-flex; align-items:center; gap:6px;
+        padding:4px 10px; border-radius:999px; font-size:11px; font-weight:600;
+        color:#fff; cursor:default; margin-top:8px;
+      }
+      .${BADGE_CLASS}.ok { background:linear-gradient(90deg,#0d8a4d,#13b36a); }
+      .${BADGE_CLASS}.warn { background:linear-gradient(90deg,#9b6a00,#d99b00); }
+      .${BADGE_CLASS}.bad { background:linear-gradient(90deg,#8e1e1e,#cc2f2f); }
+      .hip-tooltip {
+        margin-top:6px; padding:8px 10px; border-radius:10px;
+        background:#111827; color:#d1d5db; font-size:11px; line-height:1.4;
+        border:1px solid #374151; max-width:540px;
+      }
+      .hip-row-chip {
+        display:inline-block; margin-left:8px; padding:2px 8px;
+        border-radius:999px; font-size:10px; font-weight:700;
+        background:#334155; color:#e2e8f0;
+      }
+      .hip-row-chip.signal { background:#065f46; color:#d1fae5; }
+    `;
+    document.head.appendChild(style);
+  }
 
   function findComposeBodies() {
     return Array.from(document.querySelectorAll('div[aria-label="Message Body"], div[role="textbox"][g_editable="true"]'));
@@ -9,6 +37,10 @@
 
   function findReadableBodies() {
     return Array.from(document.querySelectorAll('div.a3s.aiL, div[role="listitem"] div[dir="ltr"]'));
+  }
+
+  function findInboxRows() {
+    return Array.from(document.querySelectorAll('tr.zA'));
   }
 
   function parseSignedMessage(text) {
@@ -21,26 +53,11 @@
     const end = after.lastIndexOf('}');
     if (start < 0 || end < start) return null;
 
-    const jsonText = after.slice(start, end + 1);
     try {
-      return JSON.parse(jsonText);
+      return JSON.parse(after.slice(start, end + 1));
     } catch {
       return null;
     }
-  }
-
-  function makeBadge(text, color) {
-    const badge = document.createElement('div');
-    badge.className = BADGE_CLASS;
-    badge.textContent = text;
-    badge.style.marginTop = '8px';
-    badge.style.padding = '6px 10px';
-    badge.style.borderRadius = '6px';
-    badge.style.background = color;
-    badge.style.color = '#fff';
-    badge.style.fontSize = '12px';
-    badge.style.display = 'inline-block';
-    return badge;
   }
 
   function getComposeTo(dialog) {
@@ -53,26 +70,79 @@
     return subject?.value?.trim() || '';
   }
 
+  function makeTrustPill(state, text) {
+    const pill = document.createElement('div');
+    pill.className = `${BADGE_CLASS} ${state}`;
+    pill.textContent = `🛡 ${text}`;
+    return pill;
+  }
+
+  function makeTooltip(lines) {
+    const tip = document.createElement('div');
+    tip.className = 'hip-tooltip';
+    tip.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+    return tip;
+  }
+
   async function verifyIfSigned(bodyEl) {
     if (!bodyEl || bodyEl.dataset.hipVerifyChecked === '1') return;
-    const text = bodyEl.innerText || '';
-    const signed = parseSignedMessage(text);
+
+    const signed = parseSignedMessage(bodyEl.innerText || '');
     if (!signed) {
       bodyEl.dataset.hipVerifyChecked = '1';
       return;
     }
 
     const res = await chrome.runtime.sendMessage({ type: 'hip:verify', signedMessage: signed });
-    let badge;
+
+    let pill;
+    let details;
     if (res?.ok && res?.payload?.isValid) {
-      badge = makeBadge('✅ Verified by HIP', '#0a7b32');
+      pill = makeTrustPill('ok', 'HIP VERIFIED');
+      details = makeTooltip([
+        `Status: verified`,
+        `Identity: ${signed.from || '-'}`,
+        `Key: ${signed.keyId || '-'}`,
+        `Issued: ${signed.createdAtUtc || '-'}`,
+        `MessageId: ${signed.id || '-'}`
+      ]);
     } else {
       const reason = res?.payload?.reason || res?.error || 'unknown';
-      badge = makeBadge(`❌ HIP verify failed (${reason})`, '#b32727');
+      const badReason = ['replay_detected', 'message_expired', 'invalid_signature'].includes(reason);
+      pill = makeTrustPill(badReason ? 'bad' : 'warn', badReason ? 'HIP RISK' : 'HIP REVIEW');
+      details = makeTooltip([
+        `Status: verification failed`,
+        `Reason: ${reason}`,
+        `Identity: ${signed.from || '-'}`,
+        `Key: ${signed.keyId || '-'}`,
+        `MessageId: ${signed.id || '-'}`
+      ]);
     }
 
-    bodyEl.appendChild(badge);
+    bodyEl.appendChild(pill);
+    bodyEl.appendChild(details);
     bodyEl.dataset.hipVerifyChecked = '1';
+  }
+
+  function annotateInboxRows() {
+    for (const row of findInboxRows()) {
+      if (row.dataset.hipRowChecked === '1') continue;
+      const snippetEl = row.querySelector('.y2');
+      if (!snippetEl) {
+        row.dataset.hipRowChecked = '1';
+        continue;
+      }
+
+      const snippet = snippetEl.textContent || '';
+      if (snippet.includes('HIP-Signature')) {
+        const chip = document.createElement('span');
+        chip.className = 'hip-row-chip signal';
+        chip.textContent = 'HIP SIGNAL';
+        snippetEl.appendChild(chip);
+      }
+
+      row.dataset.hipRowChecked = '1';
+    }
   }
 
   function injectButtons(bodyEl) {
@@ -85,63 +155,42 @@
     const signBtn = document.createElement('button');
     signBtn.textContent = 'Attach HIP Signature';
     signBtn.className = BTN_CLASS;
-    signBtn.style.marginLeft = '8px';
-    signBtn.style.padding = '6px 10px';
-    signBtn.style.borderRadius = '6px';
-    signBtn.style.border = '1px solid #ccc';
-    signBtn.style.background = '#fff';
-    signBtn.style.cursor = 'pointer';
+    Object.assign(signBtn.style, {
+      marginLeft: '8px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #ccc', background: '#fff', cursor: 'pointer'
+    });
 
     signBtn.addEventListener('click', async () => {
       const plainText = bodyEl.innerText || '';
-      if (!plainText.trim()) {
-        alert('Body is empty. Add message text first.');
-        return;
-      }
+      if (!plainText.trim()) return alert('Body is empty. Add message text first.');
 
       const response = await chrome.runtime.sendMessage({ type: 'hip:sign', body: plainText, to: getComposeTo(dialog) });
       if (!response?.ok || !response?.payload?.success || !response?.payload?.message) {
-        alert(`HIP sign failed: ${response?.payload?.reason || response?.error || 'unknown'}`);
-        return;
+        return alert(`HIP sign failed: ${response?.payload?.reason || response?.error || 'unknown'}`);
       }
 
       const signed = response.payload.message;
-      const stamp = `\n\n---\nHIP-Signature:\n${JSON.stringify(signed, null, 2)}\n`;
-      bodyEl.innerText = plainText + stamp;
+      bodyEl.innerText = `${plainText}\n\n---\nHIP-Signature:\n${JSON.stringify(signed, null, 2)}\n`;
       alert('HIP signature inserted in body.');
     });
 
     const apiBtn = document.createElement('button');
     apiBtn.textContent = 'Send via Gmail API (HIP headers)';
     apiBtn.className = API_BTN_CLASS;
-    apiBtn.style.marginLeft = '8px';
-    apiBtn.style.padding = '6px 10px';
-    apiBtn.style.borderRadius = '6px';
-    apiBtn.style.border = '1px solid #0a7b32';
-    apiBtn.style.background = '#e9f7ee';
-    apiBtn.style.cursor = 'pointer';
+    Object.assign(apiBtn.style, {
+      marginLeft: '8px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #0a7b32', background: '#e9f7ee', cursor: 'pointer'
+    });
 
     apiBtn.addEventListener('click', async () => {
       const to = getComposeTo(dialog);
       const subject = getComposeSubject(dialog);
       const body = bodyEl.innerText || '';
-
-      if (!to || !body.trim()) {
-        alert('To and Body are required for Gmail API send.');
-        return;
-      }
+      if (!to || !body.trim()) return alert('To and Body are required for Gmail API send.');
 
       const auth = await chrome.runtime.sendMessage({ type: 'hip:googleAuth' });
-      if (!auth?.ok) {
-        alert(`Google auth failed: ${auth?.error || 'unknown'}`);
-        return;
-      }
+      if (!auth?.ok) return alert(`Google auth failed: ${auth?.error || 'unknown'}`);
 
       const sent = await chrome.runtime.sendMessage({ type: 'hip:gmailSendHeaderSigned', to, subject, body });
-      if (!sent?.ok) {
-        alert(`Gmail send failed: ${sent?.error || sent?.payload?.error?.message || 'unknown'}`);
-        return;
-      }
+      if (!sent?.ok) return alert(`Gmail send failed: ${sent?.error || sent?.payload?.error?.message || 'unknown'}`);
 
       alert('Email sent via Gmail API with X-HIP-* headers.');
     });
@@ -151,9 +200,12 @@
     bodyEl.dataset.hipButtonAttached = '1';
   }
 
+  injectStyles();
+
   const observer = new MutationObserver(() => {
     findComposeBodies().forEach(injectButtons);
     findReadableBodies().forEach(verifyIfSigned);
+    annotateInboxRows();
   });
 
   observer.observe(document.documentElement, { childList: true, subtree: true });
