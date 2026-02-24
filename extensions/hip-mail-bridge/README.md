@@ -3,11 +3,13 @@
 MV3 extension for Gmail + Outlook Web that signs email body content using HIP.
 
 ## Features (v1)
-- Adds **Sign with HIP** button in compose windows (best-effort selectors)
-- Calls `POST /api/messages/sign`
-- Appends signed payload block into draft body
-- Detects `HIP-Signature` blocks in read mode and verifies with `POST /api/messages/verify`
-- Shows trust badge: `VALID` / `INVALID(<reason>)`
+- Gmail compose:
+  - **Attach HIP Signature** (body-stamp fallback)
+  - **Send via Gmail API (HIP headers)** (adds `X-HIP-*` headers)
+- Outlook compose:
+  - **Attach HIP Signature** (body-stamp fallback)
+- Read mode verification from `HIP-Signature` block with trust badge
+  - `✅ Verified by HIP` / `❌ HIP verify failed(...)`
 
 ## Load unpacked
 1. Open `chrome://extensions` (or `edge://extensions`)
@@ -20,6 +22,7 @@ Click extension icon and set:
 - HIP API base URL (default `http://100.67.76.107:5101`)
 - Identity ID (`hip-system`)
 - Key ID (`hip-system`)
+- Click **Authorize Google** (required for Gmail API header-send mode)
 
 ## Notes
 - Host permissions include Gmail/Outlook web and HIP API URL.
