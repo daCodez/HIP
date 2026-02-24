@@ -1,0 +1,89 @@
+@page "/"
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>HIP Admin Dashboard</PageTitle>
+
+<section class="hero">
+    <h1>HIP Admin Dashboard</h1>
+    <p>Clean, responsive control surface for Identity, Reputation, and Message trust workflows.</p>
+</section>
+
+<section class="cards">
+    <article class="card">
+        <div class="card-head">
+            <h3>Service Health</h3>
+            <button class="link-btn" @onclick="LoadServiceHealthAsync" disabled="@_loadingHealth">@(_loadingHealth ? "Checking..." : "Refresh")</button>
+        </div>
+
+        @if (_loadingHealth)
+        {
+            <p>Loading service status...</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(_healthError))
+        {
+            <p class="status-bad">Unavailable: @_healthError</p>
+        }
+        else if (_serviceHealth is not null)
+        {
+            <p class="status-ok">Status: Online</p>
+            <ul class="meta-list">
+                <li><strong>Service:</strong> @_serviceHealth.ServiceName</li>
+                <li><strong>Version:</strong> @_serviceHealth.AssemblyVersion</li>
+                <li><strong>UTC:</strong> @_serviceHealth.UtcTimestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</li>
+            </ul>
+        }
+        else
+        {
+            <p>Status not loaded yet.</p>
+        }
+    </article>
+
+    <article class="card">
+        <h3>Identity Queue</h3>
+        <p>Review registered identities and pending verification events.</p>
+    </article>
+    <article class="card">
+        <h3>Reputation Snapshot</h3>
+        <p>Monitor scoring bands and abuse-risk trends in one view.</p>
+    </article>
+</section>
+
+@code {
+    private ServiceStatusDto? _serviceHealth;
+    private string? _healthError;
+    private bool _loadingHealth;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadServiceHealthAsync();
+    }
+
+    private async Task LoadServiceHealthAsync()
+    {
+        _loadingHealth = true;
+        _healthError = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-api");
+            _serviceHealth = await client.GetFromJsonAsync<ServiceStatusDto>("/api/status");
+
+            if (_serviceHealth is null)
+            {
+                _healthError = "No data returned.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _healthError = ex.Message;
+            _serviceHealth = null;
+        }
+        finally
+        {
+            _loadingHealth = false;
+        }
+    }
+
+    private sealed record ServiceStatusDto(string ServiceName, string AssemblyVersion, DateTimeOffset UtcTimestamp);
+}
