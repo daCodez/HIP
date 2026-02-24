@@ -22,6 +22,23 @@ public static class SecurityEndpoints
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
 
+        endpoints.MapGet("/api/admin/security-events", async (HttpContext httpContext, int? take, ISecurityRejectLog rejectLog, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
+            {
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, identityService, reputationService, cancellationToken);
+                if (gate is not null)
+                {
+                    return gate;
+                }
+
+                var count = Math.Clamp(take ?? 10, 1, 100);
+                return Results.Ok(rejectLog.Recent(count));
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("GetSecurityEvents")
+            .WithTags("Admin")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
         return endpoints;
     }
 }

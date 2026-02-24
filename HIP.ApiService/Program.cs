@@ -59,6 +59,7 @@ builder.Services.AddScoped<IIdentityService, InMemoryIdentityService>();
 builder.Services.AddScoped<IReputationService, DatabaseReputationService>();
 builder.Services.AddSingleton<IAuditTrail, InMemoryAuditTrail>();
 builder.Services.AddSingleton<ISecurityEventCounter, InMemorySecurityEventCounter>();
+builder.Services.AddSingleton<ISecurityRejectLog, InMemorySecurityRejectLog>();
 builder.Services.AddSingleton<IReplayProtectionService, InMemoryReplayProtectionService>();
 builder.Services.AddSingleton<IReplayAssessmentService, InMemoryReplayAssessmentService>();
 builder.Services.AddSingleton<IKeyRotationPolicy, InMemoryKeyRotationPolicy>();

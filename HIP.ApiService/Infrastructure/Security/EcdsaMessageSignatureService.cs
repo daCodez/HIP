@@ -12,6 +12,7 @@ public sealed class EcdsaMessageSignatureService(
     IReplayAssessmentService replayAssessment,
     IReputationService reputationService,
     ISecurityEventCounter securityCounter,
+    ISecurityRejectLog securityRejectLog,
     ILogger<EcdsaMessageSignatureService> logger) : IMessageSignatureService
 {
     public Task<SignMessageResultDto> SignAsync(SignMessageRequestDto request, CancellationToken cancellationToken)
@@ -94,6 +95,13 @@ public sealed class EcdsaMessageSignatureService(
         if (age > MaxMessageAge || age < -MaxFutureSkew)
         {
             securityCounter.IncrementMessageExpired();
+            securityRejectLog.Add(new SecurityRejectEvent(
+                Reason: "message_expired",
+                IdentityId: message.From,
+                MessageId: message.Id,
+                ClockSkewSeconds: age.TotalSeconds,
+                Classification: null,
+                UtcTimestamp: DateTimeOffset.UtcNow));
             return new VerifyMessageResultDto(false, "message_expired");
         }
 
@@ -140,6 +148,14 @@ public sealed class EcdsaMessageSignatureService(
                 {
                     await reputationService.RecordSecurityEventAsync(message.From, "replay_benign", cancellationToken);
                 }
+
+                securityRejectLog.Add(new SecurityRejectEvent(
+                    Reason: "replay_detected",
+                    IdentityId: message.From,
+                    MessageId: message.Id,
+                    ClockSkewSeconds: age.TotalSeconds,
+                    Classification: assessment.Classification,
+                    UtcTimestamp: DateTimeOffset.UtcNow));
 
                 logger.LogWarning("Replay detected for signed message {MessageId} from {From}. Classification={Classification} Count={Count}",
                     message.Id, message.From, assessment.Classification, assessment.RecentReplayCount);

@@ -100,6 +100,26 @@
                 <li><strong>Policy blocked:</strong> @_securityStatus.PolicyBlocked</li>
                 <li><strong>UTC:</strong> @_securityStatus.UtcTimestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</li>
             </ul>
+
+            <div class="selected-detail">
+                <strong>Recent Security Rejects</strong>
+                @if (_securityEvents.Count == 0)
+                {
+                    <p>No recent rejects.</p>
+                }
+                else
+                {
+                    <ul class="meta-list">
+                        @foreach (var evt in _securityEvents.Take(10))
+                        {
+                            <li>
+                                <strong>@evt.Reason</strong> · @evt.IdentityId<br />
+                                <small>msg=@(evt.MessageId ?? "-") · skew=@(evt.ClockSkewSeconds?.ToString("0.##") ?? "-")s · @evt.UtcTimestamp.ToString("MM-dd HH:mm:ss 'UTC'")</small>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
         }
         else
         {
@@ -317,6 +337,7 @@
     private bool _loadingCrypto;
 
     private SecurityStatusDto? _securityStatus;
+    private List<SecurityEventDto> _securityEvents = new();
     private string? _securityError;
     private bool _loadingSecurity;
 
@@ -440,6 +461,7 @@
         {
             var client = HttpClientFactory.CreateClient("hip-api");
             _securityStatus = await client.GetFromJsonAsync<SecurityStatusDto>("/api/admin/security-status");
+            _securityEvents = await client.GetFromJsonAsync<List<SecurityEventDto>>("/api/admin/security-events?take=10") ?? new List<SecurityEventDto>();
             if (_securityStatus is null)
             {
                 _securityError = "No data returned.";
@@ -789,6 +811,7 @@
         bool PrivateKeyExists,
         bool PublicKeyExists);
     private sealed record SecurityStatusDto(long ReplayDetected, long MessageExpired, long PolicyBlocked, DateTimeOffset UtcTimestamp);
+    private sealed record SecurityEventDto(string Reason, string IdentityId, string? MessageId, double? ClockSkewSeconds, string? Classification, DateTimeOffset UtcTimestamp);
     private sealed record AuditEventDto(string Id, DateTimeOffset CreatedAtUtc, string EventType, string Subject, string Source, string Detail);
     private sealed record IdentityDto(string Id, string PublicKeyRef);
     private sealed record ReputationDto(string IdentityId, int Score, DateTimeOffset UtcTimestamp);
