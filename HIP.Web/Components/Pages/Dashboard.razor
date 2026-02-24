@@ -153,9 +153,9 @@
             <div class="chart-nav">
                 <strong>Select period:</strong>
                 <ul>
-                    <li class="@(_chartPeriod == "24h" ? "active" : "")"><a href="#" @onclick:preventDefault="true" @onclick="() => SetChartPeriodAsync("24h")">24h</a></li>
-                    <li class="@(_chartPeriod == "7d" ? "active" : "")"><a href="#" @onclick:preventDefault="true" @onclick="() => SetChartPeriodAsync("7d")">7d</a></li>
-                    <li class="@(_chartPeriod == "30d" ? "active" : "")"><a href="#" @onclick:preventDefault="true" @onclick="() => SetChartPeriodAsync("30d")">30d</a></li>
+                    <li class="@(_chartPeriod == "24h" ? "active" : "")"><a href="#" @onclick:preventDefault="true" @onclick="SetChart24hAsync">24h</a></li>
+                    <li class="@(_chartPeriod == "7d" ? "active" : "")"><a href="#" @onclick:preventDefault="true" @onclick="SetChart7dAsync">7d</a></li>
+                    <li class="@(_chartPeriod == "30d" ? "active" : "")"><a href="#" @onclick:preventDefault="true" @onclick="SetChart30dAsync">30d</a></li>
                 </ul>
             </div>
             <div class="chart-content">
@@ -593,6 +593,12 @@
             _loadingAudit = false;
         }
     }
+
+    private Task SetChart24hAsync() => SetChartPeriodAsync("24h");
+
+    private Task SetChart7dAsync() => SetChartPeriodAsync("7d");
+
+    private Task SetChart30dAsync() => SetChartPeriodAsync("30d");
 
     private async Task SetChartPeriodAsync(string period)
     {
