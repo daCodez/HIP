@@ -79,9 +79,11 @@ body {
   padding: 16px;
   box-shadow: 0 8px 24px rgba(10, 18, 35, 0.05);
 }
+.card-wide { grid-column: span 2; }
 .card h3 { margin: 0 0 8px; }
 .card p { margin: 0; color: var(--muted); }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.button-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .link-btn {
   border: 1px solid var(--border);
   background: var(--panel);
@@ -102,6 +104,16 @@ body {
   border-radius: 8px;
   padding: 8px 10px;
 }
+.text-area { min-height: 92px; resize: vertical; }
+.json-block {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  overflow-x: auto;
+  font-size: 12px;
+}
 .status-ok { color: #0f8a43 !important; font-weight: 600; }
 .status-bad { color: #c62f2f !important; font-weight: 600; }
 
@@ -109,4 +121,5 @@ body {
   .shell { flex-direction: column; }
   .sidebar { width: 100%; border-right: 0; border-bottom: 1px solid var(--border); }
   .cards { grid-template-columns: 1fr; }
+  .card-wide { grid-column: span 1; }
 }

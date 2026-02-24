@@ -1,5 +1,6 @@
 @page "/"
 @using System.Net.Http.Json
+@using System.Text.Json
 @inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>HIP Admin Dashboard</PageTitle>
@@ -135,6 +136,55 @@
             <p>Enter an identity id and click Lookup.</p>
         }
     </article>
+
+    <article class="card card-wide">
+        <div class="card-head">
+            <h3>Message Sign / Verify Playground</h3>
+            <div class="button-row">
+                <button class="link-btn" @onclick="SignMessageAsync" disabled="@_loadingSign">@(_loadingSign ? "Signing..." : "Sign")</button>
+                <button class="link-btn" @onclick="VerifyLastSignedMessageAsync" disabled="@(_loadingVerify || _lastSignedMessage is null)">@(_loadingVerify ? "Verifying..." : "Verify Last")</button>
+            </div>
+        </div>
+
+        <div class="input-row">
+            <input class="text-input" @bind="_signFrom" placeholder="from" />
+        </div>
+        <div class="input-row">
+            <input class="text-input" @bind="_signTo" placeholder="to" />
+        </div>
+        <div class="input-row">
+            <input class="text-input" @bind="_signKeyId" placeholder="keyId (optional, e.g. hip-system-v2)" />
+        </div>
+        <div class="input-row">
+            <textarea class="text-input text-area" @bind="_signBody" placeholder="message body"></textarea>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_signError))
+        {
+            <p class="status-bad">@_signError</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(_signStatus))
+        {
+            <p class="status-ok">@_signStatus</p>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_verifyError))
+        {
+            <p class="status-bad">@_verifyError</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(_verifyStatus))
+        {
+            <p class="status-ok">@_verifyStatus</p>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_lastSignedMessageJson))
+        {
+            <details>
+                <summary>Last signed payload</summary>
+                <pre class="json-block">@_lastSignedMessageJson</pre>
+            </details>
+        }
+    </article>
 </section>
 
 @code {
@@ -155,6 +205,21 @@
     private ReputationDto? _reputationResult;
     private string? _reputationError;
     private bool _loadingReputation;
+
+    private string _signFrom = "hip-system";
+    private string _signTo = "target";
+    private string _signBody = "hello from dashboard";
+    private string _signKeyId = string.Empty;
+    private bool _loadingSign;
+    private string? _signError;
+    private string? _signStatus;
+
+    private bool _loadingVerify;
+    private string? _verifyError;
+    private string? _verifyStatus;
+
+    private SignedMessageDto? _lastSignedMessage;
+    private string? _lastSignedMessageJson;
 
     protected override async Task OnInitializedAsync()
     {
@@ -304,8 +369,107 @@
         }
     }
 
+    private async Task SignMessageAsync()
+    {
+        _loadingSign = true;
+        _signError = null;
+        _signStatus = null;
+        _verifyError = null;
+        _verifyStatus = null;
+
+        if (string.IsNullOrWhiteSpace(_signFrom) || string.IsNullOrWhiteSpace(_signTo) || string.IsNullOrWhiteSpace(_signBody))
+        {
+            _signError = "from, to, and body are required.";
+            _loadingSign = false;
+            return;
+        }
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-api");
+            var request = new SignMessageRequestDto(
+                _signFrom.Trim(),
+                _signTo.Trim(),
+                _signBody,
+                null,
+                string.IsNullOrWhiteSpace(_signKeyId) ? null : _signKeyId.Trim());
+
+            using var response = await client.PostAsJsonAsync("/api/messages/sign", request);
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadFromJsonAsync<SignMessageResultDto>();
+            if (result is null)
+            {
+                _signError = "No data returned.";
+                return;
+            }
+
+            if (!result.Success)
+            {
+                _signError = $"Sign failed: {result.Reason}";
+                return;
+            }
+
+            _lastSignedMessage = result.Message;
+            _lastSignedMessageJson = JsonSerializer.Serialize(result.Message, new JsonSerializerOptions { WriteIndented = true });
+            _signStatus = $"Signed successfully (reason: {result.Reason}).";
+        }
+        catch (Exception ex)
+        {
+            _signError = ex.Message;
+        }
+        finally
+        {
+            _loadingSign = false;
+        }
+    }
+
+    private async Task VerifyLastSignedMessageAsync()
+    {
+        _loadingVerify = true;
+        _verifyError = null;
+        _verifyStatus = null;
+
+        if (_lastSignedMessage is null)
+        {
+            _verifyError = "No signed message available yet. Click Sign first.";
+            _loadingVerify = false;
+            return;
+        }
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-api");
+            using var response = await client.PostAsJsonAsync("/api/messages/verify", _lastSignedMessage);
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadFromJsonAsync<VerifyMessageResultDto>();
+            if (result is null)
+            {
+                _verifyError = "No data returned.";
+                return;
+            }
+
+            _verifyStatus = result.IsValid
+                ? $"Verify success ({result.Reason})."
+                : $"Verify failed ({result.Reason}).";
+        }
+        catch (Exception ex)
+        {
+            _verifyError = ex.Message;
+        }
+        finally
+        {
+            _loadingVerify = false;
+        }
+    }
+
     private sealed record ServiceStatusDto(string ServiceName, string AssemblyVersion, DateTimeOffset UtcTimestamp);
     private sealed record AuditEventDto(string Id, DateTimeOffset CreatedAtUtc, string EventType, string Subject, string Source, string Detail);
     private sealed record IdentityDto(string Id, string PublicKeyRef);
     private sealed record ReputationDto(string IdentityId, int Score, DateTimeOffset UtcTimestamp);
+    private sealed record SignMessageRequestDto(string From, string To, string Body, string? Id, string? KeyId);
+    private sealed record SignMessageResultDto(bool Success, string Reason, SignedMessageDto? Message);
+    private sealed record SignedMessageDto(string Id, string From, string To, string Body, string SignatureBase64, string? KeyId);
+    private sealed record VerifyMessageResultDto(bool IsValid, string Reason);
 }
