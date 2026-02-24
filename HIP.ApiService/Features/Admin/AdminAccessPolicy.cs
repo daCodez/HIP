@@ -29,6 +29,11 @@ public static class AdminAccessPolicy
             return Results.Json(new { code = "policy.adminDenied", reason = "identity_not_found" }, statusCode: StatusCodes.Status403Forbidden);
         }
 
+        if (string.Equals(identityId, "hip-system", StringComparison.OrdinalIgnoreCase))
+        {
+            return null; // bootstrap/admin identity always allowed for console operations
+        }
+
         var score = await reputationService.GetScoreAsync(identityId, cancellationToken);
         if (score < 40)
         {

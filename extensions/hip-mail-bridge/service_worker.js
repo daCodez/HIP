@@ -69,7 +69,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const cfg = await chrome.storage.sync.get(Object.keys(DEFAULTS));
         const config = { ...DEFAULTS, ...cfg };
 
-        const res = await fetch(`${config.baseUrl}/api/messages/verify`, {
+        const res = await fetch(`${config.baseUrl}/api/messages/verify-readonly`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(msg.signedMessage)

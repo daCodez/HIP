@@ -69,7 +69,13 @@ public sealed class EcdsaMessageSignatureService(
     private static readonly TimeSpan MaxMessageAge = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(1);
 
-    public async Task<VerifyMessageResultDto> VerifyAsync(SignedMessageDto message, CancellationToken cancellationToken)
+    public Task<VerifyMessageResultDto> VerifyAsync(SignedMessageDto message, CancellationToken cancellationToken)
+        => VerifyCoreAsync(message, consumeReplayNonce: true, cancellationToken);
+
+    public Task<VerifyMessageResultDto> VerifyReadOnlyAsync(SignedMessageDto message, CancellationToken cancellationToken)
+        => VerifyCoreAsync(message, consumeReplayNonce: false, cancellationToken);
+
+    private async Task<VerifyMessageResultDto> VerifyCoreAsync(SignedMessageDto message, bool consumeReplayNonce, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(message); // validation
 
@@ -135,7 +141,7 @@ public sealed class EcdsaMessageSignatureService(
                 return new VerifyMessageResultDto(false, "invalid_signature");
             }
 
-            if (!await replayProtection.TryConsumeAsync(message.Id, message.From, cancellationToken))
+            if (consumeReplayNonce && !await replayProtection.TryConsumeAsync(message.Id, message.From, cancellationToken))
             {
                 securityCounter.IncrementReplayDetected();
                 var assessment = replayAssessment.RegisterReplay(message.From, message.Id);
