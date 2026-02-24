@@ -99,6 +99,35 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.MapGet("/api/admin/crypto-config", (string? keyId, IConfiguration configuration) =>
+        {
+            var opts = configuration.GetSection(CryptoProviderOptions.SectionName).Get<CryptoProviderOptions>() ?? new CryptoProviderOptions();
+            var resolvedKeyId = string.IsNullOrWhiteSpace(keyId) ? "hip-system" : keyId.Trim();
+
+            var privateKeyPath = string.IsNullOrWhiteSpace(opts.PrivateKeyStorePath)
+                ? null
+                : Path.Combine(opts.PrivateKeyStorePath, $"{resolvedKeyId}.key");
+            var publicKeyPath = string.IsNullOrWhiteSpace(opts.PublicKeyStorePath)
+                ? null
+                : Path.Combine(opts.PublicKeyStorePath, $"{resolvedKeyId}.pub");
+
+            return Results.Ok(new
+            {
+                opts.Provider,
+                opts.PrivateKeyStorePath,
+                opts.PublicKeyStorePath,
+                KeyId = resolvedKeyId,
+                PrivateKeyPath = privateKeyPath,
+                PublicKeyPath = publicKeyPath,
+                PrivateKeyExists = privateKeyPath is not null && File.Exists(privateKeyPath),
+                PublicKeyExists = publicKeyPath is not null && File.Exists(publicKeyPath)
+            });
+        })
+        .RequireRateLimiting("read-api")
+        .WithName("GetCryptoConfig")
+        .WithTags("Admin")
+        .Produces(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status429TooManyRequests);
 }
 else
 {
