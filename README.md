@@ -108,6 +108,44 @@ Output fields:
 - `toolAccessAllowed`
 - `toolAccessReason`
 
+### Retry / replay guidance for clients
+
+To avoid false-positive replay/stale failures:
+- use unique message IDs per signed request
+- if a request times out, retry with a **new** message ID and new signature
+- keep sender clocks NTP-synced (freshness window is short)
+- avoid delayed queue replay beyond freshness TTL
+
+Server behavior:
+- repeated message IDs -> `replay_detected`
+- stale/future timestamps -> `message_expired`
+
+### Jarvis token lifecycle (access + refresh)
+
+Issue token pair:
+
+```bash
+curl -s -X POST http://127.0.0.1:5101/api/jarvis/token/issue \
+  -H "Content-Type: application/json" \
+  -d '{"identityId":"hip-system"}' | jq
+```
+
+Validate access token:
+
+```bash
+curl -s -X POST http://127.0.0.1:5101/api/jarvis/token/validate \
+  -H "Content-Type: application/json" \
+  -d '{"accessToken":"atk_..."}' | jq
+```
+
+Refresh token pair:
+
+```bash
+curl -s -X POST http://127.0.0.1:5101/api/jarvis/token/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"rtk_..."}' | jq
+```
+
 ### Runtime hook wiring (Jarvis pre-dispatch)
 
 A workspace hook is included at:

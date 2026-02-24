@@ -9,6 +9,8 @@ namespace HIP.ApiService.Infrastructure.Security;
 public sealed class EcdsaMessageSignatureService(
     IOptions<CryptoProviderOptions> options,
     IReplayProtectionService replayProtection,
+    IReplayAssessmentService replayAssessment,
+    IReputationService reputationService,
     ISecurityEventCounter securityCounter,
     ILogger<EcdsaMessageSignatureService> logger) : IMessageSignatureService
 {
@@ -66,25 +68,25 @@ public sealed class EcdsaMessageSignatureService(
     private static readonly TimeSpan MaxMessageAge = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(1);
 
-    public Task<VerifyMessageResultDto> VerifyAsync(SignedMessageDto message, CancellationToken cancellationToken)
+    public async Task<VerifyMessageResultDto> VerifyAsync(SignedMessageDto message, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(message); // validation
 
         var provider = options.Value.Provider?.Trim() ?? "Placeholder";
         if (!provider.Equals("ECDsa", StringComparison.OrdinalIgnoreCase))
         {
-            return Task.FromResult(new VerifyMessageResultDto(false, "provider_not_enabled"));
+            return new VerifyMessageResultDto(false, "provider_not_enabled");
         }
 
         var storePath = options.Value.PublicKeyStorePath;
         if (string.IsNullOrWhiteSpace(storePath))
         {
-            return Task.FromResult(new VerifyMessageResultDto(false, "missing_public_key_store"));
+            return new VerifyMessageResultDto(false, "missing_public_key_store");
         }
 
         if (message.CreatedAtUtc is null)
         {
-            return Task.FromResult(new VerifyMessageResultDto(false, "missing_timestamp"));
+            return new VerifyMessageResultDto(false, "missing_timestamp");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -92,7 +94,7 @@ public sealed class EcdsaMessageSignatureService(
         if (age > MaxMessageAge || age < -MaxFutureSkew)
         {
             securityCounter.IncrementMessageExpired();
-            return Task.FromResult(new VerifyMessageResultDto(false, "message_expired"));
+            return new VerifyMessageResultDto(false, "message_expired");
         }
 
         var keyIdMissing = string.IsNullOrWhiteSpace(message.KeyId);
@@ -105,7 +107,7 @@ public sealed class EcdsaMessageSignatureService(
         var keyPath = Path.Combine(storePath, $"{keyId}.pub");
         if (!File.Exists(keyPath))
         {
-            return Task.FromResult(new VerifyMessageResultDto(false, "public_key_not_found"));
+            return new VerifyMessageResultDto(false, "public_key_not_found");
         }
 
         try
@@ -122,28 +124,40 @@ public sealed class EcdsaMessageSignatureService(
             if (!valid)
             {
                 logger.LogInformation("Message signature verification completed for {From} -> {To} using keyId {KeyId}: {Result}", message.From, message.To, keyId, false);
-                return Task.FromResult(new VerifyMessageResultDto(false, "invalid_signature"));
+                return new VerifyMessageResultDto(false, "invalid_signature");
             }
 
             if (!replayProtection.TryConsume(message.Id))
             {
                 securityCounter.IncrementReplayDetected();
-                logger.LogWarning("Replay detected for signed message {MessageId} from {From}.", message.Id, message.From);
-                return Task.FromResult(new VerifyMessageResultDto(false, "replay_detected"));
+                var assessment = replayAssessment.RegisterReplay(message.From, message.Id);
+
+                if (assessment.ShouldPenalize)
+                {
+                    await reputationService.RecordSecurityEventAsync(message.From, "replay_abuse", cancellationToken);
+                }
+                else
+                {
+                    await reputationService.RecordSecurityEventAsync(message.From, "replay_benign", cancellationToken);
+                }
+
+                logger.LogWarning("Replay detected for signed message {MessageId} from {From}. Classification={Classification} Count={Count}",
+                    message.Id, message.From, assessment.Classification, assessment.RecentReplayCount);
+                return new VerifyMessageResultDto(false, "replay_detected");
             }
 
             logger.LogInformation("Message signature verification completed for {From} -> {To} using keyId {KeyId}: {Result}", message.From, message.To, keyId, true);
-            return Task.FromResult(new VerifyMessageResultDto(true, "ok"));
+            return new VerifyMessageResultDto(true, "ok");
         }
         catch (FormatException ex)
         {
             logger.LogWarning(ex, "Invalid base64 format for signature verification input.");
-            return Task.FromResult(new VerifyMessageResultDto(false, "invalid_format"));
+            return new VerifyMessageResultDto(false, "invalid_format");
         }
         catch (CryptographicException ex)
         {
             logger.LogWarning(ex, "Cryptographic verification failure.");
-            return Task.FromResult(new VerifyMessageResultDto(false, "crypto_error"));
+            return new VerifyMessageResultDto(false, "crypto_error");
         }
     }
 }

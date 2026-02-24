@@ -1,3 +1,4 @@
+using HIP.ApiService.Application.Abstractions;
 using HIP.ApiService.Application.Contracts;
 using MediatR;
 
@@ -39,6 +40,33 @@ public static class JarvisEndpoints
             .WithTags("Jarvis")
             .Produces<JarvisPolicyEvaluationResultDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/jarvis/token/issue", (JarvisTokenIssueRequestDto request, IJarvisTokenService tokenService) =>
+            {
+                var tokenSet = tokenService.Issue(request.IdentityId);
+                return Results.Ok(tokenSet);
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("IssueJarvisToken")
+            .WithTags("Jarvis");
+
+        endpoints.MapPost("/api/jarvis/token/validate", (JarvisTokenValidateRequestDto request, IJarvisTokenService tokenService) =>
+            {
+                var result = tokenService.Validate(request.AccessToken);
+                return Results.Ok(result);
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("ValidateJarvisToken")
+            .WithTags("Jarvis");
+
+        endpoints.MapPost("/api/jarvis/token/refresh", (JarvisTokenRefreshRequestDto request, IJarvisTokenService tokenService) =>
+            {
+                var result = tokenService.Refresh(request.RefreshToken);
+                return Results.Ok(result);
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("RefreshJarvisToken")
+            .WithTags("Jarvis");
 
         return endpoints;
     }

@@ -13,4 +13,9 @@ public sealed class InMemoryReputationService(ILogger<InMemoryReputationService>
         var score = ReputationConstants.BaseScore; // TODO(HIP): replace with full scoring pipeline
         return Task.FromResult(score); // performance awareness: constant-time response
     }
+
+    public Task RecordSecurityEventAsync(string identityId, string eventType, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
 }
