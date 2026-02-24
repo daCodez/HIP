@@ -6,6 +6,8 @@ MV3 extension for Gmail + Outlook Web that signs email body content using HIP.
 - Adds **Sign with HIP** button in compose windows (best-effort selectors)
 - Calls `POST /api/messages/sign`
 - Appends signed payload block into draft body
+- Detects `HIP-Signature` blocks in read mode and verifies with `POST /api/messages/verify`
+- Shows trust badge: `VALID` / `INVALID(<reason>)`
 
 ## Load unpacked
 1. Open `chrome://extensions` (or `edge://extensions`)
