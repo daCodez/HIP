@@ -4,7 +4,8 @@ using HIP.Web.Components;
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
-builder.Services.AddRazorComponents();
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
 
 builder.Services.AddServiceDiscovery();
 
@@ -18,7 +19,8 @@ var app = builder.Build();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
-app.MapRazorComponents<App>();
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
 app.MapDefaultEndpoints();
 
 app.Run();
