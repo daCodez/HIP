@@ -133,7 +133,7 @@
         </div>
         <p>Install HIP Mail Bridge for Chrome/Edge.</p>
         <div class="button-row" style="margin-top:10px;">
-            <a class="link-btn" href="/bff/extensions/hip-mail-bridge" download="hip-mail-bridge.tar.gz">Download Extension</a>
+            <a class="link-btn" href="@($"/bff/extensions/hip-mail-bridge?v={_extensionDownloadVersion}")" download="hip-mail-bridge.tar.gz">Download Extension</a>
         </div>
     </article>
 
@@ -388,6 +388,8 @@
     private string? _lastSignedMessageJson;
     private string? _copyStatus;
     private string? _copyError;
+
+    private readonly string _extensionDownloadVersion = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
 
     protected override async Task OnInitializedAsync()
     {
