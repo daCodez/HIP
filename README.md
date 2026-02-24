@@ -146,6 +146,22 @@ curl -s -X POST http://127.0.0.1:5101/api/jarvis/token/refresh \
   -d '{"refreshToken":"rtk_..."}' | jq
 ```
 
+Fast revoke session/token:
+
+```bash
+curl -s -X POST http://127.0.0.1:5101/api/jarvis/token/revoke \
+  -H "Content-Type: application/json" \
+  -d '{"accessToken":"atk_...","refreshToken":"rtk_..."}' | jq
+```
+
+Or revoke all active tokens for an identity:
+
+```bash
+curl -s -X POST http://127.0.0.1:5101/api/jarvis/token/revoke \
+  -H "Content-Type: application/json" \
+  -d '{"identityId":"hip-system"}' | jq
+```
+
 ### Runtime hook wiring (Jarvis pre-dispatch)
 
 A workspace hook is included at:

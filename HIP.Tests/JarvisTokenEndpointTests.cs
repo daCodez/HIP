@@ -38,5 +38,25 @@ public sealed class JarvisTokenEndpointTests
         Assert.That(refresh!.Success, Is.True);
         Assert.That(refresh.TokenSet, Is.Not.Null);
         Assert.That(refresh.TokenSet!.AccessToken, Is.Not.EqualTo(issue.AccessToken));
+
+        var revokeResponse = await client.PostAsJsonAsync("/api/jarvis/token/revoke", new JarvisTokenRevokeRequestDto(
+            AccessToken: refresh.TokenSet.AccessToken,
+            RefreshToken: refresh.TokenSet.RefreshToken,
+            IdentityId: null));
+        var revoke = await revokeResponse.Content.ReadFromJsonAsync<TokenRevokeResult>();
+
+        Assert.That(revokeResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(revoke, Is.Not.Null);
+        Assert.That(revoke!.Success, Is.True);
+        Assert.That(revoke.RevokedAccessCount, Is.GreaterThanOrEqualTo(1));
+        Assert.That(revoke.RevokedRefreshCount, Is.GreaterThanOrEqualTo(1));
+
+        var validateRevoked = await client.PostAsJsonAsync("/api/jarvis/token/validate", new JarvisTokenValidateRequestDto(refresh.TokenSet.AccessToken));
+        var validateRevokedPayload = await validateRevoked.Content.ReadFromJsonAsync<TokenValidationResult>();
+
+        Assert.That(validateRevoked.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(validateRevokedPayload, Is.Not.Null);
+        Assert.That(validateRevokedPayload!.IsValid, Is.False);
+        Assert.That(validateRevokedPayload.Reason, Is.EqualTo("not_found"));
     }
 }

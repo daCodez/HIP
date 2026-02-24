@@ -59,4 +59,49 @@ public sealed class InMemoryJarvisTokenService : IJarvisTokenService
         var newSet = Issue(item.IdentityId);
         return new TokenRefreshResult(true, "ok", newSet);
     }
+
+    public TokenRevokeResult Revoke(TokenRevokeRequest request)
+    {
+        if (request is null)
+        {
+            return new TokenRevokeResult(false, "invalid_request", 0, 0);
+        }
+
+        var revokedAccess = 0;
+        var revokedRefresh = 0;
+
+        if (!string.IsNullOrWhiteSpace(request.AccessToken) && _access.TryRemove(request.AccessToken, out _))
+        {
+            revokedAccess++;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.RefreshToken) && _refresh.TryRemove(request.RefreshToken, out _))
+        {
+            revokedRefresh++;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.IdentityId))
+        {
+            foreach (var item in _access.Where(x => x.Value.IdentityId == request.IdentityId).ToList())
+            {
+                if (_access.TryRemove(item.Key, out _))
+                {
+                    revokedAccess++;
+                }
+            }
+
+            foreach (var item in _refresh.Where(x => x.Value.IdentityId == request.IdentityId).ToList())
+            {
+                if (_refresh.TryRemove(item.Key, out _))
+                {
+                    revokedRefresh++;
+                }
+            }
+        }
+
+        var total = revokedAccess + revokedRefresh;
+        return total > 0
+            ? new TokenRevokeResult(true, "revoked", revokedAccess, revokedRefresh)
+            : new TokenRevokeResult(false, "not_found", 0, 0);
+    }
 }

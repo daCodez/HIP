@@ -1,5 +1,6 @@
 using HIP.ApiService.Application.Abstractions;
 using HIP.ApiService.Application.Contracts;
+using HIP.ApiService.Observability;
 using MediatR;
 
 namespace HIP.ApiService.Features.Jarvis;
@@ -44,6 +45,7 @@ public static class JarvisEndpoints
         endpoints.MapPost("/api/jarvis/token/issue", (JarvisTokenIssueRequestDto request, IJarvisTokenService tokenService) =>
             {
                 var tokenSet = tokenService.Issue(request.IdentityId);
+                HipTelemetry.Record("jarvis.token.issue", "ok", 0);
                 return Results.Ok(tokenSet);
             })
             .RequireRateLimiting("read-api")
@@ -53,6 +55,7 @@ public static class JarvisEndpoints
         endpoints.MapPost("/api/jarvis/token/validate", (JarvisTokenValidateRequestDto request, IJarvisTokenService tokenService) =>
             {
                 var result = tokenService.Validate(request.AccessToken);
+                HipTelemetry.Record("jarvis.token.validate", result.Reason, 0);
                 return Results.Ok(result);
             })
             .RequireRateLimiting("read-api")
@@ -62,10 +65,21 @@ public static class JarvisEndpoints
         endpoints.MapPost("/api/jarvis/token/refresh", (JarvisTokenRefreshRequestDto request, IJarvisTokenService tokenService) =>
             {
                 var result = tokenService.Refresh(request.RefreshToken);
+                HipTelemetry.Record("jarvis.token.refresh", result.Reason, 0);
                 return Results.Ok(result);
             })
             .RequireRateLimiting("read-api")
             .WithName("RefreshJarvisToken")
+            .WithTags("Jarvis");
+
+        endpoints.MapPost("/api/jarvis/token/revoke", (JarvisTokenRevokeRequestDto request, IJarvisTokenService tokenService) =>
+            {
+                var result = tokenService.Revoke(new TokenRevokeRequest(request.AccessToken, request.RefreshToken, request.IdentityId));
+                HipTelemetry.Record("jarvis.token.revoke", result.Reason, 0);
+                return Results.Ok(result);
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("RevokeJarvisToken")
             .WithTags("Jarvis");
 
         return endpoints;
