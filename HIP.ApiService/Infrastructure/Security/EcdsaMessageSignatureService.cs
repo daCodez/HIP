@@ -26,7 +26,13 @@ public sealed class EcdsaMessageSignatureService(
             return Task.FromResult(new SignMessageResultDto(false, "missing_private_key_store", null));
         }
 
-        var keyId = string.IsNullOrWhiteSpace(request.KeyId) ? request.From : request.KeyId.Trim();
+        var keyIdMissing = string.IsNullOrWhiteSpace(request.KeyId);
+        var keyId = keyIdMissing ? request.From : request.KeyId!.Trim();
+        if (keyIdMissing)
+        {
+            logger.LogWarning("Signing request from {From} omitted keyId; defaulting to legacy key id '{KeyId}'.", request.From, keyId);
+        }
+
         var keyPath = Path.Combine(privateStorePath, $"{keyId}.key");
         if (!File.Exists(keyPath))
         {
@@ -70,7 +76,13 @@ public sealed class EcdsaMessageSignatureService(
             return Task.FromResult(new VerifyMessageResultDto(false, "missing_public_key_store"));
         }
 
-        var keyId = string.IsNullOrWhiteSpace(message.KeyId) ? message.From : message.KeyId.Trim();
+        var keyIdMissing = string.IsNullOrWhiteSpace(message.KeyId);
+        var keyId = keyIdMissing ? message.From : message.KeyId!.Trim();
+        if (keyIdMissing)
+        {
+            logger.LogWarning("Verification request from {From} omitted keyId; defaulting to legacy key id '{KeyId}'.", message.From, keyId);
+        }
+
         var keyPath = Path.Combine(storePath, $"{keyId}.pub");
         if (!File.Exists(keyPath))
         {
