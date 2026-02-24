@@ -34,3 +34,26 @@ echo "$SIGNED" | jq -c '.message' | \
     -H "Content-Type: application/json" \
     -d @- | jq
 ```
+
+## Dev: Aspire multi-node smoke profile
+
+Run HIP with two API replicas:
+
+```bash
+cd /home/jarvis_bot/.openclaw/workspace/HIP
+HIP_API_REPLICAS=2 dotnet run --project HIP.AppHost
+```
+
+Quick smoke checks:
+
+```bash
+# service health through web/dashboard flow
+curl -s http://100.67.76.107:5102 > /dev/null
+
+# API endpoint still healthy under replicated apphost
+curl -s http://100.67.76.107:5101/api/status | jq
+```
+
+Notes:
+- `HIP_API_REPLICAS=1` (default) = single-node profile
+- `HIP_API_REPLICAS=2`+ = multi-node `hip-api` behind Aspire service discovery
