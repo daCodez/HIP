@@ -487,3 +487,75 @@ h6 { font-size: 12px; }
   line-height: 35px;
   margin: 0;
 }
+
+/* ===== Direct Port Baseline (KingAdmin shell) ===== */
+body { background: #ececec !important; color: #555 !important; font: 13px/1.428571429 "Helvetica Neue", Helvetica, Arial, sans-serif !important; }
+
+.top-bar { padding: 5px 0; background-color: #555; position: fixed; left: 0; right: 0; top: 0; z-index: 1030; }
+.top-bar .king-logo-text { color: #fff; font-size: 20px; font-weight: 300; text-decoration: none; position: relative; top: 7px; }
+.toggle-sidebar-collapse { color: #fff; font-size: 22px; margin-right: 15px; line-height: 34px; text-decoration: none; }
+.top-bar-right .btn-link { color: #ddd; text-decoration: none; }
+
+.left-sidebar { width: 230px; position: fixed; top: 44px; bottom: 0; left: 0; background-color: #ececec; border-right: 1px solid #dfdfdf; overflow: auto; }
+.left-sidebar.minified { width: 40px; }
+.left-sidebar.minified .text { display: none; }
+.left-sidebar.minified .main-menu > li > a, .left-sidebar.minified .main-menu > li > .active-link { padding-left: 10px; }
+
+.main-menu { list-style: none; margin: 0; padding: 0; }
+.main-menu > li > a, .main-menu > li > .active-link {
+  display: block;
+  padding: 13px 0 13px 15px;
+  font-size: 14px;
+  color: #555;
+  background-color: #ececec;
+  border-top: 1px solid #dfdfdf;
+  text-decoration: none;
+}
+.main-menu > li:first-child > a, .main-menu > li:first-child > .active-link { border-top: 0; }
+.main-menu > li.active > a,
+.main-menu > li > .active-link,
+.main-menu > li > a:hover { background-color: #dfdfdf; color: #555; }
+.main-menu .text { padding-left: 8px; font-size: .9em; }
+.link-disabled { pointer-events: none; opacity: .7; }
+
+.content-wrapper {
+  margin-left: 230px;
+  margin-top: 44px;
+  padding: 15px 30px;
+  background-color: #f1f1f1;
+  border-left: 1px solid #e4e4e4;
+  min-height: calc(100vh - 44px);
+}
+.content-wrapper.expanded { margin-left: 40px; }
+
+.breadcrumb { background: transparent; padding: 8px 0; margin-bottom: 20px; }
+.breadcrumb > li { font-size: 12px; }
+.breadcrumb a { color: #555; text-decoration: none; }
+
+.main-header { margin-bottom: 22px; }
+.main-header h2 {
+  display: inline-block;
+  margin: 0 10px 0 0;
+  padding-right: 10px;
+  border-right: 1px solid #ccc;
+  font-family: "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-size: 50px;
+  line-height: 1;
+  color: #555;
+}
+.main-header em { color: #bbb; font-style: italic; font-size: 20px; }
+
+.cards { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 20px; }
+.card, .widget { background: #f9f9f9; border: 1px solid lightgray; border-radius: 0; margin-bottom: 20px; }
+.card-head, .widget .widget-header { height: 35px; padding: 0 10px; border-bottom: 1px solid lightgray; background: #eee; display: flex; align-items: center; justify-content: space-between; }
+.card > :not(.card-head), .widget .widget-content { padding: 20px 10px; }
+.card-head h3, .widget .widget-header h3 { font-family: "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 1.1em; font-weight: 700; margin: 0; line-height: 35px; }
+
+.link-btn { border-radius: 0; background: #626262; border: 1px solid #555; color: #fff; padding: 3px 8px; font-size: 11px; }
+
+@media (max-width: 960px) {
+  .left-sidebar { position: static; width: 100%; top: auto; }
+  .content-wrapper, .content-wrapper.expanded { margin-left: 0; margin-top: 44px; padding: 15px; }
+  .cards { grid-template-columns: 1fr; }
+}

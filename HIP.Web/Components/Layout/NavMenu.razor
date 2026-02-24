@@ -2,20 +2,14 @@
     [Parameter] public bool Collapsed { get; set; }
 }
 
-<div class="p-2" style="width:@(Collapsed ? "72px" : "220px")">
-    <ul class="nav nav-pills flex-column gap-1">
-        <li class="nav-item">
-            <NavLink href="/" Match="NavLinkMatch.All" class="nav-link">
-                <span>📊</span>
-                @if (!Collapsed)
-                {
-                    <span class="ms-2">Dashboard</span>
-                }
-            </NavLink>
-        </li>
-        <li class="nav-item"><a class="nav-link disabled"><span>🪪</span>@if(!Collapsed){<span class="ms-2">Identity</span>}</a></li>
-        <li class="nav-item"><a class="nav-link disabled"><span>⭐</span>@if(!Collapsed){<span class="ms-2">Reputation</span>}</a></li>
-        <li class="nav-item"><a class="nav-link disabled"><span>✉️</span>@if(!Collapsed){<span class="ms-2">Messages</span>}</a></li>
-        <li class="nav-item"><a class="nav-link disabled"><span>⚙️</span>@if(!Collapsed){<span class="ms-2">Settings</span>}</a></li>
-    </ul>
-</div>
+<ul class="main-menu">
+    <li class="active">
+        <NavLink href="/" Match="NavLinkMatch.All" class="active-link" @onclick:preventDefault="false">
+            <i class="fa fa-dashboard fa-fw"></i><span class="text">Dashboard</span>
+        </NavLink>
+    </li>
+    <li><a class="link-disabled"><i class="fa fa-id-card-o fa-fw"></i><span class="text">Identity</span></a></li>
+    <li><a class="link-disabled"><i class="fa fa-star-o fa-fw"></i><span class="text">Reputation</span></a></li>
+    <li><a class="link-disabled"><i class="fa fa-envelope-o fa-fw"></i><span class="text">Messages</span></a></li>
+    <li><a class="link-disabled"><i class="fa fa-cog fa-fw"></i><span class="text">Settings</span></a></li>
+</ul>

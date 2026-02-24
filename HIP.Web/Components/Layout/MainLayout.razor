@@ -1,27 +1,61 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Nav
 
-<div class="bootstrap-shell">
-    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom px-3">
-        <button class="btn btn-outline-secondary btn-sm me-2" @onclick="ToggleNav">☰</button>
-        <span class="navbar-brand mb-0 h1">HIP Admin</span>
-        <div class="ms-auto d-flex align-items-center gap-2">
-            <span class="badge bg-secondary">Eric</span>
-        </div>
-    </nav>
-
-    <div class="container-fluid">
-        <div class="row flex-nowrap">
-            <aside class="col-auto border-end bg-white px-0 @(_navCollapsed ? "sidebar-collapsed" : "")">
-                <NavMenu Collapsed="@_navCollapsed" />
-            </aside>
-
-            <main class="col py-3 px-3">
-                <div class="text-muted small mb-2">
-                    @string.Join(" / ", GetBreadcrumbs())
+<div id="wrapper" class="wrapper">
+    <div class="top-bar navbar-fixed-top">
+        <div class="container-fluid">
+            <div class="clearfix">
+                <a href="#" class="pull-left toggle-sidebar-collapse" @onclick="ToggleNav" @onclick:preventDefault="true"><i class="fa fa-bars"></i></a>
+                <div class="pull-left left logo">
+                    <a href="#"><span class="king-logo-text">HIP Admin</span></a>
                 </div>
-                @Body
-            </main>
+                <div class="pull-right right">
+                    <div class="top-bar-right">
+                        <div class="logged-user">
+                            <div class="btn-group">
+                                <a href="#" class="btn btn-link dropdown-toggle" @onclick:preventDefault="true">
+                                    <span class="name">Eric</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="left-sidebar" class="left-sidebar @(_navCollapsed ? "minified" : "")">
+        <div class="sidebar-scroll">
+            <nav class="main-nav">
+                <NavMenu Collapsed="@_navCollapsed" />
+            </nav>
+        </div>
+    </div>
+
+    <div id="main-content-wrapper" class="content-wrapper @(_navCollapsed ? "expanded" : "")">
+        <div class="row">
+            <div class="col-md-4">
+                <ul class="breadcrumb">
+                    @foreach (var (crumb, index) in GetBreadcrumbs().Select((c, i) => (c, i)))
+                    {
+                        if (index == 0)
+                        {
+                            <li><i class="fa fa-home"></i><a href="#">@crumb</a></li>
+                        }
+                        else if (index == GetBreadcrumbs().Count() - 1)
+                        {
+                            <li class="active">@crumb</li>
+                        }
+                        else
+                        {
+                            <li><a href="#">@crumb</a></li>
+                        }
+                    }
+                </ul>
+            </div>
+        </div>
+        <div class="content">
+            @Body
         </div>
     </div>
 </div>
@@ -34,9 +68,9 @@
     private IEnumerable<string> GetBreadcrumbs()
     {
         var path = Nav.ToBaseRelativePath(Nav.Uri);
-        if (string.IsNullOrWhiteSpace(path)) return new[] { "Dashboard", "Overview" };
+        if (string.IsNullOrWhiteSpace(path)) return new[] { "Home", "Dashboard" };
 
-        return new[] { "Dashboard" }.Concat(path.Split('/', StringSplitOptions.RemoveEmptyEntries)
+        return new[] { "Home" }.Concat(path.Split('/', StringSplitOptions.RemoveEmptyEntries)
             .Select(p => char.ToUpperInvariant(p[0]) + p[1..]));
     }
 }
