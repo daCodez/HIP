@@ -61,6 +61,7 @@ builder.Services.AddSingleton<IAuditTrail, InMemoryAuditTrail>();
 builder.Services.AddSingleton<ISecurityEventCounter, InMemorySecurityEventCounter>();
 builder.Services.AddSingleton<ISecurityRejectLog, InMemorySecurityRejectLog>();
 builder.Services.AddScoped<IReplayProtectionService, InMemoryReplayProtectionService>();
+builder.Services.AddScoped<IHipEnvelopeVerifier, HipEnvelopeVerifier>();
 builder.Services.AddSingleton<IReplayAssessmentService, InMemoryReplayAssessmentService>();
 builder.Services.AddSingleton<IKeyRotationPolicy, InMemoryKeyRotationPolicy>();
 builder.Services.AddScoped<IJarvisTokenService, InMemoryJarvisTokenService>();
@@ -106,9 +107,9 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-    app.MapGet("/api/admin/crypto-config", async (HttpContext httpContext, string? keyId, IConfiguration configuration, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
+    app.MapGet("/api/admin/crypto-config", async (HttpContext httpContext, string? keyId, IConfiguration configuration, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
         {
-            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, identityService, reputationService, cancellationToken);
+            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
             if (gate is not null)
             {
                 return gate;

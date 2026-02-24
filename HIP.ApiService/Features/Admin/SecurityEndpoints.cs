@@ -6,9 +6,9 @@ public static class SecurityEndpoints
 {
     public static IEndpointRouteBuilder MapSecurityEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/admin/security-status", async (HttpContext httpContext, ISecurityEventCounter counter, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/admin/security-status", async (HttpContext httpContext, ISecurityEventCounter counter, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
             {
-                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, identityService, reputationService, cancellationToken);
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
                 if (gate is not null)
                 {
                     return gate;
@@ -22,9 +22,9 @@ public static class SecurityEndpoints
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
 
-        endpoints.MapGet("/api/admin/security-events", async (HttpContext httpContext, int? take, ISecurityRejectLog rejectLog, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/admin/security-events", async (HttpContext httpContext, int? take, ISecurityRejectLog rejectLog, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
             {
-                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, identityService, reputationService, cancellationToken);
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
                 if (gate is not null)
                 {
                     return gate;

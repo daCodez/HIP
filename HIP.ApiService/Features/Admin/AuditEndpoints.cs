@@ -6,9 +6,9 @@ public static class AuditEndpoints
 {
     public static IEndpointRouteBuilder MapAuditEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/admin/audit", async (HttpContext httpContext, int? take, IAuditTrail auditTrail, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/admin/audit", async (HttpContext httpContext, int? take, IAuditTrail auditTrail, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
             {
-                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, identityService, reputationService, cancellationToken);
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
                 if (gate is not null)
                 {
                     return gate;

@@ -6,10 +6,17 @@ public static class AdminAccessPolicy
 {
     public static async Task<IResult?> AuthorizeReadAsync(
         HttpContext httpContext,
+        IHipEnvelopeVerifier envelopeVerifier,
         IIdentityService identityService,
         IReputationService reputationService,
         CancellationToken cancellationToken)
     {
+        var verification = await envelopeVerifier.VerifyIfRequiredAsync(httpContext, cancellationToken);
+        if (!verification.IsValid)
+        {
+            return Results.Json(new { code = verification.Code, reason = verification.Reason }, statusCode: verification.StatusCode);
+        }
+
         var identityId = ResolveIdentityId(httpContext);
         if (string.IsNullOrWhiteSpace(identityId))
         {

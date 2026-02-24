@@ -18,6 +18,7 @@ public sealed class HipApiClient(IHttpClientFactory httpClientFactory, HipEnvelo
 
         using var request = new HttpRequestMessage(method, path);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.Add("x-hip-origin", "bff");
         request.Headers.Add("x-hip-identity", IdentityId);
         request.Headers.Add("x-hip-key-id", KeyId);
         request.Headers.Add("x-hip-msg-id", envelope.MessageId);
