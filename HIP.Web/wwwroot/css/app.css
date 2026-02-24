@@ -93,6 +93,15 @@ body {
 }
 .link-btn:disabled { opacity: .6; cursor: default; }
 .meta-list { margin: 8px 0 0; padding-left: 18px; color: var(--muted); }
+.input-row { margin-top: 6px; margin-bottom: 10px; }
+.text-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
 .status-ok { color: #0f8a43 !important; font-weight: 600; }
 .status-bad { color: #c62f2f !important; font-weight: 600; }
 

@@ -72,8 +72,35 @@
     </article>
 
     <article class="card">
-        <h3>Reputation Snapshot</h3>
-        <p>Monitor scoring bands and abuse-risk trends in one view.</p>
+        <div class="card-head">
+            <h3>Identity Lookup</h3>
+            <button class="link-btn" @onclick="LookupIdentityAsync" disabled="@_loadingIdentity">@(_loadingIdentity ? "Looking up..." : "Lookup")</button>
+        </div>
+
+        <div class="input-row">
+            <input class="text-input" @bind="_identityLookupId" placeholder="identity id (e.g. hip-system)" />
+        </div>
+
+        @if (_loadingIdentity)
+        {
+            <p>Loading identity...</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(_identityError))
+        {
+            <p class="status-bad">@_identityError</p>
+        }
+        else if (_identityResult is not null)
+        {
+            <p class="status-ok">Identity found</p>
+            <ul class="meta-list">
+                <li><strong>Id:</strong> @_identityResult.Id</li>
+                <li><strong>PublicKeyRef:</strong> @_identityResult.PublicKeyRef</li>
+            </ul>
+        }
+        else
+        {
+            <p>Enter an identity id and click Lookup.</p>
+        }
     </article>
 </section>
 
@@ -86,10 +113,16 @@
     private string? _auditError;
     private bool _loadingAudit;
 
+    private string _identityLookupId = "hip-system";
+    private IdentityDto? _identityResult;
+    private string? _identityError;
+    private bool _loadingIdentity;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadServiceHealthAsync();
         await LoadAuditFeedAsync();
+        await LookupIdentityAsync();
     }
 
     private async Task LoadServiceHealthAsync()
@@ -140,6 +173,56 @@
         }
     }
 
+    private async Task LookupIdentityAsync()
+    {
+        _loadingIdentity = true;
+        _identityError = null;
+        _identityResult = null;
+
+        var id = _identityLookupId?.Trim();
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            _identityError = "Please enter an identity id.";
+            _loadingIdentity = false;
+            return;
+        }
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-api");
+            using var response = await client.GetAsync($"/api/identity/{Uri.EscapeDataString(id)}");
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _identityError = $"Identity '{id}' was not found.";
+                return;
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                _identityError = "Invalid identity id format.";
+                return;
+            }
+
+            response.EnsureSuccessStatusCode();
+            _identityResult = await response.Content.ReadFromJsonAsync<IdentityDto>();
+
+            if (_identityResult is null)
+            {
+                _identityError = "No data returned.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _identityError = ex.Message;
+        }
+        finally
+        {
+            _loadingIdentity = false;
+        }
+    }
+
     private sealed record ServiceStatusDto(string ServiceName, string AssemblyVersion, DateTimeOffset UtcTimestamp);
     private sealed record AuditEventDto(string Id, DateTimeOffset CreatedAtUtc, string EventType, string Subject, string Source, string Detail);
+    private sealed record IdentityDto(string Id, string PublicKeyRef);
 }
