@@ -141,16 +141,28 @@
         </div>
     </article>
 
-    <article class="card card-wide">
+    <article class="card">
         <div class="card-head">
-            <h3>Security Trends</h3>
+            <h3>Trend: Security Events Over Time</h3>
             <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
         </div>
-        <div class="form-grid">
-            <div><canvas id="hipTrendChart" height="140"></canvas></div>
-            <div><canvas id="hipReasonChart" height="140"></canvas></div>
-            <div><canvas id="hipTrustChart" height="140"></canvas></div>
+        <canvas id="hipTrendChart" class="chart-canvas" height="220"></canvas>
+    </article>
+
+    <article class="card">
+        <div class="card-head">
+            <h3>Top Reject Reasons</h3>
+            <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
         </div>
+        <canvas id="hipReasonChart" class="chart-canvas" height="220"></canvas>
+    </article>
+
+    <article class="card">
+        <div class="card-head">
+            <h3>Trust Distribution</h3>
+            <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
+        </div>
+        <canvas id="hipTrustChart" class="chart-canvas" height="220"></canvas>
     </article>
 
     <article class="card card-wide">

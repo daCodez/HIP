@@ -120,7 +120,10 @@ body {
   overflow-x: auto;
   font-size: 12px;
 }
-.clickable-list { list-style: none; padding-left: 0; }
+.chart-canvas {
+  width: 100% !important;
+  min-height: 220px;
+}.clickable-list { list-style: none; padding-left: 0; }
 .clickable-item {
   padding: 8px;
   border: 1px solid var(--border);
