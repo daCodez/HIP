@@ -40,9 +40,37 @@
     </article>
 
     <article class="card">
-        <h3>Identity Queue</h3>
-        <p>Review registered identities and pending verification events.</p>
+        <div class="card-head">
+            <h3>Audit Feed</h3>
+            <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
+        </div>
+
+        @if (_loadingAudit)
+        {
+            <p>Loading audit events...</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(_auditError))
+        {
+            <p class="status-bad">Unavailable: @_auditError</p>
+        }
+        else if (_auditEvents is { Count: > 0 })
+        {
+            <ul class="meta-list">
+                @foreach (var evt in _auditEvents.Take(5))
+                {
+                    <li>
+                        <strong>@evt.EventType</strong> · @evt.Subject<br />
+                        <small>@evt.CreatedAtUtc.ToString("MM-dd HH:mm:ss 'UTC'") · @evt.Detail</small>
+                    </li>
+                }
+            </ul>
+        }
+        else
+        {
+            <p>No audit events yet.</p>
+        }
     </article>
+
     <article class="card">
         <h3>Reputation Snapshot</h3>
         <p>Monitor scoring bands and abuse-risk trends in one view.</p>
@@ -54,9 +82,14 @@
     private string? _healthError;
     private bool _loadingHealth;
 
+    private List<AuditEventDto> _auditEvents = new();
+    private string? _auditError;
+    private bool _loadingAudit;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadServiceHealthAsync();
+        await LoadAuditFeedAsync();
     }
 
     private async Task LoadServiceHealthAsync()
@@ -85,5 +118,28 @@
         }
     }
 
+    private async Task LoadAuditFeedAsync()
+    {
+        _loadingAudit = true;
+        _auditError = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-api");
+            var result = await client.GetFromJsonAsync<List<AuditEventDto>>("/api/admin/audit?take=50");
+            _auditEvents = result ?? new List<AuditEventDto>();
+        }
+        catch (Exception ex)
+        {
+            _auditError = ex.Message;
+            _auditEvents = new List<AuditEventDto>();
+        }
+        finally
+        {
+            _loadingAudit = false;
+        }
+    }
+
     private sealed record ServiceStatusDto(string ServiceName, string AssemblyVersion, DateTimeOffset UtcTimestamp);
+    private sealed record AuditEventDto(string Id, DateTimeOffset CreatedAtUtc, string EventType, string Subject, string Source, string Detail);
 }
