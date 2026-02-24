@@ -216,8 +216,16 @@ aside.border-end.bg-white {
 }
 .link-btn:disabled { opacity: .6; cursor: default; }
 
-.meta-list { margin: 8px 0 0; padding-left: 18px; color: #4b5563; }
-.meta-list li { margin-bottom: 6px; }
+.meta-list {
+  margin: 10px 0 0;
+  padding-left: 24px;
+  color: #4b5563;
+  list-style-position: outside;
+}
+.meta-list li {
+  margin-bottom: 8px;
+  padding-left: 2px;
+}
 
 .input-row { margin: 8px 0; }
 .field-label { display: block; margin-bottom: 4px; font-size: 12px; color: var(--muted); }
