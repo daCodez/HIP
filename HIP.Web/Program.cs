@@ -18,8 +18,8 @@ builder.Services.AddHttpClient("hip-api", client =>
 
 builder.Services.AddHttpClient("hip-bff", client =>
 {
-    client.BaseAddress = new Uri("http://127.0.0.1:5102");
-});
+    client.BaseAddress = new Uri("https+http://hip-web");
+}).AddServiceDiscovery();
 
 builder.Services.AddSingleton<HipEnvelopeSigner>();
 builder.Services.AddScoped<HipApiClient>();
