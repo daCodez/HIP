@@ -6,10 +6,12 @@ builder.AddServiceDefaults();
 
 builder.Services.AddRazorComponents();
 
+builder.Services.AddServiceDiscovery();
+
 builder.Services.AddHttpClient("hip-api", client =>
 {
-    client.BaseAddress = new Uri("http://100.67.76.107:5101");
-});
+    client.BaseAddress = new Uri("https+http://hip-api");
+}).AddServiceDiscovery();
 
 var app = builder.Build();
 
