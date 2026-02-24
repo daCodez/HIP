@@ -1,20 +1,18 @@
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using HIP.ApiService.Application.Abstractions;
+using HIP.ApiService.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace HIP.ApiService.Infrastructure.Security;
 
-public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy) : IJarvisTokenService
+public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy, HipDbContext db) : IJarvisTokenService
 {
     private static readonly TimeSpan AccessTtl = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan RefreshTtl = TimeSpan.FromHours(12);
 
-    private readonly ConcurrentDictionary<string, RefreshRecord> _refreshByHash = new();
-    private readonly ConcurrentDictionary<string, DateTimeOffset> _consumedProofJti = new();
-
-    public TokenIssueResult Issue(TokenIssueRequest request)
+    public async Task<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken)
     {
         var key = keyPolicy.Current();
         var now = DateTimeOffset.UtcNow;
@@ -32,84 +30,111 @@ public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy) : I
 
         var accessToken = SignClaims(claims, key.Secret);
         var refreshToken = $"rtk_{Guid.NewGuid():N}";
-        _refreshByHash[Hash(refreshToken)] = new RefreshRecord(request.IdentityId, request.Audience, request.DeviceId, key.KeyId, key.Version, refreshExpiry);
+        var refreshHash = Hash(refreshToken);
+
+        db.RefreshTokens.Add(new RefreshTokenRecord
+        {
+            TokenHash = refreshHash,
+            IdentityId = request.IdentityId,
+            Audience = request.Audience,
+            DeviceId = request.DeviceId,
+            KeyId = key.KeyId,
+            Version = key.Version,
+            ExpiresAtUtc = refreshExpiry,
+            CreatedAtUtc = now
+        });
+
+        await db.SaveChangesAsync(cancellationToken);
 
         return new TokenIssueResult(accessToken, accessExpiry, refreshToken, refreshExpiry, key.KeyId, key.Version, request.Audience, request.DeviceId);
     }
 
-    public TokenValidationResult Validate(TokenValidationRequest request)
+    public Task<TokenValidationResult> ValidateAsync(TokenValidationRequest request, CancellationToken cancellationToken)
     {
         if (!TryParseAndVerify<AccessClaims>(request.AccessToken, out var claims, out var reason))
         {
-            return new TokenValidationResult(false, reason, null, null, null, null);
+            return Task.FromResult(new TokenValidationResult(false, reason, null, null, null, null));
         }
 
         if (claims!.Ver < keyPolicy.MinAcceptedVersion)
         {
-            return new TokenValidationResult(false, "soft_revoked", claims.Sub, DateTimeOffset.FromUnixTimeSeconds(claims.Exp), claims.Kid, claims.Ver);
+            return Task.FromResult(new TokenValidationResult(false, "soft_revoked", claims.Sub, DateTimeOffset.FromUnixTimeSeconds(claims.Exp), claims.Kid, claims.Ver));
         }
 
         if (!string.IsNullOrWhiteSpace(request.Audience) && !string.Equals(request.Audience, claims.Aud, StringComparison.Ordinal))
         {
-            return new TokenValidationResult(false, "audience_mismatch", claims.Sub, DateTimeOffset.FromUnixTimeSeconds(claims.Exp), claims.Kid, claims.Ver);
+            return Task.FromResult(new TokenValidationResult(false, "policy.invalidAudience", claims.Sub, DateTimeOffset.FromUnixTimeSeconds(claims.Exp), claims.Kid, claims.Ver));
         }
 
         if (!string.IsNullOrWhiteSpace(request.DeviceId) && !string.Equals(request.DeviceId, claims.Did, StringComparison.Ordinal))
         {
-            return new TokenValidationResult(false, "device_mismatch", claims.Sub, DateTimeOffset.FromUnixTimeSeconds(claims.Exp), claims.Kid, claims.Ver);
+            return Task.FromResult(new TokenValidationResult(false, "device_mismatch", claims.Sub, DateTimeOffset.FromUnixTimeSeconds(claims.Exp), claims.Kid, claims.Ver));
         }
 
         if (claims.Exp <= DateTimeOffset.UtcNow.ToUnixTimeSeconds())
         {
-            return new TokenValidationResult(false, "expired", claims.Sub, DateTimeOffset.FromUnixTimeSeconds(claims.Exp), claims.Kid, claims.Ver);
+            return Task.FromResult(new TokenValidationResult(false, "expired", claims.Sub, DateTimeOffset.FromUnixTimeSeconds(claims.Exp), claims.Kid, claims.Ver));
         }
 
-        return new TokenValidationResult(true, "ok", claims.Sub, DateTimeOffset.FromUnixTimeSeconds(claims.Exp), claims.Kid, claims.Ver);
+        return Task.FromResult(new TokenValidationResult(true, "ok", claims.Sub, DateTimeOffset.FromUnixTimeSeconds(claims.Exp), claims.Kid, claims.Ver));
     }
 
-    public TokenRefreshResult Refresh(TokenRefreshRequest request)
+    public async Task<TokenRefreshResult> RefreshAsync(TokenRefreshRequest request, CancellationToken cancellationToken)
     {
         var hash = Hash(request.RefreshToken);
-        if (!_refreshByHash.TryRemove(hash, out var record))
+        var record = await db.RefreshTokens.FirstOrDefaultAsync(x => x.TokenHash == hash, cancellationToken);
+        if (record is null)
         {
             return new TokenRefreshResult(false, "refresh_not_found", null);
         }
 
         if (record.ExpiresAtUtc <= DateTimeOffset.UtcNow)
         {
+            db.RefreshTokens.Remove(record);
+            await db.SaveChangesAsync(cancellationToken);
             return new TokenRefreshResult(false, "refresh_expired", null);
         }
 
-        var tokenSet = Issue(new TokenIssueRequest(record.IdentityId, record.Audience, record.DeviceId));
+        db.RefreshTokens.Remove(record);
+        await db.SaveChangesAsync(cancellationToken);
+
+        var tokenSet = await IssueAsync(new TokenIssueRequest(record.IdentityId, record.Audience, record.DeviceId), cancellationToken);
         return new TokenRefreshResult(true, "ok", tokenSet);
     }
 
-    public TokenRevokeResult Revoke(TokenRevokeRequest request)
+    public async Task<TokenRevokeResult> RevokeAsync(TokenRevokeRequest request, CancellationToken cancellationToken)
     {
         var revokedRefresh = 0;
 
-        if (!string.IsNullOrWhiteSpace(request.RefreshToken) && _refreshByHash.TryRemove(Hash(request.RefreshToken), out _))
+        if (!string.IsNullOrWhiteSpace(request.RefreshToken))
         {
-            revokedRefresh++;
+            var hash = Hash(request.RefreshToken);
+            var row = await db.RefreshTokens.FirstOrDefaultAsync(x => x.TokenHash == hash, cancellationToken);
+            if (row is not null)
+            {
+                db.RefreshTokens.Remove(row);
+                revokedRefresh++;
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(request.IdentityId))
         {
-            foreach (var item in _refreshByHash.Where(x => x.Value.IdentityId == request.IdentityId).ToList())
+            var rows = await db.RefreshTokens.Where(x => x.IdentityId == request.IdentityId).ToListAsync(cancellationToken);
+            if (rows.Count > 0)
             {
-                if (_refreshByHash.TryRemove(item.Key, out _))
-                {
-                    revokedRefresh++;
-                }
+                db.RefreshTokens.RemoveRange(rows);
+                revokedRefresh += rows.Count;
             }
         }
 
         var revokedAccess = 0;
-        if (!string.IsNullOrWhiteSpace(request.AccessToken) && TryParseAndVerify<AccessClaims>(request.AccessToken, out var claims, out _))
+        if (!string.IsNullOrWhiteSpace(request.AccessToken) && TryParseAndVerify<AccessClaims>(request.AccessToken, out _, out _))
         {
             keyPolicy.Rotate(emergency: true);
             revokedAccess = 1;
         }
+
+        await db.SaveChangesAsync(cancellationToken);
 
         var total = revokedAccess + revokedRefresh;
         return total > 0
@@ -117,24 +142,24 @@ public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy) : I
             : new TokenRevokeResult(false, "not_found", 0, 0);
     }
 
-    public ProofTokenIssueResult IssueProofToken(ProofTokenIssueRequest request)
+    public Task<ProofTokenIssueResult> IssueProofTokenAsync(ProofTokenIssueRequest request, CancellationToken cancellationToken)
     {
         var ttl = request.Ttl ?? TimeSpan.FromMinutes(1);
         if (ttl <= TimeSpan.Zero || ttl > TimeSpan.FromMinutes(5))
         {
-            return new ProofTokenIssueResult(false, "invalid_ttl", null, null);
+            return Task.FromResult(new ProofTokenIssueResult(false, "invalid_ttl", null, null));
         }
 
         var key = keyPolicy.Current();
         var exp = DateTimeOffset.UtcNow.Add(ttl);
         var claims = new ProofClaims(request.IdentityId, request.Audience, request.DeviceId, request.Action, key.KeyId, key.Version, exp.ToUnixTimeSeconds(), Guid.NewGuid().ToString("n"));
         var token = SignClaims(claims, key.Secret);
-        return new ProofTokenIssueResult(true, "ok", token, exp);
+        return Task.FromResult(new ProofTokenIssueResult(true, "ok", token, exp));
     }
 
-    public ProofTokenConsumeResult ConsumeProofToken(ProofTokenConsumeRequest request)
+    public async Task<ProofTokenConsumeResult> ConsumeProofTokenAsync(ProofTokenConsumeRequest request, CancellationToken cancellationToken)
     {
-        if (!TryParseAndVerify(request.ProofToken, out ProofClaims? claims, out var reason))
+        if (!TryParseAndVerify<ProofClaims>(request.ProofToken, out var claims, out var reason))
         {
             return new ProofTokenConsumeResult(false, reason, null);
         }
@@ -156,7 +181,7 @@ public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy) : I
 
         if (!string.IsNullOrWhiteSpace(request.Audience) && !string.Equals(request.Audience, claims.Aud, StringComparison.Ordinal))
         {
-            return new ProofTokenConsumeResult(false, "audience_mismatch", claims.Sub);
+            return new ProofTokenConsumeResult(false, "policy.invalidAudience", claims.Sub);
         }
 
         if (!string.IsNullOrWhiteSpace(request.DeviceId) && !string.Equals(request.DeviceId, claims.Did, StringComparison.Ordinal))
@@ -164,25 +189,32 @@ public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy) : I
             return new ProofTokenConsumeResult(false, "device_mismatch", claims.Sub);
         }
 
-        SweepConsumedProofs();
-        if (!_consumedProofJti.TryAdd(claims.Jti, DateTimeOffset.FromUnixTimeSeconds(claims.Exp)))
+        var now = DateTimeOffset.UtcNow;
+        var allProof = await db.ConsumedProofTokens.ToListAsync(cancellationToken);
+        var expiredProof = allProof.Where(x => x.ExpiresAtUtc <= now).ToList();
+        if (expiredProof.Count > 0)
+        {
+            db.ConsumedProofTokens.RemoveRange(expiredProof);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        var exists = await db.ConsumedProofTokens.AnyAsync(x => x.Jti == claims.Jti, cancellationToken);
+        if (exists)
         {
             return new ProofTokenConsumeResult(false, "already_used", claims.Sub);
         }
 
-        return new ProofTokenConsumeResult(true, "ok", claims.Sub);
-    }
-
-    private void SweepConsumedProofs()
-    {
-        var now = DateTimeOffset.UtcNow;
-        foreach (var item in _consumedProofJti)
+        db.ConsumedProofTokens.Add(new ConsumedProofTokenRecord
         {
-            if (item.Value <= now)
-            {
-                _consumedProofJti.TryRemove(item.Key, out _);
-            }
-        }
+            Jti = claims.Jti,
+            IdentityId = claims.Sub,
+            Action = claims.Act,
+            ExpiresAtUtc = DateTimeOffset.FromUnixTimeSeconds(claims.Exp),
+            ConsumedAtUtc = now
+        });
+        await db.SaveChangesAsync(cancellationToken);
+
+        return new ProofTokenConsumeResult(true, "ok", claims.Sub);
     }
 
     private static string Hash(string value)
@@ -250,7 +282,6 @@ public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy) : I
         }
     }
 
-    private sealed record RefreshRecord(string IdentityId, string Audience, string? DeviceId, string KeyId, int Version, DateTimeOffset ExpiresAtUtc);
     private sealed record AccessClaims(string Sub, string Aud, string? Did, string Kid, int Ver, long Exp, string Jti);
     private sealed record ProofClaims(string Sub, string Aud, string? Did, string Act, string Kid, int Ver, long Exp, string Jti);
 }

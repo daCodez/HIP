@@ -2,12 +2,12 @@ namespace HIP.ApiService.Application.Abstractions;
 
 public interface IJarvisTokenService
 {
-    TokenIssueResult Issue(TokenIssueRequest request);
-    TokenValidationResult Validate(TokenValidationRequest request);
-    TokenRefreshResult Refresh(TokenRefreshRequest request);
-    TokenRevokeResult Revoke(TokenRevokeRequest request);
-    ProofTokenIssueResult IssueProofToken(ProofTokenIssueRequest request);
-    ProofTokenConsumeResult ConsumeProofToken(ProofTokenConsumeRequest request);
+    Task<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken);
+    Task<TokenValidationResult> ValidateAsync(TokenValidationRequest request, CancellationToken cancellationToken);
+    Task<TokenRefreshResult> RefreshAsync(TokenRefreshRequest request, CancellationToken cancellationToken);
+    Task<TokenRevokeResult> RevokeAsync(TokenRevokeRequest request, CancellationToken cancellationToken);
+    Task<ProofTokenIssueResult> IssueProofTokenAsync(ProofTokenIssueRequest request, CancellationToken cancellationToken);
+    Task<ProofTokenConsumeResult> ConsumeProofTokenAsync(ProofTokenConsumeRequest request, CancellationToken cancellationToken);
 }
 
 public sealed record TokenIssueRequest(string IdentityId, string Audience, string? DeviceId);

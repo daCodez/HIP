@@ -60,10 +60,10 @@ builder.Services.AddScoped<IReputationService, DatabaseReputationService>();
 builder.Services.AddSingleton<IAuditTrail, InMemoryAuditTrail>();
 builder.Services.AddSingleton<ISecurityEventCounter, InMemorySecurityEventCounter>();
 builder.Services.AddSingleton<ISecurityRejectLog, InMemorySecurityRejectLog>();
-builder.Services.AddSingleton<IReplayProtectionService, InMemoryReplayProtectionService>();
+builder.Services.AddScoped<IReplayProtectionService, InMemoryReplayProtectionService>();
 builder.Services.AddSingleton<IReplayAssessmentService, InMemoryReplayAssessmentService>();
 builder.Services.AddSingleton<IKeyRotationPolicy, InMemoryKeyRotationPolicy>();
-builder.Services.AddSingleton<IJarvisTokenService, InMemoryJarvisTokenService>();
+builder.Services.AddScoped<IJarvisTokenService, InMemoryJarvisTokenService>();
 builder.Services.AddScoped<IMessageSignatureService, EcdsaMessageSignatureService>();
 
 builder.Services.AddProblemDetails();

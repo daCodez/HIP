@@ -2,5 +2,5 @@ namespace HIP.ApiService.Application.Abstractions;
 
 public interface IReplayProtectionService
 {
-    bool TryConsume(string messageId);
+    Task<bool> TryConsumeAsync(string messageId, string identityId, CancellationToken cancellationToken);
 }

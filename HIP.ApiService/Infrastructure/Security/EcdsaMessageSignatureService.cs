@@ -135,7 +135,7 @@ public sealed class EcdsaMessageSignatureService(
                 return new VerifyMessageResultDto(false, "invalid_signature");
             }
 
-            if (!replayProtection.TryConsume(message.Id))
+            if (!await replayProtection.TryConsumeAsync(message.Id, message.From, cancellationToken))
             {
                 securityCounter.IncrementReplayDetected();
                 var assessment = replayAssessment.RegisterReplay(message.From, message.Id);

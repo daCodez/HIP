@@ -1,34 +1,44 @@
-using System.Collections.Concurrent;
 using HIP.ApiService.Application.Abstractions;
+using HIP.ApiService.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace HIP.ApiService.Infrastructure.Security;
 
-public sealed class InMemoryReplayProtectionService : IReplayProtectionService
+public sealed class InMemoryReplayProtectionService(HipDbContext db) : IReplayProtectionService
 {
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(15);
-    private readonly ConcurrentDictionary<string, DateTimeOffset> _seen = new();
 
-    public bool TryConsume(string messageId)
+    public async Task<bool> TryConsumeAsync(string messageId, string identityId, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(messageId))
+        if (string.IsNullOrWhiteSpace(messageId) || string.IsNullOrWhiteSpace(identityId))
         {
             return false;
         }
 
         var now = DateTimeOffset.UtcNow;
-        SweepExpired(now);
-
-        return _seen.TryAdd(messageId, now.Add(Ttl));
-    }
-
-    private void SweepExpired(DateTimeOffset now)
-    {
-        foreach (var kvp in _seen)
+        var allNonces = await db.ReplayNonces.ToListAsync(cancellationToken);
+        var expired = allNonces.Where(x => x.ExpiresAtUtc <= now).ToList();
+        if (expired.Count > 0)
         {
-            if (kvp.Value <= now)
-            {
-                _seen.TryRemove(kvp.Key, out _);
-            }
+            db.ReplayNonces.RemoveRange(expired);
+            await db.SaveChangesAsync(cancellationToken);
         }
+
+        var exists = await db.ReplayNonces.AnyAsync(x => x.MessageId == messageId, cancellationToken);
+        if (exists)
+        {
+            return false;
+        }
+
+        db.ReplayNonces.Add(new ReplayNonceRecord
+        {
+            MessageId = messageId,
+            IdentityId = identityId,
+            CreatedAtUtc = now,
+            ExpiresAtUtc = now.Add(Ttl)
+        });
+
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 }

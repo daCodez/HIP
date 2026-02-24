@@ -42,9 +42,9 @@ public static class JarvisEndpoints
             .Produces<JarvisPolicyEvaluationResultDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
 
-        endpoints.MapPost("/api/jarvis/token/issue", (JarvisTokenIssueRequestDto request, IJarvisTokenService tokenService) =>
+        endpoints.MapPost("/api/jarvis/token/issue", async (JarvisTokenIssueRequestDto request, IJarvisTokenService tokenService, CancellationToken cancellationToken) =>
             {
-                var tokenSet = tokenService.Issue(new TokenIssueRequest(request.IdentityId, request.Audience, request.DeviceId));
+                var tokenSet = await tokenService.IssueAsync(new TokenIssueRequest(request.IdentityId, request.Audience, request.DeviceId), cancellationToken);
                 HipTelemetry.Record("jarvis.token.issue", "ok", 0);
                 return Results.Ok(tokenSet);
             })
@@ -52,9 +52,9 @@ public static class JarvisEndpoints
             .WithName("IssueJarvisToken")
             .WithTags("Jarvis");
 
-        endpoints.MapPost("/api/jarvis/token/validate", (JarvisTokenValidateRequestDto request, IJarvisTokenService tokenService) =>
+        endpoints.MapPost("/api/jarvis/token/validate", async (JarvisTokenValidateRequestDto request, IJarvisTokenService tokenService, CancellationToken cancellationToken) =>
             {
-                var result = tokenService.Validate(new TokenValidationRequest(request.AccessToken, request.Audience, request.DeviceId));
+                var result = await tokenService.ValidateAsync(new TokenValidationRequest(request.AccessToken, request.Audience, request.DeviceId), cancellationToken);
                 HipTelemetry.Record("jarvis.token.validate", result.Reason, 0);
                 return Results.Ok(result);
             })
@@ -62,9 +62,9 @@ public static class JarvisEndpoints
             .WithName("ValidateJarvisToken")
             .WithTags("Jarvis");
 
-        endpoints.MapPost("/api/jarvis/token/refresh", (JarvisTokenRefreshRequestDto request, IJarvisTokenService tokenService) =>
+        endpoints.MapPost("/api/jarvis/token/refresh", async (JarvisTokenRefreshRequestDto request, IJarvisTokenService tokenService, CancellationToken cancellationToken) =>
             {
-                var result = tokenService.Refresh(new TokenRefreshRequest(request.RefreshToken));
+                var result = await tokenService.RefreshAsync(new TokenRefreshRequest(request.RefreshToken), cancellationToken);
                 HipTelemetry.Record("jarvis.token.refresh", result.Reason, 0);
                 return Results.Ok(result);
             })
@@ -72,9 +72,9 @@ public static class JarvisEndpoints
             .WithName("RefreshJarvisToken")
             .WithTags("Jarvis");
 
-        endpoints.MapPost("/api/jarvis/token/revoke", (JarvisTokenRevokeRequestDto request, IJarvisTokenService tokenService) =>
+        endpoints.MapPost("/api/jarvis/token/revoke", async (JarvisTokenRevokeRequestDto request, IJarvisTokenService tokenService, CancellationToken cancellationToken) =>
             {
-                var result = tokenService.Revoke(new TokenRevokeRequest(request.AccessToken, request.RefreshToken, request.IdentityId));
+                var result = await tokenService.RevokeAsync(new TokenRevokeRequest(request.AccessToken, request.RefreshToken, request.IdentityId), cancellationToken);
                 HipTelemetry.Record("jarvis.token.revoke", result.Reason, 0);
                 return Results.Ok(result);
             })
@@ -82,10 +82,10 @@ public static class JarvisEndpoints
             .WithName("RevokeJarvisToken")
             .WithTags("Jarvis");
 
-        endpoints.MapPost("/api/jarvis/proof/issue", (JarvisProofTokenIssueRequestDto request, IJarvisTokenService tokenService) =>
+        endpoints.MapPost("/api/jarvis/proof/issue", async (JarvisProofTokenIssueRequestDto request, IJarvisTokenService tokenService, CancellationToken cancellationToken) =>
             {
                 var ttl = request.TtlSeconds is > 0 ? TimeSpan.FromSeconds(request.TtlSeconds.Value) : (TimeSpan?)null;
-                var result = tokenService.IssueProofToken(new ProofTokenIssueRequest(request.IdentityId, request.Audience, request.DeviceId, request.Action, ttl));
+                var result = await tokenService.IssueProofTokenAsync(new ProofTokenIssueRequest(request.IdentityId, request.Audience, request.DeviceId, request.Action, ttl), cancellationToken);
                 HipTelemetry.Record("jarvis.proof.issue", result.Reason, 0);
                 return Results.Ok(result);
             })
@@ -93,9 +93,9 @@ public static class JarvisEndpoints
             .WithName("IssueJarvisProofToken")
             .WithTags("Jarvis");
 
-        endpoints.MapPost("/api/jarvis/proof/consume", (JarvisProofTokenConsumeRequestDto request, IJarvisTokenService tokenService) =>
+        endpoints.MapPost("/api/jarvis/proof/consume", async (JarvisProofTokenConsumeRequestDto request, IJarvisTokenService tokenService, CancellationToken cancellationToken) =>
             {
-                var result = tokenService.ConsumeProofToken(new ProofTokenConsumeRequest(request.ProofToken, request.ExpectedAction, request.Audience, request.DeviceId));
+                var result = await tokenService.ConsumeProofTokenAsync(new ProofTokenConsumeRequest(request.ProofToken, request.ExpectedAction, request.Audience, request.DeviceId), cancellationToken);
                 HipTelemetry.Record("jarvis.proof.consume", result.Reason, 0);
                 return Results.Ok(result);
             })
