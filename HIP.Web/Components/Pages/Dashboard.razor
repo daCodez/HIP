@@ -11,14 +11,7 @@
 <section class="hero">
     <h1>HIP Admin Dashboard</h1>
     <p>Clean, responsive control surface for Identity, Reputation, and Message trust workflows.</p>
-    <div class="selected-detail" style="margin-top:10px;">
-        <strong>Quick Legend</strong>
-        <ul class="meta-list">
-            <li><strong>Verified:</strong> Signature valid + fresh timestamp.</li>
-            <li><strong>Review:</strong> Needs human check (policy/reputation constraints).</li>
-            <li><strong>Risk:</strong> Replayed, expired, or invalid security signal.</li>
-        </ul>
-    </div>
+    <p><small>Use Refresh on any card to update live HIP status.</small></p>
 </section>
 
 <section class="cards">
@@ -27,10 +20,6 @@
             <h3>Service Health</h3>
             <button class="link-btn" @onclick="LoadServiceHealthAsync" disabled="@_loadingHealth">@(_loadingHealth ? "Checking..." : "Refresh")</button>
         </div>
-        @if (_helpMode)
-        {
-            <p><small>Shows whether HIP API is reachable and which build/version is running.</small></p>
-        }
 
         @if (_loadingHealth)
         {
@@ -129,11 +118,7 @@
                         {
                             <li>
                                 <strong>@evt.Reason</strong> · @evt.IdentityId<br />
-                                <small>msg=@(evt.MessageId ?? "-") · skew=@(evt.ClockSkewSeconds?.ToString("0.##") ?? "-")s · @evt.UtcTimestamp.ToString("MM-dd HH:mm:ss 'UTC'")</small><br />
-                                @if (_helpMode)
-                                {
-                                    <small><em>@TranslateReason(evt.Reason)</em></small>
-                                }
+                                <small>msg=@(evt.MessageId ?? "-") · skew=@(evt.ClockSkewSeconds?.ToString("0.##") ?? "-")s · @evt.UtcTimestamp.ToString("MM-dd HH:mm:ss 'UTC'")</small>
                             </li>
                         }
                     </ul>
@@ -161,11 +146,6 @@
             <h3>Audit Feed</h3>
             <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
         </div>
-        @if (_helpMode)
-        {
-            <p><small>Chronological event log. Use filters to narrow to sign/verify/policy/security events.</small></p>
-            <p><small><strong>Tip:</strong> Click a row to inspect full event fields and details.</small></p>
-        }
 
         <div class="form-grid">
             <div class="input-row">
@@ -309,15 +289,6 @@
                 <button class="link-btn" @onclick="CopyLastSignedJsonAsync" disabled="@(string.IsNullOrWhiteSpace(_lastSignedMessageJson))">Copy JSON</button>
             </div>
         </div>
-        @if (_helpMode)
-        {
-            <p><small>Use this to create signed test payloads and validate trust outcomes before integrating clients.</small></p>
-            <ul class="meta-list">
-                <li><strong>Sign:</strong> Creates signed payload from body text + key.</li>
-                <li><strong>Verify Last:</strong> Validates signature and freshness result.</li>
-                <li><strong>Copy JSON:</strong> Paste payload into external API tests quickly.</li>
-            </ul>
-        }
 
         <div class="input-row">
             <input class="text-input" @bind="_signFrom" placeholder="from" />
@@ -369,8 +340,32 @@
     </article>
 </section>
 
+<button class="help-tab" @onclick="ToggleHelpDrawer">?</button>
+<aside class="help-drawer @(_helpDrawerOpen ? "open" : "")">
+    <h4>Dashboard Help</h4>
+    <p><strong>Security Counters</strong></p>
+    <ul>
+        <li><b>Replay detected</b>: same signed message id reused.</li>
+        <li><b>Message expired</b>: signature timestamp too old/new.</li>
+        <li><b>Policy blocked</b>: risky input denied by HIP policy.</li>
+    </ul>
+    <p><strong>Quick actions</strong></p>
+    <ul>
+        <li>Refresh cards after tests.</li>
+        <li>Use Sign/Verify playground for end-to-end checks.</li>
+        <li>Open Audit Feed and click rows for details.</li>
+    </ul>
+    <p><strong>Reason code translator</strong></p>
+    <ul>
+        <li><code>replay_detected</code> → duplicate signed message</li>
+        <li><code>message_expired</code> → outside freshness window</li>
+        <li><code>policy_blocked</code> → blocked unsafe request</li>
+        <li><code>policy.lowReputation</code> → score below threshold</li>
+    </ul>
+</aside>
+
 @code {
-    private bool _helpMode = true;
+    private bool _helpDrawerOpen;
 
     private ServiceStatusDto? _serviceHealth;
     private string? _healthError;
@@ -426,17 +421,10 @@
 
     private readonly string _extensionDownloadVersion = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
 
-    private static string TranslateReason(string reason) => reason switch
+    private void ToggleHelpDrawer()
     {
-        "replay_detected" => "This exact signed message was seen before (possible duplicate/replay).",
-        "message_expired" => "Message timestamp is too old/new for trust window.",
-        "policy_blocked" => "HIP policy blocked unsafe or high-risk input.",
-        "invalid_signature" => "Signature does not match payload/key.",
-        "invalid_format" => "Payload/signature format is malformed.",
-        "policy.lowReputation" => "Identity score below required threshold for this action.",
-        "policy.invalidAudience" => "Token/audience does not match expected target.",
-        _ => "No translator yet for this reason code."
-    };
+        _helpDrawerOpen = !_helpDrawerOpen;
+    }
 
     protected override async Task OnInitializedAsync()
     {
