@@ -1,34 +1,28 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Nav
 
-<div class="app-frame">
-    <header class="topbar">
-        <div class="topbar-left">
-            <button class="menu-toggle" @onclick="ToggleNav" title="Toggle navigation">☰</button>
-            <div class="topbar-title">HIP Admin</div>
+<div class="bootstrap-shell">
+    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom px-3">
+        <button class="btn btn-outline-secondary btn-sm me-2" @onclick="ToggleNav">☰</button>
+        <span class="navbar-brand mb-0 h1">HIP Admin</span>
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <span class="badge bg-secondary">Eric</span>
         </div>
-        <div class="topbar-right">
-            <div class="user-chip" title="Logged in user">
-                <span class="user-avatar">E</span>
-                <span>Eric</span>
-            </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row flex-nowrap">
+            <aside class="col-auto border-end bg-white px-0 @(_navCollapsed ? "sidebar-collapsed" : "")">
+                <NavMenu Collapsed="@_navCollapsed" />
+            </aside>
+
+            <main class="col py-3 px-3">
+                <div class="text-muted small mb-2">
+                    @string.Join(" / ", GetBreadcrumbs())
+                </div>
+                @Body
+            </main>
         </div>
-    </header>
-
-    <div class="shell @(_navCollapsed ? "collapsed" : string.Empty)">
-        <aside class="sidebar">
-            <NavMenu />
-        </aside>
-
-        <main class="main">
-            <div class="breadcrumb-bar">
-                @foreach (var crumb in GetBreadcrumbs())
-                {
-                    <span class="crumb">@crumb</span>
-                }
-            </div>
-            @Body
-        </main>
     </div>
 </div>
 
@@ -40,14 +34,9 @@
     private IEnumerable<string> GetBreadcrumbs()
     {
         var path = Nav.ToBaseRelativePath(Nav.Uri);
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return new[] { "Dashboard", "Overview" };
-        }
+        if (string.IsNullOrWhiteSpace(path)) return new[] { "Dashboard", "Overview" };
 
-        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries)
-            .Select(p => char.ToUpperInvariant(p[0]) + p[1..]);
-
-        return new[] { "Dashboard" }.Concat(parts);
+        return new[] { "Dashboard" }.Concat(path.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => char.ToUpperInvariant(p[0]) + p[1..]));
     }
 }

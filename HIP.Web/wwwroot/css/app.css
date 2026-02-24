@@ -15,6 +15,9 @@
 html, body { margin: 0; padding: 0; font-family: Inter, Segoe UI, system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
 a { color: inherit; }
 
+.bootstrap-shell { min-height: 100vh; }
+.sidebar-collapsed .nav-link { text-align: center; }
+
 .app-frame { min-height: 100vh; }
 
 .topbar {

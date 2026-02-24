@@ -1,22 +1,21 @@
-<nav>
-    <NavLink href="/" Match="NavLinkMatch.All">
-        <span class="nav-icon">📊</span>
-        <span class="nav-label">Dashboard</span>
-    </NavLink>
-    <NavLink href="#" @onclick:preventDefault="true">
-        <span class="nav-icon">🪪</span>
-        <span class="nav-label">Identity</span>
-    </NavLink>
-    <NavLink href="#" @onclick:preventDefault="true">
-        <span class="nav-icon">⭐</span>
-        <span class="nav-label">Reputation</span>
-    </NavLink>
-    <NavLink href="#" @onclick:preventDefault="true">
-        <span class="nav-icon">✉️</span>
-        <span class="nav-label">Messages</span>
-    </NavLink>
-    <NavLink href="#" @onclick:preventDefault="true">
-        <span class="nav-icon">⚙️</span>
-        <span class="nav-label">Settings</span>
-    </NavLink>
-</nav>
+@code {
+    [Parameter] public bool Collapsed { get; set; }
+}
+
+<div class="p-2" style="width:@(Collapsed ? "72px" : "220px")">
+    <ul class="nav nav-pills flex-column gap-1">
+        <li class="nav-item">
+            <NavLink href="/" Match="NavLinkMatch.All" class="nav-link">
+                <span>📊</span>
+                @if (!Collapsed)
+                {
+                    <span class="ms-2">Dashboard</span>
+                }
+            </NavLink>
+        </li>
+        <li class="nav-item"><a class="nav-link disabled"><span>🪪</span>@if(!Collapsed){<span class="ms-2">Identity</span>}</a></li>
+        <li class="nav-item"><a class="nav-link disabled"><span>⭐</span>@if(!Collapsed){<span class="ms-2">Reputation</span>}</a></li>
+        <li class="nav-item"><a class="nav-link disabled"><span>✉️</span>@if(!Collapsed){<span class="ms-2">Messages</span>}</a></li>
+        <li class="nav-item"><a class="nav-link disabled"><span>⚙️</span>@if(!Collapsed){<span class="ms-2">Settings</span>}</a></li>
+    </ul>
+</div>
