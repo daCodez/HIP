@@ -79,9 +79,11 @@ public sealed class EvaluateJarvisPolicyHandler(
         };
 
         var toolAccessAllowed = decision != "block" && identity is not null && score >= requiredScore;
-        var toolAccessReason = identity is null
-            ? "identity_not_found"
-            : toolAccessAllowed ? "allowed" : "insufficient_reputation";
+        var toolAccessReason = decision == "block"
+            ? "policy_blocked"
+            : identity is null
+                ? "identity_not_found"
+                : toolAccessAllowed ? "allowed" : "insufficient_reputation";
 
         if (!toolAccessAllowed && decision == "allow")
         {
