@@ -396,8 +396,8 @@
 
         try
         {
-            var client = HttpClientFactory.CreateClient("hip-api");
-            _serviceHealth = await client.GetFromJsonAsync<ServiceStatusDto>("/api/status");
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            _serviceHealth = await client.GetFromJsonAsync<ServiceStatusDto>("/bff/status");
 
             if (_serviceHealth is null)
             {
@@ -459,9 +459,9 @@
 
         try
         {
-            var client = HttpClientFactory.CreateClient("hip-api");
-            _securityStatus = await client.GetFromJsonAsync<SecurityStatusDto>("/api/admin/security-status");
-            _securityEvents = await client.GetFromJsonAsync<List<SecurityEventDto>>("/api/admin/security-events?take=10") ?? new List<SecurityEventDto>();
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            _securityStatus = await client.GetFromJsonAsync<SecurityStatusDto>("/bff/security-status");
+            _securityEvents = await client.GetFromJsonAsync<List<SecurityEventDto>>("/bff/security-events?take=10") ?? new List<SecurityEventDto>();
             if (_securityStatus is null)
             {
                 _securityError = "No data returned.";
@@ -600,8 +600,8 @@
 
         try
         {
-            var client = HttpClientFactory.CreateClient("hip-api");
-            using var response = await client.GetAsync($"/api/identity/{Uri.EscapeDataString(id)}");
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            using var response = await client.GetAsync($"/bff/identity/{Uri.EscapeDataString(id)}");
 
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
@@ -649,8 +649,8 @@
 
         try
         {
-            var client = HttpClientFactory.CreateClient("hip-api");
-            using var response = await client.GetAsync($"/api/reputation/{Uri.EscapeDataString(id)}");
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            using var response = await client.GetAsync($"/bff/reputation/{Uri.EscapeDataString(id)}");
 
             if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
             {
