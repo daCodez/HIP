@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "HIP Mail Bridge",
+  "version": "0.1.0",
+  "description": "Sign and verify Gmail/Outlook email content using HIP API.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "https://outlook.office.com/*",
+    "https://outlook.live.com/*",
+    "http://100.67.76.107:5101/*"
+  ],
+  "background": {
+    "service_worker": "service_worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content/gmail.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://outlook.office.com/*", "https://outlook.live.com/*"],
+      "js": ["content/outlook.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "HIP Mail Bridge"
+  }
+}
