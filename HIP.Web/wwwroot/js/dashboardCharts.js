@@ -15,6 +15,10 @@ window.hipCharts = (() => {
     charts[id] = new Chart(el.getContext('2d'), cfg);
   }
 
+  function axisColor() { return '#8f8f8f'; }
+  function gridColor() { return '#e5e5e5'; }
+  function legendColor() { return '#7b7b7b'; }
+
   function renderAll(model) {
     mk('hipTrendChart', {
       type: 'line',
@@ -26,7 +30,15 @@ window.hipCharts = (() => {
           { label: 'Blocked', data: model.trend.blocked, borderColor: '#8b5cf6', tension: .25 }
         ]
       },
-      options: { responsive: true, plugins: { legend: { labels: { color: '#cbd5e1' } } }, scales: { x: { ticks: { color: '#94a3b8' } }, y: { ticks: { color: '#94a3b8' } } } }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: legendColor(), boxWidth: 22, boxHeight: 10 } } },
+        scales: {
+          x: { ticks: { color: axisColor() }, grid: { color: gridColor() } },
+          y: { ticks: { color: axisColor() }, grid: { color: gridColor() }, beginAtZero: true }
+        }
+      }
     });
 
     mk('hipReasonChart', {
@@ -35,7 +47,15 @@ window.hipCharts = (() => {
         labels: model.reasons.labels,
         datasets: [{ label: 'Count', data: model.reasons.values, backgroundColor: '#3b82f6' }]
       },
-      options: { responsive: true, plugins: { legend: { labels: { color: '#cbd5e1' } } }, scales: { x: { ticks: { color: '#94a3b8' } }, y: { ticks: { color: '#94a3b8' } } } }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: legendColor(), boxWidth: 22, boxHeight: 10 } } },
+        scales: {
+          x: { ticks: { color: axisColor() }, grid: { color: gridColor() } },
+          y: { ticks: { color: axisColor() }, grid: { color: gridColor() }, beginAtZero: true }
+        }
+      }
     });
 
     mk('hipTrustChart', {
@@ -44,7 +64,11 @@ window.hipCharts = (() => {
         labels: model.trust.labels,
         datasets: [{ data: model.trust.values, backgroundColor: ['#16a34a', '#f59e0b', '#ef4444'] }]
       },
-      options: { responsive: true, plugins: { legend: { labels: { color: '#cbd5e1' } } } }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: legendColor(), boxWidth: 18, boxHeight: 8 } } }
+      }
     });
   }
 
