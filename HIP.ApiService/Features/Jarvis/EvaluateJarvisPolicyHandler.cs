@@ -11,6 +11,7 @@ public sealed class EvaluateJarvisPolicyHandler(
     IIdentityService identityService,
     IReputationService reputationService,
     IAuditTrail auditTrail,
+    ISecurityEventCounter securityCounter,
     ILogger<EvaluateJarvisPolicyHandler> logger) : IRequestHandler<EvaluateJarvisPolicyCommand, JarvisPolicyEvaluationResultDto>
 {
     private static readonly string[] HighRiskMarkers =
@@ -90,6 +91,11 @@ public sealed class EvaluateJarvisPolicyHandler(
             decision = "review";
             risk = risk == "low" ? "medium" : risk;
             reasons.Add("Tool access requires higher trust level.");
+        }
+
+        if (decision == "block")
+        {
+            securityCounter.IncrementPolicyBlocked();
         }
 
         if (reasons.Count == 0)

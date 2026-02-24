@@ -9,6 +9,7 @@ namespace HIP.ApiService.Infrastructure.Security;
 public sealed class EcdsaMessageSignatureService(
     IOptions<CryptoProviderOptions> options,
     IReplayProtectionService replayProtection,
+    ISecurityEventCounter securityCounter,
     ILogger<EcdsaMessageSignatureService> logger) : IMessageSignatureService
 {
     public Task<SignMessageResultDto> SignAsync(SignMessageRequestDto request, CancellationToken cancellationToken)
@@ -90,6 +91,7 @@ public sealed class EcdsaMessageSignatureService(
         var age = now - message.CreatedAtUtc.Value;
         if (age > MaxMessageAge || age < -MaxFutureSkew)
         {
+            securityCounter.IncrementMessageExpired();
             return Task.FromResult(new VerifyMessageResultDto(false, "message_expired"));
         }
 
@@ -125,6 +127,7 @@ public sealed class EcdsaMessageSignatureService(
 
             if (!replayProtection.TryConsume(message.Id))
             {
+                securityCounter.IncrementReplayDetected();
                 logger.LogWarning("Replay detected for signed message {MessageId} from {From}.", message.Id, message.From);
                 return Task.FromResult(new VerifyMessageResultDto(false, "replay_detected"));
             }

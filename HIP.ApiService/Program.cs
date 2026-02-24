@@ -58,6 +58,7 @@ builder.Services.AddDbContext<HipDbContext>(options =>
 builder.Services.AddScoped<IIdentityService, InMemoryIdentityService>();
 builder.Services.AddScoped<IReputationService, DatabaseReputationService>();
 builder.Services.AddSingleton<IAuditTrail, InMemoryAuditTrail>();
+builder.Services.AddSingleton<ISecurityEventCounter, InMemorySecurityEventCounter>();
 builder.Services.AddSingleton<IReplayProtectionService, InMemoryReplayProtectionService>();
 builder.Services.AddSingleton<IMessageSignatureService, EcdsaMessageSignatureService>();
 
@@ -143,6 +144,7 @@ app.MapReputationEndpoints();
 app.MapMessageEndpoints();
 app.MapJarvisEndpoints();
 app.MapAuditEndpoints();
+app.MapSecurityEndpoints();
 app.MapDefaultEndpoints();
 
 app.Run();

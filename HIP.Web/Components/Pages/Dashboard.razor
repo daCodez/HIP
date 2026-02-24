@@ -77,6 +77,36 @@
         }
     </article>
 
+    <article class="card">
+        <div class="card-head">
+            <h3>Security Status</h3>
+            <button class="link-btn" @onclick="LoadSecurityStatusAsync" disabled="@_loadingSecurity">@(_loadingSecurity ? "Loading..." : "Refresh")</button>
+        </div>
+
+        @if (_loadingSecurity)
+        {
+            <p>Loading security counters...</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(_securityError))
+        {
+            <p class="status-bad">@_securityError</p>
+        }
+        else if (_securityStatus is not null)
+        {
+            <p class="status-ok">Counters loaded</p>
+            <ul class="meta-list">
+                <li><strong>Replay detected:</strong> @_securityStatus.ReplayDetected</li>
+                <li><strong>Message expired:</strong> @_securityStatus.MessageExpired</li>
+                <li><strong>Policy blocked:</strong> @_securityStatus.PolicyBlocked</li>
+                <li><strong>UTC:</strong> @_securityStatus.UtcTimestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</li>
+            </ul>
+        }
+        else
+        {
+            <p>No security data loaded yet.</p>
+        }
+    </article>
+
     <article class="card card-wide">
         <div class="card-head">
             <h3>Audit Feed</h3>
@@ -286,6 +316,10 @@
     private string? _cryptoError;
     private bool _loadingCrypto;
 
+    private SecurityStatusDto? _securityStatus;
+    private string? _securityError;
+    private bool _loadingSecurity;
+
     private List<AuditEventDto> _auditEvents = new();
     private List<AuditEventDto> _filteredAuditEvents = new();
     private AuditEventDto? _selectedAuditEvent;
@@ -328,6 +362,7 @@
     {
         await LoadServiceHealthAsync();
         await LoadCryptoConfigAsync();
+        await LoadSecurityStatusAsync();
         await LoadAuditFeedAsync();
         await LookupIdentityAsync();
         await LookupReputationAsync();
@@ -393,6 +428,31 @@
         finally
         {
             _loadingCrypto = false;
+        }
+    }
+
+    private async Task LoadSecurityStatusAsync()
+    {
+        _loadingSecurity = true;
+        _securityError = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-api");
+            _securityStatus = await client.GetFromJsonAsync<SecurityStatusDto>("/api/admin/security-status");
+            if (_securityStatus is null)
+            {
+                _securityError = "No data returned.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _securityError = ex.Message;
+            _securityStatus = null;
+        }
+        finally
+        {
+            _loadingSecurity = false;
         }
     }
 
@@ -728,6 +788,7 @@
         string? PublicKeyPath,
         bool PrivateKeyExists,
         bool PublicKeyExists);
+    private sealed record SecurityStatusDto(long ReplayDetected, long MessageExpired, long PolicyBlocked, DateTimeOffset UtcTimestamp);
     private sealed record AuditEventDto(string Id, DateTimeOffset CreatedAtUtc, string EventType, string Subject, string Source, string Detail);
     private sealed record IdentityDto(string Id, string PublicKeyRef);
     private sealed record ReputationDto(string IdentityId, int Score, DateTimeOffset UtcTimestamp);
