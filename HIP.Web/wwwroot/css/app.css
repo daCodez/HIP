@@ -66,11 +66,11 @@ a { color: inherit; }
 }
 
 .hero {
-  background: linear-gradient(180deg, rgba(79,140,255,.12), rgba(79,140,255,.02));
+  background: linear-gradient(180deg, rgba(79,140,255,.14), rgba(79,140,255,.03));
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 18px;
-  margin-bottom: 16px;
+  border-radius: 0;
+  padding: 18px 24px;
+  margin: -24px -24px 16px -24px;
 }
 .hero h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: .2px; }
 .hero p { margin: 0; color: var(--muted); }
@@ -211,6 +211,7 @@ a { color: inherit; }
   .shell { flex-direction: column; }
   .sidebar { width: 100%; border-right: 0; border-bottom: 1px solid var(--border); }
   .main { padding: 14px; }
+  .hero { margin: -14px -14px 14px -14px; padding: 16px; }
   .cards { grid-template-columns: 1fr; }
   .card-wide { grid-column: span 1; }
   .form-grid { grid-template-columns: 1fr; }
