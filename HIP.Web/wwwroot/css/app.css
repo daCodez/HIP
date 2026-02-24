@@ -432,3 +432,54 @@ aside.border-end.bg-white {
 }
 
 .link-btn:hover { background-color: #494949; color: #fff; }
+
+/* Dashboard spacing + type tuning */
+html, body {
+  font-size: 13px;
+  line-height: 1.428571429;
+}
+
+h1 { font-size: 42px; }
+h2 { font-size: 30px; }
+h3 { font-size: 20px; }
+h4 { font-size: 18px; }
+h5 { font-size: 14px; }
+h6 { font-size: 12px; }
+
+.main { padding: 15px 18px; }
+
+.hero {
+  margin-bottom: 14px;
+  padding-bottom: 0;
+}
+
+.hero h1 {
+  font-size: 54px;
+  line-height: 1.05;
+  margin-bottom: 8px;
+}
+
+.hero p {
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.cards { gap: 12px; }
+
+.card > :not(.card-head),
+.card-body,
+.widget .widget-content {
+  padding: 12px;
+}
+
+.card-head,
+.widget .widget-header {
+  padding: 0 10px;
+}
+
+.card-head h3,
+.widget .widget-header h3 {
+  font-size: 20px;
+  line-height: 35px;
+  margin: 0;
+}
