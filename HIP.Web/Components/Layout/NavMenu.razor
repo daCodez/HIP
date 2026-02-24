@@ -1,7 +1,22 @@
 <nav>
-    <NavLink href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
-    <NavLink href="#" @onclick:preventDefault="true">Identity</NavLink>
-    <NavLink href="#" @onclick:preventDefault="true">Reputation</NavLink>
-    <NavLink href="#" @onclick:preventDefault="true">Messages</NavLink>
-    <NavLink href="#" @onclick:preventDefault="true">Settings</NavLink>
+    <NavLink href="/" Match="NavLinkMatch.All">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Dashboard</span>
+    </NavLink>
+    <NavLink href="#" @onclick:preventDefault="true">
+        <span class="nav-icon">🪪</span>
+        <span class="nav-label">Identity</span>
+    </NavLink>
+    <NavLink href="#" @onclick:preventDefault="true">
+        <span class="nav-icon">⭐</span>
+        <span class="nav-label">Reputation</span>
+    </NavLink>
+    <NavLink href="#" @onclick:preventDefault="true">
+        <span class="nav-icon">✉️</span>
+        <span class="nav-label">Messages</span>
+    </NavLink>
+    <NavLink href="#" @onclick:preventDefault="true">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">Settings</span>
+    </NavLink>
 </nav>
