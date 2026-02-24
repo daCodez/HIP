@@ -102,6 +102,39 @@
             <p>Enter an identity id and click Lookup.</p>
         }
     </article>
+
+    <article class="card">
+        <div class="card-head">
+            <h3>Reputation Lookup</h3>
+            <button class="link-btn" @onclick="LookupReputationAsync" disabled="@_loadingReputation">@(_loadingReputation ? "Looking up..." : "Lookup")</button>
+        </div>
+
+        <div class="input-row">
+            <input class="text-input" @bind="_reputationLookupId" placeholder="identity id (e.g. hip-system)" />
+        </div>
+
+        @if (_loadingReputation)
+        {
+            <p>Loading reputation...</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(_reputationError))
+        {
+            <p class="status-bad">@_reputationError</p>
+        }
+        else if (_reputationResult is not null)
+        {
+            <p class="status-ok">Reputation loaded</p>
+            <ul class="meta-list">
+                <li><strong>IdentityId:</strong> @_reputationResult.IdentityId</li>
+                <li><strong>Score:</strong> @_reputationResult.Score</li>
+                <li><strong>UTC:</strong> @_reputationResult.UtcTimestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</li>
+            </ul>
+        }
+        else
+        {
+            <p>Enter an identity id and click Lookup.</p>
+        }
+    </article>
 </section>
 
 @code {
@@ -118,11 +151,17 @@
     private string? _identityError;
     private bool _loadingIdentity;
 
+    private string _reputationLookupId = "hip-system";
+    private ReputationDto? _reputationResult;
+    private string? _reputationError;
+    private bool _loadingReputation;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadServiceHealthAsync();
         await LoadAuditFeedAsync();
         await LookupIdentityAsync();
+        await LookupReputationAsync();
     }
 
     private async Task LoadServiceHealthAsync()
@@ -222,7 +261,51 @@
         }
     }
 
+    private async Task LookupReputationAsync()
+    {
+        _loadingReputation = true;
+        _reputationError = null;
+        _reputationResult = null;
+
+        var id = _reputationLookupId?.Trim();
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            _reputationError = "Please enter an identity id.";
+            _loadingReputation = false;
+            return;
+        }
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-api");
+            using var response = await client.GetAsync($"/api/reputation/{Uri.EscapeDataString(id)}");
+
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                _reputationError = "Invalid identity id format.";
+                return;
+            }
+
+            response.EnsureSuccessStatusCode();
+            _reputationResult = await response.Content.ReadFromJsonAsync<ReputationDto>();
+
+            if (_reputationResult is null)
+            {
+                _reputationError = "No data returned.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _reputationError = ex.Message;
+        }
+        finally
+        {
+            _loadingReputation = false;
+        }
+    }
+
     private sealed record ServiceStatusDto(string ServiceName, string AssemblyVersion, DateTimeOffset UtcTimestamp);
     private sealed record AuditEventDto(string Id, DateTimeOffset CreatedAtUtc, string EventType, string Subject, string Source, string Detail);
     private sealed record IdentityDto(string Id, string PublicKeyRef);
+    private sealed record ReputationDto(string IdentityId, int Score, DateTimeOffset UtcTimestamp);
 }
