@@ -143,6 +143,18 @@
 
     <article class="card card-wide">
         <div class="card-head">
+            <h3>Security Trends</h3>
+            <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
+        </div>
+        <div class="form-grid">
+            <div><canvas id="hipTrendChart" height="140"></canvas></div>
+            <div><canvas id="hipReasonChart" height="140"></canvas></div>
+            <div><canvas id="hipTrustChart" height="140"></canvas></div>
+        </div>
+    </article>
+
+    <article class="card card-wide">
+        <div class="card-head">
             <h3>Audit Feed</h3>
             <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
         </div>
@@ -426,6 +438,14 @@
         _helpDrawerOpen = !_helpDrawerOpen;
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _auditEvents.Count > 0)
+        {
+            await RenderChartsAsync();
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadServiceHealthAsync();
@@ -536,6 +556,7 @@
             var result = await client.GetFromJsonAsync<List<AuditEventDto>>($"/api/admin/audit?take={_auditTake}");
             _auditEvents = result ?? new List<AuditEventDto>();
             ApplyAuditFilter();
+            await RenderChartsAsync();
         }
         catch (Exception ex)
         {
@@ -548,6 +569,46 @@
         {
             _loadingAudit = false;
         }
+    }
+
+    private async Task RenderChartsAsync()
+    {
+        if (_auditEvents.Count == 0) return;
+
+        var ordered = _auditEvents.OrderBy(x => x.CreatedAtUtc).ToList();
+
+        var hourly = ordered
+            .GroupBy(x => new DateTimeOffset(x.CreatedAtUtc.Year, x.CreatedAtUtc.Month, x.CreatedAtUtc.Day, x.CreatedAtUtc.Hour, 0, 0, TimeSpan.Zero))
+            .OrderBy(g => g.Key)
+            .ToList();
+
+        var labels = hourly.Select(g => g.Key.ToString("HH:mm")).ToArray();
+        var replay = hourly.Select(g => g.Count(e => e.Detail == "replay_detected")).ToArray();
+        var expired = hourly.Select(g => g.Count(e => e.Detail == "message_expired")).ToArray();
+        var blocked = hourly.Select(g => g.Count(e => e.Detail.Contains("block", StringComparison.OrdinalIgnoreCase))).ToArray();
+
+        var reasonGroups = ordered
+            .GroupBy(x => string.IsNullOrWhiteSpace(x.Detail) ? "unknown" : x.Detail)
+            .OrderByDescending(g => g.Count())
+            .Take(6)
+            .ToList();
+
+        var reasonLabels = reasonGroups.Select(g => g.Key).ToArray();
+        var reasonCounts = reasonGroups.Select(g => g.Count()).ToArray();
+
+        var verifiedCount = ordered.Count(x => string.Equals(x.Detail, "ok", StringComparison.OrdinalIgnoreCase));
+        var reviewCount = ordered.Count(x => string.Equals(x.Detail, "insufficient_reputation", StringComparison.OrdinalIgnoreCase) ||
+                                             string.Equals(x.Detail, "review", StringComparison.OrdinalIgnoreCase));
+        var riskCount = ordered.Count - verifiedCount - reviewCount;
+
+        var model = new
+        {
+            trend = new { labels, replay, expired, blocked },
+            reasons = new { labels = reasonLabels, values = reasonCounts },
+            trust = new { labels = new[] { "Verified", "Review", "Risk" }, values = new[] { verifiedCount, reviewCount, Math.Max(riskCount, 0) } }
+        };
+
+        await JS.InvokeVoidAsync("hipCharts.renderAll", model);
     }
 
     private void ApplyAuditFilter()

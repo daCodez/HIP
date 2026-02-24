@@ -1,0 +1,52 @@
+window.hipCharts = (() => {
+  const charts = {};
+
+  function destroy(id) {
+    if (charts[id]) {
+      charts[id].destroy();
+      delete charts[id];
+    }
+  }
+
+  function mk(id, cfg) {
+    const el = document.getElementById(id);
+    if (!el || !window.Chart) return;
+    destroy(id);
+    charts[id] = new Chart(el.getContext('2d'), cfg);
+  }
+
+  function renderAll(model) {
+    mk('hipTrendChart', {
+      type: 'line',
+      data: {
+        labels: model.trend.labels,
+        datasets: [
+          { label: 'Replay', data: model.trend.replay, borderColor: '#f59e0b', tension: .25 },
+          { label: 'Expired', data: model.trend.expired, borderColor: '#ef4444', tension: .25 },
+          { label: 'Blocked', data: model.trend.blocked, borderColor: '#8b5cf6', tension: .25 }
+        ]
+      },
+      options: { responsive: true, plugins: { legend: { labels: { color: '#cbd5e1' } } }, scales: { x: { ticks: { color: '#94a3b8' } }, y: { ticks: { color: '#94a3b8' } } } }
+    });
+
+    mk('hipReasonChart', {
+      type: 'bar',
+      data: {
+        labels: model.reasons.labels,
+        datasets: [{ label: 'Count', data: model.reasons.values, backgroundColor: '#3b82f6' }]
+      },
+      options: { responsive: true, plugins: { legend: { labels: { color: '#cbd5e1' } } }, scales: { x: { ticks: { color: '#94a3b8' } }, y: { ticks: { color: '#94a3b8' } } } }
+    });
+
+    mk('hipTrustChart', {
+      type: 'doughnut',
+      data: {
+        labels: model.trust.labels,
+        datasets: [{ data: model.trust.values, backgroundColor: ['#16a34a', '#f59e0b', '#ef4444'] }]
+      },
+      options: { responsive: true, plugins: { legend: { labels: { color: '#cbd5e1' } } } }
+    });
+  }
+
+  return { renderAll };
+})();
