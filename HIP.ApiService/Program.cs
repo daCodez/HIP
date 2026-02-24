@@ -11,6 +11,7 @@ using HIP.ApiService.Features.Identity;
 using HIP.ApiService.Features.Reputation;
 using HIP.ApiService.Features.Admin;
 using HIP.ApiService.Features.Messages;
+using HIP.ApiService.Features.Jarvis;
 using HIP.ServiceDefaults;
 using MediatR;
 using HIP.ApiService;
@@ -139,6 +140,7 @@ app.MapStatusEndpoints();
 app.MapIdentityEndpoints();
 app.MapReputationEndpoints();
 app.MapMessageEndpoints();
+app.MapJarvisEndpoints();
 app.MapAuditEndpoints();
 app.MapDefaultEndpoints();
 

@@ -57,3 +57,32 @@ curl -s http://100.67.76.107:5101/api/status | jq
 Notes:
 - `HIP_API_REPLICAS=1` (default) = single-node profile
 - `HIP_API_REPLICAS=2`+ = multi-node `hip-api` behind Aspire service discovery
+
+## Jarvis integration: identity + trust endpoints
+
+### Get trust context for an agent identity
+
+```bash
+curl -s http://127.0.0.1:5101/api/jarvis/context/hip-system | jq
+```
+
+Response includes:
+- `identityExists`
+- `reputationScore`
+- `trustLevel` (`low|medium|high`)
+- `canUseSensitiveTools`
+- `memoryRoute` (`trusted|constrained`)
+
+### Evaluate tool access by risk tier
+
+```bash
+curl -s -X POST http://127.0.0.1:5101/api/jarvis/tool-access \
+  -H "Content-Type: application/json" \
+  -d '{"identityId":"hip-system","toolName":"nodes.camera_snap","riskLevel":"high"}' | jq
+```
+
+Risk thresholds:
+- `low` >= 20
+- `medium` >= 50
+- `high` >= 80
+
