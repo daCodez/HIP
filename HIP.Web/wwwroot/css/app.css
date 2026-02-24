@@ -16,9 +16,21 @@
 html, body { margin: 0; padding: 0; background: radial-gradient(1000px 500px at 20% -5%, #1a2641 0%, var(--bg) 45%); color: var(--text); font-family: Inter, Segoe UI, system-ui, -apple-system, sans-serif; }
 a { color: inherit; }
 
+.app-frame { min-height: 100vh; }
+
+.topbar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  background: linear-gradient(90deg, #0f1a31, #12233f);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-title { font-weight: 700; letter-spacing: .2px; }
+
 .shell {
   display: flex;
-  min-height: 100vh;
+  min-height: calc(100vh - 56px);
 }
 
 .sidebar {
@@ -68,9 +80,9 @@ a { color: inherit; }
 .hero {
   background: linear-gradient(180deg, rgba(79,140,255,.14), rgba(79,140,255,.03));
   border: 1px solid var(--border);
-  border-radius: 0;
-  padding: 18px 24px;
-  margin: -24px -24px 16px -24px;
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
 }
 .hero h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: .2px; }
 .hero p { margin: 0; color: var(--muted); }
@@ -208,10 +220,9 @@ a { color: inherit; }
 }
 
 @media (max-width: 960px) {
-  .shell { flex-direction: column; }
+  .shell { flex-direction: column; min-height: calc(100vh - 56px); }
   .sidebar { width: 100%; border-right: 0; border-bottom: 1px solid var(--border); }
   .main { padding: 14px; }
-  .hero { margin: -14px -14px 14px -14px; padding: 16px; }
   .cards { grid-template-columns: 1fr; }
   .card-wide { grid-column: span 1; }
   .form-grid { grid-template-columns: 1fr; }
