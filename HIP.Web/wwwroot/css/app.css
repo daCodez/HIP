@@ -344,3 +344,91 @@ aside.border-end.bg-white {
   .secondary-stat { grid-template-columns: 1fr; }
   .help-drawer { width: 90vw; right: -90vw; }
 }
+
+/* KingAdmin-style overrides (from provided reference) */
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  color: #555;
+  background: #ececec;
+}
+
+h1, h2 { font-family: "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 300; }
+h3, h4, h5, h6 { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+
+.main {
+  background-color: #f1f1f1;
+  border-left: 1px solid #e4e4e4;
+}
+
+.sidebar,
+aside.border-end.bg-white {
+  background-color: #ececec !important;
+}
+
+.sidebar nav a {
+  display: block;
+  position: relative;
+  padding: 13px 0 13px 15px;
+  font-size: 14px;
+  color: #555;
+  background-color: #ececec;
+  border-top: 1px solid #dfdfdf;
+  border-bottom: 0;
+}
+
+.sidebar nav a.active,
+.sidebar nav a:hover {
+  background-color: #dfdfdf;
+  color: #555;
+  font-weight: 700;
+}
+
+.card,
+.widget {
+  border: 1px solid lightgray;
+  background-color: #f9f9f9;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.card-head,
+.widget .widget-header {
+  height: 35px;
+  padding: 0 10px;
+  border-bottom: 1px solid lightgray;
+  background-color: #eeeeee;
+  border-radius: 0;
+}
+
+.widget .widget-header h3 {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 1.1em;
+  line-height: 35px;
+  font-weight: 700;
+}
+
+.chart-nav ul li a {
+  font-size: 0.9em;
+  border: none;
+  padding: 5px 8px;
+  color: #555;
+  background: transparent;
+}
+
+.chart-nav li.active a,
+.chart-nav li a:hover {
+  background-color: #ececec;
+  border-bottom: 1px solid #e1e1e1;
+  color: #555;
+}
+
+.link-btn {
+  border-radius: 0;
+  background-color: #626262;
+  border-color: #555;
+  color: #fff;
+  font-family: "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.link-btn:hover { background-color: #494949; color: #fff; }
