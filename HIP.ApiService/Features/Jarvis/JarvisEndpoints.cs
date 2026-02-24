@@ -29,6 +29,17 @@ public static class JarvisEndpoints
             .Produces<JarvisToolAccessResultDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
 
+        endpoints.MapPost("/api/jarvis/policy/evaluate", async (JarvisPolicyEvaluationRequestDto request, ISender sender, CancellationToken cancellationToken) =>
+            {
+                var result = await sender.Send(new EvaluateJarvisPolicyCommand(request), cancellationToken);
+                return Results.Ok(result);
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("EvaluateJarvisPolicy")
+            .WithTags("Jarvis")
+            .Produces<JarvisPolicyEvaluationResultDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
         return endpoints;
     }
 }

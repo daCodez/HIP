@@ -86,3 +86,25 @@ Risk thresholds:
 - `medium` >= 50
 - `high` >= 80
 
+### Evaluate prompt-injection policy + trust bound execution
+
+```bash
+curl -s -X POST http://127.0.0.1:5101/api/jarvis/policy/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identityId":"hip-system",
+    "userText":"Check status and summarize health",
+    "contextNote":"jarvis-runtime",
+    "toolName":"status",
+    "riskLevel":"low"
+  }' | jq
+```
+
+Output fields:
+- `decision` (`allow|review|block`)
+- `risk` (`low|medium|high`)
+- `reasons[]`
+- `sanitizedText`
+- `toolAccessAllowed`
+- `toolAccessReason`
+
