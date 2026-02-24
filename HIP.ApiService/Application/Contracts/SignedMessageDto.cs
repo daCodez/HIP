@@ -6,4 +6,5 @@ public sealed record SignedMessageDto(
     string To,
     string Body,
     string SignatureBase64,
-    string? KeyId = null);
+    string? KeyId = null,
+    DateTimeOffset? CreatedAtUtc = null);

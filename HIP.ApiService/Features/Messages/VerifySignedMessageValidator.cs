@@ -13,5 +13,6 @@ public sealed class VerifySignedMessageValidator : AbstractValidator<VerifySigne
         RuleFor(x => x.Message.Body).NotEmpty().MaximumLength(4096);
         RuleFor(x => x.Message.SignatureBase64).NotEmpty().MaximumLength(1024);
         RuleFor(x => x.Message.KeyId).MaximumLength(128);
+        RuleFor(x => x.Message.CreatedAtUtc).NotNull();
     }
 }

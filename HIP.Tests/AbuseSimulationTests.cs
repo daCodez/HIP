@@ -63,7 +63,8 @@ public sealed class AbuseSimulationTests
                 To: "target",
                 Body: "abuse-sim",
                 SignatureBase64: "!!!", // malformed on purpose
-                KeyId: keyId);
+                KeyId: keyId,
+                CreatedAtUtc: DateTimeOffset.UtcNow);
 
             const int attempts = 40;
             var tasks = Enumerable.Range(0, attempts)

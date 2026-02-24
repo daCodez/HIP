@@ -44,13 +44,14 @@ public sealed class EcdsaMessageSignatureService(
         {
             var keyPem = File.ReadAllText(keyPath);
             var id = string.IsNullOrWhiteSpace(request.Id) ? Guid.NewGuid().ToString("n") : request.Id;
-            var payload = Encoding.UTF8.GetBytes($"{id}|{request.From}|{request.To}|{request.Body}|{keyId}");
+            var createdAtUtc = DateTimeOffset.UtcNow;
+            var payload = Encoding.UTF8.GetBytes($"{id}|{request.From}|{request.To}|{request.Body}|{keyId}|{createdAtUtc.ToUnixTimeSeconds()}");
 
             using var ecdsa = ECDsa.Create();
             ecdsa.ImportFromPem(keyPem);
             var signature = ecdsa.SignData(payload, HashAlgorithmName.SHA256);
 
-            var message = new SignedMessageDto(id, request.From, request.To, request.Body, Convert.ToBase64String(signature), keyId);
+            var message = new SignedMessageDto(id, request.From, request.To, request.Body, Convert.ToBase64String(signature), keyId, createdAtUtc);
             logger.LogInformation("Message signing completed for {From} -> {To} using keyId {KeyId}", request.From, request.To, keyId);
             return Task.FromResult(new SignMessageResultDto(true, "ok", message));
         }
@@ -60,6 +61,9 @@ public sealed class EcdsaMessageSignatureService(
             return Task.FromResult(new SignMessageResultDto(false, "crypto_error", null));
         }
     }
+
+    private static readonly TimeSpan MaxMessageAge = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(1);
 
     public Task<VerifyMessageResultDto> VerifyAsync(SignedMessageDto message, CancellationToken cancellationToken)
     {
@@ -75,6 +79,18 @@ public sealed class EcdsaMessageSignatureService(
         if (string.IsNullOrWhiteSpace(storePath))
         {
             return Task.FromResult(new VerifyMessageResultDto(false, "missing_public_key_store"));
+        }
+
+        if (message.CreatedAtUtc is null)
+        {
+            return Task.FromResult(new VerifyMessageResultDto(false, "missing_timestamp"));
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var age = now - message.CreatedAtUtc.Value;
+        if (age > MaxMessageAge || age < -MaxFutureSkew)
+        {
+            return Task.FromResult(new VerifyMessageResultDto(false, "message_expired"));
         }
 
         var keyIdMissing = string.IsNullOrWhiteSpace(message.KeyId);
@@ -95,7 +111,7 @@ public sealed class EcdsaMessageSignatureService(
             var keyPem = File.ReadAllText(keyPath);
             var signature = Convert.FromBase64String(message.SignatureBase64);
 
-            var payload = Encoding.UTF8.GetBytes($"{message.Id}|{message.From}|{message.To}|{message.Body}|{keyId}");
+            var payload = Encoding.UTF8.GetBytes($"{message.Id}|{message.From}|{message.To}|{message.Body}|{keyId}|{message.CreatedAtUtc.Value.ToUnixTimeSeconds()}");
 
             using var ecdsa = ECDsa.Create();
             ecdsa.ImportFromPem(keyPem);
