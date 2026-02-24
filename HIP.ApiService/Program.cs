@@ -58,6 +58,7 @@ builder.Services.AddDbContext<HipDbContext>(options =>
 builder.Services.AddScoped<IIdentityService, InMemoryIdentityService>();
 builder.Services.AddScoped<IReputationService, DatabaseReputationService>();
 builder.Services.AddSingleton<IAuditTrail, InMemoryAuditTrail>();
+builder.Services.AddSingleton<IReplayProtectionService, InMemoryReplayProtectionService>();
 builder.Services.AddSingleton<IMessageSignatureService, EcdsaMessageSignatureService>();
 
 builder.Services.AddProblemDetails();

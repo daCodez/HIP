@@ -8,6 +8,7 @@ namespace HIP.ApiService.Infrastructure.Security;
 
 public sealed class EcdsaMessageSignatureService(
     IOptions<CryptoProviderOptions> options,
+    IReplayProtectionService replayProtection,
     ILogger<EcdsaMessageSignatureService> logger) : IMessageSignatureService
 {
     public Task<SignMessageResultDto> SignAsync(SignMessageRequestDto request, CancellationToken cancellationToken)
@@ -100,8 +101,20 @@ public sealed class EcdsaMessageSignatureService(
             ecdsa.ImportFromPem(keyPem);
             var valid = ecdsa.VerifyData(payload, signature, HashAlgorithmName.SHA256);
 
-            logger.LogInformation("Message signature verification completed for {From} -> {To} using keyId {KeyId}: {Result}", message.From, message.To, keyId, valid);
-            return Task.FromResult(new VerifyMessageResultDto(valid, valid ? "ok" : "invalid_signature"));
+            if (!valid)
+            {
+                logger.LogInformation("Message signature verification completed for {From} -> {To} using keyId {KeyId}: {Result}", message.From, message.To, keyId, false);
+                return Task.FromResult(new VerifyMessageResultDto(false, "invalid_signature"));
+            }
+
+            if (!replayProtection.TryConsume(message.Id))
+            {
+                logger.LogWarning("Replay detected for signed message {MessageId} from {From}.", message.Id, message.From);
+                return Task.FromResult(new VerifyMessageResultDto(false, "replay_detected"));
+            }
+
+            logger.LogInformation("Message signature verification completed for {From} -> {To} using keyId {KeyId}: {Result}", message.From, message.To, keyId, true);
+            return Task.FromResult(new VerifyMessageResultDto(true, "ok"));
         }
         catch (FormatException ex)
         {

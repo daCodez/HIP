@@ -87,6 +87,14 @@ public sealed class MessageVerificationEndpointTests
             Assert.That(verify, Is.Not.Null);
             Assert.That(verify!.IsValid, Is.True);
             Assert.That(verify.Reason, Is.EqualTo("ok"));
+
+            var replayResponse = await client.PostAsJsonAsync("/api/messages/verify", signed.Message);
+            var replay = await replayResponse.Content.ReadFromJsonAsync<VerifyMessageResultDto>();
+
+            Assert.That(replayResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(replay, Is.Not.Null);
+            Assert.That(replay!.IsValid, Is.False);
+            Assert.That(replay.Reason, Is.EqualTo("replay_detected"));
         }
         finally
         {
