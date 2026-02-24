@@ -141,28 +141,38 @@
         </div>
     </article>
 
-    <article class="card">
-        <div class="card-head">
-            <h3>Trend: Security Events Over Time</h3>
-            <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
+    <article class="card card-wide widget">
+        <div class="widget-header">
+            <h3>📈 Security Stat</h3>
+            <em>- Events, rejects and trust distribution</em>
+            <div class="widget-header-toolbar">
+                <button type="button" class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
+            </div>
         </div>
-        <canvas id="hipTrendChart" class="chart-canvas" height="220"></canvas>
-    </article>
-
-    <article class="card">
-        <div class="card-head">
-            <h3>Top Reject Reasons</h3>
-            <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
+        <div class="widget-content">
+            <div class="chart-nav">
+                <strong>Select period:</strong>
+                <ul>
+                    <li class="@(_chartPeriod == "24h" ? "active" : "")"><a href="#" @onclick:preventDefault="true" @onclick="() => SetChartPeriodAsync("24h")">24h</a></li>
+                    <li class="@(_chartPeriod == "7d" ? "active" : "")"><a href="#" @onclick:preventDefault="true" @onclick="() => SetChartPeriodAsync("7d")">7d</a></li>
+                    <li class="@(_chartPeriod == "30d" ? "active" : "")"><a href="#" @onclick:preventDefault="true" @onclick="() => SetChartPeriodAsync("30d")">30d</a></li>
+                </ul>
+            </div>
+            <div class="chart-content">
+                <canvas id="hipTrendChart" class="chart-canvas" height="260"></canvas>
+            </div>
+            <hr class="separator" />
+            <div class="secondary-stat">
+                <div class="stat-item">
+                    <div class="stat-label">Top Reject Reasons</div>
+                    <canvas id="hipReasonChart" class="chart-canvas" height="190"></canvas>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Trust Distribution</div>
+                    <canvas id="hipTrustChart" class="chart-canvas" height="190"></canvas>
+                </div>
+            </div>
         </div>
-        <canvas id="hipReasonChart" class="chart-canvas" height="220"></canvas>
-    </article>
-
-    <article class="card">
-        <div class="card-head">
-            <h3>Trust Distribution</h3>
-            <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
-        </div>
-        <canvas id="hipTrustChart" class="chart-canvas" height="220"></canvas>
     </article>
 
     <article class="card card-wide">
@@ -415,6 +425,7 @@
     private Task? _auditLoopTask;
     private string? _auditError;
     private bool _loadingAudit;
+    private string _chartPeriod = "24h";
 
     private string _identityLookupId = "hip-system";
     private IdentityDto? _identityResult;
@@ -583,11 +594,32 @@
         }
     }
 
+    private async Task SetChartPeriodAsync(string period)
+    {
+        _chartPeriod = period;
+        await RenderChartsAsync();
+    }
+
     private async Task RenderChartsAsync()
     {
         if (_auditEvents.Count == 0) return;
 
-        var ordered = _auditEvents.OrderBy(x => x.CreatedAtUtc).ToList();
+        var cutoff = _chartPeriod switch
+        {
+            "7d" => DateTimeOffset.UtcNow.AddDays(-7),
+            "30d" => DateTimeOffset.UtcNow.AddDays(-30),
+            _ => DateTimeOffset.UtcNow.AddHours(-24)
+        };
+
+        var ordered = _auditEvents
+            .Where(x => x.CreatedAtUtc >= cutoff)
+            .OrderBy(x => x.CreatedAtUtc)
+            .ToList();
+
+        if (ordered.Count == 0)
+        {
+            ordered = _auditEvents.OrderBy(x => x.CreatedAtUtc).ToList();
+        }
 
         var hourly = ordered
             .GroupBy(x => new DateTimeOffset(x.CreatedAtUtc.Year, x.CreatedAtUtc.Month, x.CreatedAtUtc.Day, x.CreatedAtUtc.Hour, 0, 0, TimeSpan.Zero))
