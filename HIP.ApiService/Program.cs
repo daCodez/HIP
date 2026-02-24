@@ -61,6 +61,7 @@ builder.Services.AddSingleton<IAuditTrail, InMemoryAuditTrail>();
 builder.Services.AddSingleton<ISecurityEventCounter, InMemorySecurityEventCounter>();
 builder.Services.AddSingleton<IReplayProtectionService, InMemoryReplayProtectionService>();
 builder.Services.AddSingleton<IReplayAssessmentService, InMemoryReplayAssessmentService>();
+builder.Services.AddSingleton<IKeyRotationPolicy, InMemoryKeyRotationPolicy>();
 builder.Services.AddSingleton<IJarvisTokenService, InMemoryJarvisTokenService>();
 builder.Services.AddScoped<IMessageSignatureService, EcdsaMessageSignatureService>();
 

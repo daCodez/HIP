@@ -44,7 +44,7 @@ public static class JarvisEndpoints
 
         endpoints.MapPost("/api/jarvis/token/issue", (JarvisTokenIssueRequestDto request, IJarvisTokenService tokenService) =>
             {
-                var tokenSet = tokenService.Issue(request.IdentityId);
+                var tokenSet = tokenService.Issue(new TokenIssueRequest(request.IdentityId, request.Audience, request.DeviceId));
                 HipTelemetry.Record("jarvis.token.issue", "ok", 0);
                 return Results.Ok(tokenSet);
             })
@@ -54,7 +54,7 @@ public static class JarvisEndpoints
 
         endpoints.MapPost("/api/jarvis/token/validate", (JarvisTokenValidateRequestDto request, IJarvisTokenService tokenService) =>
             {
-                var result = tokenService.Validate(request.AccessToken);
+                var result = tokenService.Validate(new TokenValidationRequest(request.AccessToken, request.Audience, request.DeviceId));
                 HipTelemetry.Record("jarvis.token.validate", result.Reason, 0);
                 return Results.Ok(result);
             })
@@ -64,7 +64,7 @@ public static class JarvisEndpoints
 
         endpoints.MapPost("/api/jarvis/token/refresh", (JarvisTokenRefreshRequestDto request, IJarvisTokenService tokenService) =>
             {
-                var result = tokenService.Refresh(request.RefreshToken);
+                var result = tokenService.Refresh(new TokenRefreshRequest(request.RefreshToken));
                 HipTelemetry.Record("jarvis.token.refresh", result.Reason, 0);
                 return Results.Ok(result);
             })
@@ -80,6 +80,27 @@ public static class JarvisEndpoints
             })
             .RequireRateLimiting("read-api")
             .WithName("RevokeJarvisToken")
+            .WithTags("Jarvis");
+
+        endpoints.MapPost("/api/jarvis/proof/issue", (JarvisProofTokenIssueRequestDto request, IJarvisTokenService tokenService) =>
+            {
+                var ttl = request.TtlSeconds is > 0 ? TimeSpan.FromSeconds(request.TtlSeconds.Value) : (TimeSpan?)null;
+                var result = tokenService.IssueProofToken(new ProofTokenIssueRequest(request.IdentityId, request.Audience, request.DeviceId, request.Action, ttl));
+                HipTelemetry.Record("jarvis.proof.issue", result.Reason, 0);
+                return Results.Ok(result);
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("IssueJarvisProofToken")
+            .WithTags("Jarvis");
+
+        endpoints.MapPost("/api/jarvis/proof/consume", (JarvisProofTokenConsumeRequestDto request, IJarvisTokenService tokenService) =>
+            {
+                var result = tokenService.ConsumeProofToken(new ProofTokenConsumeRequest(request.ProofToken, request.ExpectedAction, request.Audience, request.DeviceId));
+                HipTelemetry.Record("jarvis.proof.consume", result.Reason, 0);
+                return Results.Ok(result);
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("ConsumeJarvisProofToken")
             .WithTags("Jarvis");
 
         return endpoints;

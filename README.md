@@ -122,12 +122,18 @@ Server behavior:
 
 ### Jarvis token lifecycle (access + refresh)
 
+Token binding fields:
+- `identityId`
+- `audience`
+- `deviceId` (optional but recommended)
+- `keyId` + `keyVersion` (for soft revoke via rotation)
+
 Issue token pair:
 
 ```bash
 curl -s -X POST http://127.0.0.1:5101/api/jarvis/token/issue \
   -H "Content-Type: application/json" \
-  -d '{"identityId":"hip-system"}' | jq
+  -d '{"identityId":"hip-system","audience":"jarvis-runtime","deviceId":"device-1"}' | jq
 ```
 
 Validate access token:
@@ -135,7 +141,7 @@ Validate access token:
 ```bash
 curl -s -X POST http://127.0.0.1:5101/api/jarvis/token/validate \
   -H "Content-Type: application/json" \
-  -d '{"accessToken":"atk_..."}' | jq
+  -d '{"accessToken":"v1...","audience":"jarvis-runtime","deviceId":"device-1"}' | jq
 ```
 
 Refresh token pair:
@@ -161,6 +167,26 @@ curl -s -X POST http://127.0.0.1:5101/api/jarvis/token/revoke \
   -H "Content-Type: application/json" \
   -d '{"identityId":"hip-system"}' | jq
 ```
+
+### One-time proof token for sensitive actions
+
+Issue proof token:
+
+```bash
+curl -s -X POST http://127.0.0.1:5101/api/jarvis/proof/issue \
+  -H "Content-Type: application/json" \
+  -d '{"identityId":"hip-system","audience":"jarvis-runtime","deviceId":"device-1","action":"tool:camera","ttlSeconds":60}' | jq
+```
+
+Consume proof token once:
+
+```bash
+curl -s -X POST http://127.0.0.1:5101/api/jarvis/proof/consume \
+  -H "Content-Type: application/json" \
+  -d '{"proofToken":"v1...","expectedAction":"tool:camera","audience":"jarvis-runtime","deviceId":"device-1"}' | jq
+```
+
+Note: key rotation policy supports emergency soft revoke by bumping minimum accepted key version.
 
 ### Runtime hook wiring (Jarvis pre-dispatch)
 
