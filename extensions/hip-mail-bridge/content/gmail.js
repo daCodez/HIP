@@ -44,6 +44,7 @@
   }
 
   const verifyCache = new Map();
+  const renderedBadgeByMessageId = new Set();
 
   function parseSignedMessage(text) {
     const marker = 'HIP-Signature:';
@@ -103,6 +104,11 @@
       return;
     }
 
+    if (renderedBadgeByMessageId.has(signed.id)) {
+      bodyEl.dataset.hipVerifyChecked = '1';
+      return;
+    }
+
     let verdict = verifyCache.get(signed.id);
     if (!verdict) {
       const res = await chrome.runtime.sendMessage({ type: 'hip:verify', signedMessage: signed });
@@ -137,8 +143,10 @@
       ]);
     }
 
+    bodyEl.querySelectorAll(`.${BADGE_CLASS}, .hip-tooltip`).forEach(n => n.remove());
     bodyEl.appendChild(pill);
     bodyEl.appendChild(details);
+    renderedBadgeByMessageId.add(signed.id);
     bodyEl.dataset.hipVerifyChecked = '1';
   }
 
