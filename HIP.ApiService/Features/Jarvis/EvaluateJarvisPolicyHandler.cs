@@ -86,6 +86,12 @@ public sealed class EvaluateJarvisPolicyHandler(
                 ? "identity_not_found"
                 : toolAccessAllowed ? "allowed" : "insufficient_reputation";
 
+        var policyCode = decision == "block"
+            ? "policy.promptInjectionDetected"
+            : identity is null
+                ? "policy.adminDenied"
+                : toolAccessAllowed ? "policy.allowed" : "policy.lowReputation";
+
         if (!toolAccessAllowed && decision == "allow")
         {
             decision = "review";
@@ -96,6 +102,7 @@ public sealed class EvaluateJarvisPolicyHandler(
         if (decision == "block")
         {
             securityCounter.IncrementPolicyBlocked();
+            await reputationService.RecordSecurityEventAsync(request.IdentityId, "policy_blocked", cancellationToken);
         }
 
         if (reasons.Count == 0)
@@ -122,6 +129,7 @@ public sealed class EvaluateJarvisPolicyHandler(
             reasons,
             sanitizedText,
             toolAccessAllowed,
-            toolAccessReason);
+            toolAccessReason,
+            policyCode);
     }
 }

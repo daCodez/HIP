@@ -6,8 +6,14 @@ public static class SecurityEndpoints
 {
     public static IEndpointRouteBuilder MapSecurityEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/admin/security-status", (ISecurityEventCounter counter) =>
+        endpoints.MapGet("/api/admin/security-status", async (HttpContext httpContext, ISecurityEventCounter counter, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
             {
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, identityService, reputationService, cancellationToken);
+                if (gate is not null)
+                {
+                    return gate;
+                }
+
                 return Results.Ok(counter.Snapshot());
             })
             .RequireRateLimiting("read-api")

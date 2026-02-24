@@ -6,4 +6,5 @@ public sealed record JarvisPolicyEvaluationResultDto(
     List<string> Reasons,
     string SanitizedText,
     bool ToolAccessAllowed,
-    string ToolAccessReason);
+    string ToolAccessReason,
+    string PolicyCode);

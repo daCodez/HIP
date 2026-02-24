@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using HIP.ApiService.Application.Abstractions;
+using HIP.ApiService.Application.Audit;
 using HIP.ApiService.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,13 +8,12 @@ using NUnit.Framework;
 
 namespace HIP.Tests;
 
-public sealed class SecurityStatusEndpointTests
+public sealed class AuditEndpointTests
 {
     [Test]
-    public async Task SecurityStatus_ReturnsCountersSnapshot()
+    public async Task GetAuditEvents_Returns200_AndList()
     {
         await using var app = new WebApplicationFactory<Program>();
-
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<HipDbContext>();
@@ -29,23 +28,16 @@ public sealed class SecurityStatusEndpointTests
                 rec.SpamFlags = 0;
                 await db.SaveChangesAsync();
             }
-
-            var counters = scope.ServiceProvider.GetRequiredService<ISecurityEventCounter>();
-            counters.IncrementReplayDetected();
-            counters.IncrementMessageExpired();
-            counters.IncrementPolicyBlocked();
         }
 
         using var client = app.CreateClient();
-        var response = await client.GetAsync("/api/admin/security-status");
-        var payload = await response.Content.ReadFromJsonAsync<SecurityStatusDto>();
+
+        await client.GetAsync("/api/identity/hip-system");
+        var response = await client.GetAsync("/api/admin/audit?take=10");
+        var payload = await response.Content.ReadFromJsonAsync<List<AuditEvent>>();
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(payload, Is.Not.Null);
-        Assert.That(payload!.ReplayDetected, Is.GreaterThanOrEqualTo(1));
-        Assert.That(payload.MessageExpired, Is.GreaterThanOrEqualTo(1));
-        Assert.That(payload.PolicyBlocked, Is.GreaterThanOrEqualTo(1));
+        Assert.That(payload!.Count, Is.GreaterThanOrEqualTo(1));
     }
-
-    private sealed record SecurityStatusDto(long ReplayDetected, long MessageExpired, long PolicyBlocked, DateTimeOffset UtcTimestamp);
 }

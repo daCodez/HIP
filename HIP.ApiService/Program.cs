@@ -105,8 +105,14 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-    app.MapGet("/api/admin/crypto-config", (string? keyId, IConfiguration configuration) =>
+    app.MapGet("/api/admin/crypto-config", async (HttpContext httpContext, string? keyId, IConfiguration configuration, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
         {
+            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, identityService, reputationService, cancellationToken);
+            if (gate is not null)
+            {
+                return gate;
+            }
+
             var opts = configuration.GetSection(CryptoProviderOptions.SectionName).Get<CryptoProviderOptions>() ?? new CryptoProviderOptions();
             var resolvedKeyId = string.IsNullOrWhiteSpace(keyId) ? "hip-system" : keyId.Trim();
 
