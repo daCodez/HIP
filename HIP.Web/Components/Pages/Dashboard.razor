@@ -42,6 +42,40 @@
 
     <article class="card">
         <div class="card-head">
+            <h3>Crypto Config (Dev)</h3>
+            <button class="link-btn" @onclick="LoadCryptoConfigAsync" disabled="@_loadingCrypto">@(_loadingCrypto ? "Checking..." : "Refresh")</button>
+        </div>
+
+        <div class="input-row">
+            <input class="text-input" @bind="_cryptoKeyId" placeholder="key id (e.g. hip-system)" />
+        </div>
+
+        @if (_loadingCrypto)
+        {
+            <p>Loading crypto config...</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(_cryptoError))
+        {
+            <p class="status-bad">@_cryptoError</p>
+        }
+        else if (_cryptoConfig is not null)
+        {
+            <p class="status-ok">Config loaded</p>
+            <ul class="meta-list">
+                <li><strong>Provider:</strong> @_cryptoConfig.Provider</li>
+                <li><strong>KeyId:</strong> @_cryptoConfig.KeyId</li>
+                <li><strong>Private key:</strong> @(_cryptoConfig.PrivateKeyExists ? "Found" : "Missing")</li>
+                <li><strong>Public key:</strong> @(_cryptoConfig.PublicKeyExists ? "Found" : "Missing")</li>
+            </ul>
+        }
+        else
+        {
+            <p>No crypto config loaded yet.</p>
+        }
+    </article>
+
+    <article class="card">
+        <div class="card-head">
             <h3>Audit Feed</h3>
             <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
         </div>
@@ -192,6 +226,11 @@
     private string? _healthError;
     private bool _loadingHealth;
 
+    private CryptoConfigDto? _cryptoConfig;
+    private string _cryptoKeyId = "hip-system";
+    private string? _cryptoError;
+    private bool _loadingCrypto;
+
     private List<AuditEventDto> _auditEvents = new();
     private string? _auditError;
     private bool _loadingAudit;
@@ -224,6 +263,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadServiceHealthAsync();
+        await LoadCryptoConfigAsync();
         await LoadAuditFeedAsync();
         await LookupIdentityAsync();
         await LookupReputationAsync();
@@ -252,6 +292,43 @@
         finally
         {
             _loadingHealth = false;
+        }
+    }
+
+    private async Task LoadCryptoConfigAsync()
+    {
+        _loadingCrypto = true;
+        _cryptoError = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-api");
+            var keyId = string.IsNullOrWhiteSpace(_cryptoKeyId) ? "hip-system" : _cryptoKeyId.Trim();
+            using var response = await client.GetAsync($"/api/admin/crypto-config?keyId={Uri.EscapeDataString(keyId)}");
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _cryptoError = "Crypto config endpoint is only available in Development.";
+                _cryptoConfig = null;
+                return;
+            }
+
+            response.EnsureSuccessStatusCode();
+            _cryptoConfig = await response.Content.ReadFromJsonAsync<CryptoConfigDto>();
+
+            if (_cryptoConfig is null)
+            {
+                _cryptoError = "No data returned.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _cryptoError = ex.Message;
+            _cryptoConfig = null;
+        }
+        finally
+        {
+            _loadingCrypto = false;
         }
     }
 
@@ -465,6 +542,15 @@
     }
 
     private sealed record ServiceStatusDto(string ServiceName, string AssemblyVersion, DateTimeOffset UtcTimestamp);
+    private sealed record CryptoConfigDto(
+        string Provider,
+        string? PrivateKeyStorePath,
+        string? PublicKeyStorePath,
+        string KeyId,
+        string? PrivateKeyPath,
+        string? PublicKeyPath,
+        bool PrivateKeyExists,
+        bool PublicKeyExists);
     private sealed record AuditEventDto(string Id, DateTimeOffset CreatedAtUtc, string EventType, string Subject, string Source, string Detail);
     private sealed record IdentityDto(string Id, string PublicKeyRef);
     private sealed record ReputationDto(string IdentityId, int Score, DateTimeOffset UtcTimestamp);
