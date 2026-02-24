@@ -504,7 +504,7 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
 .main-menu { list-style: none; margin: 0; padding: 0; }
 .main-menu > li > a, .main-menu > li > .active-link {
   display: block;
-  padding: 13px 0 13px 15px;
+  padding: 13px 15px;
   font-size: 14px;
   color: #555;
   background-color: #ececec;
@@ -512,11 +512,19 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
   text-decoration: none;
 }
 .main-menu > li:first-child > a, .main-menu > li:first-child > .active-link { border-top: 0; }
-.main-menu > li.active > a,
-.main-menu > li > .active-link,
-.main-menu > li > a:hover { background-color: #dfdfdf; color: #555; }
-.main-menu .text { padding-left: 8px; font-size: .9em; }
-.link-disabled { pointer-events: none; opacity: .7; }
+.main-menu > li > a:hover { background-color: #f1f1f1; color: #555; }
+.main-menu > li.active > .active-link {
+  background-color: #1d92af;
+  color: #fff;
+  border: 1px solid #198099;
+  border-radius: 5px;
+  margin: 8px;
+  padding: 10px 12px;
+}
+.main-menu > li.active > .active-link i,
+.main-menu > li.active > .active-link .text { color: #fff; }
+.main-menu .text { padding-left: 8px; font-size: .95em; }
+.link-disabled { pointer-events: none; opacity: .85; }
 
 .content-wrapper {
   margin-left: 230px;
