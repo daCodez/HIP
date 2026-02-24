@@ -82,7 +82,6 @@
             <h3>Security Status</h3>
             <button class="link-btn" @onclick="LoadSecurityStatusAsync" disabled="@_loadingSecurity">@(_loadingSecurity ? "Loading..." : "Refresh")</button>
         </div>
-        <p><small>Replay = duplicate signed message. Expired = stale/future timestamp. Policy blocked = risky input denied.</small></p>
 
         @if (_loadingSecurity)
         {
@@ -101,11 +100,8 @@
                 <li><strong>Policy blocked:</strong> @_securityStatus.PolicyBlocked</li>
                 <li><strong>UTC:</strong> @_securityStatus.UtcTimestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</li>
             </ul>
-            <p><small><strong>What each means:</strong> replay = repeated message id, expired = timestamp outside freshness, policy blocked = rejected high-risk request.</small></p>
-
             <div class="selected-detail">
                 <strong>Recent Security Rejects</strong>
-                <p><small>Latest denied security events. Translator below explains reason codes.</small></p>
                 @if (_securityEvents.Count == 0)
                 {
                     <p>No recent rejects.</p>
@@ -134,7 +130,6 @@
         <div class="card-head">
             <h3>Extension Download</h3>
         </div>
-        <p>Install HIP Mail Bridge for Chrome/Edge.</p>
         <div class="button-row" style="margin-top:10px;">
             <a class="link-btn" href="@($"/bff/extensions/hip-mail-bridge?v={_extensionDownloadVersion}")" download="hip-mail-bridge.tar.gz">Download Extension</a>
         </div>
@@ -380,32 +375,7 @@
     </article>
 </section>
 
-<button class="help-tab" @onclick="ToggleHelpDrawer">?</button>
-<aside class="help-drawer @(_helpDrawerOpen ? "open" : "")">
-    <h4>Dashboard Help</h4>
-    <p><strong>Security Counters</strong></p>
-    <ul>
-        <li><b>Replay detected</b>: same signed message id reused.</li>
-        <li><b>Message expired</b>: signature timestamp too old/new.</li>
-        <li><b>Policy blocked</b>: risky input denied by HIP policy.</li>
-    </ul>
-    <p><strong>Quick actions</strong></p>
-    <ul>
-        <li>Refresh cards after tests.</li>
-        <li>Use Sign/Verify playground for end-to-end checks.</li>
-        <li>Open Audit Feed and click rows for details.</li>
-    </ul>
-    <p><strong>Reason code translator</strong></p>
-    <ul>
-        <li><code>replay_detected</code> → duplicate signed message</li>
-        <li><code>message_expired</code> → outside freshness window</li>
-        <li><code>policy_blocked</code> → blocked unsafe request</li>
-        <li><code>policy.lowReputation</code> → score below threshold</li>
-    </ul>
-</aside>
-
 @code {
-    private bool _helpDrawerOpen;
 
     private ServiceStatusDto? _serviceHealth;
     private string? _healthError;
@@ -461,11 +431,6 @@
     private string? _copyError;
 
     private readonly string _extensionDownloadVersion = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
-
-    private void ToggleHelpDrawer()
-    {
-        _helpDrawerOpen = !_helpDrawerOpen;
-    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

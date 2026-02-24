@@ -300,35 +300,6 @@ aside.border-end.bg-white {
   font-size: 12px;
 }
 
-.help-tab {
-  position: fixed;
-  right: 0;
-  top: 45%;
-  z-index: 50;
-  border: 1px solid var(--border);
-  border-right: none;
-  border-radius: 10px 0 0 10px;
-  background: #fff;
-  color: #1d4ed8;
-  padding: 10px 12px;
-  cursor: pointer;
-  font-weight: 700;
-}
-.help-drawer {
-  position: fixed;
-  right: -340px;
-  top: 0;
-  height: 100vh;
-  width: 340px;
-  overflow: auto;
-  background: #ffffff;
-  border-left: 1px solid var(--border);
-  padding: 14px;
-  z-index: 49;
-  transition: right .2s ease;
-}
-.help-drawer.open { right: 0; }
-.help-drawer ul { margin: 6px 0 12px 18px; color: var(--muted); }
 
 @media (max-width: 1160px) {
   .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -342,7 +313,6 @@ aside.border-end.bg-white {
   .card-wide { grid-column: span 1; }
   .form-grid { grid-template-columns: 1fr; }
   .secondary-stat { grid-template-columns: 1fr; }
-  .help-drawer { width: 90vw; right: -90vw; }
 }
 
 /* KingAdmin-style overrides (from provided reference) */
