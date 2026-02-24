@@ -11,6 +11,20 @@
 <section class="hero">
     <h1>HIP Admin Dashboard</h1>
     <p>Clean, responsive control surface for Identity, Reputation, and Message trust workflows.</p>
+    <div class="button-row" style="margin-top:10px;">
+        <button class="link-btn" @onclick="ToggleHelpMode">@(_helpMode ? "Hide Help" : "Show Help")</button>
+    </div>
+    @if (_helpMode)
+    {
+        <div class="selected-detail" style="margin-top:10px;">
+            <strong>Quick Legend</strong>
+            <ul class="meta-list">
+                <li><strong>Verified:</strong> Signature valid + fresh timestamp.</li>
+                <li><strong>Review:</strong> Needs human check (policy/reputation constraints).</li>
+                <li><strong>Risk:</strong> Replayed, expired, or invalid security signal.</li>
+            </ul>
+        </div>
+    }
 </section>
 
 <section class="cards">
@@ -19,6 +33,10 @@
             <h3>Service Health</h3>
             <button class="link-btn" @onclick="LoadServiceHealthAsync" disabled="@_loadingHealth">@(_loadingHealth ? "Checking..." : "Refresh")</button>
         </div>
+        @if (_helpMode)
+        {
+            <p><small>Shows whether HIP API is reachable and which build/version is running.</small></p>
+        }
 
         @if (_loadingHealth)
         {
@@ -82,6 +100,10 @@
             <h3>Security Status</h3>
             <button class="link-btn" @onclick="LoadSecurityStatusAsync" disabled="@_loadingSecurity">@(_loadingSecurity ? "Loading..." : "Refresh")</button>
         </div>
+        @if (_helpMode)
+        {
+            <p><small>Replay = same signed message seen again. Expired = signed too old/new. Policy blocked = HIP rejected risky input.</small></p>
+        }
 
         @if (_loadingSecurity)
         {
@@ -142,6 +164,10 @@
             <h3>Audit Feed</h3>
             <button class="link-btn" @onclick="LoadAuditFeedAsync" disabled="@_loadingAudit">@(_loadingAudit ? "Loading..." : "Refresh")</button>
         </div>
+        @if (_helpMode)
+        {
+            <p><small>Chronological event log. Use filters to narrow to sign/verify/policy/security events.</small></p>
+        }
 
         <div class="form-grid">
             <div class="input-row">
@@ -285,6 +311,10 @@
                 <button class="link-btn" @onclick="CopyLastSignedJsonAsync" disabled="@(string.IsNullOrWhiteSpace(_lastSignedMessageJson))">Copy JSON</button>
             </div>
         </div>
+        @if (_helpMode)
+        {
+            <p><small>Use this to create signed test payloads and validate trust outcomes before integrating clients.</small></p>
+        }
 
         <div class="input-row">
             <input class="text-input" @bind="_signFrom" placeholder="from" />
@@ -337,6 +367,8 @@
 </section>
 
 @code {
+    private bool _helpMode;
+
     private ServiceStatusDto? _serviceHealth;
     private string? _healthError;
     private bool _loadingHealth;
@@ -390,6 +422,11 @@
     private string? _copyError;
 
     private readonly string _extensionDownloadVersion = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+
+    private void ToggleHelpMode()
+    {
+        _helpMode = !_helpMode;
+    }
 
     protected override async Task OnInitializedAsync()
     {
