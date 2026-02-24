@@ -36,7 +36,14 @@
   }
 
   function findReadableBodies() {
-    return Array.from(document.querySelectorAll('div.a3s.aiL, div[role="listitem"] div[dir="ltr"]'));
+    const nodes = Array.from(document.querySelectorAll('div.a3s.aiL'));
+    return nodes.filter(n => {
+      if (!n.isConnected) return false;
+      if (n.closest('[aria-hidden="true"]')) return false;
+      const style = window.getComputedStyle(n);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      return true;
+    });
   }
 
   function findInboxRows() {
@@ -228,10 +235,16 @@
 
   injectStyles();
 
+  let scanScheduled = false;
   const observer = new MutationObserver(() => {
-    findComposeBodies().forEach(injectButtons);
-    findReadableBodies().forEach(verifyIfSigned);
-    annotateInboxRows();
+    if (scanScheduled) return;
+    scanScheduled = true;
+    setTimeout(() => {
+      scanScheduled = false;
+      findComposeBodies().forEach(injectButtons);
+      findReadableBodies().forEach(verifyIfSigned);
+      annotateInboxRows();
+    }, 150);
   });
 
   observer.observe(document.documentElement, { childList: true, subtree: true });
