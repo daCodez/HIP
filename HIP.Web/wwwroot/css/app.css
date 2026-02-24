@@ -18,43 +18,25 @@ a { color: inherit; }
 .app-frame { min-height: 100vh; }
 
 .topbar {
-  height: 56px;
+  height: 58px;
   display: flex;
   align-items: center;
+  gap: 12px;
   padding: 0 18px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: #d1d5db;
+  border-bottom: 1px solid #b9c0ca;
 }
-.topbar-title { font-weight: 700; color: #111827; }
+.topbar-left { font-size: 20px; color: #374151; }
+.topbar-title { font-weight: 800; color: #1f2937; letter-spacing: .2px; }
 
-.shell { display: flex; min-height: calc(100vh - 56px); }
+.shell { display: flex; min-height: calc(100vh - 58px); }
 
 .sidebar {
   width: 240px;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  padding: 16px 12px;
+  padding: 12px;
 }
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding: 0 8px;
-}
-.logo {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 12px;
-}
-.brand-sub { color: var(--muted); font-size: 12px; }
 
 .sidebar nav a {
   display: block;
