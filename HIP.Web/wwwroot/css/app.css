@@ -575,11 +575,11 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
 .card p,
 .card .status-ok,
 .card .status-bad {
-  margin: 0 0 6px;
+  margin: 0 0 3px;
 }
 
 .meta-list {
-  margin-top: 0;
+  margin-top: 2px;
 }
 
 .meta-list li {
