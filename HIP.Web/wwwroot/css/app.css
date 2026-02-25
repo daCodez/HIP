@@ -551,13 +551,20 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
 /* Spacing cleanup */
 .cards {
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .card,
 .widget {
-  height: auto;
   margin-bottom: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.card > :not(.card-head),
+.widget .widget-content {
+  flex: 1 1 auto;
 }
 
 .card > :not(.card-head),
