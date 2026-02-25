@@ -547,3 +547,40 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
   .content-wrapper, .content-wrapper.expanded { margin-left: 0; margin-top: 44px; padding: 15px; }
   .cards { grid-template-columns: 1fr; }
 }
+
+/* Spacing cleanup */
+.cards {
+  gap: 16px;
+  align-items: start;
+}
+
+.card,
+.widget {
+  height: auto;
+  margin-bottom: 16px;
+}
+
+.card > :not(.card-head),
+.widget .widget-content {
+  padding: 14px 10px;
+}
+
+.card p,
+.card .status-ok,
+.card .status-bad {
+  margin: 0 0 12px;
+}
+
+.meta-list {
+  margin-top: 0;
+}
+
+.meta-list li {
+  margin-bottom: 6px;
+  line-height: 1.45;
+}
+
+.selected-detail {
+  margin-top: 12px;
+  padding-top: 10px;
+}
