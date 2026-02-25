@@ -582,28 +582,23 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
   margin-top: 2px;
 }
 
-/* Normalize vertical rhythm inside status/meta stacks */
+/* Use KingAdmin default rhythm */
 .card .status-ok,
 .card .status-bad {
-  margin-bottom: 6px !important;
-}
-
-.card .status-ok + .meta-list,
-.card .status-bad + .meta-list {
-  margin-top: 0 !important;
-  margin-bottom: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  margin: 0 0 10px !important;
 }
 
 .card ul.meta-list {
-  margin-bottom: 0;
+  margin: 0 0 10px;
 }
 
 .card ul.meta-list li {
-  margin: 0;
-  line-height: 1.4;
+  margin-bottom: 10px;
+  line-height: 1.428571429;
+}
+
+.card ul.meta-list li:last-child {
+  margin-bottom: 0;
 }
 
 .meta-list li {
