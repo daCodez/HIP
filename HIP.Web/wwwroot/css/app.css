@@ -582,10 +582,10 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
   margin-top: 2px;
 }
 
-/* Force tight status-to-meta stacking in cards */
+/* Normalize vertical rhythm inside status/meta stacks */
 .card .status-ok,
 .card .status-bad {
-  margin-bottom: 0 !important;
+  margin-bottom: 6px !important;
 }
 
 .card .status-ok + .meta-list,
@@ -594,6 +594,13 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
 }
 
 .card ul.meta-list {
+  margin-bottom: 0;
+}
+
+.card ul.meta-list li {
+  margin-bottom: 6px;
+}
+.card ul.meta-list li:last-child {
   margin-bottom: 0;
 }
 
