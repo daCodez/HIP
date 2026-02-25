@@ -578,7 +578,7 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
 .card p,
 .card .status-ok,
 .card .status-bad {
-  margin: 0 0 12px;
+  margin: 0 0 6px;
 }
 
 .meta-list {
