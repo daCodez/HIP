@@ -548,6 +548,73 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
   .cards { grid-template-columns: 1fr; }
 }
 
+/* HARD RESET baseline: strict KingAdmin-like widgets */
+.cards-reset {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+
+.cards-reset .card.widget {
+  margin: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.cards-reset .widget-header {
+  height: 35px;
+  padding: 0 10px;
+  border-bottom: 1px solid lightgray;
+  background-color: #eeeeee;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cards-reset .widget-header h3 {
+  margin: 0;
+  font-size: 1.1em;
+  line-height: 35px;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 700;
+}
+
+.cards-reset .widget-content {
+  padding: 20px 10px;
+  flex: 1 1 auto;
+}
+
+.cards-reset .status-ok,
+.cards-reset .status-bad,
+.cards-reset .widget-content p {
+  margin: 0 0 10px;
+}
+
+.cards-reset .meta-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cards-reset .meta-list li {
+  margin: 0 0 10px;
+  line-height: 1.428571429;
+}
+
+.cards-reset .meta-list li:last-child {
+  margin-bottom: 0;
+}
+
+.cards-reset .input-row {
+  margin: 0 0 16px;
+}
+
+@media (max-width: 1200px) {
+  .cards-reset { grid-template-columns: 1fr; }
+}
+
 /* Spacing cleanup */
 .cards {
   gap: 16px;
