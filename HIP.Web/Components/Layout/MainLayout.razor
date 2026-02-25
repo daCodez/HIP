@@ -1,20 +1,21 @@
 @inherits LayoutComponentBase
-@inject NavigationManager Nav
 
 <div id="wrapper" class="wrapper sidebar-fixed topnav-fixed dashboard">
     <div class="top-bar navbar-fixed-top">
         <div class="container-fluid">
             <div class="clearfix">
-                <a href="#" class="pull-left toggle-sidebar-collapse" @onclick="ToggleNav" @onclick:preventDefault="true"><i class="fa fa-bars"></i></a>
+                <a href="#" class="pull-left toggle-sidebar-collapse"><i class="fa fa-bars"></i></a>
                 <div class="pull-left left logo">
-                    <a href="#"><span class="king-logo-text">HIP Admin</span></a>
+                    <a href="/"><span class="king-logo-text">HIP Admin</span></a>
+                    <h1 class="sr-only">HIP Admin Dashboard</h1>
                 </div>
                 <div class="pull-right right">
                     <div class="top-bar-right">
                         <div class="logged-user">
                             <div class="btn-group">
-                                <a href="#" class="btn btn-link dropdown-toggle" @onclick:preventDefault="true">
+                                <a href="#" class="btn btn-link dropdown-toggle">
                                     <span class="name">Eric</span>
+                                    <span class="caret"></span>
                                 </a>
                             </div>
                         </div>
@@ -24,53 +25,19 @@
         </div>
     </div>
 
-    <div id="left-sidebar" class="left-sidebar @(_navCollapsed ? "minified" : "")">
+    <div id="left-sidebar" class="left-sidebar">
         <div class="sidebar-scroll">
             <nav class="main-nav">
-                <NavMenu Collapsed="@_navCollapsed" />
+                <ul class="main-menu">
+                    <li class="active"><a href="/"><i class="fa fa-dashboard fa-fw"></i><span class="text">Dashboard</span></a></li>
+                    <li><a href="#"><i class="fa fa-id-card-o fa-fw"></i><span class="text">Identity</span></a></li>
+                    <li><a href="#"><i class="fa fa-star-o fa-fw"></i><span class="text">Reputation</span></a></li>
+                    <li><a href="#"><i class="fa fa-envelope-o fa-fw"></i><span class="text">Messages</span></a></li>
+                    <li><a href="#"><i class="fa fa-cog fa-fw"></i><span class="text">Settings</span></a></li>
+                </ul>
             </nav>
         </div>
     </div>
 
-    <div id="main-content-wrapper" class="content-wrapper @(_navCollapsed ? "expanded" : "")">
-        <div class="row">
-            <div class="col-md-4">
-                <ul class="breadcrumb">
-                    @foreach (var (crumb, index) in GetBreadcrumbs().Select((c, i) => (c, i)))
-                    {
-                        if (index == 0)
-                        {
-                            <li><i class="fa fa-home"></i><a href="#">@crumb</a></li>
-                        }
-                        else if (index == GetBreadcrumbs().Count() - 1)
-                        {
-                            <li class="active">@crumb</li>
-                        }
-                        else
-                        {
-                            <li><a href="#">@crumb</a></li>
-                        }
-                    }
-                </ul>
-            </div>
-        </div>
-        <div class="content">
-            @Body
-        </div>
-    </div>
+    @Body
 </div>
-
-@code {
-    private bool _navCollapsed;
-
-    private void ToggleNav() => _navCollapsed = !_navCollapsed;
-
-    private IEnumerable<string> GetBreadcrumbs()
-    {
-        var path = Nav.ToBaseRelativePath(Nav.Uri);
-        if (string.IsNullOrWhiteSpace(path)) return new[] { "Home", "Dashboard" };
-
-        return new[] { "Home" }.Concat(path.Split('/', StringSplitOptions.RemoveEmptyEntries)
-            .Select(p => char.ToUpperInvariant(p[0]) + p[1..]));
-    }
-}

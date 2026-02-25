@@ -677,3 +677,59 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
   margin-top: 12px;
   padding-top: 10px;
 }
+
+/* Exact KingAdmin block overrides for dashboard hard reset */
+#main-content-wrapper.content-wrapper {
+  margin-left: 230px;
+  margin-top: 44px;
+  padding: 15px 30px;
+  background-color: #f1f1f1;
+  border-left: 1px solid #e4e4e4;
+}
+
+.main-content .row { margin-left: -15px; margin-right: -15px; }
+.main-content .row > [class*="col-md-"] { padding-left: 15px; padding-right: 15px; }
+
+.main-content .widget {
+  border: 1px solid lightgray;
+  margin-bottom: 20px;
+  background-color: #f9f9f9;
+}
+
+.main-content .widget .widget-header {
+  padding: 0 10px;
+  height: 35px;
+  border-bottom: 1px solid lightgray;
+  background-color: #eeeeee;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.main-content .widget .widget-header h3 {
+  margin: 0;
+  font-family: "latobold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 1.1em;
+  line-height: 35px;
+}
+
+.main-content .widget .widget-content {
+  padding: 20px 10px;
+}
+
+.main-content .widget .widget-content p { margin: 0 0 10px; }
+.main-content .widget .widget-content .meta-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.main-content .widget .widget-content .meta-list li {
+  margin-bottom: 10px;
+  line-height: 1.428571429;
+}
+.main-content .widget .widget-content .meta-list li:last-child { margin-bottom: 0; }
+.main-content .widget .widget-content .selected-detail { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e0e0e0; }
+
+@media (max-width: 992px) {
+  #main-content-wrapper.content-wrapper { margin-left: 0; padding: 15px; }
+}

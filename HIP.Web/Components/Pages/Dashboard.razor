@@ -6,110 +6,160 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<PageTitle>HIP Admin Dashboard</PageTitle>
+<PageTitle>Dashboard | HIP Admin</PageTitle>
 
-<div class="main-header">
-    <h2>DASHBOARD</h2>
-    <em>the first priority information</em>
-</div>
+<div id="main-content-wrapper" class="content-wrapper">
+    <div class="row">
+        <div class="col-md-4">
+            <ul class="breadcrumb">
+                <li><i class="fa fa-home"></i><a href="#">Home</a></li>
+                <li class="active">Dashboard</li>
+            </ul>
+        </div>
+        <div class="col-md-8">
+            <div class="top-content"></div>
+        </div>
+    </div>
 
-<section class="cards cards-reset">
-    <article class="card widget">
-        <div class="widget-header">
-            <h3><i class="fa fa-heartbeat"></i> Service Health</h3>
-            <button class="link-btn icon-btn" @onclick="LoadServiceHealthAsync" disabled="@_loadingHealth" title="Refresh" aria-label="Refresh service health"><i class="fa @(_loadingHealth ? "fa-spinner fa-spin" : "fa-refresh")"></i></button>
+    <div class="content">
+        <div class="main-header">
+            <h2>DASHBOARD</h2>
+            <em>the first priority information</em>
         </div>
-        <div class="widget-content">
-            @if (_loadingHealth)
-            {
-                <p>Loading service status...</p>
-            }
-            else if (!string.IsNullOrWhiteSpace(_healthError))
-            {
-                <p class="status-bad">Unavailable: @_healthError</p>
-            }
-            else if (_serviceHealth is not null)
-            {
-                <p class="status-ok">Status: Online</p>
-                <ul class="meta-list">
-                    <li><strong>Service:</strong> @_serviceHealth.ServiceName</li>
-                    <li><strong>Version:</strong> @_serviceHealth.AssemblyVersion</li>
-                    <li><strong>UTC:</strong> @_serviceHealth.UtcTimestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</li>
-                </ul>
-            }
-            else
-            {
-                <p>Status not loaded yet.</p>
-            }
-        </div>
-    </article>
 
-    <article class="card widget">
-        <div class="widget-header">
-            <h3><i class="fa fa-key"></i> Crypto Config (Dev)</h3>
-            <button class="link-btn icon-btn" @onclick="LoadCryptoConfigAsync" disabled="@_loadingCrypto" title="Refresh" aria-label="Refresh crypto config"><i class="fa @(_loadingCrypto ? "fa-spinner fa-spin" : "fa-refresh")"></i></button>
-        </div>
-        <div class="widget-content">
-            <div class="input-row">
-                <input class="text-input" @bind="_cryptoKeyId" placeholder="key id (e.g. hip-system)" />
+        <div class="main-content">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="widget">
+                        <div class="widget-header">
+                            <h3><i class="fa fa-heartbeat"></i> Service Health</h3>
+                            <div class="btn-group widget-header-toolbar">
+                                <button class="link-btn icon-btn" @onclick="LoadServiceHealthAsync" disabled="@_loadingHealth" title="Refresh"><i class="fa @(_loadingHealth ? "fa-spinner fa-spin" : "fa-refresh")"></i></button>
+                            </div>
+                        </div>
+                        <div class="widget-content">
+                            @if (_loadingHealth)
+                            {
+                                <p>Loading service status...</p>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(_healthError))
+                            {
+                                <p class="status-bad">Unavailable: @_healthError</p>
+                            }
+                            else if (_serviceHealth is not null)
+                            {
+                                <p class="status-ok">Status: Online</p>
+                                <ul class="meta-list">
+                                    <li><strong>Service:</strong> @_serviceHealth.ServiceName</li>
+                                    <li><strong>Version:</strong> @_serviceHealth.AssemblyVersion</li>
+                                    <li><strong>UTC:</strong> @_serviceHealth.UtcTimestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</li>
+                                </ul>
+                            }
+                            else
+                            {
+                                <p>Status not loaded yet.</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="widget">
+                        <div class="widget-header">
+                            <h3><i class="fa fa-key"></i> Crypto Config (Dev)</h3>
+                            <div class="btn-group widget-header-toolbar">
+                                <button class="link-btn icon-btn" @onclick="LoadCryptoConfigAsync" disabled="@_loadingCrypto" title="Refresh"><i class="fa @(_loadingCrypto ? "fa-spinner fa-spin" : "fa-refresh")"></i></button>
+                            </div>
+                        </div>
+                        <div class="widget-content">
+                            <div class="input-row">
+                                <input class="text-input" @bind="_cryptoKeyId" placeholder="key id (e.g. hip-system)" />
+                            </div>
+
+                            @if (_loadingCrypto)
+                            {
+                                <p>Loading crypto config...</p>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(_cryptoError))
+                            {
+                                <p class="status-bad">@_cryptoError</p>
+                            }
+                            else if (_cryptoConfig is not null)
+                            {
+                                <p class="status-ok">Config loaded</p>
+                                <ul class="meta-list">
+                                    <li><strong>Provider:</strong> @_cryptoConfig.Provider</li>
+                                    <li><strong>KeyId:</strong> @_cryptoConfig.KeyId</li>
+                                    <li><strong>Private key:</strong> @(_cryptoConfig.PrivateKeyExists ? "Found" : "Missing")</li>
+                                    <li><strong>Public key:</strong> @(_cryptoConfig.PublicKeyExists ? "Found" : "Missing")</li>
+                                </ul>
+                            }
+                            else
+                            {
+                                <p>No crypto config loaded yet.</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="widget">
+                        <div class="widget-header">
+                            <h3><i class="fa fa-shield"></i> Security Status</h3>
+                            <div class="btn-group widget-header-toolbar">
+                                <button class="link-btn icon-btn" @onclick="LoadSecurityStatusAsync" disabled="@_loadingSecurity" title="Refresh"><i class="fa @(_loadingSecurity ? "fa-spinner fa-spin" : "fa-refresh")"></i></button>
+                            </div>
+                        </div>
+                        <div class="widget-content">
+                            @if (_loadingSecurity)
+                            {
+                                <p>Loading security counters...</p>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(_securityError))
+                            {
+                                <p class="status-bad">@_securityError</p>
+                            }
+                            else if (_securityStatus is not null)
+                            {
+                                <p class="status-ok">Counters loaded</p>
+                                <ul class="meta-list">
+                                    <li><strong>Replay detected:</strong> @_securityStatus.ReplayDetected</li>
+                                    <li><strong>Message expired:</strong> @_securityStatus.MessageExpired</li>
+                                    <li><strong>Policy blocked:</strong> @_securityStatus.PolicyBlocked</li>
+                                    <li><strong>UTC:</strong> @_securityStatus.UtcTimestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</li>
+                                </ul>
+                            }
+                            else
+                            {
+                                <p>No security data loaded yet.</p>
+                            }
+
+                            <div class="selected-detail">
+                                <strong>Recent Security Rejects</strong>
+                                @if (_securityEvents.Count == 0)
+                                {
+                                    <p>No recent rejects.</p>
+                                }
+                                else
+                                {
+                                    <ul class="meta-list">
+                                        @foreach (var evt in _securityEvents.Take(10))
+                                        {
+                                            <li>
+                                                <strong>@evt.Reason</strong> · @evt.IdentityId<br />
+                                                <small>msg=@(evt.MessageId ?? "-") · @evt.UtcTimestamp.ToString("MM-dd HH:mm:ss 'UTC'")</small>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-
-            @if (_loadingCrypto)
-            {
-                <p>Loading crypto config...</p>
-            }
-            else if (!string.IsNullOrWhiteSpace(_cryptoError))
-            {
-                <p class="status-bad">@_cryptoError</p>
-            }
-            else if (_cryptoConfig is not null)
-            {
-                <p class="status-ok">Config loaded</p>
-                <ul class="meta-list">
-                    <li><strong>Provider:</strong> @_cryptoConfig.Provider</li>
-                    <li><strong>KeyId:</strong> @_cryptoConfig.KeyId</li>
-                    <li><strong>Private key:</strong> @(_cryptoConfig.PrivateKeyExists ? "Found" : "Missing")</li>
-                    <li><strong>Public key:</strong> @(_cryptoConfig.PublicKeyExists ? "Found" : "Missing")</li>
-                </ul>
-            }
-            else
-            {
-                <p>No crypto config loaded yet.</p>
-            }
         </div>
-    </article>
-
-    <article class="card widget">
-        <div class="widget-header">
-            <h3><i class="fa fa-shield"></i> Security Status</h3>
-            <button class="link-btn icon-btn" @onclick="LoadSecurityStatusAsync" disabled="@_loadingSecurity" title="Refresh" aria-label="Refresh security status"><i class="fa @(_loadingSecurity ? "fa-spinner fa-spin" : "fa-refresh")"></i></button>
-        </div>
-        <div class="widget-content">
-            @if (_loadingSecurity)
-            {
-                <p>Loading security counters...</p>
-            }
-            else if (!string.IsNullOrWhiteSpace(_securityError))
-            {
-                <p class="status-bad">@_securityError</p>
-            }
-            else if (_securityStatus is not null)
-            {
-                <p class="status-ok">Counters loaded</p>
-                <ul class="meta-list">
-                    <li><strong>Replay detected:</strong> @_securityStatus.ReplayDetected</li>
-                    <li><strong>Message expired:</strong> @_securityStatus.MessageExpired</li>
-                    <li><strong>Policy blocked:</strong> @_securityStatus.PolicyBlocked</li>
-                    <li><strong>UTC:</strong> @_securityStatus.UtcTimestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</li>
-                </ul>
-            }
-            else
-            {
-                <p>No security data loaded yet.</p>
-            }
-        </div>
-    </article>
-</section>
+    </div>
+</div>
 @code {
 
     private ServiceStatusDto? _serviceHealth;
