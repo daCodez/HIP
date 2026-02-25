@@ -591,6 +591,10 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
 .card .status-ok + .meta-list,
 .card .status-bad + .meta-list {
   margin-top: 0 !important;
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .card ul.meta-list {
@@ -598,10 +602,8 @@ body { background: #ececec !important; color: #555 !important; font: 13px/1.4285
 }
 
 .card ul.meta-list li {
-  margin-bottom: 6px;
-}
-.card ul.meta-list li:last-child {
-  margin-bottom: 0;
+  margin: 0;
+  line-height: 1.4;
 }
 
 .meta-list li {
