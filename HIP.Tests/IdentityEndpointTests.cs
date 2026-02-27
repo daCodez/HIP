@@ -20,7 +20,7 @@ public sealed class IdentityEndpointTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(payload, Is.Not.Null);
         Assert.That(payload!.Id, Is.EqualTo("hip-system"));
-        Assert.That(payload.PublicKeyRef, Is.EqualTo("pkref:placeholder"));
+        Assert.That(payload.PublicKeyRef, Is.EqualTo("pkref:hip-system-main"));
     }
 
     [Test]
