@@ -1,0 +1,21 @@
+# .NET build artifacts
+**/bin/
+**/obj/
+
+# Test outputs
+**/TestResults/
+
+# Local SQLite/dev runtime files
+HIP.ApiService/*.db
+HIP.ApiService/*.db-shm
+HIP.ApiService/*.db-wal
+
+# Local apphost/runtime scratch
+apphost.run.json
+apphost.multinode.cs
+apphost.run.json.bak.*
+
+# IDE/user files
+.vs/
+*.user
+*.suo
