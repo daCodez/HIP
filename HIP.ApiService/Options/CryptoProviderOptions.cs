@@ -6,4 +6,5 @@ public sealed class CryptoProviderOptions
 
     public string Provider { get; init; } = "Placeholder";
     public string? PublicKeyStorePath { get; init; }
+    public string? PrivateKeyStorePath { get; init; }
 }

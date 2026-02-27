@@ -13,9 +13,11 @@ public static class StatusEndpoints
                 var response = await sender.Send(new GetStatusQuery(), cancellationToken); // performance awareness: cancellation supported
                 return Results.Ok(response); // security awareness: fixed payload only, no user secrets
             })
+            .RequireRateLimiting("read-api")
             .WithName("GetStatus")
             .WithTags("Status")
-            .Produces<StatusResponse>(StatusCodes.Status200OK);
+            .Produces<StatusResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
 
         return endpoints;
     }

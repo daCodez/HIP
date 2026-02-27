@@ -5,4 +5,4 @@ public sealed record SignedMessage(
     string From,
     string To,
     string Body,
-    string SignaturePlaceholder);
+    string SignatureBase64);
