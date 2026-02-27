@@ -20,6 +20,17 @@ var client = app.Services.GetRequiredService<IHipSdkClient>();
 var status = await client.GetStatusAsync();
 ```
 
+Demo app:
+
+```bash
+cd /home/jarvis_bot/.openclaw/workspace/HIP
+# Terminal A
+ dotnet run --project HIP.ApiService
+
+# Terminal B
+ dotnet run --project HIP.Sdk.Demo -- http://127.0.0.1:5101 hip-system
+```
+
 ## Dev: verify crypto config wiring
 
 With `HIP.ApiService` running in **Development**, use this to confirm key-path resolution and file discovery:
