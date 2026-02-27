@@ -1,5 +1,25 @@
 # HIP
 
+## HIP SDK (starter)
+
+A .NET client library scaffold now exists at `HIP.Sdk/`.
+
+It currently supports:
+- `GetStatusAsync()`
+- `GetIdentityAsync(id)`
+- `GetReputationAsync(identityId)`
+
+Quick usage:
+
+```csharp
+using HIP.Sdk;
+
+builder.Services.AddHipSdkClient(o => o.BaseUrl = "http://127.0.0.1:5101");
+
+var client = app.Services.GetRequiredService<IHipSdkClient>();
+var status = await client.GetStatusAsync();
+```
+
 ## Dev: verify crypto config wiring
 
 With `HIP.ApiService` running in **Development**, use this to confirm key-path resolution and file discovery:
