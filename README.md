@@ -4,6 +4,9 @@
 
 A .NET client library scaffold now exists at `HIP.Sdk/`.
 
+Developer docs:
+- `HIP.Sdk/README.md` (usage + maintenance rules)
+
 It currently supports:
 - `GetStatusAsync()`
 - `GetIdentityAsync(id)`
