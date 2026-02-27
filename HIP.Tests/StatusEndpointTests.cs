@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using HIP.ApiService.Features.Status;
 using Microsoft.AspNetCore.Mvc.Testing;
+using NUnit.Framework;
 
 namespace HIP.Tests;
 
