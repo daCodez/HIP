@@ -68,7 +68,6 @@ builder.Services.AddDbContext<HipDbContext>(options =>
 
 builder.Services.AddScoped<IIdentityService, InMemoryIdentityService>();
 builder.Services.AddScoped<IReputationService, DatabaseReputationService>();
-builder.Services.AddScoped<IAuditTrail, DatabaseAuditTrail>();
 builder.Services.AddSingleton<ISecurityEventCounter, InMemorySecurityEventCounter>();
 builder.Services.AddSingleton<ISecurityRejectLog, InMemorySecurityRejectLog>();
 builder.Services.AddScoped<IReplayProtectionService, InMemoryReplayProtectionService>();
@@ -83,6 +82,9 @@ builder.Services.AddExceptionHandler(_ => { });
 
 var pluginRegistry = new HipPluginRegistry();
 builder.Services.AddSingleton<IHipPluginRegistry>(pluginRegistry);
+
+// Core plugin: always provide the durable default audit sink.
+pluginRegistry.Register(new AuditDatabasePlugin());
 
 var enabledPlugins = (builder.Configuration.GetSection("HIP:Plugins:Enabled").Get<string[]>() ?? [])
     .Select(x => x?.Trim())

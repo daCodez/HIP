@@ -144,7 +144,7 @@ HIP now includes a plugin foundation for future modular extension:
 - plugin manifest model (`id`, `version`, `capabilities`)
 - runtime registry (`IHipPluginRegistry`) wired into startup and endpoint mapping
 
-Current state: foundation is enabled, with no external plugins loaded by default.
+Current state: foundation is enabled, with a core audit plugin loaded by default (`core.audit.database`), and no external plugins loaded by default.
 
 Enable plugins via config:
 
