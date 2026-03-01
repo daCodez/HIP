@@ -83,8 +83,9 @@ builder.Services.AddExceptionHandler(_ => { });
 var pluginRegistry = new HipPluginRegistry();
 builder.Services.AddSingleton<IHipPluginRegistry>(pluginRegistry);
 
-// Core plugin: always provide the durable default audit sink.
+// Core plugins: always provide default audit + policy implementations.
 pluginRegistry.Register(new AuditDatabasePlugin());
+pluginRegistry.Register(new PolicyDefaultPlugin());
 
 var enabledPlugins = (builder.Configuration.GetSection("HIP:Plugins:Enabled").Get<string[]>() ?? [])
     .Select(x => x?.Trim())
