@@ -164,6 +164,11 @@ Optional OIDC identity plugin:
 - Sync mapping: `POST /api/plugins/identity/oidc/sync`
 - Plugin info: `GET /api/plugins/identity/oidc/info`
 
+Optional system metrics plugin:
+- Enable `core.metrics.system` in `HIP:Plugins:Enabled`.
+- System metrics feed: `GET /api/plugins/system-metrics?take=60`
+- Adds CPU/Memory widget cards to dashboard (real-time sparkline graphs).
+
 Enable plugins via config:
 
 ```json

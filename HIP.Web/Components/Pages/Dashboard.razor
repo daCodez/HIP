@@ -33,7 +33,7 @@
                 <div class="row" style="margin-bottom:10px;">
                     @if (_policyWidget is not null)
                     {
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="widget">
                                 <div class="widget-header">
                                     <h3><i class="fa fa-balance-scale"></i> Policy Pack</h3>
@@ -58,7 +58,33 @@
                         </div>
                     }
 
-                    <div class="col-md-@(_policyWidget is null ? "12" : "6")">
+                    @if (_showSystemMetrics)
+                    {
+                        <div class="col-md-4">
+                            <div class="widget">
+                                <div class="widget-header"><h3><i class="fa fa-microchip"></i> CPU Usage</h3></div>
+                                <div class="widget-content">
+                                    <p><strong>@_latestCpu.ToString("0.0")%</strong></p>
+                                    <svg viewBox="0 0 100 30" width="100%" height="60">
+                                        <polyline fill="none" stroke="#3c8dbc" stroke-width="1.5" points="@BuildPoints(_cpuSeries)" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="widget">
+                                <div class="widget-header"><h3><i class="fa fa-memory"></i> Memory Usage</h3></div>
+                                <div class="widget-content">
+                                    <p><strong>@_latestMemory.ToString("0.0")%</strong></p>
+                                    <svg viewBox="0 0 100 30" width="100%" height="60">
+                                        <polyline fill="none" stroke="#00a65a" stroke-width="1.5" points="@BuildPoints(_memorySeries)" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="col-md-@((_policyWidget is null && !_showSystemMetrics) ? "12" : "4")">
                         <div class="widget">
                             <div class="widget-header">
                                 <h3><i class="fa fa-puzzle-piece"></i> Plugin Widgets</h3>
@@ -231,6 +257,13 @@
     private PluginWidgetDto? _policyWidget;
     private PolicyCurrentDto? _policyWidgetInfo;
 
+    private bool _showSystemMetrics;
+    private List<double> _cpuSeries = new();
+    private List<double> _memorySeries = new();
+    private double _latestCpu;
+    private double _latestMemory;
+    private CancellationTokenSource? _metricsLoopCts;
+
     private List<AuditEventDto> _auditEvents = new();
     private List<AuditEventDto> _filteredAuditEvents = new();
     private AuditEventDto? _selectedAuditEvent;
@@ -267,6 +300,12 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadPluginWidgetsAsync();
+        if (_showSystemMetrics)
+        {
+            _metricsLoopCts = new CancellationTokenSource();
+            _ = RunMetricsLoopAsync(_metricsLoopCts.Token);
+        }
+
         await LoadServiceHealthAsync();
         await LoadCryptoConfigAsync();
         await LoadSecurityStatusAsync();
@@ -282,6 +321,7 @@
             var client = HttpClientFactory.CreateClient("hip-bff");
             _pluginWidgets = await client.GetFromJsonAsync<List<PluginWidgetDto>>("/bff/plugins/widgets") ?? new();
             _policyWidget = _pluginWidgets.FirstOrDefault(x => x.Label == "Policy Pack");
+            _showSystemMetrics = _pluginWidgets.Any(x => x.Label == "CPU Usage") || _pluginWidgets.Any(x => x.Label == "Memory Usage");
 
             if (_policyWidget is not null)
             {
@@ -291,6 +331,11 @@
             {
                 _policyWidgetInfo = null;
             }
+
+            if (_showSystemMetrics)
+            {
+                await LoadSystemMetricsAsync();
+            }
         }
         catch
         {
@@ -298,6 +343,47 @@
             _policyWidget = null;
             _policyWidgetInfo = null;
         }
+    }
+
+    private async Task RunMetricsLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            await LoadSystemMetricsAsync();
+            await InvokeAsync(StateHasChanged);
+            try
+            {
+                await Task.Delay(1000, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    private async Task LoadSystemMetricsAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            var payload = await client.GetFromJsonAsync<SystemMetricsDto>("/bff/system-metrics?take=60");
+            var samples = payload?.Samples ?? new();
+            _cpuSeries = samples.Select(x => x.Cpu).ToList();
+            _memorySeries = samples.Select(x => x.Memory).ToList();
+            _latestCpu = _cpuSeries.LastOrDefault();
+            _latestMemory = _memorySeries.LastOrDefault();
+        }
+        catch
+        {
+        }
+    }
+
+    private static string BuildPoints(List<double> values)
+    {
+        if (values.Count == 0) return string.Empty;
+        var step = values.Count <= 1 ? 100 : 100.0 / (values.Count - 1);
+        return string.Join(' ', values.Select((v, i) => $"{(i * step):0.##},{(30 - (Math.Clamp(v, 0, 100) / 100.0 * 30)):0.##}"));
     }
 
     private async Task LoadServiceHealthAsync()
@@ -683,6 +769,8 @@
 
     public async ValueTask DisposeAsync()
     {
+        _metricsLoopCts?.Cancel();
+        _metricsLoopCts?.Dispose();
         await StopAuditAutoRefreshAsync();
     }
 
@@ -701,6 +789,8 @@
     private sealed record PluginWidgetDto(string Label, string Route, string? Icon, int Order, string? Capability, string Display);
     private sealed record PolicyScoresDto(int Low, int Medium, int High);
     private sealed record PolicyCurrentDto(string PluginId, string Version, PolicyScoresDto RequiredScores);
+    private sealed record SystemMetricPointDto(DateTimeOffset Utc, double Cpu, double Memory);
+    private sealed record SystemMetricsDto(List<SystemMetricPointDto> Samples);
     private sealed record AuditEventDto(string Id, DateTimeOffset CreatedAtUtc, string EventType, string Subject, string Source, string Detail);
     private sealed record IdentityDto(string Id, string PublicKeyRef);
     private sealed record ReputationDto(string IdentityId, int Score, DateTimeOffset UtcTimestamp);

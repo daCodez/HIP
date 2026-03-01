@@ -121,6 +121,11 @@ if (enabledPlugins.Contains("core.identity.oidc"))
     pluginRegistry.Register(new IdentityOidcPlugin());
 }
 
+if (enabledPlugins.Contains("core.metrics.system"))
+{
+    pluginRegistry.Register(new SystemMetricsPlugin());
+}
+
 if (autoDiscover)
 {
     var discovered = HipPluginDiscovery.Discover(pluginDirectory);

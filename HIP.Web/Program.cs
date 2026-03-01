@@ -106,10 +106,31 @@ app.MapGet("/bff/identity/oidc/info", async (HipApiClient api, CancellationToken
     return Results.Content(body, "application/json", Encoding.UTF8, status);
 });
 
+app.MapPost("/bff/identity/oidc/resolve", async (OidcIdentityRequest request, HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var payload = System.Text.Json.JsonSerializer.Serialize(request);
+    var (status, body) = await api.PostAsync("/api/plugins/identity/oidc/resolve", payload, cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
+app.MapPost("/bff/identity/oidc/sync", async (OidcIdentityRequest request, HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var payload = System.Text.Json.JsonSerializer.Serialize(request);
+    var (status, body) = await api.PostAsync("/api/plugins/identity/oidc/sync", payload, cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
 app.MapPost("/bff/feedback", async (ReputationFeedbackRequest request, HipApiClient api, CancellationToken cancellationToken) =>
 {
     var payload = System.Text.Json.JsonSerializer.Serialize(request);
     var (status, body) = await api.PostAsync("/api/plugins/reputation/feedback", payload, cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
+app.MapGet("/bff/system-metrics", async (int? take, HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var count = Math.Clamp(take ?? 60, 5, 120);
+    var (status, body) = await api.GetAsync($"/api/plugins/system-metrics?take={count}", cancellationToken);
     return Results.Content(body, "application/json", Encoding.UTF8, status);
 });
 
@@ -129,3 +150,4 @@ app.MapDefaultEndpoints();
 app.Run();
 
 public sealed record ReputationFeedbackRequest(string IdentityId, string Feedback, string? Source = null, string? Note = null);
+public sealed record OidcIdentityRequest(string Issuer, string Subject, string? Email = null, bool? EmailVerified = null);

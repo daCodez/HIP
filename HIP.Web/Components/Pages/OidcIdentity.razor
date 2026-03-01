@@ -8,20 +8,20 @@
     <div class="content">
         <div class="main-header">
             <h2>OIDC IDENTITY</h2>
-            <em>identity provider mapping plugin</em>
+            <em>resolve and sync external identity mappings</em>
         </div>
 
-        <div class="widget">
+        <div class="widget" style="margin-bottom:12px;">
             <div class="widget-header">
                 <h3><i class="fa fa-id-badge"></i> Plugin Info</h3>
                 <div class="btn-group widget-header-toolbar">
-                    <button class="link-btn icon-btn" @onclick="LoadAsync" disabled="@_loading" title="Refresh"><i class="fa @(_loading ? "fa-spinner fa-spin" : "fa-refresh")"></i></button>
+                    <button class="link-btn icon-btn" @onclick="LoadInfoAsync" disabled="@_loadingInfo" title="Refresh"><i class="fa @(_loadingInfo ? "fa-spinner fa-spin" : "fa-refresh")"></i></button>
                 </div>
             </div>
             <div class="widget-content">
-                @if (!string.IsNullOrWhiteSpace(_error))
+                @if (!string.IsNullOrWhiteSpace(_infoError))
                 {
-                    <p class="status-bad">@_error</p>
+                    <p class="status-bad">@_infoError</p>
                 }
                 else if (_info is null)
                 {
@@ -34,23 +34,68 @@
                 }
             </div>
         </div>
+
+        <div class="widget" style="margin-bottom:12px;">
+            <div class="widget-header">
+                <h3><i class="fa fa-search"></i> Resolve Mapping</h3>
+            </div>
+            <div class="widget-content">
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+                    <input class="text-input" placeholder="issuer" @bind="_issuer" />
+                    <input class="text-input" placeholder="subject" @bind="_subject" />
+                    <input class="text-input" placeholder="email (optional)" @bind="_email" />
+                    <label style="display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" @bind="_emailVerified" /> email verified
+                    </label>
+                    <button class="btn btn-sm btn-primary" @onclick="ResolveAsync" disabled="@_working">Resolve</button>
+                    <button class="btn btn-sm btn-default" @onclick="SyncAsync" disabled="@_working">Sync</button>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_actionError))
+                {
+                    <p class="status-bad">@_actionError</p>
+                }
+
+                @if (_resolveResult is not null)
+                {
+                    <p><strong>Identity:</strong> @_resolveResult.IdentityId</p>
+                    <p><strong>Exists:</strong> @_resolveResult.Exists</p>
+                    <p><strong>Assurance:</strong> @_resolveResult.Assurance</p>
+                }
+
+                @if (_syncResult is not null)
+                {
+                    <p class="status-ok"><strong>Synced:</strong> @_syncResult.IdentityId</p>
+                }
+            </div>
+        </div>
     </div>
 </div>
 
 @code {
-    private bool _loading;
-    private string? _error;
+    private bool _loadingInfo;
+    private bool _working;
+    private string? _infoError;
+    private string? _actionError;
+
     private OidcInfoDto? _info;
+    private ResolveResultDto? _resolveResult;
+    private SyncResultDto? _syncResult;
+
+    private string _issuer = "https://accounts.example.com";
+    private string _subject = "user-123";
+    private string? _email;
+    private bool _emailVerified = true;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadAsync();
+        await LoadInfoAsync();
     }
 
-    private async Task LoadAsync()
+    private async Task LoadInfoAsync()
     {
-        _loading = true;
-        _error = null;
+        _loadingInfo = true;
+        _infoError = null;
 
         try
         {
@@ -59,14 +104,69 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _infoError = ex.Message;
             _info = null;
         }
         finally
         {
-            _loading = false;
+            _loadingInfo = false;
         }
     }
 
+    private async Task ResolveAsync()
+    {
+        await RunActionAsync("/bff/identity/oidc/resolve", isSync: false);
+    }
+
+    private async Task SyncAsync()
+    {
+        await RunActionAsync("/bff/identity/oidc/sync", isSync: true);
+    }
+
+    private async Task RunActionAsync(string path, bool isSync)
+    {
+        _working = true;
+        _actionError = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            var response = await client.PostAsJsonAsync(path, new OidcRequestDto(_issuer, _subject, _email, _emailVerified));
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _actionError = body;
+                return;
+            }
+
+            if (isSync)
+            {
+                _syncResult = System.Text.Json.JsonSerializer.Deserialize<SyncResultDto>(body, JsonOptions);
+                await ResolveAsync();
+            }
+            else
+            {
+                _resolveResult = System.Text.Json.JsonSerializer.Deserialize<ResolveResultDto>(body, JsonOptions);
+            }
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private sealed record OidcInfoDto(string PluginId, string Version, List<string> Supported);
+    private sealed record OidcRequestDto(string Issuer, string Subject, string? Email, bool? EmailVerified);
+    private sealed record ResolveResultDto(string IdentityId, string Issuer, string Subject, bool Exists, string Assurance);
+    private sealed record SyncResultDto(bool Synced, string IdentityId, string Issuer, string Subject);
 }
