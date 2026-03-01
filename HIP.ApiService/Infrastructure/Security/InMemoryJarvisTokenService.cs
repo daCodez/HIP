@@ -7,11 +7,23 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HIP.ApiService.Infrastructure.Security;
 
+/// <summary>
+/// Executes the operation for this public API member.
+/// </summary>
+/// <param name="keyPolicy">The keyPolicy value used by this operation.</param>
+/// <param name="db">The db value used by this operation.</param>
+/// <returns>The operation result.</returns>
 public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy, HipDbContext db) : IJarvisTokenService
 {
     private static readonly TimeSpan AccessTtl = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan RefreshTtl = TimeSpan.FromHours(12);
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="request">The request value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public async Task<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken)
     {
         var key = keyPolicy.Current();
@@ -49,6 +61,12 @@ public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy, Hip
         return new TokenIssueResult(accessToken, accessExpiry, refreshToken, refreshExpiry, key.KeyId, key.Version, request.Audience, request.DeviceId);
     }
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="request">The request value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public Task<TokenValidationResult> ValidateAsync(TokenValidationRequest request, CancellationToken cancellationToken)
     {
         if (!TryParseAndVerify<AccessClaims>(request.AccessToken, out var claims, out var reason))
@@ -79,6 +97,12 @@ public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy, Hip
         return Task.FromResult(new TokenValidationResult(true, "ok", claims.Sub, DateTimeOffset.FromUnixTimeSeconds(claims.Exp), claims.Kid, claims.Ver));
     }
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="request">The request value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public async Task<TokenRefreshResult> RefreshAsync(TokenRefreshRequest request, CancellationToken cancellationToken)
     {
         var hash = Hash(request.RefreshToken);
@@ -102,6 +126,12 @@ public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy, Hip
         return new TokenRefreshResult(true, "ok", tokenSet);
     }
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="request">The request value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public async Task<TokenRevokeResult> RevokeAsync(TokenRevokeRequest request, CancellationToken cancellationToken)
     {
         var revokedRefresh = 0;
@@ -142,6 +172,12 @@ public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy, Hip
             : new TokenRevokeResult(false, "not_found", 0, 0);
     }
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="request">The request value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public Task<ProofTokenIssueResult> IssueProofTokenAsync(ProofTokenIssueRequest request, CancellationToken cancellationToken)
     {
         var ttl = request.Ttl ?? TimeSpan.FromMinutes(1);
@@ -157,6 +193,12 @@ public sealed class InMemoryJarvisTokenService(IKeyRotationPolicy keyPolicy, Hip
         return Task.FromResult(new ProofTokenIssueResult(true, "ok", token, exp));
     }
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="request">The request value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public async Task<ProofTokenConsumeResult> ConsumeProofTokenAsync(ProofTokenConsumeRequest request, CancellationToken cancellationToken)
     {
         if (!TryParseAndVerify<ProofClaims>(request.ProofToken, out var claims, out var reason))

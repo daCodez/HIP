@@ -2,8 +2,15 @@ using HIP.ApiService.Application.Abstractions;
 
 namespace HIP.ApiService.Features.Admin;
 
+/// <summary>
+/// Represents a publicly visible API member.
+/// </summary>
 public static class AdminAccessPolicy
 {
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <returns>The operation result.</returns>
     public static async Task<IResult?> AuthorizeReadAsync(
         HttpContext httpContext,
         IHipEnvelopeVerifier envelopeVerifier,

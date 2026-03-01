@@ -6,6 +6,10 @@ using Microsoft.Extensions.Options;
 
 namespace HIP.ApiService.Infrastructure.Security;
 
+/// <summary>
+/// Executes the operation for this public API member.
+/// </summary>
+/// <returns>The operation result.</returns>
 public sealed class EcdsaMessageSignatureService(
     IOptions<CryptoProviderOptions> options,
     IReplayProtectionService replayProtection,
@@ -15,6 +19,12 @@ public sealed class EcdsaMessageSignatureService(
     ISecurityRejectLog securityRejectLog,
     ILogger<EcdsaMessageSignatureService> logger) : IMessageSignatureService
 {
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="request">The request value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public Task<SignMessageResultDto> SignAsync(SignMessageRequestDto request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request); // validation
@@ -69,9 +79,21 @@ public sealed class EcdsaMessageSignatureService(
     private static readonly TimeSpan MaxMessageAge = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="message">The message value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public Task<VerifyMessageResultDto> VerifyAsync(SignedMessageDto message, CancellationToken cancellationToken)
         => VerifyCoreAsync(message, consumeReplayNonce: true, cancellationToken);
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="message">The message value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public Task<VerifyMessageResultDto> VerifyReadOnlyAsync(SignedMessageDto message, CancellationToken cancellationToken)
         => VerifyCoreAsync(message, consumeReplayNonce: false, cancellationToken);
 

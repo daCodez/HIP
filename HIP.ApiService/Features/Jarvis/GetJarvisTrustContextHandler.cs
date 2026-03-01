@@ -1,5 +1,6 @@
 using HIP.ApiService.Application.Abstractions;
-using HIP.ApiService.Application.Audit;
+using HIP.Audit.Abstractions;
+using HIP.Audit.Models;
 using HIP.ApiService.Application.Contracts;
 using HIP.ApiService.Observability;
 using MediatR;
@@ -7,12 +8,22 @@ using System.Diagnostics;
 
 namespace HIP.ApiService.Features.Jarvis;
 
+/// <summary>
+/// Executes the operation for this public API member.
+/// </summary>
+/// <returns>The operation result.</returns>
 public sealed class GetJarvisTrustContextHandler(
     IIdentityService identityService,
     IReputationService reputationService,
     IAuditTrail auditTrail,
     ILogger<GetJarvisTrustContextHandler> logger) : IRequestHandler<GetJarvisTrustContextQuery, JarvisTrustContextDto>
 {
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="request">The request value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public async Task<JarvisTrustContextDto> Handle(GetJarvisTrustContextQuery request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();

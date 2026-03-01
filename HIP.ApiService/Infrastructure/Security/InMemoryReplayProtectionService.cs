@@ -4,10 +4,22 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HIP.ApiService.Infrastructure.Security;
 
+/// <summary>
+/// Executes the operation for this public API member.
+/// </summary>
+/// <param name="db">The db value used by this operation.</param>
+/// <returns>The operation result.</returns>
 public sealed class InMemoryReplayProtectionService(HipDbContext db) : IReplayProtectionService
 {
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(15);
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="messageId">The messageId value used by this operation.</param>
+    /// <param name="identityId">The identityId value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public async Task<bool> TryConsumeAsync(string messageId, string identityId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(messageId) || string.IsNullOrWhiteSpace(identityId))

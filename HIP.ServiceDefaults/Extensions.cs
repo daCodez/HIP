@@ -14,7 +14,11 @@ public static class Extensions
         ArgumentNullException.ThrowIfNull(builder); // validation
         builder.Services.AddHealthChecks().AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]); // security awareness: no sensitive data
         builder.Services.AddOpenTelemetry()
-            .WithMetrics(metrics => metrics.AddAspNetCoreInstrumentation().AddRuntimeInstrumentation().AddHttpClientInstrumentation())
+            .WithMetrics(metrics => metrics
+                .AddAspNetCoreInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddMeter("HIP.ApiService"))
             .WithTracing(tracing => tracing.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation()); // performance awareness via telemetry
 
         builder.Services.ConfigureHttpClientDefaults(http =>

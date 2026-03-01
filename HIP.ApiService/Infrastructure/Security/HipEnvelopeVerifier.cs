@@ -6,12 +6,22 @@ using Microsoft.Extensions.Options;
 
 namespace HIP.ApiService.Infrastructure.Security;
 
+/// <summary>
+/// Executes the operation for this public API member.
+/// </summary>
+/// <returns>The operation result.</returns>
 public sealed class HipEnvelopeVerifier(
     IOptions<CryptoProviderOptions> cryptoOptions,
     IReplayProtectionService replayProtection) : IHipEnvelopeVerifier
 {
     private static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="httpContext">The httpContext value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public async Task<HipEnvelopeVerificationResult> VerifyIfRequiredAsync(HttpContext httpContext, CancellationToken cancellationToken)
     {
         var origin = httpContext.Request.Headers["x-hip-origin"].ToString();

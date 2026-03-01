@@ -4,8 +4,12 @@ using HIP.Sdk.Models;
 
 namespace HIP.Sdk;
 
+/// <summary>
+/// Default HTTP implementation of <see cref="IHipSdkClient"/>.
+/// </summary>
 public sealed class HipSdkClient(HttpClient httpClient) : IHipSdkClient
 {
+    /// <inheritdoc />
     public async Task<StatusResponse> GetStatusAsync(CancellationToken cancellationToken = default)
     {
         var result = await httpClient.GetFromJsonAsync<StatusResponse>("/api/status", cancellationToken)
@@ -14,12 +18,21 @@ public sealed class HipSdkClient(HttpClient httpClient) : IHipSdkClient
         return result;
     }
 
+    /// <inheritdoc />
     public Task<IdentityDto?> GetIdentityAsync(string id, CancellationToken cancellationToken = default)
         => GetNullableAsync<IdentityDto>($"/api/identity/{Uri.EscapeDataString(id)}", cancellationToken);
 
+    /// <inheritdoc />
     public Task<ReputationDto?> GetReputationAsync(string identityId, CancellationToken cancellationToken = default)
         => GetNullableAsync<ReputationDto>($"/api/reputation/{Uri.EscapeDataString(identityId)}", cancellationToken);
 
+    /// <summary>
+    /// Executes a GET request and returns <see langword="null"/> when the server returns 404.
+    /// </summary>
+    /// <typeparam name="T">Expected JSON payload type.</typeparam>
+    /// <param name="path">Relative API path.</param>
+    /// <param name="cancellationToken">Cancellation token for the outbound HTTP request.</param>
+    /// <returns>Deserialized payload or <see langword="null"/> for not-found responses.</returns>
     private async Task<T?> GetNullableAsync<T>(string path, CancellationToken cancellationToken) where T : class
     {
         using var response = await httpClient.GetAsync(path, cancellationToken);

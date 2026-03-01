@@ -5,8 +5,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HIP.ApiService.Infrastructure.Reputation;
 
+/// <summary>
+/// Executes the operation for this public API member.
+/// </summary>
+/// <param name="db">The db value used by this operation.</param>
+/// <param name="logger">The logger value used by this operation.</param>
+/// <returns>The operation result.</returns>
 public sealed class DatabaseReputationService(HipDbContext db, ILogger<DatabaseReputationService> logger) : IReputationService
 {
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="identityId">The identityId value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public async Task<int> GetScoreAsync(string identityId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(identityId); // validation
@@ -29,6 +41,13 @@ public sealed class DatabaseReputationService(HipDbContext db, ILogger<DatabaseR
         return (int)Math.Clamp(Math.Round(score), 0, 100); // performance awareness: primitive math only
     }
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="identityId">The identityId value used by this operation.</param>
+    /// <param name="eventType">The eventType value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public async Task RecordSecurityEventAsync(string identityId, string eventType, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(identityId) || string.IsNullOrWhiteSpace(eventType))

@@ -14,6 +14,12 @@
 - [ ] Updated docs: `HIP/README.md` and/or `HIP.Sdk/README.md`
 - [ ] Called out breaking changes (if any)
 
+## Endpoint Security Inventory (required when endpoints are added/changed)
+- [ ] Updated endpoint inventory: `HIP/docs/endpoint-cap-exceptions-priority-2.md`
+- [ ] Documented payload cap and rationale for each changed endpoint
+- [ ] Documented rate-limit policy/rationale for each changed endpoint
+- [ ] Added/updated boundary tests (including `413` and/or `429` where relevant)
+
 ## Risk / Rollback
 - Risk level: Low / Medium / High
 - Rollback plan:

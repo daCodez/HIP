@@ -2,8 +2,15 @@ using FluentValidation;
 
 namespace HIP.ApiService.Features.Messages;
 
+/// <summary>
+/// Represents a publicly visible API member.
+/// </summary>
 public sealed class VerifySignedMessageValidator : AbstractValidator<VerifySignedMessageCommand>
 {
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <returns>The operation result.</returns>
     public VerifySignedMessageValidator()
     {
         RuleFor(x => x.Message).NotNull();

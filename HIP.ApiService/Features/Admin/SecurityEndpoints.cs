@@ -2,8 +2,16 @@ using HIP.ApiService.Application.Abstractions;
 
 namespace HIP.ApiService.Features.Admin;
 
+/// <summary>
+/// Represents a publicly visible API member.
+/// </summary>
 public static class SecurityEndpoints
 {
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="endpoints">The endpoints value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public static IEndpointRouteBuilder MapSecurityEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet("/api/admin/security-status", async (HttpContext httpContext, ISecurityEventCounter counter, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
