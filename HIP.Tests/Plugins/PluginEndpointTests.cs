@@ -56,6 +56,34 @@ public sealed class PluginEndpointTests
     }
 
     [Test]
+    public async Task StrictPolicyPlugin_WhenEnabled_AppearsInPluginList()
+    {
+        const string key = "HIP__Plugins__Enabled__0";
+        var original = Environment.GetEnvironmentVariable(key);
+        Environment.SetEnvironmentVariable(key, "core.policy.strict");
+
+        try
+        {
+            await using var app = new WebApplicationFactory<Program>();
+            using var client = app.CreateClient();
+
+            var response = await client.GetAsync("/api/plugins");
+            var payload = await response.Content.ReadFromJsonAsync<List<HipPluginManifest>>();
+
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(payload, Is.Not.Null);
+            Assert.That(payload!.Any(x => x.Id == "core.policy.strict"), Is.True);
+
+            var strictResponse = await client.GetAsync("/api/plugins/policy/strict");
+            Assert.That(strictResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(key, original);
+        }
+    }
+
+    [Test]
     public async Task PolicyPlugin_CurrentEndpoint_ReturnsDefaultThresholds()
     {
         await using var app = new WebApplicationFactory<Program>();

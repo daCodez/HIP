@@ -106,6 +106,11 @@ if (enabledPlugins.Contains("sample"))
     pluginRegistry.Register(new SamplePlugin());
 }
 
+if (enabledPlugins.Contains("core.policy.strict"))
+{
+    pluginRegistry.Register(new PolicyStrictPlugin());
+}
+
 if (autoDiscover)
 {
     var discovered = HipPluginDiscovery.Discover(pluginDirectory);

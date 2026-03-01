@@ -150,6 +150,9 @@ Current state: foundation is enabled, with core plugins loaded by default:
 
 No external plugins are loaded by default.
 
+Optional built-in policy pack:
+- Enable `core.policy.strict` in `HIP:Plugins:Enabled` to raise policy thresholds (low=60, medium=90, high=95).
+
 Enable plugins via config:
 
 ```json

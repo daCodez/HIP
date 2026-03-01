@@ -68,6 +68,40 @@ public sealed class JarvisIntegrationEndpointTests
     }
 
     [Test]
+    public async Task EvaluatePolicy_WithStrictPlugin_BetaMediumRisk_IsReviewed()
+    {
+        const string key = "HIP__Plugins__Enabled__0";
+        var original = Environment.GetEnvironmentVariable(key);
+        Environment.SetEnvironmentVariable(key, "core.policy.strict");
+
+        try
+        {
+            await using var app = new WebApplicationFactory<Program>();
+            using var client = app.CreateClient();
+
+            var request = new JarvisPolicyEvaluationRequestDto(
+                IdentityId: "beta-node",
+                UserText: "Check service status and summarize health.",
+                ContextNote: "dashboard",
+                ToolName: "status",
+                RiskLevel: "medium");
+
+            var response = await client.PostAsJsonAsync("/api/jarvis/policy/evaluate", request);
+            var payload = await response.Content.ReadFromJsonAsync<JarvisPolicyEvaluationResultDto>();
+
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(payload, Is.Not.Null);
+            Assert.That(payload!.Decision, Is.EqualTo("review"));
+            Assert.That(payload.ToolAccessAllowed, Is.False);
+            Assert.That(payload.ToolAccessReason, Is.EqualTo("insufficient_reputation"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(key, original);
+        }
+    }
+
+    [Test]
     public async Task EvaluatePolicy_BenignText_AllowsAndKeepsSanitizedText()
     {
         await using var app = new WebApplicationFactory<Program>();
