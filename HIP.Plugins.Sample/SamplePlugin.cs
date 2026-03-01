@@ -18,7 +18,11 @@ public sealed class SamplePlugin : IHipPlugin
         Id: "sample",
         Version: "0.1.0",
         Capabilities: ["endpoint.sample.ping"],
-        Description: "Sample plugin proving dynamic plugin registration.");
+        Description: "Sample plugin proving dynamic plugin registration.",
+        NavItems:
+        [
+            new HipPluginNavItem("Sample Ping", "/api/plugins/sample/ping", "fa-plug", 90, "endpoint.sample.ping")
+        ]);
 
     /// <inheritdoc />
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)

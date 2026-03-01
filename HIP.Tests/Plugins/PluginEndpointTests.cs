@@ -41,6 +41,10 @@ public sealed class PluginEndpointTests
             Assert.That(payload, Is.Not.Null);
             Assert.That(payload!.Any(x => x.Id == "sample"), Is.True);
 
+            var nav = await client.GetFromJsonAsync<List<HipPluginNavItem>>("/api/plugins/nav");
+            Assert.That(nav, Is.Not.Null);
+            Assert.That(nav!.Any(x => x.Route == "/api/plugins/sample/ping"), Is.True);
+
             var ping = await client.GetAsync("/api/plugins/sample/ping");
             Assert.That(ping.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         }

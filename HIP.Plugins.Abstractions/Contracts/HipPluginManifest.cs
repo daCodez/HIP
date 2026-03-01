@@ -7,4 +7,5 @@ public sealed record HipPluginManifest(
     string Id,
     string Version,
     IReadOnlyList<string> Capabilities,
-    string? Description = null);
+    string? Description = null,
+    IReadOnlyList<HipPluginNavItem>? NavItems = null);

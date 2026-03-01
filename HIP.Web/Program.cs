@@ -63,6 +63,19 @@ app.MapGet("/bff/reputation/{id}", async (string id, HipApiClient api, Cancellat
     return Results.Content(body, "application/json", Encoding.UTF8, status);
 });
 
+app.MapGet("/bff/audit", async (int? take, HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var count = Math.Clamp(take ?? 50, 1, 200);
+    var (status, body) = await api.GetAsync($"/api/admin/audit?take={count}", cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
+app.MapGet("/bff/plugins/nav", async (HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var (status, body) = await api.GetAsync("/api/plugins/nav", cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
 app.MapGet("/bff/extensions/hip-mail-bridge", () =>
 {
     var path = "/home/jarvis_bot/.openclaw/workspace/HIP/extensions/hip-mail-bridge.tar.gz";

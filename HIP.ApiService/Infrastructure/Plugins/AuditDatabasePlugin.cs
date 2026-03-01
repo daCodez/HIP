@@ -18,7 +18,11 @@ public sealed class AuditDatabasePlugin : IHipPlugin
         Id: "core.audit.database",
         Version: "1.0.0",
         Capabilities: ["audit.trail.write", "audit.trail.read"],
-        Description: "Registers DatabaseAuditTrail as the default audit sink.");
+        Description: "Registers DatabaseAuditTrail as the default audit sink.",
+        NavItems:
+        [
+            new HipPluginNavItem("Audit", "/audit", "fa-shield", 20, "audit.trail.read")
+        ]);
 
     /// <inheritdoc />
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)

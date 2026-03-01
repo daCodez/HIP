@@ -1,5 +1,25 @@
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
 @code {
     [Parameter] public bool Collapsed { get; set; }
+
+    private List<PluginNavItemDto> _pluginNavItems = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            _pluginNavItems = await client.GetFromJsonAsync<List<PluginNavItemDto>>("/bff/plugins/nav") ?? new();
+        }
+        catch
+        {
+            _pluginNavItems = new();
+        }
+    }
+
+    private sealed record PluginNavItemDto(string Label, string Route, string? Icon, int Order, string? Capability);
 }
 
 <ul class="main-menu">
@@ -8,8 +28,18 @@
             <i class="fa fa-dashboard fa-fw"></i><span class="text">Dashboard</span>
         </NavLink>
     </li>
-    <li><a class="link-disabled"><i class="fa fa-id-card-o fa-fw"></i><span class="text">Identity</span></a></li>
-    <li><a class="link-disabled"><i class="fa fa-star-o fa-fw"></i><span class="text">Reputation</span></a></li>
-    <li><a class="link-disabled"><i class="fa fa-envelope-o fa-fw"></i><span class="text">Messages</span></a></li>
-    <li><a class="link-disabled"><i class="fa fa-cog fa-fw"></i><span class="text">Settings</span></a></li>
+    <li>
+        <NavLink href="/audit" class="active-link" @onclick:preventDefault="false">
+            <i class="fa fa-shield fa-fw"></i><span class="text">Audit</span>
+        </NavLink>
+    </li>
+
+    @foreach (var item in _pluginNavItems)
+    {
+        <li>
+            <a href="@item.Route" class="active-link">
+                <i class="fa @(string.IsNullOrWhiteSpace(item.Icon) ? "fa-plug" : item.Icon) fa-fw"></i><span class="text">@item.Label</span>
+            </a>
+        </li>
+    }
 </ul>

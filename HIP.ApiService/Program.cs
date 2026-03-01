@@ -362,6 +362,18 @@ app.MapGet("/api/plugins", () => Results.Ok(runtimePluginRegistry.Manifests))
     .WithTags("Plugins")
     .Produces(StatusCodes.Status200OK);
 
+app.MapGet("/api/plugins/nav", () =>
+    {
+        var nav = runtimePluginRegistry.Manifests
+            .SelectMany(x => x.NavItems ?? Array.Empty<HipPluginNavItem>())
+            .OrderBy(x => x.Order)
+            .ToArray();
+        return Results.Ok(nav);
+    })
+    .WithName("GetPluginNav")
+    .WithTags("Plugins")
+    .Produces(StatusCodes.Status200OK);
+
 runtimePluginRegistry.MapEndpoints(app, app.Configuration, app.Environment);
 
 app.MapDefaultEndpoints();
