@@ -22,6 +22,12 @@ public sealed class ChatInsightsPluginTests
             var providers = await client.GetAsync("/api/plugins/chat/providers");
             Assert.That(providers.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
+            var oauthStatus = await client.GetAsync("/api/plugins/chat/oauth/status");
+            Assert.That(oauthStatus.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+            var oauthStart = await client.GetAsync("/api/plugins/chat/oauth/start");
+            Assert.That(oauthStart.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+
             var query = await client.PostAsJsonAsync("/api/plugins/chat/query", new { question = "what are top risks?" });
             Assert.That(query.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 

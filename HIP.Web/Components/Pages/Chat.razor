@@ -12,9 +12,23 @@
         </div>
 
         <div class="widget" style="margin-bottom:12px;">
-            <div class="widget-header"><h3><i class="fa fa-robot"></i> Query</h3></div>
+            <div class="widget-header"><h3><i class="fa fa-link"></i> Provider Connection</h3></div>
             <div class="widget-content">
                 <p><strong>Mode:</strong> @_mode</p>
+                @if (_mode == "oauth")
+                {
+                    <p><strong>Connected:</strong> @_oauthConnected</p>
+                    @if (!string.IsNullOrWhiteSpace(_oauthStartUrl))
+                    {
+                        <a class="btn btn-sm btn-default" href="@_oauthStartUrl" target="_blank">Connect OAuth</a>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="widget" style="margin-bottom:12px;">
+            <div class="widget-header"><h3><i class="fa fa-robot"></i> Query</h3></div>
+            <div class="widget-content">
                 <div style="display:flex; gap:8px;">
                     <input class="text-input" style="flex:1" @bind="_question" placeholder="Ask about risk, policy outcomes, or trends..." />
                     <button class="btn btn-sm btn-primary" @onclick="AskAsync" disabled="@_loading">Ask</button>
@@ -41,6 +55,8 @@
     private string? _answer;
     private string? _error;
     private bool _loading;
+    private bool _oauthConnected;
+    private string? _oauthStartUrl;
 
     protected override async Task OnInitializedAsync()
     {
@@ -49,6 +65,15 @@
             var client = HttpClientFactory.CreateClient("hip-bff");
             var provider = await client.GetFromJsonAsync<ProviderDto>("/bff/chat/providers");
             _mode = provider?.Mode ?? "unknown";
+
+            if (_mode == "oauth")
+            {
+                var status = await client.GetFromJsonAsync<OAuthStatusDto>("/bff/chat/oauth/status");
+                _oauthConnected = status?.Connected ?? false;
+
+                var start = await client.GetFromJsonAsync<OAuthStartDto>("/bff/chat/oauth/start");
+                _oauthStartUrl = start?.AuthorizeUrl;
+            }
         }
         catch
         {
@@ -86,6 +111,8 @@
     }
 
     private sealed record ProviderDto(string Mode);
+    private sealed record OAuthStatusDto(bool Connected, DateTimeOffset? ExpiresAtUtc);
+    private sealed record OAuthStartDto(string AuthorizeUrl, string State);
     private sealed record QueryDto(string Question);
     private sealed record AnswerDto(string Mode, string Answer);
 }

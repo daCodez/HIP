@@ -153,6 +153,18 @@ app.MapGet("/bff/chat/providers", async (HipApiClient api, CancellationToken can
     return Results.Content(body, "application/json", Encoding.UTF8, status);
 });
 
+app.MapGet("/bff/chat/oauth/status", async (HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var (status, body) = await api.GetAsync("/api/plugins/chat/oauth/status", cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
+app.MapGet("/bff/chat/oauth/start", async (HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var (status, body) = await api.GetAsync("/api/plugins/chat/oauth/start", cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
 app.MapPost("/bff/chat/query", async (ChatQueryRequest request, HipApiClient api, CancellationToken cancellationToken) =>
 {
     var payload = System.Text.Json.JsonSerializer.Serialize(request);

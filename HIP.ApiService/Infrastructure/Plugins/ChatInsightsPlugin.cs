@@ -33,6 +33,8 @@ public sealed class ChatInsightsPlugin : IHipPlugin
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         services.AddHttpClient();
+        services.AddSingleton<ChatOAuthStateStore>();
+        services.AddSingleton<ChatOAuthTokenStore>();
         services.AddScoped<InsightsChatService>();
     }
 
@@ -48,6 +50,92 @@ public sealed class ChatInsightsPlugin : IHipPlugin
             .WithName("GetChatProviders")
             .WithTags("Plugins")
             .Produces(StatusCodes.Status200OK);
+
+        endpoints.MapGet("/api/plugins/chat/oauth/status", (ChatOAuthTokenStore tokenStore) =>
+            {
+                var (token, expires) = tokenStore.Get();
+                return Results.Ok(new { connected = !string.IsNullOrWhiteSpace(token), expiresAtUtc = expires });
+            })
+            .WithName("GetChatOAuthStatus")
+            .WithTags("Plugins")
+            .Produces(StatusCodes.Status200OK);
+
+        endpoints.MapGet("/api/plugins/chat/oauth/start", (IConfiguration cfg, ChatOAuthStateStore stateStore) =>
+            {
+                var authUrl = cfg["HIP:Chat:OAuthAuthorizeUrl"];
+                var clientId = cfg["HIP:Chat:OAuthClientId"];
+                var redirectUri = cfg["HIP:Chat:OAuthRedirectUri"];
+                var scope = cfg["HIP:Chat:OAuthScope"] ?? "";
+
+                if (string.IsNullOrWhiteSpace(authUrl) || string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(redirectUri))
+                {
+                    return Results.BadRequest(new { code = "chat.oauth.notConfigured" });
+                }
+
+                var state = stateStore.Create();
+                var url = $"{authUrl}?response_type=code&client_id={Uri.EscapeDataString(clientId)}&redirect_uri={Uri.EscapeDataString(redirectUri)}&scope={Uri.EscapeDataString(scope)}&state={Uri.EscapeDataString(state)}";
+                return Results.Ok(new { authorizeUrl = url, state });
+            })
+            .WithName("StartChatOAuth")
+            .WithTags("Plugins")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest);
+
+        endpoints.MapGet("/api/plugins/chat/oauth/callback", async (
+                string? code,
+                string? state,
+                IConfiguration cfg,
+                IHttpClientFactory httpFactory,
+                ChatOAuthStateStore stateStore,
+                ChatOAuthTokenStore tokenStore,
+                CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state) || !stateStore.Consume(state))
+                {
+                    return Results.BadRequest(new { code = "chat.oauth.invalidCallback" });
+                }
+
+                var tokenUrl = cfg["HIP:Chat:OAuthTokenUrl"];
+                var clientId = cfg["HIP:Chat:OAuthClientId"];
+                var clientSecret = cfg["HIP:Chat:OAuthClientSecret"];
+                var redirectUri = cfg["HIP:Chat:OAuthRedirectUri"];
+                var successRedirect = cfg["HIP:Chat:OAuthSuccessRedirect"] ?? "/chat";
+
+                if (string.IsNullOrWhiteSpace(tokenUrl) || string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret) || string.IsNullOrWhiteSpace(redirectUri))
+                {
+                    return Results.BadRequest(new { code = "chat.oauth.notConfigured" });
+                }
+
+                var client = httpFactory.CreateClient();
+                using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["grant_type"] = "authorization_code",
+                    ["code"] = code,
+                    ["redirect_uri"] = redirectUri,
+                    ["client_id"] = clientId,
+                    ["client_secret"] = clientSecret
+                });
+
+                using var resp = await client.PostAsync(tokenUrl, form, ct);
+                var body = await resp.Content.ReadAsStringAsync(ct);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    return Results.BadRequest(new { code = "chat.oauth.exchangeFailed", providerBody = body });
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                var accessToken = doc.RootElement.TryGetProperty("access_token", out var t) ? t.GetString() : null;
+                var expiresIn = doc.RootElement.TryGetProperty("expires_in", out var e) && e.TryGetInt32(out var secs) ? secs : 3600;
+                if (string.IsNullOrWhiteSpace(accessToken))
+                {
+                    return Results.BadRequest(new { code = "chat.oauth.noAccessToken" });
+                }
+
+                tokenStore.Set(accessToken, DateTimeOffset.UtcNow.AddSeconds(expiresIn));
+                return Results.Redirect(successRedirect);
+            })
+            .WithName("ChatOAuthCallback")
+            .WithTags("Plugins");
 
         endpoints.MapPost("/api/plugins/chat/query", async (ChatQueryRequest request, InsightsChatService service, CancellationToken ct) =>
             {
@@ -68,7 +156,7 @@ public sealed class ChatInsightsPlugin : IHipPlugin
     /// <summary>Chat query payload.</summary>
     public sealed record ChatQueryRequest(string Question);
 
-    private sealed class InsightsChatService(HipDbContext db, IConfiguration config, IHttpClientFactory httpFactory)
+    private sealed class InsightsChatService(HipDbContext db, IConfiguration config, IHttpClientFactory httpFactory, ChatOAuthTokenStore tokenStore)
     {
         public async Task<object> QueryAsync(string question, CancellationToken cancellationToken)
         {
@@ -110,7 +198,11 @@ public sealed class ChatInsightsPlugin : IHipPlugin
             }
 
             var client = httpFactory.CreateClient();
-            var token = mode == "oauth" ? config["HIP:Chat:OAuthAccessToken"] : config["HIP:Chat:ApiKey"];
+            var storedOAuth = tokenStore.Get().AccessToken;
+            var token = mode == "oauth"
+                ? (string.IsNullOrWhiteSpace(storedOAuth) ? config["HIP:Chat:OAuthAccessToken"] : storedOAuth)
+                : config["HIP:Chat:ApiKey"];
+
             if (!string.IsNullOrWhiteSpace(token))
             {
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);

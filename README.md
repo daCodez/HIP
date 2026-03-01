@@ -179,8 +179,11 @@ Optional AI chat insights plugin:
 - Enable `core.chat.insights` in `HIP:Plugins:Enabled`.
 - Providers info: `GET /api/plugins/chat/providers`
 - Ask question: `POST /api/plugins/chat/query`
+- OAuth status/start: `GET /api/plugins/chat/oauth/status`, `GET /api/plugins/chat/oauth/start`
+- OAuth callback: `GET /api/plugins/chat/oauth/callback`
 - UI page: `/chat`
 - Modes via config: `HIP:Chat:Mode` = `mock|api|oauth`
+- OAuth config keys: `HIP:Chat:OAuthAuthorizeUrl`, `HIP:Chat:OAuthTokenUrl`, `HIP:Chat:OAuthClientId`, `HIP:Chat:OAuthClientSecret`, `HIP:Chat:OAuthRedirectUri`, `HIP:Chat:OAuthScope`, `HIP:Chat:OAuthSuccessRedirect`
 
 Enable plugins via config:
 
