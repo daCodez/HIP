@@ -175,6 +175,13 @@ Optional identity insights plugin:
 - Top risk identities: `GET /api/plugins/identity/insights/top-risk?take=10`
 - Adds dashboard risk widget + `/identity/insights` investigation page.
 
+Optional AI chat insights plugin:
+- Enable `core.chat.insights` in `HIP:Plugins:Enabled`.
+- Providers info: `GET /api/plugins/chat/providers`
+- Ask question: `POST /api/plugins/chat/query`
+- UI page: `/chat`
+- Modes via config: `HIP:Chat:Mode` = `mock|api|oauth`
+
 Enable plugins via config:
 
 ```json

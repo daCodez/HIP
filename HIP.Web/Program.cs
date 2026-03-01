@@ -147,6 +147,19 @@ app.MapGet("/bff/identity/insights/{identityId}", async (string identityId, HipA
     return Results.Content(body, "application/json", Encoding.UTF8, status);
 });
 
+app.MapGet("/bff/chat/providers", async (HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var (status, body) = await api.GetAsync("/api/plugins/chat/providers", cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
+app.MapPost("/bff/chat/query", async (ChatQueryRequest request, HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var payload = System.Text.Json.JsonSerializer.Serialize(request);
+    var (status, body) = await api.PostAsync("/api/plugins/chat/query", payload, cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
 app.MapGet("/bff/extensions/hip-mail-bridge", () =>
 {
     var path = "/home/jarvis_bot/.openclaw/workspace/HIP/extensions/hip-mail-bridge.tar.gz";
@@ -164,3 +177,4 @@ app.Run();
 
 public sealed record ReputationFeedbackRequest(string IdentityId, string Feedback, string? Source = null, string? Note = null);
 public sealed record OidcIdentityRequest(string Issuer, string Subject, string? Email = null, bool? EmailVerified = null);
+public sealed record ChatQueryRequest(string Question);

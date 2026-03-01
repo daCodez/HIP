@@ -131,6 +131,11 @@ if (enabledPlugins.Contains("core.identity.insights"))
     pluginRegistry.Register(new IdentityInsightsPlugin());
 }
 
+if (enabledPlugins.Contains("core.chat.insights"))
+{
+    pluginRegistry.Register(new ChatInsightsPlugin());
+}
+
 if (autoDiscover)
 {
     var discovered = HipPluginDiscovery.Discover(pluginDirectory);

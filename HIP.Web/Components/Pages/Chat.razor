@@ -1,0 +1,91 @@
+@page "/chat"
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>AI Chat | HIP Admin</PageTitle>
+
+<div class="content-wrapper">
+    <div class="content">
+        <div class="main-header">
+            <h2>AI CHAT</h2>
+            <em>ask questions about HIP data</em>
+        </div>
+
+        <div class="widget" style="margin-bottom:12px;">
+            <div class="widget-header"><h3><i class="fa fa-robot"></i> Query</h3></div>
+            <div class="widget-content">
+                <p><strong>Mode:</strong> @_mode</p>
+                <div style="display:flex; gap:8px;">
+                    <input class="text-input" style="flex:1" @bind="_question" placeholder="Ask about risk, policy outcomes, or trends..." />
+                    <button class="btn btn-sm btn-primary" @onclick="AskAsync" disabled="@_loading">Ask</button>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <p class="status-bad">@_error</p>
+                }
+            </div>
+        </div>
+
+        <div class="widget">
+            <div class="widget-header"><h3><i class="fa fa-comment"></i> Answer</h3></div>
+            <div class="widget-content">
+                <p>@(_answer ?? "No answer yet.")</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _mode = "unknown";
+    private string _question = "What are the top risks in recent events?";
+    private string? _answer;
+    private string? _error;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            var provider = await client.GetFromJsonAsync<ProviderDto>("/bff/chat/providers");
+            _mode = provider?.Mode ?? "unknown";
+        }
+        catch
+        {
+            _mode = "unknown";
+        }
+    }
+
+    private async Task AskAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            var response = await client.PostAsJsonAsync("/bff/chat/query", new QueryDto(_question));
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = body;
+                return;
+            }
+
+            var payload = System.Text.Json.JsonSerializer.Deserialize<AnswerDto>(body, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            _answer = payload?.Answer ?? body;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private sealed record ProviderDto(string Mode);
+    private sealed record QueryDto(string Question);
+    private sealed record AnswerDto(string Mode, string Answer);
+}

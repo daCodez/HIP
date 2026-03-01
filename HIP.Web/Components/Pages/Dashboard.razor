@@ -90,12 +90,27 @@
                             <div class="widget">
                                 <div class="widget-header"><h3><i class="fa fa-exclamation-triangle"></i> Top Risk Identities (24h)</h3></div>
                                 <div class="widget-content">
-                                    <ul class="meta-list">
-                                        @foreach (var item in _riskIdentities)
-                                        {
-                                            <li><a href="/identity/insights">@item.IdentityId</a> — block:@item.Blocked review:@item.Review</li>
-                                        }
-                                    </ul>
+                                    <table class="table table-sm table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Identity</th>
+                                                <th>Block</th>
+                                                <th>Review</th>
+                                                <th>Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in _riskIdentities)
+                                            {
+                                                <tr>
+                                                    <td><a href="/identity/insights">@item.IdentityId</a></td>
+                                                    <td>@item.Blocked</td>
+                                                    <td>@item.Review</td>
+                                                    <td>@item.Total</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
