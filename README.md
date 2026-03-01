@@ -153,6 +153,11 @@ No external plugins are loaded by default.
 Optional built-in policy pack:
 - Enable `core.policy.strict` in `HIP:Plugins:Enabled` to raise policy thresholds (low=60, medium=90, high=95).
 
+Optional reputation feedback plugin:
+- Enable `core.reputation.feedback` in `HIP:Plugins:Enabled`.
+- Submit feedback: `POST /api/plugins/reputation/feedback`
+- View 24h stats: `GET /api/plugins/reputation/feedback/stats`
+
 Enable plugins via config:
 
 ```json

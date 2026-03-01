@@ -111,6 +111,11 @@ if (enabledPlugins.Contains("core.policy.strict"))
     pluginRegistry.Register(new PolicyStrictPlugin());
 }
 
+if (enabledPlugins.Contains("core.reputation.feedback"))
+{
+    pluginRegistry.Register(new ReputationFeedbackPlugin());
+}
+
 if (autoDiscover)
 {
     var discovered = HipPluginDiscovery.Discover(pluginDirectory);

@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
@@ -18,8 +20,20 @@ public static class Extensions
                 .AddAspNetCoreInstrumentation()
                 .AddRuntimeInstrumentation()
                 .AddHttpClientInstrumentation()
-                .AddMeter("HIP.ApiService"))
-            .WithTracing(tracing => tracing.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation()); // performance awareness via telemetry
+                .AddMeter("HIP.ApiService")
+                .AddOtlpExporter())
+            .WithTracing(tracing => tracing
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddOtlpExporter()); // performance awareness via telemetry
+
+        builder.Logging.AddOpenTelemetry(logging =>
+        {
+            logging.IncludeFormattedMessage = true;
+            logging.IncludeScopes = true;
+            logging.ParseStateValues = true;
+            logging.AddOtlpExporter();
+        });
 
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
