@@ -100,6 +100,12 @@ app.MapGet("/bff/feedback/stats", async (HipApiClient api, CancellationToken can
     return Results.Content(body, "application/json", Encoding.UTF8, status);
 });
 
+app.MapGet("/bff/identity/oidc/info", async (HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var (status, body) = await api.GetAsync("/api/plugins/identity/oidc/info", cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
 app.MapPost("/bff/feedback", async (ReputationFeedbackRequest request, HipApiClient api, CancellationToken cancellationToken) =>
 {
     var payload = System.Text.Json.JsonSerializer.Serialize(request);

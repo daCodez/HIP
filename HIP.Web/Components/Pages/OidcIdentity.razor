@@ -1,0 +1,72 @@
+@page "/identity/oidc"
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>OIDC Identity | HIP Admin</PageTitle>
+
+<div class="content-wrapper">
+    <div class="content">
+        <div class="main-header">
+            <h2>OIDC IDENTITY</h2>
+            <em>identity provider mapping plugin</em>
+        </div>
+
+        <div class="widget">
+            <div class="widget-header">
+                <h3><i class="fa fa-id-badge"></i> Plugin Info</h3>
+                <div class="btn-group widget-header-toolbar">
+                    <button class="link-btn icon-btn" @onclick="LoadAsync" disabled="@_loading" title="Refresh"><i class="fa @(_loading ? "fa-spinner fa-spin" : "fa-refresh")"></i></button>
+                </div>
+            </div>
+            <div class="widget-content">
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <p class="status-bad">@_error</p>
+                }
+                else if (_info is null)
+                {
+                    <p>No plugin data available.</p>
+                }
+                else
+                {
+                    <p><strong>Plugin:</strong> @_info.PluginId (@_info.Version)</p>
+                    <p><strong>Supported:</strong> @string.Join(", ", _info.Supported)</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private string? _error;
+    private OidcInfoDto? _info;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            _info = await client.GetFromJsonAsync<OidcInfoDto>("/bff/identity/oidc/info");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _info = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private sealed record OidcInfoDto(string PluginId, string Version, List<string> Supported);
+}

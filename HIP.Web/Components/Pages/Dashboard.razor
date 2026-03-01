@@ -236,37 +236,30 @@
     private AuditEventDto? _selectedAuditEvent;
     private string _auditEventTypeFilter = "all";
     private int _auditTake = 50;
-    private bool _auditAutoRefresh;
     private CancellationTokenSource? _auditLoopCts;
     private Task? _auditLoopTask;
     private string? _auditError;
-    private bool _loadingAudit;
 
     private string _identityLookupId = "hip-system";
     private IdentityDto? _identityResult;
     private string? _identityError;
-    private bool _loadingIdentity;
 
     private string _reputationLookupId = "hip-system";
     private ReputationDto? _reputationResult;
     private string? _reputationError;
-    private bool _loadingReputation;
 
     private string _signFrom = "hip-system";
     private string _signTo = "target";
     private string _signBody = "hello from dashboard";
     private string _signKeyId = string.Empty;
-    private bool _loadingSign;
     private string? _signError;
     private string? _signStatus;
 
-    private bool _loadingVerify;
     private string? _verifyError;
     private string? _verifyStatus;
 
     private SignedMessageDto? _lastSignedMessage;
     private string? _lastSignedMessageJson;
-    private string? _copyStatus;
     private string? _copyError;
 
     private readonly string _extensionDownloadVersion = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
@@ -398,7 +391,6 @@
 
     private async Task LoadAuditFeedAsync()
     {
-        _loadingAudit = true;
         _auditError = null;
 
         try
@@ -417,7 +409,6 @@
         }
         finally
         {
-            _loadingAudit = false;
         }
     }
 
@@ -440,15 +431,7 @@
 
     private async Task OnAuditAutoRefreshChangedAsync()
     {
-        if (_auditAutoRefresh)
-        {
-            StartAuditAutoRefresh();
-            await LoadAuditFeedAsync();
-        }
-        else
-        {
-            await StopAuditAutoRefreshAsync();
-        }
+        await StopAuditAutoRefreshAsync();
     }
 
     private void StartAuditAutoRefresh()
@@ -504,7 +487,6 @@
 
     private async Task LookupIdentityAsync()
     {
-        _loadingIdentity = true;
         _identityError = null;
         _identityResult = null;
 
@@ -512,7 +494,6 @@
         if (string.IsNullOrWhiteSpace(id))
         {
             _identityError = "Please enter an identity id.";
-            _loadingIdentity = false;
             return;
         }
 
@@ -547,13 +528,11 @@
         }
         finally
         {
-            _loadingIdentity = false;
         }
     }
 
     private async Task LookupReputationAsync()
     {
-        _loadingReputation = true;
         _reputationError = null;
         _reputationResult = null;
 
@@ -561,7 +540,6 @@
         if (string.IsNullOrWhiteSpace(id))
         {
             _reputationError = "Please enter an identity id.";
-            _loadingReputation = false;
             return;
         }
 
@@ -590,24 +568,20 @@
         }
         finally
         {
-            _loadingReputation = false;
         }
     }
 
     private async Task SignMessageAsync()
     {
-        _loadingSign = true;
         _signError = null;
         _signStatus = null;
         _verifyError = null;
         _verifyStatus = null;
         _copyError = null;
-        _copyStatus = null;
 
         if (string.IsNullOrWhiteSpace(_signFrom) || string.IsNullOrWhiteSpace(_signTo) || string.IsNullOrWhiteSpace(_signBody))
         {
             _signError = "from, to, and body are required.";
-            _loadingSign = false;
             return;
         }
 
@@ -647,20 +621,17 @@
         }
         finally
         {
-            _loadingSign = false;
         }
     }
 
     private async Task VerifyLastSignedMessageAsync()
     {
-        _loadingVerify = true;
         _verifyError = null;
         _verifyStatus = null;
 
         if (_lastSignedMessage is null)
         {
             _verifyError = "No signed message available yet. Click Sign first.";
-            _loadingVerify = false;
             return;
         }
 
@@ -687,14 +658,12 @@
         }
         finally
         {
-            _loadingVerify = false;
         }
     }
 
     private async Task CopyLastSignedJsonAsync()
     {
         _copyError = null;
-        _copyStatus = null;
 
         if (string.IsNullOrWhiteSpace(_lastSignedMessageJson))
         {
@@ -705,7 +674,6 @@
         try
         {
             await JS.InvokeVoidAsync("navigator.clipboard.writeText", _lastSignedMessageJson);
-            _copyStatus = "Signed payload JSON copied to clipboard.";
         }
         catch (Exception ex)
         {

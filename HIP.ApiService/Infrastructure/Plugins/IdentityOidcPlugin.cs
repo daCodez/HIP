@@ -27,7 +27,7 @@ public sealed class IdentityOidcPlugin : IHipPlugin
         Description: "Maps OIDC issuer/subject claims to HIP identity records.",
         NavItems:
         [
-            new HipPluginNavItem("OIDC Identity", "/api/plugins/identity/oidc/info", "fa-id-badge", 96, "identity.oidc.resolve")
+            new HipPluginNavItem("OIDC Identity", "/identity/oidc", "fa-id-badge", 96, "identity.oidc.resolve")
         ]);
 
     /// <inheritdoc />
