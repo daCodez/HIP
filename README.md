@@ -169,6 +169,12 @@ Optional system metrics plugin:
 - System metrics feed: `GET /api/plugins/system-metrics?take=60`
 - Adds CPU/Memory widget cards to dashboard (real-time sparkline graphs).
 
+Optional identity insights plugin:
+- Enable `core.identity.insights` in `HIP:Plugins:Enabled`.
+- Identity snapshot: `GET /api/plugins/identity/insights/{identityId}`
+- Top risk identities: `GET /api/plugins/identity/insights/top-risk?take=10`
+- Adds dashboard risk widget + `/identity/insights` investigation page.
+
 Enable plugins via config:
 
 ```json

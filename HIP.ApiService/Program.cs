@@ -126,6 +126,11 @@ if (enabledPlugins.Contains("core.metrics.system"))
     pluginRegistry.Register(new SystemMetricsPlugin());
 }
 
+if (enabledPlugins.Contains("core.identity.insights"))
+{
+    pluginRegistry.Register(new IdentityInsightsPlugin());
+}
+
 if (autoDiscover)
 {
     var discovered = HipPluginDiscovery.Discover(pluginDirectory);

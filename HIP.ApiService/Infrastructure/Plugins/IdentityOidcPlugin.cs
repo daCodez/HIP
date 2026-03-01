@@ -134,6 +134,23 @@ public sealed class IdentityOidcPlugin : IHipPlugin
             identity.PublicKeyRef = $"oidc:{issuer}";
         }
 
+        // Alias support: allow callers that still send raw OIDC subject IDs (e.g., "openclaw-control-ui").
+        // This keeps existing integrations working while identity IDs migrate to canonical oidc-* values.
+        var subjectAlias = await db.Identities.FirstOrDefaultAsync(x => x.Id == subject, cancellationToken);
+        if (subjectAlias is null)
+        {
+            db.Identities.Add(new IdentityRecord
+            {
+                Id = subject,
+                PublicKeyRef = $"oidc-alias:{identityId}",
+                CreatedAtUtc = now
+            });
+        }
+        else
+        {
+            subjectAlias.PublicKeyRef = $"oidc-alias:{identityId}";
+        }
+
         await db.SaveChangesAsync(cancellationToken);
 
         await auditTrail.AppendAsync(new AuditEvent(

@@ -134,6 +134,19 @@ app.MapGet("/bff/system-metrics", async (int? take, HipApiClient api, Cancellati
     return Results.Content(body, "application/json", Encoding.UTF8, status);
 });
 
+app.MapGet("/bff/identity/insights/top-risk", async (int? take, HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var count = Math.Clamp(take ?? 10, 1, 50);
+    var (status, body) = await api.GetAsync($"/api/plugins/identity/insights/top-risk?take={count}", cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
+app.MapGet("/bff/identity/insights/{identityId}", async (string identityId, HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var (status, body) = await api.GetAsync($"/api/plugins/identity/insights/{Uri.EscapeDataString(identityId)}", cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
 app.MapGet("/bff/extensions/hip-mail-bridge", () =>
 {
     var path = "/home/jarvis_bot/.openclaw/workspace/HIP/extensions/hip-mail-bridge.tar.gz";
