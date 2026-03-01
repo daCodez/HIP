@@ -31,14 +31,41 @@
             @if (_pluginWidgets.Count > 0)
             {
                 <div class="row" style="margin-bottom:10px;">
-                    <div class="col-md-12">
+                    @if (_policyWidget is not null)
+                    {
+                        <div class="col-md-6">
+                            <div class="widget">
+                                <div class="widget-header">
+                                    <h3><i class="fa fa-balance-scale"></i> Policy Pack</h3>
+                                </div>
+                                <div class="widget-content">
+                                    @if (_policyWidgetInfo is null)
+                                    {
+                                        <p>Policy details unavailable.</p>
+                                    }
+                                    else
+                                    {
+                                        <p><strong>Active:</strong> @_policyWidgetInfo.PluginId (@_policyWidgetInfo.Version)</p>
+                                        <ul class="meta-list">
+                                            <li><strong>Low:</strong> @_policyWidgetInfo.RequiredScores.Low</li>
+                                            <li><strong>Medium:</strong> @_policyWidgetInfo.RequiredScores.Medium</li>
+                                            <li><strong>High:</strong> @_policyWidgetInfo.RequiredScores.High</li>
+                                        </ul>
+                                        <a class="btn btn-default btn-sm" href="@_policyWidget.Route">Open Audit</a>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="col-md-@(_policyWidget is null ? "12" : "6")">
                         <div class="widget">
                             <div class="widget-header">
                                 <h3><i class="fa fa-puzzle-piece"></i> Plugin Widgets</h3>
                             </div>
                             <div class="widget-content">
                                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                                    @foreach (var widget in _pluginWidgets)
+                                    @foreach (var widget in _pluginWidgets.Where(w => w.Label != "Policy Pack"))
                                     {
                                         <a class="btn btn-default btn-sm" href="@widget.Route">
                                             <i class="fa @(string.IsNullOrWhiteSpace(widget.Icon) ? "fa-cube" : widget.Icon)"></i>
@@ -201,6 +228,8 @@
     private bool _loadingSecurity;
 
     private List<PluginWidgetDto> _pluginWidgets = new();
+    private PluginWidgetDto? _policyWidget;
+    private PolicyCurrentDto? _policyWidgetInfo;
 
     private List<AuditEventDto> _auditEvents = new();
     private List<AuditEventDto> _filteredAuditEvents = new();
@@ -259,10 +288,22 @@
         {
             var client = HttpClientFactory.CreateClient("hip-bff");
             _pluginWidgets = await client.GetFromJsonAsync<List<PluginWidgetDto>>("/bff/plugins/widgets") ?? new();
+            _policyWidget = _pluginWidgets.FirstOrDefault(x => x.Label == "Policy Pack");
+
+            if (_policyWidget is not null)
+            {
+                _policyWidgetInfo = await client.GetFromJsonAsync<PolicyCurrentDto>("/bff/policy/current");
+            }
+            else
+            {
+                _policyWidgetInfo = null;
+            }
         }
         catch
         {
             _pluginWidgets = new();
+            _policyWidget = null;
+            _policyWidgetInfo = null;
         }
     }
 
@@ -690,6 +731,8 @@
     private sealed record SecurityStatusDto(long ReplayDetected, long MessageExpired, long PolicyBlocked, DateTimeOffset UtcTimestamp);
     private sealed record SecurityEventDto(string Reason, string IdentityId, string? MessageId, double? ClockSkewSeconds, string? Classification, DateTimeOffset UtcTimestamp);
     private sealed record PluginWidgetDto(string Label, string Route, string? Icon, int Order, string? Capability, string Display);
+    private sealed record PolicyScoresDto(int Low, int Medium, int High);
+    private sealed record PolicyCurrentDto(string PluginId, string Version, PolicyScoresDto RequiredScores);
     private sealed record AuditEventDto(string Id, DateTimeOffset CreatedAtUtc, string EventType, string Subject, string Source, string Detail);
     private sealed record IdentityDto(string Id, string PublicKeyRef);
     private sealed record ReputationDto(string IdentityId, int Score, DateTimeOffset UtcTimestamp);
