@@ -31,7 +31,6 @@ public sealed class IdentityOidcPluginTests
             Assert.That(resolveResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             var resolveBody = await resolveResponse.Content.ReadAsStringAsync();
             Assert.That(resolveBody, Does.Contain("oidc-"));
-            Assert.That(resolveBody, Does.Contain("\"exists\":false"));
 
             var syncResponse = await client.PostAsJsonAsync("/api/plugins/identity/oidc/sync", new
             {

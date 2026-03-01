@@ -186,8 +186,14 @@ Notes:
 
 Discovery endpoint:
 - `GET /api/plugins` returns active plugin manifests.
-- `GET /api/plugins/nav` returns plugin-contributed navigation items.
+- `GET /api/plugins/nav` returns plugin-contributed items marked for page navigation.
+- `GET /api/plugins/widgets` returns plugin-contributed items marked for dashboard widgets.
 - `GET /api/plugins/policy/current` returns current default policy-pack thresholds.
+
+Plugin UI display mode:
+- Plugin `NavItems` now support `Display` = `"page"` or `"widget"`.
+- `page` items appear in sidebar navigation.
+- `widget` items appear in dashboard widget shortcuts.
 
 Policy tuning config (default policy plugin):
 - `HIP:Policy:LowRiskRequiredScore` (default 20)

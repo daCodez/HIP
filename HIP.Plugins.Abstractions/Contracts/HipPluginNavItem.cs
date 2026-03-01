@@ -8,4 +8,5 @@ public sealed record HipPluginNavItem(
     string Route,
     string? Icon = null,
     int Order = 100,
-    string? Capability = null);
+    string? Capability = null,
+    string Display = "page");

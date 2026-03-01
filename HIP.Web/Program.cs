@@ -76,6 +76,12 @@ app.MapGet("/bff/plugins/nav", async (HipApiClient api, CancellationToken cancel
     return Results.Content(body, "application/json", Encoding.UTF8, status);
 });
 
+app.MapGet("/bff/plugins/widgets", async (HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var (status, body) = await api.GetAsync("/api/plugins/widgets", cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
 app.MapGet("/bff/policy/current", async (HipApiClient api, CancellationToken cancellationToken) =>
 {
     var (status, body) = await api.GetAsync("/api/plugins/policy/current", cancellationToken);

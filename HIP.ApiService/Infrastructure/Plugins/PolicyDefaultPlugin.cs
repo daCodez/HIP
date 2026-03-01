@@ -19,7 +19,11 @@ public sealed class PolicyDefaultPlugin : IHipPlugin
         Id: "core.policy.default",
         Version: "1.0.0",
         Capabilities: ["policy.evaluate"],
-        Description: "Registers the default policy evaluator for allow/review/block decisions.");
+        Description: "Registers the default policy evaluator for allow/review/block decisions.",
+        NavItems:
+        [
+            new HipPluginNavItem("Policy Pack", "/audit", "fa-balance-scale", 30, "policy.evaluate", "widget")
+        ]);
 
     /// <inheritdoc />
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)

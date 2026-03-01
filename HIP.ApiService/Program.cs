@@ -382,11 +382,25 @@ app.MapGet("/api/plugins/nav", () =>
     {
         var nav = runtimePluginRegistry.Manifests
             .SelectMany(x => x.NavItems ?? Array.Empty<HipPluginNavItem>())
+            .Where(x => string.Equals(x.Display, "page", StringComparison.OrdinalIgnoreCase))
             .OrderBy(x => x.Order)
             .ToArray();
         return Results.Ok(nav);
     })
     .WithName("GetPluginNav")
+    .WithTags("Plugins")
+    .Produces(StatusCodes.Status200OK);
+
+app.MapGet("/api/plugins/widgets", () =>
+    {
+        var widgets = runtimePluginRegistry.Manifests
+            .SelectMany(x => x.NavItems ?? Array.Empty<HipPluginNavItem>())
+            .Where(x => string.Equals(x.Display, "widget", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.Order)
+            .ToArray();
+        return Results.Ok(widgets);
+    })
+    .WithName("GetPluginWidgets")
     .WithTags("Plugins")
     .Produces(StatusCodes.Status200OK);
 

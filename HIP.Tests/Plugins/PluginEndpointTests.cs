@@ -100,6 +100,21 @@ public sealed class PluginEndpointTests
     }
 
     [Test]
+    public async Task PluginWidgetsEndpoint_ReturnsWidgetItemsOnly()
+    {
+        await using var app = new WebApplicationFactory<Program>();
+        using var client = app.CreateClient();
+
+        var response = await client.GetAsync("/api/plugins/widgets");
+        var payload = await response.Content.ReadFromJsonAsync<List<HipPluginNavItem>>();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(payload, Is.Not.Null);
+        Assert.That(payload!.Any(x => x.Display == "widget"), Is.True);
+        Assert.That(payload!.Any(x => x.Display == "page"), Is.False);
+    }
+
+    [Test]
     public async Task AutoDiscover_WithAllowlist_LoadsSampleWithoutExplicitEnable()
     {
         const string autoDiscoverKey = "HIP__Plugins__AutoDiscover";
