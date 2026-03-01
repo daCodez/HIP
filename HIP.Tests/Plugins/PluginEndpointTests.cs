@@ -49,4 +49,42 @@ public sealed class PluginEndpointTests
             Environment.SetEnvironmentVariable(key, original);
         }
     }
+
+    [Test]
+    public async Task AutoDiscover_WithAllowlist_LoadsSampleWithoutExplicitEnable()
+    {
+        const string autoDiscoverKey = "HIP__Plugins__AutoDiscover";
+        const string allowlistKey = "HIP__Plugins__Allowlist__0";
+        const string enabledKey = "HIP__Plugins__Enabled__0";
+
+        var originalAuto = Environment.GetEnvironmentVariable(autoDiscoverKey);
+        var originalAllow = Environment.GetEnvironmentVariable(allowlistKey);
+        var originalEnabled = Environment.GetEnvironmentVariable(enabledKey);
+
+        Environment.SetEnvironmentVariable(autoDiscoverKey, "true");
+        Environment.SetEnvironmentVariable(allowlistKey, "sample");
+        Environment.SetEnvironmentVariable(enabledKey, null);
+
+        try
+        {
+            await using var app = new WebApplicationFactory<Program>();
+            using var client = app.CreateClient();
+
+            var response = await client.GetAsync("/api/plugins");
+            var payload = await response.Content.ReadFromJsonAsync<List<HipPluginManifest>>();
+
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(payload, Is.Not.Null);
+            Assert.That(payload!.Any(x => x.Id == "sample"), Is.True);
+
+            var ping = await client.GetAsync("/api/plugins/sample/ping");
+            Assert.That(ping.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(autoDiscoverKey, originalAuto);
+            Environment.SetEnvironmentVariable(allowlistKey, originalAllow);
+            Environment.SetEnvironmentVariable(enabledKey, originalEnabled);
+        }
+    }
 }

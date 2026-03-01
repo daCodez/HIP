@@ -152,11 +152,19 @@ Enable plugins via config:
 {
   "HIP": {
     "Plugins": {
-      "Enabled": ["sample"]
+      "Enabled": ["sample"],
+      "AutoDiscover": true,
+      "Allowlist": ["sample"],
+      "Directory": "plugins"
     }
   }
 }
 ```
+
+Notes:
+- `Enabled` explicitly enables known plugin IDs.
+- `AutoDiscover=true` scans loaded assemblies and optional plugin directory.
+- `Allowlist` constrains which discovered plugins can load.
 
 Discovery endpoint:
 - `GET /api/plugins` returns active plugin manifests.

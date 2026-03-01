@@ -84,12 +84,53 @@ builder.Services.AddExceptionHandler(_ => { });
 var pluginRegistry = new HipPluginRegistry();
 builder.Services.AddSingleton<IHipPluginRegistry>(pluginRegistry);
 
-var enabledPlugins = builder.Configuration.GetSection("HIP:Plugins:Enabled").Get<string[]>() ?? [];
-foreach (var pluginId in enabledPlugins.Select(x => x?.Trim()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>())
+var enabledPlugins = (builder.Configuration.GetSection("HIP:Plugins:Enabled").Get<string[]>() ?? [])
+    .Select(x => x?.Trim())
+    .Where(x => !string.IsNullOrWhiteSpace(x))
+    .Cast<string>()
+    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+var autoDiscover = builder.Configuration.GetValue<bool>("HIP:Plugins:AutoDiscover");
+var pluginDirectory = builder.Configuration["HIP:Plugins:Directory"];
+var pluginAllowlist = (builder.Configuration.GetSection("HIP:Plugins:Allowlist").Get<string[]>() ?? [])
+    .Select(x => x?.Trim())
+    .Where(x => !string.IsNullOrWhiteSpace(x))
+    .Cast<string>()
+    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+if (enabledPlugins.Contains("sample"))
 {
-    if (string.Equals(pluginId, "sample", StringComparison.OrdinalIgnoreCase))
+    pluginRegistry.Register(new SamplePlugin());
+}
+
+if (autoDiscover)
+{
+    var discovered = HipPluginDiscovery.Discover(pluginDirectory);
+    foreach (var plugin in discovered)
     {
-        pluginRegistry.Register(new SamplePlugin());
+        if (enabledPlugins.Count > 0 && !enabledPlugins.Contains(plugin.Manifest.Id))
+        {
+            continue;
+        }
+
+        if (pluginAllowlist.Count > 0 && !pluginAllowlist.Contains(plugin.Manifest.Id))
+        {
+            continue;
+        }
+
+        if (string.IsNullOrWhiteSpace(plugin.Manifest.Id) || string.IsNullOrWhiteSpace(plugin.Manifest.Version) || plugin.Manifest.Capabilities.Count == 0)
+        {
+            continue;
+        }
+
+        try
+        {
+            pluginRegistry.Register(plugin);
+        }
+        catch
+        {
+            // Ignore duplicate/invalid plugin registrations to keep startup resilient.
+        }
     }
 }
 
