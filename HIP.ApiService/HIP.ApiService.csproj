@@ -15,5 +15,7 @@
     <ProjectReference Include="..\HIP.Communication\HIP.Communication.csproj" />
     <ProjectReference Include="..\HIP.Reputation\HIP.Reputation.csproj" />
     <ProjectReference Include="..\HIP.Audit\HIP.Audit.csproj" />
+    <ProjectReference Include="..\HIP.Plugins.Abstractions\HIP.Plugins.Abstractions.csproj" />
+    <ProjectReference Include="..\HIP.Plugins.Sample\HIP.Plugins.Sample.csproj" />
   </ItemGroup>
 </Project>

@@ -137,6 +137,32 @@ curl -s http://127.0.0.1:5101/api/jarvis/context/hip-system | jq
 
 ---
 
+## Plugin architecture foundation (new)
+
+HIP now includes a plugin foundation for future modular extension:
+- shared contracts in `HIP.Plugins.Abstractions`
+- plugin manifest model (`id`, `version`, `capabilities`)
+- runtime registry (`IHipPluginRegistry`) wired into startup and endpoint mapping
+
+Current state: foundation is enabled, with no external plugins loaded by default.
+
+Enable plugins via config:
+
+```json
+{
+  "HIP": {
+    "Plugins": {
+      "Enabled": ["sample"]
+    }
+  }
+}
+```
+
+Discovery endpoint:
+- `GET /api/plugins` returns active plugin manifests.
+
+---
+
 ## Roadmap: AI-assisted trust
 
 As HIP evolves, AI can be added as a decision-support layer (not a black-box replacement for policy).

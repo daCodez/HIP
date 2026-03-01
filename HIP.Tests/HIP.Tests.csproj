@@ -12,5 +12,6 @@
   <ItemGroup>
     <ProjectReference Include="..\HIP.ApiService\HIP.ApiService.csproj" />
     <ProjectReference Include="..\HIP.Audit\HIP.Audit.csproj" />
+    <ProjectReference Include="..\HIP.Plugins.Abstractions\HIP.Plugins.Abstractions.csproj" />
   </ItemGroup>
 </Project>

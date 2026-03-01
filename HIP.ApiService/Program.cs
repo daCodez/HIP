@@ -9,6 +9,9 @@ using HIP.ApiService.Infrastructure.Reputation;
 using HIP.ApiService.Infrastructure.Audit;
 using HIP.ApiService.Infrastructure.Persistence;
 using HIP.ApiService.Infrastructure.Security;
+using HIP.ApiService.Infrastructure.Plugins;
+using HIP.Plugins.Abstractions.Contracts;
+using HIP.Plugins.Sample;
 using HIP.ApiService.Features.Status;
 using HIP.ApiService.Features.Identity;
 using HIP.ApiService.Features.Reputation;
@@ -77,6 +80,21 @@ builder.Services.AddScoped<IMessageSignatureService, EcdsaMessageSignatureServic
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler(_ => { });
+
+var pluginRegistry = new HipPluginRegistry();
+builder.Services.AddSingleton<IHipPluginRegistry>(pluginRegistry);
+
+var enabledPlugins = builder.Configuration.GetSection("HIP:Plugins:Enabled").Get<string[]>() ?? [];
+foreach (var pluginId in enabledPlugins.Select(x => x?.Trim()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>())
+{
+    if (string.Equals(pluginId, "sample", StringComparison.OrdinalIgnoreCase))
+    {
+        pluginRegistry.Register(new SamplePlugin());
+    }
+}
+
+pluginRegistry.ConfigureServices(builder.Services, builder.Configuration, builder.Environment);
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -294,6 +312,14 @@ if (exposeInternalApis)
     app.MapAuditEndpoints();
     app.MapSecurityEndpoints();
 }
+
+var runtimePluginRegistry = app.Services.GetRequiredService<IHipPluginRegistry>();
+app.MapGet("/api/plugins", () => Results.Ok(runtimePluginRegistry.Manifests))
+    .WithName("GetPlugins")
+    .WithTags("Plugins")
+    .Produces(StatusCodes.Status200OK);
+
+runtimePluginRegistry.MapEndpoints(app, app.Configuration, app.Environment);
 
 app.MapDefaultEndpoints();
 
