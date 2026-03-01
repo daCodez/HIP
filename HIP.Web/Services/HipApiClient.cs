@@ -11,6 +11,9 @@ public sealed class HipApiClient(IHttpClientFactory httpClientFactory, HipEnvelo
     public Task<(int Status, string Body)> GetAsync(string path, CancellationToken cancellationToken)
         => SendAsync(HttpMethod.Get, path, string.Empty, cancellationToken);
 
+    public Task<(int Status, string Body)> PostAsync(string path, string body, CancellationToken cancellationToken)
+        => SendAsync(HttpMethod.Post, path, body, cancellationToken);
+
     private async Task<(int Status, string Body)> SendAsync(HttpMethod method, string path, string body, CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient("hip-api");

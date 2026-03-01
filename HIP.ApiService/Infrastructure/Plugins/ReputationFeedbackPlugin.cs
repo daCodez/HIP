@@ -25,7 +25,7 @@ public sealed class ReputationFeedbackPlugin : IHipPlugin
         Description: "Collects recipient feedback and applies it to reputation signals.",
         NavItems:
         [
-            new HipPluginNavItem("Feedback", "/api/plugins/reputation/feedback/stats", "fa-comments-o", 95, "reputation.feedback.read")
+            new HipPluginNavItem("Feedback", "/feedback", "fa-comments-o", 95, "reputation.feedback.read")
         ]);
 
     /// <inheritdoc />

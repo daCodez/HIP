@@ -116,6 +116,11 @@ if (enabledPlugins.Contains("core.reputation.feedback"))
     pluginRegistry.Register(new ReputationFeedbackPlugin());
 }
 
+if (enabledPlugins.Contains("core.identity.oidc"))
+{
+    pluginRegistry.Register(new IdentityOidcPlugin());
+}
+
 if (autoDiscover)
 {
     var discovered = HipPluginDiscovery.Discover(pluginDirectory);

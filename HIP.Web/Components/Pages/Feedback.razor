@@ -1,0 +1,143 @@
+@page "/feedback"
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Feedback | HIP Admin</PageTitle>
+
+<div class="content-wrapper">
+    <div class="content">
+        <div class="main-header">
+            <h2>FEEDBACK</h2>
+            <em>recipient-driven trust signals</em>
+        </div>
+
+        <div class="widget" style="margin-bottom:12px;">
+            <div class="widget-header">
+                <h3><i class="fa fa-plus-circle"></i> Submit Feedback</h3>
+            </div>
+            <div class="widget-content">
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <input class="text-input" placeholder="identity id" @bind="_identityId" />
+                    <select class="text-input" @bind="_feedback">
+                        <option value="legit">legit</option>
+                        <option value="suspicious">suspicious</option>
+                        <option value="malicious">malicious</option>
+                    </select>
+                    <input class="text-input" placeholder="source (optional)" @bind="_source" />
+                    <button class="btn btn-sm btn-primary" @onclick="SubmitAsync" disabled="@_submitting">Submit</button>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_submitStatus))
+                {
+                    <p class="status-ok">@_submitStatus</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(_submitError))
+                {
+                    <p class="status-bad">@_submitError</p>
+                }
+            </div>
+        </div>
+
+        <div class="widget">
+            <div class="widget-header">
+                <h3><i class="fa fa-bar-chart"></i> Feedback Stats (24h)</h3>
+                <div class="btn-group widget-header-toolbar">
+                    <button class="link-btn icon-btn" @onclick="LoadStatsAsync" disabled="@_loading" title="Refresh"><i class="fa @(_loading ? "fa-spinner fa-spin" : "fa-refresh")"></i></button>
+                </div>
+            </div>
+            <div class="widget-content">
+                @if (!string.IsNullOrWhiteSpace(_statsError))
+                {
+                    <p class="status-bad">@_statsError</p>
+                }
+                else if (_stats is null)
+                {
+                    <p>No stats yet.</p>
+                }
+                else
+                {
+                    <p><strong>Total:</strong> @_stats.Total</p>
+                    <ul class="meta-list">
+                        @foreach (var item in _stats.Counts)
+                        {
+                            <li><strong>@item.Feedback:</strong> @item.Count</li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _identityId = "beta-node";
+    private string _feedback = "suspicious";
+    private string _source = "web";
+
+    private bool _submitting;
+    private string? _submitStatus;
+    private string? _submitError;
+
+    private bool _loading;
+    private string? _statsError;
+    private StatsDto? _stats;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStatsAsync();
+    }
+
+    private async Task SubmitAsync()
+    {
+        _submitting = true;
+        _submitStatus = null;
+        _submitError = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            var response = await client.PostAsJsonAsync("/bff/feedback", new FeedbackRequestDto(_identityId, _feedback, _source, null));
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                _submitError = body;
+                return;
+            }
+
+            _submitStatus = "Feedback submitted.";
+            await LoadStatsAsync();
+        }
+        catch (Exception ex)
+        {
+            _submitError = ex.Message;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        _loading = true;
+        _statsError = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            _stats = await client.GetFromJsonAsync<StatsDto>("/bff/feedback/stats");
+        }
+        catch (Exception ex)
+        {
+            _statsError = ex.Message;
+            _stats = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private sealed record FeedbackRequestDto(string IdentityId, string Feedback, string? Source, string? Note);
+    private sealed record CountDto(string Feedback, int Count);
+    private sealed record StatsDto(int WindowHours, List<CountDto> Counts, int Total);
+}

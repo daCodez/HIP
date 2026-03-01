@@ -88,6 +88,19 @@ app.MapGet("/bff/policy/strict", async (HipApiClient api, CancellationToken canc
     return Results.Content(body, "application/json", Encoding.UTF8, status);
 });
 
+app.MapGet("/bff/feedback/stats", async (HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var (status, body) = await api.GetAsync("/api/plugins/reputation/feedback/stats", cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
+app.MapPost("/bff/feedback", async (ReputationFeedbackRequest request, HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var payload = System.Text.Json.JsonSerializer.Serialize(request);
+    var (status, body) = await api.PostAsync("/api/plugins/reputation/feedback", payload, cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
 app.MapGet("/bff/extensions/hip-mail-bridge", () =>
 {
     var path = "/home/jarvis_bot/.openclaw/workspace/HIP/extensions/hip-mail-bridge.tar.gz";
@@ -102,3 +115,5 @@ app.MapGet("/bff/extensions/hip-mail-bridge", () =>
 app.MapDefaultEndpoints();
 
 app.Run();
+
+public sealed record ReputationFeedbackRequest(string IdentityId, string Feedback, string? Source = null, string? Note = null);

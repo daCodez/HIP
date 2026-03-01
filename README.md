@@ -158,6 +158,12 @@ Optional reputation feedback plugin:
 - Submit feedback: `POST /api/plugins/reputation/feedback`
 - View 24h stats: `GET /api/plugins/reputation/feedback/stats`
 
+Optional OIDC identity plugin:
+- Enable `core.identity.oidc` in `HIP:Plugins:Enabled`.
+- Resolve mapping: `POST /api/plugins/identity/oidc/resolve`
+- Sync mapping: `POST /api/plugins/identity/oidc/sync`
+- Plugin info: `GET /api/plugins/identity/oidc/info`
+
 Enable plugins via config:
 
 ```json
