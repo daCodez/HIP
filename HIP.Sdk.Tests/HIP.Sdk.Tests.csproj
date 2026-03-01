@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HIP.Sdk\HIP.Sdk.csproj" />
+    <ProjectReference Include="..\HIP.Audit\HIP.Audit.csproj" />
   </ItemGroup>
 
 </Project>

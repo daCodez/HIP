@@ -1,5 +1,6 @@
 using HIP.ApiService.Application.Abstractions;
-using HIP.ApiService.Application.Audit;
+using HIP.Audit.Abstractions;
+using HIP.Audit.Models;
 using HIP.ApiService.Application.Contracts;
 using HIP.ApiService.Observability;
 using MediatR;
@@ -7,6 +8,10 @@ using System.Diagnostics;
 
 namespace HIP.ApiService.Features.Jarvis;
 
+/// <summary>
+/// Executes the operation for this public API member.
+/// </summary>
+/// <returns>The operation result.</returns>
 public sealed class EvaluateJarvisPolicyHandler(
     IIdentityService identityService,
     IReputationService reputationService,
@@ -33,6 +38,12 @@ public sealed class EvaluateJarvisPolicyHandler(
         "do not tell"
     ];
 
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="command">The command value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public async Task<JarvisPolicyEvaluationResultDto> Handle(EvaluateJarvisPolicyCommand command, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
@@ -116,7 +127,12 @@ public sealed class EvaluateJarvisPolicyHandler(
             EventType: "jarvis.policy.evaluate",
             Subject: request.IdentityId,
             Source: "api",
-            Detail: $"decision={decision};risk={risk};markers={matched.Count}"), cancellationToken);
+            Detail: $"decision={decision};risk={risk};markers={matched.Count}",
+            Category: "policy",
+            Outcome: decision,
+            ReasonCode: policyCode,
+            CorrelationId: Activity.Current?.TraceId.ToString(),
+            LatencyMs: sw.Elapsed.TotalMilliseconds), cancellationToken);
 
         sw.Stop();
         HipTelemetry.Record("jarvis.policy.evaluate", decision, sw.Elapsed.TotalMilliseconds);

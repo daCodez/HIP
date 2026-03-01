@@ -3,8 +3,17 @@ using Microsoft.Extensions.Hosting;
 
 namespace HIP.ApiService.Infrastructure.Persistence;
 
+/// <summary>
+/// Represents a publicly visible API member.
+/// </summary>
 public static class HipDbInitializer
 {
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <param name="services">The services value used by this operation.</param>
+    /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>
+    /// <returns>The operation result.</returns>
     public static async Task InitializeAsync(IServiceProvider services, CancellationToken cancellationToken)
     {
         using var scope = services.CreateScope();
@@ -61,6 +70,25 @@ public static class HipDbInitializer
               IdentityId TEXT NOT NULL,
               ExpiresAtUtc TEXT NOT NULL,
               CreatedAtUtc TEXT NOT NULL
+            );
+            """,
+            cancellationToken);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS audit_events (
+              Id TEXT NOT NULL PRIMARY KEY,
+              CreatedAtUtc TEXT NOT NULL,
+              EventType TEXT NOT NULL,
+              Subject TEXT NOT NULL,
+              Source TEXT NOT NULL,
+              Detail TEXT NOT NULL,
+              Category TEXT NULL,
+              Outcome TEXT NULL,
+              ReasonCode TEXT NULL,
+              Route TEXT NULL,
+              CorrelationId TEXT NULL,
+              LatencyMs REAL NULL
             );
             """,
             cancellationToken);

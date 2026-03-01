@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using HIP.Audit.Models;
@@ -8,10 +9,10 @@ using NUnit.Framework;
 
 namespace HIP.Tests;
 
-public sealed class AuditEndpointTests
+public sealed class TokenAuditTrailTests
 {
     [Test]
-    public async Task GetAuditEvents_Returns200_AndList()
+    public async Task TokenIssue_WritesAuditEvent()
     {
         await using var app = new WebApplicationFactory<Program>();
         using (var scope = app.Services.CreateScope())
@@ -32,12 +33,21 @@ public sealed class AuditEndpointTests
 
         using var client = app.CreateClient();
 
-        await client.GetAsync("/api/identity/hip-system");
-        var response = await client.GetAsync("/api/admin/audit?take=10");
-        var payload = await response.Content.ReadFromJsonAsync<List<AuditEvent>>();
+        var issueResponse = await client.PostAsJsonAsync("/api/jarvis/token/issue", new
+        {
+            identityId = "hip-system",
+            audience = "jarvis-runtime",
+            deviceId = "device-test"
+        });
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(issueResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var auditResponse = await client.GetAsync("/api/admin/audit?take=20&eventType=jarvis.token.issue");
+        var payload = await auditResponse.Content.ReadFromJsonAsync<List<AuditEvent>>();
+
+        Assert.That(auditResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(payload, Is.Not.Null);
-        Assert.That(payload!.Count, Is.GreaterThanOrEqualTo(1));
+        Assert.That(payload!, Is.Not.Empty);
+        Assert.That(payload!.Any(x => x.EventType == "jarvis.token.issue" && x.Outcome == "success"), Is.True);
     }
 }

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using HIP.Audit.Models;
@@ -8,10 +9,10 @@ using NUnit.Framework;
 
 namespace HIP.Tests;
 
-public sealed class AuditEndpointTests
+public sealed class AuditFilteringTests
 {
     [Test]
-    public async Task GetAuditEvents_Returns200_AndList()
+    public async Task GetAuditEvents_FiltersByEventType()
     {
         await using var app = new WebApplicationFactory<Program>();
         using (var scope = app.Services.CreateScope())
@@ -33,11 +34,14 @@ public sealed class AuditEndpointTests
         using var client = app.CreateClient();
 
         await client.GetAsync("/api/identity/hip-system");
-        var response = await client.GetAsync("/api/admin/audit?take=10");
+        await client.GetAsync("/api/reputation/hip-system");
+
+        var response = await client.GetAsync("/api/admin/audit?take=20&eventType=identity.read");
         var payload = await response.Content.ReadFromJsonAsync<List<AuditEvent>>();
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(payload, Is.Not.Null);
-        Assert.That(payload!.Count, Is.GreaterThanOrEqualTo(1));
+        Assert.That(payload!, Is.Not.Empty);
+        Assert.That(payload!.All(x => x.EventType == "identity.read"), Is.True);
     }
 }

@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.Sdk.Tests", "HIP.Sdk.Te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.Sdk.Demo", "HIP.Sdk.Demo\HIP.Sdk.Demo.csproj", "{C00ABF13-168D-4CD7-923F-52661B6B10FB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.Audit", "HIP.Audit\HIP.Audit.csproj", "{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -153,6 +155,18 @@ Global
 		{C00ABF13-168D-4CD7-923F-52661B6B10FB}.Release|x64.Build.0 = Release|Any CPU
 		{C00ABF13-168D-4CD7-923F-52661B6B10FB}.Release|x86.ActiveCfg = Release|Any CPU
 		{C00ABF13-168D-4CD7-923F-52661B6B10FB}.Release|x86.Build.0 = Release|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Debug|x64.Build.0 = Debug|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Debug|x86.Build.0 = Debug|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Release|x64.ActiveCfg = Release|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Release|x64.Build.0 = Release|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Release|x86.ActiveCfg = Release|Any CPU
+		{24C4E5B3-2BD4-436E-B8B2-099FF9D235FA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

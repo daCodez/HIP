@@ -2,14 +2,50 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HIP.ApiService.Infrastructure.Persistence;
 
+/// <summary>
+/// Represents the Entity Framework database context used by HIP.ApiService to persist
+/// identities, reputation signals, refresh tokens, proof-token consumption records, and replay nonces.
+/// </summary>
+/// <param name="options">
+/// The context options that configure the provider, connection, and runtime behavior for this context.
+/// </param>
 public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbContext(options)
 {
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <returns>The operation result.</returns>
     public DbSet<IdentityRecord> Identities => Set<IdentityRecord>();
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <returns>The operation result.</returns>
     public DbSet<ReputationSignalRecord> ReputationSignals => Set<ReputationSignalRecord>();
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <returns>The operation result.</returns>
     public DbSet<RefreshTokenRecord> RefreshTokens => Set<RefreshTokenRecord>();
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <returns>The operation result.</returns>
     public DbSet<ConsumedProofTokenRecord> ConsumedProofTokens => Set<ConsumedProofTokenRecord>();
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
+    /// <returns>The operation result.</returns>
     public DbSet<ReplayNonceRecord> ReplayNonces => Set<ReplayNonceRecord>();
+    /// <summary>
+    /// Durable audit event records used for security/policy observability.
+    /// </summary>
+    /// <returns>The operation result.</returns>
+    public DbSet<AuditEventRecord> AuditEvents => Set<AuditEventRecord>();
 
+    /// <summary>
+    /// Configures entity mappings, table names, key constraints, and property limits for HIP persistence models.
+    /// </summary>
+    /// <param name="modelBuilder">The model builder used to configure EF Core entity metadata.</param>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var identity = modelBuilder.Entity<IdentityRecord>();
@@ -59,5 +95,26 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
         replay.Property(x => x.IdentityId).HasMaxLength(64).IsRequired();
         replay.Property(x => x.ExpiresAtUtc).IsRequired();
         replay.Property(x => x.CreatedAtUtc).IsRequired();
+
+        var audit = modelBuilder.Entity<AuditEventRecord>();
+        audit.ToTable("audit_events");
+        audit.HasKey(x => x.Id);
+        audit.Property(x => x.Id).HasMaxLength(64);
+        audit.Property(x => x.CreatedAtUtc).IsRequired();
+        audit.Property(x => x.EventType).HasMaxLength(128).IsRequired();
+        audit.Property(x => x.Subject).HasMaxLength(128).IsRequired();
+        audit.Property(x => x.Source).HasMaxLength(64).IsRequired();
+        audit.Property(x => x.Detail).HasMaxLength(512).IsRequired();
+        audit.Property(x => x.Category).HasMaxLength(64);
+        audit.Property(x => x.Outcome).HasMaxLength(32);
+        audit.Property(x => x.ReasonCode).HasMaxLength(128);
+        audit.Property(x => x.Route).HasMaxLength(256);
+        audit.Property(x => x.CorrelationId).HasMaxLength(128);
+
+        audit.HasIndex(x => x.CreatedAtUtc);
+        audit.HasIndex(x => x.EventType);
+        audit.HasIndex(x => x.Subject);
+        audit.HasIndex(x => x.Outcome);
+        audit.HasIndex(x => x.ReasonCode);
     }
 }

@@ -1,5 +1,8 @@
 using FluentValidation;
+using System.Diagnostics;
 using HIP.ApiService.Application.Abstractions;
+using HIP.Audit.Abstractions;
+using HIP.Audit.Models;
 using HIP.ApiService.Application.Behaviors;
 using HIP.ApiService.Infrastructure.Identity;
 using HIP.ApiService.Infrastructure.Reputation;
@@ -12,6 +15,7 @@ using HIP.ApiService.Features.Reputation;
 using HIP.ApiService.Features.Admin;
 using HIP.ApiService.Features.Messages;
 using HIP.ApiService.Features.Jarvis;
+using HIP.ApiService.Observability;
 using HIP.ServiceDefaults;
 using MediatR;
 using HIP.ApiService;
@@ -19,6 +23,10 @@ using Microsoft.EntityFrameworkCore;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 512 * 1024; // global safety net: 512 KB
+});
 builder.AddServiceDefaults();
 
 builder.Services.Configure<CryptoProviderOptions>(builder.Configuration.GetSection(CryptoProviderOptions.SectionName)); // validation/security awareness: options bind from env/config only
@@ -57,7 +65,7 @@ builder.Services.AddDbContext<HipDbContext>(options =>
 
 builder.Services.AddScoped<IIdentityService, InMemoryIdentityService>();
 builder.Services.AddScoped<IReputationService, DatabaseReputationService>();
-builder.Services.AddSingleton<IAuditTrail, InMemoryAuditTrail>();
+builder.Services.AddScoped<IAuditTrail, DatabaseAuditTrail>();
 builder.Services.AddSingleton<ISecurityEventCounter, InMemorySecurityEventCounter>();
 builder.Services.AddSingleton<ISecurityRejectLog, InMemorySecurityRejectLog>();
 builder.Services.AddScoped<IReplayProtectionService, InMemoryReplayProtectionService>();
@@ -72,12 +80,77 @@ builder.Services.AddExceptionHandler(_ => { });
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfterValue)
+            ? retryAfterValue.TotalSeconds
+            : (double?)null;
+
+        if (retryAfter is not null)
+        {
+            context.HttpContext.Response.Headers.RetryAfter = Math.Ceiling(retryAfter.Value).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        var request = context.HttpContext.Request;
+        var identityId = context.HttpContext.Request.Headers.TryGetValue("x-hip-identity", out var hdr)
+            ? hdr.ToString()
+            : "anonymous";
+
+        var auditTrail = context.HttpContext.RequestServices.GetService<IAuditTrail>();
+        if (auditTrail is not null)
+        {
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                EventType: "api.rate_limit.rejected",
+                Subject: string.IsNullOrWhiteSpace(identityId) ? "anonymous" : identityId,
+                Source: "api",
+                Detail: "rateLimit.exceeded",
+                Category: "security",
+                Outcome: "throttled",
+                ReasonCode: "rateLimit.exceeded",
+                Route: request.Path,
+                CorrelationId: Activity.Current?.TraceId.ToString()),
+                cancellationToken);
+        }
+
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            code = "rateLimit.exceeded",
+            reason = "too many requests",
+            retryAfterSeconds = retryAfter
+        }, cancellationToken);
+    };
+
     options.AddPolicy("read-api", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    // tighter per-endpoint limits to reduce enumeration/abuse risk on identity/reputation reads
+    options.AddPolicy("identity-read", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    options.AddPolicy("reputation-read", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst
@@ -101,6 +174,62 @@ if (!app.Environment.IsDevelopment() && insecureTransportAllowed)
 }
 
 app.UseExceptionHandler(); // security awareness: prevent leaking internals
+
+app.Use(async (httpContext, next) =>
+{
+    const long globalMaxBytes = 512 * 1024;
+
+    var endpointLimitMetadata = httpContext.GetEndpoint()?
+        .Metadata
+        .GetMetadata<Microsoft.AspNetCore.Http.Metadata.IRequestSizeLimitMetadata>();
+
+    long? endpointLimit = endpointLimitMetadata is null ? null : endpointLimitMetadata.MaxRequestBodySize;
+    var effectiveLimit = endpointLimit ?? globalMaxBytes;
+    var contentLength = httpContext.Request.ContentLength;
+
+    if (contentLength is not null && contentLength.Value > effectiveLimit)
+    {
+        var routePattern = (httpContext.GetEndpoint() as Microsoft.AspNetCore.Routing.RouteEndpoint)
+            ?.RoutePattern
+            .RawText ?? "unknown";
+
+        HipTelemetry.RecordHttpRequestSize(contentLength.Value, routePattern, httpContext.Request.Method, "4xx");
+
+        httpContext.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+        await httpContext.Response.WriteAsJsonAsync(new
+        {
+            code = "payload.tooLarge",
+            reason = "request payload exceeds configured endpoint limit"
+        });
+        return;
+    }
+
+    await next();
+});
+
+app.Use(async (httpContext, next) =>
+{
+    const int samplePercent = 20; // keep telemetry cost/noise low
+    var shouldSample = Random.Shared.Next(100) < samplePercent;
+
+    await next();
+
+    if (!shouldSample)
+    {
+        return;
+    }
+
+    var routePattern = (httpContext.GetEndpoint() as Microsoft.AspNetCore.Routing.RouteEndpoint)
+        ?.RoutePattern
+        .RawText ?? "unknown";
+
+    var method = httpContext.Request.Method;
+    var statusClass = $"{httpContext.Response.StatusCode / 100}xx";
+    var contentLength = httpContext.Request.ContentLength ?? 0;
+
+    HipTelemetry.RecordHttpRequestSize(contentLength, routePattern, method, statusClass);
+});
+
 app.UseRateLimiter(); // security awareness: basic abuse throttling on public reads
 
 if (app.Environment.IsDevelopment())
@@ -149,15 +278,28 @@ else
     app.UseHttpsRedirection();
 }
 
+var exposeInternalApisSetting = builder.Configuration["HIP:ExposeInternalApis"];
+var exposeInternalApis = bool.TryParse(exposeInternalApisSetting, out var parsedExposeInternal)
+    ? parsedExposeInternal
+    : app.Environment.IsDevelopment();
+
 app.MapStatusEndpoints();
 app.MapIdentityEndpoints();
 app.MapReputationEndpoints();
 app.MapMessageEndpoints();
-app.MapJarvisEndpoints();
-app.MapAuditEndpoints();
-app.MapSecurityEndpoints();
+
+if (exposeInternalApis)
+{
+    app.MapJarvisEndpoints();
+    app.MapAuditEndpoints();
+    app.MapSecurityEndpoints();
+}
+
 app.MapDefaultEndpoints();
 
 app.Run();
 
+/// <summary>
+/// Partial Program marker used by integration tests to bootstrap the API host.
+/// </summary>
 public partial class Program { }

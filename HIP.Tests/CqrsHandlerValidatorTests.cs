@@ -1,6 +1,7 @@
 using FluentValidation;
 using HIP.ApiService.Application.Abstractions;
-using HIP.ApiService.Application.Audit;
+using HIP.Audit.Abstractions;
+using HIP.Audit.Models;
 using HIP.ApiService.Application.Contracts;
 using HIP.ApiService.Features.Identity;
 using HIP.ApiService.Features.Reputation;
@@ -31,6 +32,9 @@ public sealed class CqrsHandlerValidatorTests
         public Task AppendAsync(AuditEvent auditEvent, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task<IReadOnlyList<AuditEvent>> RecentAsync(int count, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<AuditEvent>>(Array.Empty<AuditEvent>());
+
+        public Task<IReadOnlyList<AuditEvent>> QueryAsync(AuditQuery query, CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<AuditEvent>>(Array.Empty<AuditEvent>());
     }
 
