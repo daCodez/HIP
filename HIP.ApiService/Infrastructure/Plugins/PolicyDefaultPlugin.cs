@@ -1,5 +1,7 @@
 using HIP.ApiService.Application.Abstractions;
 using HIP.Plugins.Abstractions.Contracts;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,11 +24,31 @@ public sealed class PolicyDefaultPlugin : IHipPlugin
     /// <inheritdoc />
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
+        services.Configure<PolicyPackOptions>(configuration.GetSection(PolicyPackOptions.SectionName));
         services.AddScoped<IJarvisPolicyEvaluator, DefaultJarvisPolicyEvaluator>();
     }
 
     /// <inheritdoc />
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IConfiguration configuration, IHostEnvironment environment)
     {
+        endpoints.MapGet("/api/plugins/policy/current", () =>
+            {
+                var options = new PolicyPackOptions();
+                configuration.GetSection(PolicyPackOptions.SectionName).Bind(options);
+                return Results.Ok(new
+                {
+                    pluginId = Manifest.Id,
+                    version = Manifest.Version,
+                    requiredScores = new
+                    {
+                        low = options.LowRiskRequiredScore,
+                        medium = options.MediumRiskRequiredScore,
+                        high = options.HighRiskRequiredScore
+                    }
+                });
+            })
+            .WithName("GetCurrentPolicyPack")
+            .WithTags("Plugins")
+            .Produces(StatusCodes.Status200OK);
     }
 }

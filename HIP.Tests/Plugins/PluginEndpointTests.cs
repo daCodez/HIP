@@ -56,6 +56,22 @@ public sealed class PluginEndpointTests
     }
 
     [Test]
+    public async Task PolicyPlugin_CurrentEndpoint_ReturnsDefaultThresholds()
+    {
+        await using var app = new WebApplicationFactory<Program>();
+        using var client = app.CreateClient();
+
+        var response = await client.GetAsync("/api/plugins/policy/current");
+        var payload = await response.Content.ReadAsStringAsync();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(payload, Does.Contain("\"pluginId\":\"core.policy.default\""));
+        Assert.That(payload, Does.Contain("\"low\":20"));
+        Assert.That(payload, Does.Contain("\"medium\":50"));
+        Assert.That(payload, Does.Contain("\"high\":80"));
+    }
+
+    [Test]
     public async Task AutoDiscover_WithAllowlist_LoadsSampleWithoutExplicitEnable()
     {
         const string autoDiscoverKey = "HIP__Plugins__AutoDiscover";

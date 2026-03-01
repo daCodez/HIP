@@ -28,12 +28,6 @@
             <i class="fa fa-dashboard fa-fw"></i><span class="text">Dashboard</span>
         </NavLink>
     </li>
-    <li>
-        <NavLink href="/audit" class="active-link" @onclick:preventDefault="false">
-            <i class="fa fa-shield fa-fw"></i><span class="text">Audit</span>
-        </NavLink>
-    </li>
-
     @foreach (var item in _pluginNavItems)
     {
         <li>

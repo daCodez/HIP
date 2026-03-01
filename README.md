@@ -172,6 +172,13 @@ Notes:
 
 Discovery endpoint:
 - `GET /api/plugins` returns active plugin manifests.
+- `GET /api/plugins/nav` returns plugin-contributed navigation items.
+- `GET /api/plugins/policy/current` returns current default policy-pack thresholds.
+
+Policy tuning config (default policy plugin):
+- `HIP:Policy:LowRiskRequiredScore` (default 20)
+- `HIP:Policy:MediumRiskRequiredScore` (default 50)
+- `HIP:Policy:HighRiskRequiredScore` (default 80)
 
 ---
 

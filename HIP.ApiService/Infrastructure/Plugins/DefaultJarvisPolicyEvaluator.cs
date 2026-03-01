@@ -1,6 +1,7 @@
 using HIP.ApiService.Application.Abstractions;
 using HIP.ApiService.Application.Contracts;
 using HIP.ApiService.Observability;
+using Microsoft.Extensions.Options;
 
 namespace HIP.ApiService.Infrastructure.Plugins;
 
@@ -11,6 +12,7 @@ public sealed class DefaultJarvisPolicyEvaluator(
     IIdentityService identityService,
     IReputationService reputationService,
     ISecurityEventCounter securityCounter,
+    IOptions<PolicyPackOptions> options,
     ILogger<DefaultJarvisPolicyEvaluator> logger) : IJarvisPolicyEvaluator
 {
     private static readonly string[] HighRiskMarkers =
@@ -69,9 +71,9 @@ public sealed class DefaultJarvisPolicyEvaluator(
 
         var requiredScore = request.RiskLevel switch
         {
-            "low" => 20,
-            "medium" => 50,
-            "high" => 80,
+            "low" => options.Value.LowRiskRequiredScore,
+            "medium" => options.Value.MediumRiskRequiredScore,
+            "high" => options.Value.HighRiskRequiredScore,
             _ => 101
         };
 
