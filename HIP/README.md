@@ -237,6 +237,10 @@ Rollback toggles (quick safety controls):
 - **Transport safety:** `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` is Development-only; remove/disable it outside Development.
 - **Feature isolation:** if a plugin causes regression, remove that plugin id from `HIP:Plugins:Enabled` and retest baseline endpoints.
 
+Deployment preflight:
+- Run `./scripts/preflight.sh` before deploy.
+- It checks environment safety guards, policy toggle visibility, and does a solution build sanity pass.
+
 ---
 
 ## Roadmap: AI-assisted trust
