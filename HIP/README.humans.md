@@ -94,6 +94,33 @@ This helps answer: **“Which rule set made this decision?”**
 4. Confirm request risk level is correct
 5. Retry only after fixing the root cause
 
+## If preflight fails, what to do (simple runbook)
+Run:
+```bash
+./scripts/preflight.sh
+```
+
+Then use this quick map:
+
+- **`dotnet is not installed`**
+  - Install .NET SDK used by this repo, then rerun preflight.
+
+- **`HIP.sln not found` / project file missing**
+  - You are in the wrong folder. `cd` into repo root (`HIP/`) and rerun.
+
+- **`ASPIRE_ALLOW_UNSECURED_TRANSPORT=true is not allowed outside Development`**
+  - Remove/unset that env var for staging/prod.
+  - Keep it only for local Development.
+
+- **Policy version warning or startup policy validation failure**
+  - Set a non-empty policy version (example: `HIP__Policy__Version=default-v1`).
+  - Ensure thresholds are ordered: `low <= medium <= high`.
+  - Ensure thresholds are in range `0..100`.
+
+- **Build sanity check fails**
+  - Run `dotnet build HIP.sln` to see full errors.
+  - Fix compile/config issues, then rerun preflight.
+
 ---
 
 ## Quick glossary (non-technical)
