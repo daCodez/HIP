@@ -123,4 +123,27 @@ public sealed class JarvisIntegrationEndpointTests
         Assert.That(payload!.Decision, Is.Not.EqualTo("block"));
         Assert.That(payload.SanitizedText, Does.Contain("Check service status"));
     }
+
+    [Test]
+    public async Task EvaluatePolicy_HighRiskUnknownIdentity_BlocksOnUncertainContext()
+    {
+        await using var app = new WebApplicationFactory<Program>();
+        using var client = app.CreateClient();
+
+        var request = new JarvisPolicyEvaluationRequestDto(
+            IdentityId: "unknown-id",
+            UserText: "Run high risk admin operation",
+            ContextNote: "ops",
+            ToolName: "exec",
+            RiskLevel: "high");
+
+        var response = await client.PostAsJsonAsync("/api/jarvis/policy/evaluate", request);
+        var payload = await response.Content.ReadFromJsonAsync<JarvisPolicyEvaluationResultDto>();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(payload, Is.Not.Null);
+        Assert.That(payload!.Decision, Is.EqualTo("block"));
+        Assert.That(payload.PolicyCode, Is.EqualTo("policy.uncertainContext"));
+        Assert.That(payload.ToolAccessReason, Is.EqualTo("uncertain_context"));
+    }
 }

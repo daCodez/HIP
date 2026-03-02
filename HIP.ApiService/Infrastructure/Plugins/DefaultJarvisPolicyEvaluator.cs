@@ -66,9 +66,23 @@ public sealed class DefaultJarvisPolicyEvaluator(
             reasons.Add("Sanitization removed all actionable text.");
         }
 
-        var identity = await identityService.GetByIdAsync(request.IdentityId, cancellationToken);
-        var score = await reputationService.GetScoreAsync(request.IdentityId, cancellationToken);
+        IdentityDto? identity;
+        int score;
+        var contextUnavailable = false;
 
+        try
+        {
+            identity = await identityService.GetByIdAsync(request.IdentityId, cancellationToken);
+            score = await reputationService.GetScoreAsync(request.IdentityId, cancellationToken);
+        }
+        catch
+        {
+            identity = null;
+            score = 0;
+            contextUnavailable = true;
+        }
+
+        var riskLevelKnown = request.RiskLevel is "low" or "medium" or "high";
         var requiredScore = request.RiskLevel switch
         {
             "low" => options.Value.LowRiskRequiredScore,
@@ -77,15 +91,23 @@ public sealed class DefaultJarvisPolicyEvaluator(
             _ => 101
         };
 
+        var uncertaintyDetected = !riskLevelKnown || contextUnavailable || identity is null;
+        if (decision != "block" && request.RiskLevel == "high" && uncertaintyDetected)
+        {
+            decision = "block";
+            risk = "high";
+            reasons.Add("High-risk requests require complete identity/reputation context.");
+        }
+
         var toolAccessAllowed = decision != "block" && identity is not null && score >= requiredScore;
         var toolAccessReason = decision == "block"
-            ? "policy_blocked"
+            ? uncertaintyDetected && request.RiskLevel == "high" ? "uncertain_context" : "policy_blocked"
             : identity is null
                 ? "identity_not_found"
                 : toolAccessAllowed ? "allowed" : "insufficient_reputation";
 
         var policyCode = decision == "block"
-            ? "policy.promptInjectionDetected"
+            ? uncertaintyDetected && request.RiskLevel == "high" ? "policy.uncertainContext" : "policy.promptInjectionDetected"
             : identity is null
                 ? "policy.adminDenied"
                 : toolAccessAllowed ? "policy.allowed" : "policy.lowReputation";

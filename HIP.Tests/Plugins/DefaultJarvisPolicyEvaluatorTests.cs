@@ -67,6 +67,23 @@ public sealed class DefaultJarvisPolicyEvaluatorTests
     }
 
     [Test]
+    public async Task EvaluateAsync_HighRiskMissingIdentity_BlocksOnUncertainContext()
+    {
+        var sut = Create(new FakeIdentityService(exists: false), new FakeReputationService(score: 90), new FakeSecurityCounter());
+
+        var result = await sut.EvaluateAsync(new JarvisPolicyEvaluationRequestDto(
+            IdentityId: "unknown",
+            UserText: "check health",
+            ContextNote: "tests",
+            ToolName: "exec",
+            RiskLevel: "high"), CancellationToken.None);
+
+        Assert.That(result.Decision, Is.EqualTo("block"));
+        Assert.That(result.PolicyCode, Is.EqualTo("policy.uncertainContext"));
+        Assert.That(result.ToolAccessReason, Is.EqualTo("uncertain_context"));
+    }
+
+    [Test]
     public async Task EvaluateAsync_TrustedIdentity_Allows()
     {
         var sut = Create(new FakeIdentityService(exists: true), new FakeReputationService(score: 95), new FakeSecurityCounter());

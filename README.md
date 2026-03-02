@@ -223,6 +223,9 @@ Policy tuning config (default policy plugin):
 - `HIP:Policy:MediumRiskRequiredScore` (default 50)
 - `HIP:Policy:HighRiskRequiredScore` (default 80)
 
+High-risk policy guardrail:
+- High-risk requests are denied by default when identity/reputation context is missing or uncertain (`policy.uncertainContext`).
+
 ---
 
 ## Roadmap: AI-assisted trust
