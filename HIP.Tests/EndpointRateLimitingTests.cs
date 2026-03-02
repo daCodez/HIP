@@ -70,4 +70,35 @@ public sealed class EndpointRateLimitingTests
 
         rejected.Dispose();
     }
+
+    [Test]
+    public async Task PluginManifestEndpoint_UsesBaselineReadRateLimit_WithStandard429Body()
+    {
+        await using var app = new WebApplicationFactory<Program>();
+        using var client = app.CreateClient();
+
+        HttpResponseMessage? rejected = null;
+
+        for (var i = 0; i < 140; i++)
+        {
+            var response = await client.GetAsync("/api/plugins");
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                rejected = response;
+                break;
+            }
+
+            response.Dispose();
+        }
+
+        Assert.That(rejected, Is.Not.Null);
+        Assert.That(rejected!.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
+
+        var payload = await rejected.Content.ReadFromJsonAsync<RateLimitErrorDto>();
+        Assert.That(payload, Is.Not.Null);
+        Assert.That(payload!.Code, Is.EqualTo("rateLimit.exceeded"));
+        Assert.That(payload.Reason, Is.EqualTo("too many requests"));
+
+        rejected.Dispose();
+    }
 }

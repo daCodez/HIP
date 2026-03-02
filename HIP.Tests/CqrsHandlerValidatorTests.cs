@@ -5,6 +5,7 @@ using HIP.Audit.Models;
 using HIP.ApiService.Application.Contracts;
 using HIP.ApiService.Features.Identity;
 using HIP.ApiService.Features.Reputation;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
@@ -41,7 +42,7 @@ public sealed class CqrsHandlerValidatorTests
     [Test]
     public async Task GetIdentityHandler_KnownId_ReturnsIdentity()
     {
-        var handler = new GetIdentityHandler(new FakeIdentityService(), new FakeAuditTrail(), NullLogger<GetIdentityHandler>.Instance);
+        var handler = new GetIdentityHandler(new FakeIdentityService(), new FakeAuditTrail(), new HttpContextAccessor(), NullLogger<GetIdentityHandler>.Instance);
 
         var result = await handler.Handle(new GetIdentityQuery("hip-system"), CancellationToken.None);
 
@@ -52,7 +53,7 @@ public sealed class CqrsHandlerValidatorTests
     [Test]
     public async Task GetReputationHandler_KnownId_ReturnsBaseScore()
     {
-        var handler = new GetReputationHandler(new FakeReputationService(), new FakeAuditTrail(), NullLogger<GetReputationHandler>.Instance);
+        var handler = new GetReputationHandler(new FakeReputationService(), new FakeAuditTrail(), new HttpContextAccessor(), NullLogger<GetReputationHandler>.Instance);
 
         var result = await handler.Handle(new GetReputationQuery("hip-system"), CancellationToken.None);
 

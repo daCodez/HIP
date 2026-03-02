@@ -11,7 +11,7 @@ namespace HIP.ApiService.Infrastructure.Identity;
 /// <param name="db">The db value used by this operation.</param>
 /// <param name="logger">The logger value used by this operation.</param>
 /// <returns>The operation result.</returns>
-public sealed class InMemoryIdentityService(HipDbContext db, ILogger<InMemoryIdentityService> logger) : IIdentityService
+public sealed class DatabaseIdentityService(HipDbContext db, ILogger<DatabaseIdentityService> logger) : IIdentityService
 {
     /// <summary>
     /// Executes the operation for this public API member.

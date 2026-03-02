@@ -13,9 +13,14 @@ namespace HIP.ApiService.Features.Reputation;
 /// </summary>
 /// <param name="reputationService">The reputationService value used by this operation.</param>
 /// <param name="auditTrail">The auditTrail value used by this operation.</param>
+/// <param name="httpContextAccessor">The httpContextAccessor value used by this operation.</param>
 /// <param name="logger">The logger value used by this operation.</param>
 /// <returns>The operation result.</returns>
-public sealed class GetReputationHandler(IReputationService reputationService, IAuditTrail auditTrail, ILogger<GetReputationHandler> logger)
+public sealed class GetReputationHandler(
+    IReputationService reputationService,
+    IAuditTrail auditTrail,
+    IHttpContextAccessor httpContextAccessor,
+    ILogger<GetReputationHandler> logger)
     : IRequestHandler<GetReputationQuery, ReputationDto>
 {
     /// <summary>
@@ -39,6 +44,7 @@ public sealed class GetReputationHandler(IReputationService reputationService, I
 
         var score = await reputationService.GetScoreAsync(request.IdentityId, cancellationToken); // performance awareness
         var result = new ReputationDto(request.IdentityId, score, DateTimeOffset.UtcNow); // security awareness: no secrets
+        var route = httpContextAccessor.HttpContext?.Request.Path.Value;
 
         await auditTrail.AppendAsync(
             new AuditEvent(
@@ -51,6 +57,7 @@ public sealed class GetReputationHandler(IReputationService reputationService, I
                 Category: "api",
                 Outcome: "success",
                 ReasonCode: "ok",
+                Route: route,
                 CorrelationId: Activity.Current?.TraceId.ToString(),
                 LatencyMs: stopwatch.Elapsed.TotalMilliseconds),
             cancellationToken);

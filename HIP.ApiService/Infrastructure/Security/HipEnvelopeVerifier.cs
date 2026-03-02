@@ -51,14 +51,14 @@ public sealed class HipEnvelopeVerifier(
         var now = DateTimeOffset.UtcNow;
         var issuedAt = DateTimeOffset.FromUnixTimeSeconds(issuedUnix);
         var expiresAt = DateTimeOffset.FromUnixTimeSeconds(expiresUnix);
+        if (expiresAt <= issuedAt)
+        {
+            return new HipEnvelopeVerificationResult(false, StatusCodes.Status401Unauthorized, "policy.invalidEnvelope", "invalid envelope lifetime");
+        }
+
         if (expiresAt < now || issuedAt > now.Add(MaxFutureSkew))
         {
             return new HipEnvelopeVerificationResult(false, StatusCodes.Status401Unauthorized, "policy.envelopeExpired", "envelope expired or issued in future");
-        }
-
-        if (!await replayProtection.TryConsumeAsync($"env:{msgId}", identityId, cancellationToken))
-        {
-            return new HipEnvelopeVerificationResult(false, StatusCodes.Status409Conflict, "policy.replayDetected", "envelope replay detected");
         }
 
         var publicStore = cryptoOptions.Value.PublicKeyStorePath;
@@ -96,6 +96,11 @@ public sealed class HipEnvelopeVerifier(
             if (!valid)
             {
                 return new HipEnvelopeVerificationResult(false, StatusCodes.Status401Unauthorized, "policy.invalidSignature", "invalid envelope signature");
+            }
+
+            if (!await replayProtection.TryConsumeAsync($"env:{msgId}", identityId, cancellationToken))
+            {
+                return new HipEnvelopeVerificationResult(false, StatusCodes.Status409Conflict, "policy.replayDetected", "envelope replay detected");
             }
 
             return new HipEnvelopeVerificationResult(true, StatusCodes.Status200OK, "policy.signatureValid", "ok");

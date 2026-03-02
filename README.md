@@ -206,9 +206,9 @@ Notes:
 - `Allowlist` constrains which discovered plugins can load.
 
 Discovery endpoint:
-- `GET /api/plugins` returns active plugin manifests.
-- `GET /api/plugins/nav` returns plugin-contributed items marked for page navigation.
-- `GET /api/plugins/widgets` returns plugin-contributed items marked for dashboard widgets.
+- `GET /api/plugins` returns active plugin manifests (baseline read-rate limited).
+- `GET /api/plugins/nav` returns plugin-contributed items marked for page navigation (baseline read-rate limited).
+- `GET /api/plugins/widgets` returns plugin-contributed items marked for dashboard widgets (baseline read-rate limited).
 - `GET /api/plugins/policy/current` returns current policy-pack thresholds + source.
 - `GET /api/policy/effective` returns neutral effective policy view (`source: default|strict`).
 
@@ -279,6 +279,7 @@ Some endpoints are internal/privileged integration surfaces (for example Jarvis/
 Exposure control:
 - `HIP:ExposeInternalApis=true|false`
 - Default behavior: enabled in Development, disabled outside Development unless explicitly turned on.
+- `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` is permitted only in Development; startup fails outside Development when this flag is enabled.
 
 This keeps the public API surface clean while preserving internal tooling for trusted environments.
 
@@ -300,6 +301,15 @@ Example response:
 ```
 
 If `retryAfterSeconds` is present, wait that long before retrying.
+
+### Audit metadata on read endpoints
+Identity and reputation read operations (`/api/identity/{id}`, `/api/reputation/{identityId}`) are written to the audit trail with:
+- `eventType`: `identity.read` / `reputation.read`
+- `outcome` + `reasonCode`: stable success/not-found semantics
+- `route`: concrete request path for traceability
+
+### Signed-envelope verification hardening
+For BFF-origin signed requests (`x-hip-origin: bff`), HIP validates signature before consuming replay nonce state. This avoids burning replay nonces on invalid signatures and reduces denial-of-service surface.
 
 ### Request body too large (`413`)
 HIP enforces payload size limits globally, and stricter limits on some write endpoints.

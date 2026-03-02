@@ -72,4 +72,28 @@ public sealed class AuditSecurityCoverageTests
         Assert.That(payload!, Is.Not.Empty);
         Assert.That(payload!.Any(x => x.Outcome == "throttled"), Is.True);
     }
+
+    [Test]
+    public async Task IdentityAndReputationReads_IncludeRouteInAuditTrail()
+    {
+        await using var app = new WebApplicationFactory<Program>();
+        using var client = app.CreateClient();
+
+        await client.GetAsync("/api/identity/hip-system");
+        await client.GetAsync("/api/reputation/hip-system");
+
+        var auditResponse = await client.GetAsync("/api/admin/audit?take=100");
+        var payload = await auditResponse.Content.ReadFromJsonAsync<List<AuditEvent>>();
+
+        Assert.That(auditResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(payload, Is.Not.Null);
+
+        var identityRead = payload!.FirstOrDefault(x => x.EventType == "identity.read");
+        var reputationRead = payload!.FirstOrDefault(x => x.EventType == "reputation.read");
+
+        Assert.That(identityRead, Is.Not.Null);
+        Assert.That(reputationRead, Is.Not.Null);
+        Assert.That(identityRead!.Route, Is.EqualTo("/api/identity/hip-system"));
+        Assert.That(reputationRead!.Route, Is.EqualTo("/api/reputation/hip-system"));
+    }
 }

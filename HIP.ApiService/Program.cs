@@ -57,6 +57,7 @@ if (string.Equals(cryptoOptions.Provider, "ECDsa", StringComparison.OrdinalIgnor
 }
 
 builder.Services.AddLogging(); // performance awareness: central logging pipeline
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
@@ -67,7 +68,7 @@ var connectionString = builder.Configuration.GetConnectionString("Hip")
 builder.Services.AddDbContext<HipDbContext>(options =>
     options.UseSqlite(connectionString));
 
-builder.Services.AddScoped<IIdentityService, InMemoryIdentityService>();
+builder.Services.AddScoped<IIdentityService, DatabaseIdentityService>();
 builder.Services.AddScoped<IReputationService, DatabaseReputationService>();
 builder.Services.AddSingleton<ISecurityEventCounter, InMemorySecurityEventCounter>();
 builder.Services.AddSingleton<ISecurityRejectLog, InMemorySecurityRejectLog>();
@@ -390,9 +391,11 @@ if (exposeInternalApis)
 
 var runtimePluginRegistry = app.Services.GetRequiredService<IHipPluginRegistry>();
 app.MapGet("/api/plugins", () => Results.Ok(runtimePluginRegistry.Manifests))
+    .RequireRateLimiting("read-api")
     .WithName("GetPlugins")
     .WithTags("Plugins")
-    .Produces(StatusCodes.Status200OK);
+    .Produces(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status429TooManyRequests);
 
 app.MapGet("/api/plugins/nav", () =>
     {
@@ -403,9 +406,11 @@ app.MapGet("/api/plugins/nav", () =>
             .ToArray();
         return Results.Ok(nav);
     })
+    .RequireRateLimiting("read-api")
     .WithName("GetPluginNav")
     .WithTags("Plugins")
-    .Produces(StatusCodes.Status200OK);
+    .Produces(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status429TooManyRequests);
 
 app.MapGet("/api/plugins/widgets", () =>
     {
@@ -416,9 +421,11 @@ app.MapGet("/api/plugins/widgets", () =>
             .ToArray();
         return Results.Ok(widgets);
     })
+    .RequireRateLimiting("read-api")
     .WithName("GetPluginWidgets")
     .WithTags("Plugins")
-    .Produces(StatusCodes.Status200OK);
+    .Produces(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status429TooManyRequests);
 
 runtimePluginRegistry.MapEndpoints(app, app.Configuration, app.Environment);
 

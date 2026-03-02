@@ -13,9 +13,14 @@ namespace HIP.ApiService.Features.Identity;
 /// </summary>
 /// <param name="identityService">The identityService value used by this operation.</param>
 /// <param name="auditTrail">The auditTrail value used by this operation.</param>
+/// <param name="httpContextAccessor">The httpContextAccessor value used by this operation.</param>
 /// <param name="logger">The logger value used by this operation.</param>
 /// <returns>The operation result.</returns>
-public sealed class GetIdentityHandler(IIdentityService identityService, IAuditTrail auditTrail, ILogger<GetIdentityHandler> logger)
+public sealed class GetIdentityHandler(
+    IIdentityService identityService,
+    IAuditTrail auditTrail,
+    IHttpContextAccessor httpContextAccessor,
+    ILogger<GetIdentityHandler> logger)
     : IRequestHandler<GetIdentityQuery, IdentityDto?>
 {
     /// <summary>
@@ -39,6 +44,7 @@ public sealed class GetIdentityHandler(IIdentityService identityService, IAuditT
 
         var result = await identityService.GetByIdAsync(request.Id, cancellationToken); // performance awareness: async + cancellation
         var auditResult = result is null ? "not-found" : "ok";
+        var route = httpContextAccessor.HttpContext?.Request.Path.Value;
 
         await auditTrail.AppendAsync(
             new AuditEvent(
@@ -51,6 +57,7 @@ public sealed class GetIdentityHandler(IIdentityService identityService, IAuditT
                 Category: "api",
                 Outcome: result is null ? "not_found" : "success",
                 ReasonCode: auditResult,
+                Route: route,
                 CorrelationId: Activity.Current?.TraceId.ToString(),
                 LatencyMs: stopwatch.Elapsed.TotalMilliseconds),
             cancellationToken);
