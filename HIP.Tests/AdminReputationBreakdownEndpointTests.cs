@@ -49,4 +49,22 @@ public sealed class AdminReputationBreakdownEndpointTests
         Assert.That(payload.EventCount, Is.GreaterThanOrEqualTo(1));
         Assert.That(payload.EventPenaltyComponent, Is.GreaterThan(0));
     }
+
+    [Test]
+    public async Task AdminReputationBreakdown_FieldsAreInternallyConsistent()
+    {
+        await using var app = new WebApplicationFactory<Program>();
+
+        using var client = app.CreateClient();
+        var response = await client.GetAsync("/api/admin/reputation/hip-system/breakdown");
+        var payload = await response.Content.ReadFromJsonAsync<ReputationScoreBreakdown>();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(payload, Is.Not.Null);
+        Assert.That(payload!.Score, Is.GreaterThanOrEqualTo(0));
+        Assert.That(payload.Score, Is.LessThanOrEqualTo(100));
+        Assert.That(payload.EventCount, Is.GreaterThanOrEqualTo(0));
+        Assert.That(payload.AggregatePenaltyComponent, Is.GreaterThanOrEqualTo(0));
+        Assert.That(payload.EventPenaltyComponent, Is.GreaterThanOrEqualTo(0));
+    }
 }

@@ -159,6 +159,61 @@ public sealed class TokenAndReplayCoverageTests
         Assert.That(recentScore, Is.LessThan(oldScore));
     }
 
+    [Test]
+    public async Task DatabaseReputationService_RepeatedReplayAbuse_ProgressivelyLowersScore()
+    {
+        await using var db = CreateDb();
+        db.ReputationSignals.Add(new ReputationSignalRecord
+        {
+            IdentityId = "abuse-user",
+            AcceptanceRatio = 0,
+            FeedbackScore = 0,
+            DaysActive = 0,
+            AbuseReports = 0,
+            AuthFailures = 0,
+            SpamFlags = 0,
+            UpdatedAtUtc = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync(CancellationToken.None);
+
+        var service = new DatabaseReputationService(db, NullLogger<DatabaseReputationService>.Instance);
+
+        var baseline = await service.GetScoreAsync("abuse-user", CancellationToken.None);
+        await service.RecordSecurityEventAsync("abuse-user", "replay_abuse", CancellationToken.None);
+        var afterOne = await service.GetScoreAsync("abuse-user", CancellationToken.None);
+        await service.RecordSecurityEventAsync("abuse-user", "replay_abuse", CancellationToken.None);
+        var afterTwo = await service.GetScoreAsync("abuse-user", CancellationToken.None);
+
+        Assert.That(afterOne, Is.LessThan(baseline));
+        Assert.That(afterTwo, Is.LessThan(afterOne));
+    }
+
+    [Test]
+    public async Task DatabaseReputationService_ReplayBenign_DoesNotAddEventPenalty()
+    {
+        await using var db = CreateDb();
+        db.ReputationSignals.Add(new ReputationSignalRecord
+        {
+            IdentityId = "benign-user",
+            AcceptanceRatio = 0,
+            FeedbackScore = 0,
+            DaysActive = 0,
+            AbuseReports = 0,
+            AuthFailures = 0,
+            SpamFlags = 0,
+            UpdatedAtUtc = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync(CancellationToken.None);
+
+        var service = new DatabaseReputationService(db, NullLogger<DatabaseReputationService>.Instance);
+        await service.RecordSecurityEventAsync("benign-user", "replay_benign", CancellationToken.None);
+
+        var breakdown = await service.GetScoreBreakdownAsync("benign-user", CancellationToken.None);
+
+        Assert.That(breakdown.EventCount, Is.EqualTo(1));
+        Assert.That(breakdown.EventPenaltyComponent, Is.EqualTo(0).Within(0.0001));
+    }
+
     private static HipDbContext CreateDb()
     {
         var conn = new SqliteConnection("DataSource=:memory:");
