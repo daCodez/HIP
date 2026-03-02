@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using HIP.ApiService.Application.Abstractions;
 using HIP.ApiService;
 using Microsoft.Extensions.Options;
@@ -12,9 +13,11 @@ namespace HIP.ApiService.Infrastructure.Security;
 /// <returns>The operation result.</returns>
 public sealed class HipEnvelopeVerifier(
     IOptions<CryptoProviderOptions> cryptoOptions,
-    IReplayProtectionService replayProtection) : IHipEnvelopeVerifier
+    IReplayProtectionService replayProtection,
+    IIdentityService identityService) : IHipEnvelopeVerifier
 {
     private static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(1);
+    private static readonly Regex HeaderTokenPattern = new("^[a-zA-Z0-9._:-]{1,128}$", RegexOptions.Compiled);
 
     /// <summary>
     /// Executes the operation for this public API member.
@@ -41,6 +44,24 @@ public sealed class HipEnvelopeVerifier(
         if (new[] { identityId, keyId, msgId, nonce, issuedAtRaw, expiresAtRaw, signatureBase64 }.Any(string.IsNullOrWhiteSpace))
         {
             return new HipEnvelopeVerificationResult(false, StatusCodes.Status401Unauthorized, "policy.invalidEnvelope", "missing required signature headers");
+        }
+
+        if (!HeaderTokenPattern.IsMatch(identityId) ||
+            !HeaderTokenPattern.IsMatch(keyId) ||
+            !HeaderTokenPattern.IsMatch(msgId) ||
+            !HeaderTokenPattern.IsMatch(nonce))
+        {
+            return new HipEnvelopeVerificationResult(false, StatusCodes.Status401Unauthorized, "policy.invalidEnvelope", "invalid envelope header format");
+        }
+
+        if (!string.Equals(identityId, keyId, StringComparison.Ordinal))
+        {
+            return new HipEnvelopeVerificationResult(false, StatusCodes.Status401Unauthorized, "policy.identityKeyMismatch", "identity and key mismatch");
+        }
+
+        if (await identityService.GetByIdAsync(identityId, cancellationToken) is null)
+        {
+            return new HipEnvelopeVerificationResult(false, StatusCodes.Status401Unauthorized, "policy.unknownIdentity", "unknown identity");
         }
 
         if (!long.TryParse(issuedAtRaw, out var issuedUnix) || !long.TryParse(expiresAtRaw, out var expiresUnix))

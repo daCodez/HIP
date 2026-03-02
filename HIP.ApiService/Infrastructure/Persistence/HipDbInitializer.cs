@@ -146,7 +146,9 @@ public static class HipDbInitializer
 
             foreach (var seed in seedIdentities)
             {
-                var identity = await db.Identities.FirstOrDefaultAsync(x => x.Id == seed.Id, cancellationToken);
+                var identity = db.Identities.Local.FirstOrDefault(x => x.Id == seed.Id)
+                    ?? await db.Identities.FirstOrDefaultAsync(x => x.Id == seed.Id, cancellationToken);
+
                 if (identity is null)
                 {
                     db.Identities.Add(new IdentityRecord
@@ -172,7 +174,9 @@ public static class HipDbInitializer
 
             foreach (var seed in seedReputation)
             {
-                var record = await db.ReputationSignals.FirstOrDefaultAsync(x => x.IdentityId == seed.IdentityId, cancellationToken);
+                var record = db.ReputationSignals.Local.FirstOrDefault(x => x.IdentityId == seed.IdentityId)
+                    ?? await db.ReputationSignals.FirstOrDefaultAsync(x => x.IdentityId == seed.IdentityId, cancellationToken);
+
                 if (record is null)
                 {
                     db.ReputationSignals.Add(seed);

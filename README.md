@@ -309,7 +309,13 @@ Identity and reputation read operations (`/api/identity/{id}`, `/api/reputation/
 - `route`: concrete request path for traceability
 
 ### Signed-envelope verification hardening
-For BFF-origin signed requests (`x-hip-origin: bff`), HIP validates signature before consuming replay nonce state. This avoids burning replay nonces on invalid signatures and reduces denial-of-service surface.
+For BFF-origin signed requests (`x-hip-origin: bff`), HIP applies strict envelope checks:
+- `x-hip-identity` and `x-hip-key-id` must match (current key ownership policy)
+- identity/key/message/nonce headers must match a safe token format
+- identity must exist before signature verification proceeds
+- signature is validated before replay nonce state is consumed
+
+This avoids burning replay nonces on invalid signatures, blocks key/identity impersonation attempts, and reduces denial-of-service surface.
 
 ### Request body too large (`413`)
 HIP enforces payload size limits globally, and stricter limits on some write endpoints.
