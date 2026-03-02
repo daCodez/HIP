@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Linq;
 using HIP.ApiService.Application.Contracts;
+using HIP.Audit.Models;
 using Microsoft.AspNetCore.Mvc.Testing;
 using NUnit.Framework;
 
@@ -148,5 +150,81 @@ public sealed class JarvisIntegrationEndpointTests
         Assert.That(payload.PolicyCode, Is.EqualTo("policy.uncertainContext"));
         Assert.That(payload.ToolAccessReason, Is.EqualTo("uncertain_context"));
         Assert.That(payload.DecisionTrace.IdentityExists, Is.False);
+    }
+
+    [Test]
+    public async Task EvaluatePolicy_AllowPath_AuditEntryMatchesDecisionTrace()
+    {
+        await using var app = new WebApplicationFactory<Program>();
+        using var client = app.CreateClient();
+
+        var request = new JarvisPolicyEvaluationRequestDto(
+            IdentityId: "hip-system",
+            UserText: "Check service status.",
+            ContextNote: "ops",
+            ToolName: "status",
+            RiskLevel: "low");
+
+        var response = await client.PostAsJsonAsync("/api/jarvis/policy/evaluate", request);
+        var payload = await response.Content.ReadFromJsonAsync<JarvisPolicyEvaluationResultDto>();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(payload, Is.Not.Null);
+
+        var auditRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/admin/audit?take=20&eventType=jarvis.policy.evaluate&identityId={request.IdentityId}");
+        auditRequest.Headers.Add("x-hip-identity", "hip-system");
+        var auditResponse = await client.SendAsync(auditRequest);
+        var events = await auditResponse.Content.ReadFromJsonAsync<List<AuditEvent>>();
+
+        Assert.That(auditResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(events, Is.Not.Null);
+        var latest = events!
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefault();
+        Assert.That(latest, Is.Not.Null);
+
+        Assert.That(latest!.Outcome, Is.EqualTo(payload!.Decision));
+        Assert.That(latest.ReasonCode, Is.EqualTo(payload.PolicyCode));
+        Assert.That(latest.Detail, Does.Contain($"policyVersion={payload.PolicyVersion}"));
+        Assert.That(latest.Detail, Does.Contain($"identityExists={payload.DecisionTrace.IdentityExists}"));
+        Assert.That(latest.Detail, Does.Contain($"reputationScore={payload.DecisionTrace.ReputationScore}"));
+    }
+
+    [Test]
+    public async Task EvaluatePolicy_UncertainBlock_AuditEntryMatchesDecisionTrace()
+    {
+        await using var app = new WebApplicationFactory<Program>();
+        using var client = app.CreateClient();
+
+        var request = new JarvisPolicyEvaluationRequestDto(
+            IdentityId: "unknown-id",
+            UserText: "Run high risk admin operation",
+            ContextNote: "ops",
+            ToolName: "exec",
+            RiskLevel: "high");
+
+        var response = await client.PostAsJsonAsync("/api/jarvis/policy/evaluate", request);
+        var payload = await response.Content.ReadFromJsonAsync<JarvisPolicyEvaluationResultDto>();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(payload, Is.Not.Null);
+
+        var auditRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/admin/audit?take=20&eventType=jarvis.policy.evaluate&identityId={request.IdentityId}");
+        auditRequest.Headers.Add("x-hip-identity", "hip-system");
+        var auditResponse = await client.SendAsync(auditRequest);
+        var events = await auditResponse.Content.ReadFromJsonAsync<List<AuditEvent>>();
+
+        Assert.That(auditResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(events, Is.Not.Null);
+        var latest = events!
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefault();
+        Assert.That(latest, Is.Not.Null);
+
+        Assert.That(latest!.Outcome, Is.EqualTo(payload!.Decision));
+        Assert.That(latest.ReasonCode, Is.EqualTo(payload.PolicyCode));
+        Assert.That(latest.Detail, Does.Contain($"policyVersion={payload.PolicyVersion}"));
+        Assert.That(latest.Detail, Does.Contain("identityExists=False"));
+        Assert.That(latest.Detail, Does.Contain($"reputationScore={payload.DecisionTrace.ReputationScore}"));
     }
 }
