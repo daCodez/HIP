@@ -94,6 +94,17 @@ public static class HipDbInitializer
             """,
             cancellationToken);
 
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS reputation_events (
+              Id TEXT NOT NULL PRIMARY KEY,
+              IdentityId TEXT NOT NULL,
+              EventType TEXT NOT NULL,
+              CreatedAtUtc TEXT NOT NULL
+            );
+            """,
+            cancellationToken);
+
         var now = DateTimeOffset.UtcNow;
         var auditOptions = scope.ServiceProvider.GetService<IOptions<AuditRetentionOptions>>()?.Value ?? new AuditRetentionOptions();
         var retentionDays = Math.Clamp(auditOptions.RetentionDays, 1, 3650);

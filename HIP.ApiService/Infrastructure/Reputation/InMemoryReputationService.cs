@@ -28,6 +28,25 @@ public sealed class InMemoryReputationService(ILogger<InMemoryReputationService>
     /// <summary>
     /// Executes the operation for this public API member.
     /// </summary>
+    public Task<ReputationScoreBreakdown> GetScoreBreakdownAsync(string identityId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(identityId);
+        var score = ReputationConstants.BaseScore;
+        return Task.FromResult(new ReputationScoreBreakdown(
+            IdentityId: identityId,
+            Score: score,
+            AcceptanceComponent: 0,
+            FeedbackComponent: 0,
+            TrustComponent: 0,
+            AggregatePenaltyComponent: 0,
+            EventPenaltyComponent: 0,
+            EventCount: 0,
+            ComputedAtUtc: DateTimeOffset.UtcNow));
+    }
+
+    /// <summary>
+    /// Executes the operation for this public API member.
+    /// </summary>
     /// <param name="identityId">The identityId value used by this operation.</param>
     /// <param name="eventType">The eventType value used by this operation.</param>
     /// <param name="cancellationToken">The cancellationToken value used by this operation.</param>

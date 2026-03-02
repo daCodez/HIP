@@ -47,6 +47,23 @@ public static class SecurityEndpoints
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
 
+        endpoints.MapGet("/api/admin/reputation/{identityId}/breakdown", async (HttpContext httpContext, string identityId, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
+            {
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+                if (gate is not null)
+                {
+                    return gate;
+                }
+
+                var breakdown = await reputationService.GetScoreBreakdownAsync(identityId, cancellationToken);
+                return Results.Ok(breakdown);
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("GetAdminReputationBreakdown")
+            .WithTags("Admin")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
         return endpoints;
     }
 }

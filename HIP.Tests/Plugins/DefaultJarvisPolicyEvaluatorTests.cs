@@ -103,6 +103,9 @@ public sealed class DefaultJarvisPolicyEvaluatorTests
         public Task<int> GetScoreAsync(string identityId, CancellationToken cancellationToken)
             => Task.FromResult(score);
 
+        public Task<ReputationScoreBreakdown> GetScoreBreakdownAsync(string identityId, CancellationToken cancellationToken)
+            => Task.FromResult(new ReputationScoreBreakdown(identityId, score, 0, 0, 0, 0, 0, 0, DateTimeOffset.UtcNow));
+
         public Task RecordSecurityEventAsync(string identityId, string eventType, CancellationToken cancellationToken)
         {
             RecordedEvents.Add(eventType);

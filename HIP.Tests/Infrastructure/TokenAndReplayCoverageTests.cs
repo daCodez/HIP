@@ -1,8 +1,10 @@
 using HIP.ApiService.Application.Abstractions;
 using HIP.ApiService.Infrastructure.Persistence;
+using HIP.ApiService.Infrastructure.Reputation;
 using HIP.ApiService.Infrastructure.Security;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
 namespace HIP.Tests.Infrastructure;
@@ -96,6 +98,65 @@ public sealed class TokenAndReplayCoverageTests
 
         Assert.That(last.ShouldPenalize, Is.True);
         Assert.That(last.Classification, Is.EqualTo("abuse_suspected"));
+    }
+
+    [Test]
+    public async Task DatabaseReputationService_RecordSecurityEvent_PersistsDurableEvent()
+    {
+        await using var db = CreateDb();
+        var service = new DatabaseReputationService(db, NullLogger<DatabaseReputationService>.Instance);
+
+        await service.RecordSecurityEventAsync("hip-system", "policy_blocked", CancellationToken.None);
+
+        var events = await db.ReputationEvents
+            .Where(x => x.IdentityId == "hip-system" && x.EventType == "policy_blocked")
+            .ToListAsync(CancellationToken.None);
+
+        Assert.That(events, Has.Count.EqualTo(1));
+        Assert.That(events[0].CreatedAtUtc, Is.Not.EqualTo(default(DateTimeOffset)));
+    }
+
+    [Test]
+    public async Task DatabaseReputationService_GetScore_RecentSecurityEventsPenalizeMoreThanOldEvents()
+    {
+        await using var db = CreateDb();
+        db.ReputationSignals.Add(new ReputationSignalRecord
+        {
+            IdentityId = "decay-user",
+            AcceptanceRatio = 0,
+            FeedbackScore = 0,
+            DaysActive = 0,
+            AbuseReports = 0,
+            AuthFailures = 0,
+            SpamFlags = 0,
+            UpdatedAtUtc = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync(CancellationToken.None);
+
+        var service = new DatabaseReputationService(db, NullLogger<DatabaseReputationService>.Instance);
+
+        db.ReputationEvents.Add(new ReputationEventRecord
+        {
+            IdentityId = "decay-user",
+            EventType = "replay_abuse",
+            CreatedAtUtc = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync(CancellationToken.None);
+
+        var recentScore = await service.GetScoreAsync("decay-user", CancellationToken.None);
+
+        db.ReputationEvents.RemoveRange(db.ReputationEvents.Where(x => x.IdentityId == "decay-user"));
+        db.ReputationEvents.Add(new ReputationEventRecord
+        {
+            IdentityId = "decay-user",
+            EventType = "replay_abuse",
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-60)
+        });
+        await db.SaveChangesAsync(CancellationToken.None);
+
+        var oldScore = await service.GetScoreAsync("decay-user", CancellationToken.None);
+
+        Assert.That(recentScore, Is.LessThan(oldScore));
     }
 
     private static HipDbContext CreateDb()

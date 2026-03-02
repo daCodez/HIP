@@ -41,6 +41,10 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
     /// </summary>
     /// <returns>The operation result.</returns>
     public DbSet<AuditEventRecord> AuditEvents => Set<AuditEventRecord>();
+    /// <summary>
+    /// Durable reputation-impacting event records.
+    /// </summary>
+    public DbSet<ReputationEventRecord> ReputationEvents => Set<ReputationEventRecord>();
 
     /// <summary>
     /// Configures entity mappings, table names, key constraints, and property limits for HIP persistence models.
@@ -116,5 +120,16 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
         audit.HasIndex(x => x.Subject);
         audit.HasIndex(x => x.Outcome);
         audit.HasIndex(x => x.ReasonCode);
+
+        var reputationEvent = modelBuilder.Entity<ReputationEventRecord>();
+        reputationEvent.ToTable("reputation_events");
+        reputationEvent.HasKey(x => x.Id);
+        reputationEvent.Property(x => x.Id).HasMaxLength(64);
+        reputationEvent.Property(x => x.IdentityId).HasMaxLength(64).IsRequired();
+        reputationEvent.Property(x => x.EventType).HasMaxLength(64).IsRequired();
+        reputationEvent.Property(x => x.CreatedAtUtc).IsRequired();
+        reputationEvent.HasIndex(x => x.IdentityId);
+        reputationEvent.HasIndex(x => x.EventType);
+        reputationEvent.HasIndex(x => x.CreatedAtUtc);
     }
 }

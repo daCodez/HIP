@@ -24,6 +24,9 @@ public sealed class CqrsHandlerValidatorTests
         public Task<int> GetScoreAsync(string identityId, CancellationToken cancellationToken)
             => Task.FromResult(identityId == "hip-system" ? 50 : 0);
 
+        public Task<ReputationScoreBreakdown> GetScoreBreakdownAsync(string identityId, CancellationToken cancellationToken)
+            => Task.FromResult(new ReputationScoreBreakdown(identityId, 50, 0, 0, 0, 0, 0, 0, DateTimeOffset.UtcNow));
+
         public Task RecordSecurityEventAsync(string identityId, string eventType, CancellationToken cancellationToken)
             => Task.CompletedTask;
     }

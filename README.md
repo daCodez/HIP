@@ -317,6 +317,20 @@ For BFF-origin signed requests (`x-hip-origin: bff`), HIP applies strict envelop
 
 This avoids burning replay nonces on invalid signatures, blocks key/identity impersonation attempts, and reduces denial-of-service surface.
 
+### Durable reputation event model
+Security events recorded through the reputation service are now persisted as durable rows (`reputation_events`) with:
+- `identityId`
+- `eventType`
+- `createdAtUtc`
+
+Reputation scoring now applies time-decay to these event penalties so newer abuse weighs more than older abuse.
+
+### Admin reputation score explainability endpoint
+Admin surface now includes:
+- `GET /api/admin/reputation/{identityId}/breakdown`
+
+It returns stable score factors (acceptance, feedback, trust, aggregate penalties, event penalties, event count, computed timestamp) for debugging/audit workflows.
+
 ### Request body too large (`413`)
 HIP enforces payload size limits globally, and stricter limits on some write endpoints.
 
