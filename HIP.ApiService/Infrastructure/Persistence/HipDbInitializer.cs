@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace HIP.ApiService.Infrastructure.Persistence;
 
@@ -94,6 +95,16 @@ public static class HipDbInitializer
             cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
+        var auditOptions = scope.ServiceProvider.GetService<IOptions<AuditRetentionOptions>>()?.Value ?? new AuditRetentionOptions();
+        var retentionDays = Math.Clamp(auditOptions.RetentionDays, 1, 3650);
+        var cutoff = now.AddDays(-retentionDays);
+        var auditRows = await db.AuditEvents.ToListAsync(cancellationToken);
+        var expiredAudit = auditRows.Where(x => x.CreatedAtUtc < cutoff).ToList();
+        if (expiredAudit.Count > 0)
+        {
+            db.AuditEvents.RemoveRange(expiredAudit);
+            await db.SaveChangesAsync(cancellationToken);
+        }
 
         var identityExists = await db.Identities.AnyAsync(x => x.Id == "hip-system", cancellationToken);
         if (!identityExists)

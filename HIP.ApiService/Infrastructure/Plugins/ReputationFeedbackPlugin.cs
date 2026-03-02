@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace HIP.ApiService.Infrastructure.Plugins;
 
@@ -31,6 +32,8 @@ public sealed class ReputationFeedbackPlugin : IHipPlugin
     /// <inheritdoc />
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
+        services.Configure<ReputationFeedbackOptions>(configuration.GetSection(ReputationFeedbackOptions.SectionName));
+        services.AddSingleton<FeedbackAbuseGuardStore>();
     }
 
     /// <inheritdoc />
@@ -54,6 +57,8 @@ public sealed class ReputationFeedbackPlugin : IHipPlugin
         ReputationFeedbackRequest request,
         HipDbContext db,
         IAuditTrail auditTrail,
+        FeedbackAbuseGuardStore abuseGuard,
+        IOptions<ReputationFeedbackOptions> options,
         CancellationToken cancellationToken)
     {
         var identityId = request.IdentityId?.Trim();
@@ -70,6 +75,39 @@ public sealed class ReputationFeedbackPlugin : IHipPlugin
         }
 
         var now = DateTimeOffset.UtcNow;
+        var reporter = string.IsNullOrWhiteSpace(request.Source) ? "unknown" : request.Source!.Trim().ToLowerInvariant();
+        var cfg = options.Value;
+
+        if (abuseGuard.IsRateLimited(reporter, Math.Clamp(cfg.MaxPerReporterPerMinute, 1, 500), now))
+        {
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: now,
+                EventType: "reputation.feedback.rate_limited",
+                Subject: identityId,
+                Source: "api",
+                Detail: reporter,
+                Category: "reputation",
+                Outcome: "rejected",
+                ReasonCode: "feedback.rateLimited"), cancellationToken);
+            return Results.StatusCode(StatusCodes.Status429TooManyRequests);
+        }
+
+        if (abuseGuard.IsDuplicate(reporter, identityId, TimeSpan.FromMinutes(Math.Clamp(cfg.DuplicateWindowMinutes, 1, 1440)), now))
+        {
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: now,
+                EventType: "reputation.feedback.duplicate",
+                Subject: identityId,
+                Source: "api",
+                Detail: reporter,
+                Category: "reputation",
+                Outcome: "rejected",
+                ReasonCode: "feedback.duplicate"), cancellationToken);
+            return Results.Conflict(new { code = "feedback.duplicate", identityId, reporter });
+        }
+
         var record = await db.ReputationSignals.FirstOrDefaultAsync(x => x.IdentityId == identityId, cancellationToken);
         if (record is null)
         {
@@ -90,15 +128,15 @@ public sealed class ReputationFeedbackPlugin : IHipPlugin
         switch (feedback)
         {
             case "legit":
-                record.FeedbackScore = Clamp01(record.FeedbackScore + 0.08);
-                record.AcceptanceRatio = Clamp01(record.AcceptanceRatio + 0.05);
+                record.FeedbackScore = Clamp01(record.FeedbackScore + (0.08 * Math.Clamp(cfg.LegitWeight, 0, 10)));
+                record.AcceptanceRatio = Clamp01(record.AcceptanceRatio + (0.05 * Math.Clamp(cfg.LegitWeight, 0, 10)));
                 break;
             case "suspicious":
-                record.FeedbackScore = Clamp01(record.FeedbackScore - 0.06);
+                record.FeedbackScore = Clamp01(record.FeedbackScore - (0.06 * Math.Clamp(cfg.SuspiciousWeight, 0, 10)));
                 record.AuthFailures += 1;
                 break;
             case "malicious":
-                record.FeedbackScore = Clamp01(record.FeedbackScore - 0.15);
+                record.FeedbackScore = Clamp01(record.FeedbackScore - (0.15 * Math.Clamp(cfg.MaliciousWeight, 0, 10)));
                 record.AbuseReports += 1;
                 record.SpamFlags += 1;
                 break;

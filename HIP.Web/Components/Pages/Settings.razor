@@ -11,7 +11,7 @@
             <em>admin runtime configuration</em>
         </div>
 
-        <div class="widget">
+        <div class="widget" style="margin-bottom:12px;">
             <div class="widget-header"><h3><i class="fa fa-cog"></i> Core Settings</h3></div>
             <div class="widget-content">
                 <label style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
@@ -25,6 +25,12 @@
                     <option value="api">api</option>
                     <option value="oauth">oauth</option>
                 </select>
+
+                <label style="display:block; margin-bottom:6px;">Audit Retention Days</label>
+                <input type="number" class="text-input" style="max-width:220px; margin-bottom:10px;" min="1" max="3650" @bind="_settings.AuditRetentionDays" />
+
+                <label style="display:block; margin-bottom:6px;">Audit Export Max Rows</label>
+                <input type="number" class="text-input" style="max-width:220px; margin-bottom:12px;" min="100" max="10000" @bind="_settings.AuditExportMaxRows" />
 
                 <label style="display:block; margin-bottom:6px;">Enabled Plugins</label>
                 @foreach (var p in _allPlugins)
@@ -49,6 +55,44 @@
                 }
             </div>
         </div>
+
+        <div class="widget">
+            <div class="widget-header"><h3><i class="fa fa-history"></i> Recent Settings Changes</h3></div>
+            <div class="widget-content">
+                @if (!string.IsNullOrWhiteSpace(_auditError))
+                {
+                    <p class="status-bad">@_auditError</p>
+                }
+                else if (_settingsAudit.Count == 0)
+                {
+                    <p>No recent settings audit events.</p>
+                }
+                else
+                {
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>UTC</th>
+                                <th>Actor</th>
+                                <th>Reason</th>
+                                <th>Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _settingsAudit)
+                            {
+                                <tr>
+                                    <td>@item.CreatedAtUtc.ToString("MM-dd HH:mm:ss")</td>
+                                    <td>@item.Subject</td>
+                                    <td>@item.ReasonCode</td>
+                                    <td>@item.Detail</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
     </div>
 </div>
 
@@ -63,14 +107,17 @@
         "core.chat.insights"
     ];
 
-    private AdminSettingsDto _settings = new(true, "oauth", []);
+    private AdminSettingsDto _settings = new(true, "oauth", [], 30, 2000);
     private bool _saving;
     private string? _message;
     private string? _error;
+    private string? _auditError;
+    private List<AuditRowDto> _settingsAudit = new();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+        await LoadSettingsAuditAsync();
     }
 
     private async Task LoadAsync()
@@ -105,6 +152,7 @@
             }
 
             _message = "Saved. Restart AppHost to apply changes.";
+            await LoadSettingsAuditAsync();
         }
         catch (Exception ex)
         {
@@ -113,6 +161,21 @@
         finally
         {
             _saving = false;
+        }
+    }
+
+    private async Task LoadSettingsAuditAsync()
+    {
+        _auditError = null;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            _settingsAudit = await client.GetFromJsonAsync<List<AuditRowDto>>("/bff/admin/settings/audit") ?? new();
+        }
+        catch (Exception ex)
+        {
+            _auditError = ex.Message;
+            _settingsAudit = new();
         }
     }
 
@@ -128,16 +191,31 @@
         public bool ExposeInternalApis { get; set; }
         public string ChatMode { get; set; } = "mock";
         public string[] EnabledPlugins { get; set; } = [];
+        public int AuditRetentionDays { get; set; } = 30;
+        public int AuditExportMaxRows { get; set; } = 2000;
 
         public AdminSettingsDto()
         {
         }
 
-        public AdminSettingsDto(bool exposeInternalApis, string chatMode, string[] enabledPlugins)
+        public AdminSettingsDto(bool exposeInternalApis, string chatMode, string[] enabledPlugins, int auditRetentionDays, int auditExportMaxRows)
         {
             ExposeInternalApis = exposeInternalApis;
             ChatMode = chatMode;
             EnabledPlugins = enabledPlugins;
+            AuditRetentionDays = auditRetentionDays;
+            AuditExportMaxRows = auditExportMaxRows;
         }
     }
+
+    private sealed record AuditRowDto(
+        string Id,
+        DateTimeOffset CreatedAtUtc,
+        string EventType,
+        string Subject,
+        string Source,
+        string Detail,
+        string? Category,
+        string? Outcome,
+        string? ReasonCode);
 }

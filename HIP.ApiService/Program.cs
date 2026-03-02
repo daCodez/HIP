@@ -33,6 +33,7 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.AddServiceDefaults();
 
 builder.Services.Configure<CryptoProviderOptions>(builder.Configuration.GetSection(CryptoProviderOptions.SectionName)); // validation/security awareness: options bind from env/config only
+builder.Services.Configure<AuditRetentionOptions>(builder.Configuration.GetSection(AuditRetentionOptions.SectionName));
 
 var cryptoOptions = builder.Configuration
     .GetSection(CryptoProviderOptions.SectionName)

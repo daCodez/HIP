@@ -1,4 +1,4 @@
-#:sdk Aspire.AppHost.Sdk@13.1.1
+#:sdk Aspire.AppHost.Sdk@13.1.2
 
 var builder = DistributedApplication.CreateBuilder(args);
 

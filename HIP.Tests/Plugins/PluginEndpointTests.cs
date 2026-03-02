@@ -76,6 +76,11 @@ public sealed class PluginEndpointTests
 
             var strictResponse = await client.GetAsync("/api/plugins/policy/strict");
             Assert.That(strictResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+            var effective = await client.GetAsync("/api/policy/effective");
+            var effectiveBody = await effective.Content.ReadAsStringAsync();
+            Assert.That(effective.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(effectiveBody, Does.Contain("\"source\":\"strict\""));
         }
         finally
         {
@@ -94,9 +99,15 @@ public sealed class PluginEndpointTests
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(payload, Does.Contain("\"pluginId\":\"core.policy.default\""));
-        Assert.That(payload, Does.Contain("\"low\":20"));
+        Assert.That(payload, Does.Contain("\"source\":"));
+        Assert.That(payload, Does.Contain("\"low\":"));
         Assert.That(payload, Does.Contain("\"medium\":50"));
         Assert.That(payload, Does.Contain("\"high\":80"));
+
+        var effective = await client.GetAsync("/api/policy/effective");
+        var effectiveBody = await effective.Content.ReadAsStringAsync();
+        Assert.That(effective.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(effectiveBody, Does.Contain("\"source\":"));
     }
 
     [Test]

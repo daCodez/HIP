@@ -11,38 +11,6 @@
             <em>recent trust/security decisions</em>
         </div>
 
-        <div class="widget" style="margin-bottom:12px;">
-            <div class="widget-header">
-                <h3><i class="fa fa-balance-scale"></i> Policy Pack</h3>
-                <div class="btn-group widget-header-toolbar">
-                    <button class="link-btn icon-btn" @onclick="LoadPolicyAsync" disabled="@_loadingPolicy" title="Refresh"><i class="fa @(_loadingPolicy ? "fa-spinner fa-spin" : "fa-refresh")"></i></button>
-                </div>
-            </div>
-            <div class="widget-content">
-                @if (!string.IsNullOrWhiteSpace(_policyError))
-                {
-                    <p class="status-bad">@_policyError</p>
-                }
-                else if (_policyCurrent is null)
-                {
-                    <p>Policy pack info unavailable.</p>
-                }
-                else
-                {
-                    <p><strong>Active:</strong> @_policyCurrent.PluginId (@_policyCurrent.Version)</p>
-                    <ul class="meta-list">
-                        <li><strong>Low:</strong> @_policyCurrent.RequiredScores.Low</li>
-                        <li><strong>Medium:</strong> @_policyCurrent.RequiredScores.Medium</li>
-                        <li><strong>High:</strong> @_policyCurrent.RequiredScores.High</li>
-                    </ul>
-                    @if (_strictPolicy is not null)
-                    {
-                        <p><strong>Strict pack available:</strong> @_strictPolicy.PluginId</p>
-                    }
-                }
-            </div>
-        </div>
-
         <div class="widget">
             <div class="widget-header">
                 <h3><i class="fa fa-shield"></i> Audit Trail</h3>
@@ -101,47 +69,9 @@
     private string? _error;
     private List<AuditEventDto> _events = new();
 
-    private bool _loadingPolicy;
-    private string? _policyError;
-    private PolicyCurrentDto? _policyCurrent;
-    private PolicyStrictDto? _strictPolicy;
-
     protected override async Task OnInitializedAsync()
     {
-        await LoadPolicyAsync();
         await LoadAuditAsync();
-    }
-
-    private async Task LoadPolicyAsync()
-    {
-        _loadingPolicy = true;
-        _policyError = null;
-
-        try
-        {
-            var client = HttpClientFactory.CreateClient("hip-bff");
-            _policyCurrent = await client.GetFromJsonAsync<PolicyCurrentDto>("/bff/policy/current");
-
-            using var strictResponse = await client.GetAsync("/bff/policy/strict");
-            if (strictResponse.IsSuccessStatusCode)
-            {
-                _strictPolicy = await strictResponse.Content.ReadFromJsonAsync<PolicyStrictDto>();
-            }
-            else
-            {
-                _strictPolicy = null;
-            }
-        }
-        catch (Exception ex)
-        {
-            _policyError = ex.Message;
-            _policyCurrent = null;
-            _strictPolicy = null;
-        }
-        finally
-        {
-            _loadingPolicy = false;
-        }
     }
 
     private async Task LoadAuditAsync()
@@ -164,10 +94,6 @@
             _loading = false;
         }
     }
-
-    private sealed record PolicyScoresDto(int Low, int Medium, int High);
-    private sealed record PolicyCurrentDto(string PluginId, string Version, PolicyScoresDto RequiredScores);
-    private sealed record PolicyStrictDto(string PluginId, string Version);
 
     private sealed record AuditEventDto(
         string Id,

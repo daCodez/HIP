@@ -209,7 +209,8 @@ Discovery endpoint:
 - `GET /api/plugins` returns active plugin manifests.
 - `GET /api/plugins/nav` returns plugin-contributed items marked for page navigation.
 - `GET /api/plugins/widgets` returns plugin-contributed items marked for dashboard widgets.
-- `GET /api/plugins/policy/current` returns current default policy-pack thresholds.
+- `GET /api/plugins/policy/current` returns current policy-pack thresholds + source.
+- `GET /api/policy/effective` returns neutral effective policy view (`source: default|strict`).
 
 Plugin UI display mode:
 - Plugin `NavItems` now support `Display` = `"page"` or `"widget"`.

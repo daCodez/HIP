@@ -60,24 +60,48 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var client = HttpClientFactory.CreateClient("hip-bff");
+
         try
         {
-            var client = HttpClientFactory.CreateClient("hip-bff");
             var provider = await client.GetFromJsonAsync<ProviderDto>("/bff/chat/providers");
             _mode = provider?.Mode ?? "unknown";
-
-            if (_mode == "oauth")
-            {
-                var status = await client.GetFromJsonAsync<OAuthStatusDto>("/bff/chat/oauth/status");
-                _oauthConnected = status?.Connected ?? false;
-
-                var start = await client.GetFromJsonAsync<OAuthStartDto>("/bff/chat/oauth/start");
-                _oauthStartUrl = start?.AuthorizeUrl;
-            }
         }
         catch
         {
             _mode = "unknown";
+            return;
+        }
+
+        if (_mode == "oauth")
+        {
+            try
+            {
+                var status = await client.GetFromJsonAsync<OAuthStatusDto>("/bff/chat/oauth/status");
+                _oauthConnected = status?.Connected ?? false;
+            }
+            catch
+            {
+                _oauthConnected = false;
+            }
+
+            try
+            {
+                using var response = await client.GetAsync("/bff/chat/oauth/start");
+                if (response.IsSuccessStatusCode)
+                {
+                    var start = await response.Content.ReadFromJsonAsync<OAuthStartDto>();
+                    _oauthStartUrl = start?.AuthorizeUrl;
+                }
+                else
+                {
+                    _oauthStartUrl = null;
+                }
+            }
+            catch
+            {
+                _oauthStartUrl = null;
+            }
         }
     }
 

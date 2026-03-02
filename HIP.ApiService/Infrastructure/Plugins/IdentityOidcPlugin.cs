@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace HIP.ApiService.Infrastructure.Plugins;
 
@@ -33,6 +34,7 @@ public sealed class IdentityOidcPlugin : IHipPlugin
     /// <inheritdoc />
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
+        services.Configure<IdentityOidcOptions>(configuration.GetSection(IdentityOidcOptions.SectionName));
     }
 
     /// <inheritdoc />
@@ -61,12 +63,40 @@ public sealed class IdentityOidcPlugin : IHipPlugin
             .WithTags("Plugins")
             .Produces(StatusCodes.Status202Accepted)
             .Produces(StatusCodes.Status400BadRequest);
+
+        endpoints.MapGet("/api/plugins/identity/oidc/history/{identityId}", async (string identityId, HipDbContext db, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(identityId))
+                {
+                    return Results.BadRequest(new { code = "identity.required" });
+                }
+
+                var rows = await db.AuditEvents.AsNoTracking()
+                    .Where(x => x.Subject == identityId && (x.EventType == "identity.oidc.resolve" || x.EventType == "identity.oidc.sync"))
+                    .ToListAsync(ct);
+
+                var items = rows.OrderByDescending(x => x.CreatedAtUtc).Take(50).Select(x => new
+                {
+                    utc = x.CreatedAtUtc,
+                    eventType = x.EventType,
+                    outcome = x.Outcome,
+                    reasonCode = x.ReasonCode,
+                    detail = x.Detail
+                });
+
+                return Results.Ok(new { identityId, items });
+            })
+            .WithName("GetOidcIdentityHistory")
+            .WithTags("Plugins")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest);
     }
 
     private static async Task<IResult> HandleResolveAsync(
         OidcIdentityRequest request,
         HipDbContext db,
         IAuditTrail auditTrail,
+        IOptions<IdentityOidcOptions> options,
         CancellationToken cancellationToken)
     {
         var issuer = request.Issuer?.Trim();
@@ -75,6 +105,23 @@ public sealed class IdentityOidcPlugin : IHipPlugin
         if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject))
         {
             return Results.BadRequest(new { code = "identity.oidc.invalid", reason = "issuer and subject are required" });
+        }
+
+        var oidc = options.Value;
+        var allow = oidc.AllowedIssuers;
+        if (allow.Length > 0 && !allow.Contains(issuer, StringComparer.OrdinalIgnoreCase))
+        {
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                EventType: "identity.oidc.resolve",
+                Subject: subject,
+                Source: "api",
+                Detail: issuer,
+                Category: "identity",
+                Outcome: "rejected",
+                ReasonCode: "oidc.issuerDenied"), cancellationToken);
+            return Results.BadRequest(new { code = "oidc.issuerDenied", issuer });
         }
 
         var identityId = BuildIdentityId(issuer, subject);
@@ -91,13 +138,15 @@ public sealed class IdentityOidcPlugin : IHipPlugin
             Outcome: exists ? "found" : "not_found",
             ReasonCode: exists ? "oidc.mapped" : "oidc.notMapped"), cancellationToken);
 
+        var assurance = request.EmailVerified == true || !oidc.RequireVerifiedEmailForHighAssurance ? "high" : "medium";
+
         return Results.Ok(new
         {
             identityId,
             issuer,
             subject,
             exists,
-            assurance = request.EmailVerified == true ? "high" : "medium"
+            assurance
         });
     }
 
@@ -105,6 +154,7 @@ public sealed class IdentityOidcPlugin : IHipPlugin
         OidcIdentityRequest request,
         HipDbContext db,
         IAuditTrail auditTrail,
+        IOptions<IdentityOidcOptions> options,
         CancellationToken cancellationToken)
     {
         var issuer = request.Issuer?.Trim();
@@ -113,6 +163,23 @@ public sealed class IdentityOidcPlugin : IHipPlugin
         if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject))
         {
             return Results.BadRequest(new { code = "identity.oidc.invalid", reason = "issuer and subject are required" });
+        }
+
+        var oidc = options.Value;
+        var allow = oidc.AllowedIssuers;
+        if (allow.Length > 0 && !allow.Contains(issuer, StringComparer.OrdinalIgnoreCase))
+        {
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                EventType: "identity.oidc.sync",
+                Subject: subject,
+                Source: "api",
+                Detail: issuer,
+                Category: "identity",
+                Outcome: "rejected",
+                ReasonCode: "oidc.issuerDenied"), cancellationToken);
+            return Results.BadRequest(new { code = "oidc.issuerDenied", issuer });
         }
 
         var identityId = BuildIdentityId(issuer, subject);

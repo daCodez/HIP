@@ -188,15 +188,25 @@ app.MapGet("/bff/admin/settings", () =>
     var enabled = plugins["Enabled"]?.AsArray()?.Select(x => x?.GetValue<string>() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray() ?? Array.Empty<string>();
     var chat = hip["Chat"]?.AsObject() ?? new JsonObject();
 
+    var audit = hip["Audit"]?.AsObject() ?? new JsonObject();
+
     return Results.Ok(new
     {
         exposeInternalApis = hip["ExposeInternalApis"]?.GetValue<bool>() ?? true,
         chatMode = chat["Mode"]?.GetValue<string>() ?? "mock",
-        enabledPlugins = enabled
+        enabledPlugins = enabled,
+        auditRetentionDays = audit["RetentionDays"]?.GetValue<int>() ?? 30,
+        auditExportMaxRows = audit["ExportMaxRows"]?.GetValue<int>() ?? 2000
     });
 });
 
-app.MapPost("/bff/admin/settings", (AdminSettingsRequest request) =>
+app.MapGet("/bff/admin/settings/audit", async (HipApiClient api, CancellationToken cancellationToken) =>
+{
+    var (status, body) = await api.GetAsync("/api/admin/audit?take=25&eventType=policy.config.change", cancellationToken);
+    return Results.Content(body, "application/json", Encoding.UTF8, status);
+});
+
+app.MapPost("/bff/admin/settings", async (AdminSettingsRequest request, HipApiClient api, CancellationToken cancellationToken) =>
 {
     var path = ResolveApiSettingsPath();
     if (!File.Exists(path))
@@ -223,7 +233,16 @@ app.MapPost("/bff/admin/settings", (AdminSettingsRequest request) =>
     hip["Chat"] = chat;
     chat["Mode"] = string.IsNullOrWhiteSpace(request.ChatMode) ? "mock" : request.ChatMode;
 
+    var audit = hip["Audit"] as JsonObject ?? new JsonObject();
+    hip["Audit"] = audit;
+    audit["RetentionDays"] = Math.Clamp(request.AuditRetentionDays, 1, 3650);
+    audit["ExportMaxRows"] = Math.Clamp(request.AuditExportMaxRows, 100, 10000);
+
     File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+    var detail = $"chatMode={request.ChatMode};exposeInternal={request.ExposeInternalApis};plugins={string.Join('|', request.EnabledPlugins)};retention={request.AuditRetentionDays};exportMax={request.AuditExportMaxRows}";
+    var payload = JsonSerializer.Serialize(new { actor = "settings-ui", detail });
+    await api.PostAsync("/api/admin/policy/audit-change", payload, cancellationToken);
 
     return Results.Ok(new { saved = true, restartRequired = true, path });
 });
@@ -249,4 +268,4 @@ string ResolveApiSettingsPath()
 public sealed record ReputationFeedbackRequest(string IdentityId, string Feedback, string? Source = null, string? Note = null);
 public sealed record OidcIdentityRequest(string Issuer, string Subject, string? Email = null, bool? EmailVerified = null);
 public sealed record ChatQueryRequest(string Question);
-public sealed record AdminSettingsRequest(bool ExposeInternalApis, string ChatMode, string[] EnabledPlugins);
+public sealed record AdminSettingsRequest(bool ExposeInternalApis, string ChatMode, string[] EnabledPlugins, int AuditRetentionDays, int AuditExportMaxRows);
