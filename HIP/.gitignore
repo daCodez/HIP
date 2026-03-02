@@ -1,0 +1,49 @@
+# .NET build artifacts
+**/bin/
+**/obj/
+
+# Test outputs
+**/TestResults/
+
+# Local SQLite/dev runtime files
+HIP.ApiService/*.db
+HIP.ApiService/*.db-shm
+HIP.ApiService/*.db-wal
+
+# Local apphost/runtime scratch
+apphost.run.json
+apphost.multinode.cs
+apphost.run.json.bak.*
+
+# Local launch profiles
+**/Properties/launchSettings.json
+**/Properties/launchSettings.json.bak.*
+
+# IDE/user files
+.vs/
+*.user
+*.suo
+
+# OpenClaw local workspace/private assistant files
+.openclaw/
+AGENTS.md
+SOUL.md
+USER.md
+MEMORY.md
+HEARTBEAT.md
+IDENTITY.md
+TOOLS.md
+memory/
+data/
+runtime_mem_status.txt
+memory_runtime_check.txt
+
+# Local Node deps (if not part of HIP deliverable)
+node_modules/
+
+# Local backups/scratch
+HIP.backup.*/
+shared/
+package.json
+package-lock.json
+*.bak
