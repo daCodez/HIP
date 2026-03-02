@@ -1,0 +1,143 @@
+@page "/settings"
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Settings | HIP Admin</PageTitle>
+
+<div class="content-wrapper">
+    <div class="content">
+        <div class="main-header">
+            <h2>SETTINGS</h2>
+            <em>admin runtime configuration</em>
+        </div>
+
+        <div class="widget">
+            <div class="widget-header"><h3><i class="fa fa-cog"></i> Core Settings</h3></div>
+            <div class="widget-content">
+                <label style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+                    <input type="checkbox" @bind="_settings.ExposeInternalApis" />
+                    Expose internal APIs
+                </label>
+
+                <label style="display:block; margin-bottom:6px;">Chat Mode</label>
+                <select class="text-input" style="max-width:220px; margin-bottom:12px;" @bind="_settings.ChatMode">
+                    <option value="mock">mock</option>
+                    <option value="api">api</option>
+                    <option value="oauth">oauth</option>
+                </select>
+
+                <label style="display:block; margin-bottom:6px;">Enabled Plugins</label>
+                @foreach (var p in _allPlugins)
+                {
+                    <label style="display:block; margin-bottom:4px;">
+                        <input type="checkbox" checked="@_settings.EnabledPlugins.Contains(p)" @onchange="e => TogglePlugin(p, e.Value as bool? == true)" /> @p
+                    </label>
+                }
+
+                <div style="margin-top:12px; display:flex; gap:8px;">
+                    <button class="btn btn-sm btn-primary" @onclick="SaveAsync" disabled="@_saving">Save</button>
+                    <button class="btn btn-sm btn-default" @onclick="LoadAsync" disabled="@_saving">Reload</button>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_message))
+                {
+                    <p class="status-ok" style="margin-top:10px;">@_message</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <p class="status-bad" style="margin-top:10px;">@_error</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly string[] _allPlugins =
+    [
+        "core.policy.strict",
+        "core.reputation.feedback",
+        "core.identity.oidc",
+        "core.metrics.system",
+        "core.identity.insights",
+        "core.chat.insights"
+    ];
+
+    private AdminSettingsDto _settings = new(true, "oauth", []);
+    private bool _saving;
+    private string? _message;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _message = null;
+        _error = null;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            _settings = await client.GetFromJsonAsync<AdminSettingsDto>("/bff/admin/settings") ?? _settings;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _message = null;
+        _error = null;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("hip-bff");
+            var response = await client.PostAsJsonAsync("/bff/admin/settings", _settings);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = body;
+                return;
+            }
+
+            _message = "Saved. Restart AppHost to apply changes.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void TogglePlugin(string plugin, bool enabled)
+    {
+        var set = _settings.EnabledPlugins.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (enabled) set.Add(plugin); else set.Remove(plugin);
+        _settings.EnabledPlugins = set.OrderBy(x => x).ToArray();
+    }
+
+    private sealed class AdminSettingsDto
+    {
+        public bool ExposeInternalApis { get; set; }
+        public string ChatMode { get; set; } = "mock";
+        public string[] EnabledPlugins { get; set; } = [];
+
+        public AdminSettingsDto()
+        {
+        }
+
+        public AdminSettingsDto(bool exposeInternalApis, string chatMode, string[] enabledPlugins)
+        {
+            ExposeInternalApis = exposeInternalApis;
+            ChatMode = chatMode;
+            EnabledPlugins = enabledPlugins;
+        }
+    }
+}

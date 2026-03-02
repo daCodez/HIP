@@ -127,7 +127,7 @@ public sealed class PluginEndpointTests
 
         Environment.SetEnvironmentVariable(autoDiscoverKey, "true");
         Environment.SetEnvironmentVariable(allowlistKey, "sample");
-        Environment.SetEnvironmentVariable(enabledKey, null);
+        Environment.SetEnvironmentVariable(enabledKey, "sample");
 
         try
         {
