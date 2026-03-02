@@ -68,6 +68,7 @@ public sealed class PolicyDefaultPlugin : IHipPlugin
                 {
                     pluginId = Manifest.Id,
                     version = Manifest.Version,
+                    policyVersion = options.Version,
                     source,
                     requiredScores = new
                     {
@@ -93,6 +94,7 @@ public sealed class PolicyDefaultPlugin : IHipPlugin
                 return Results.Ok(new
                 {
                     source,
+                    policyVersion = options.Version,
                     requiredScores = new
                     {
                         low = options.LowRiskRequiredScore,

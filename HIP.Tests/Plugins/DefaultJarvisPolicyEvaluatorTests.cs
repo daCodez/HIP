@@ -26,6 +26,7 @@ public sealed class DefaultJarvisPolicyEvaluatorTests
 
         Assert.That(result.Decision, Is.EqualTo("block"));
         Assert.That(result.PolicyCode, Is.EqualTo("policy.promptInjectionDetected"));
+        Assert.That(result.PolicyVersion, Is.EqualTo("default-v1"));
         Assert.That(result.ToolAccessAllowed, Is.False);
         Assert.That(counter.PolicyBlocked, Is.EqualTo(1));
         Assert.That(reputation.RecordedEvents, Contains.Item("policy_blocked"));

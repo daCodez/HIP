@@ -63,6 +63,7 @@ public sealed class JarvisIntegrationEndpointTests
         Assert.That(payload, Is.Not.Null);
         Assert.That(payload!.Decision, Is.EqualTo("block"));
         Assert.That(payload.Risk, Is.EqualTo("high"));
+        Assert.That(payload.PolicyVersion, Is.EqualTo("default-v1"));
         Assert.That(payload.SanitizedText, Is.EqualTo(string.Empty));
         Assert.That(payload.ToolAccessAllowed, Is.False);
     }

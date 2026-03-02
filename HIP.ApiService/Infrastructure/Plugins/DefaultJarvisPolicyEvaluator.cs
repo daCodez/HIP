@@ -120,6 +120,7 @@ public sealed class DefaultJarvisPolicyEvaluator(
             sanitizedText,
             toolAccessAllowed,
             toolAccessReason,
-            policyCode);
+            policyCode,
+            options.Value.Version);
     }
 }

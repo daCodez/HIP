@@ -100,6 +100,7 @@ public sealed class PluginEndpointTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(payload, Does.Contain("\"pluginId\":\"core.policy.default\""));
         Assert.That(payload, Does.Contain("\"source\":"));
+        Assert.That(payload, Does.Contain("\"policyVersion\":"));
         Assert.That(payload, Does.Contain("\"low\":"));
         Assert.That(payload, Does.Contain("\"medium\":50"));
         Assert.That(payload, Does.Contain("\"high\":80"));
@@ -108,6 +109,7 @@ public sealed class PluginEndpointTests
         var effectiveBody = await effective.Content.ReadAsStringAsync();
         Assert.That(effective.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(effectiveBody, Does.Contain("\"source\":"));
+        Assert.That(effectiveBody, Does.Contain("\"policyVersion\":"));
     }
 
     [Test]

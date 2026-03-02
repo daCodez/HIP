@@ -209,8 +209,8 @@ Discovery endpoint:
 - `GET /api/plugins` returns active plugin manifests (baseline read-rate limited).
 - `GET /api/plugins/nav` returns plugin-contributed items marked for page navigation (baseline read-rate limited).
 - `GET /api/plugins/widgets` returns plugin-contributed items marked for dashboard widgets (baseline read-rate limited).
-- `GET /api/plugins/policy/current` returns current policy-pack thresholds + source.
-- `GET /api/policy/effective` returns neutral effective policy view (`source: default|strict`).
+- `GET /api/plugins/policy/current` returns current policy-pack thresholds + source + `policyVersion`.
+- `GET /api/policy/effective` returns neutral effective policy view (`source: default|strict`) + `policyVersion`.
 
 Plugin UI display mode:
 - Plugin `NavItems` now support `Display` = `"page"` or `"widget"`.
@@ -218,6 +218,7 @@ Plugin UI display mode:
 - `widget` items appear in dashboard widget shortcuts.
 
 Policy tuning config (default policy plugin):
+- `HIP:Policy:Version` (default `default-v1`)
 - `HIP:Policy:LowRiskRequiredScore` (default 20)
 - `HIP:Policy:MediumRiskRequiredScore` (default 50)
 - `HIP:Policy:HighRiskRequiredScore` (default 80)
