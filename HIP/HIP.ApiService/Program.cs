@@ -39,6 +39,10 @@ var cryptoOptions = builder.Configuration
     .GetSection(CryptoProviderOptions.SectionName)
     .Get<CryptoProviderOptions>() ?? new CryptoProviderOptions();
 
+var policyOptions = builder.Configuration
+    .GetSection(PolicyPackOptions.SectionName)
+    .Get<PolicyPackOptions>() ?? new PolicyPackOptions();
+
 if (string.Equals(cryptoOptions.Provider, "ECDsa", StringComparison.OrdinalIgnoreCase))
 {
     if (string.IsNullOrWhiteSpace(cryptoOptions.PrivateKeyStorePath) ||
@@ -54,6 +58,24 @@ if (string.Equals(cryptoOptions.Provider, "ECDsa", StringComparison.OrdinalIgnor
         throw new InvalidOperationException(
             $"HIP:Crypto:PublicKeyStorePath is missing or does not exist: '{cryptoOptions.PublicKeyStorePath ?? "<null>"}'.");
     }
+}
+
+if (string.IsNullOrWhiteSpace(policyOptions.Version))
+{
+    throw new InvalidOperationException("HIP:Policy:Version must not be empty.");
+}
+
+if (policyOptions.LowRiskRequiredScore is < 0 or > 100 ||
+    policyOptions.MediumRiskRequiredScore is < 0 or > 100 ||
+    policyOptions.HighRiskRequiredScore is < 0 or > 100)
+{
+    throw new InvalidOperationException("HIP:Policy risk score thresholds must be within [0,100].");
+}
+
+if (policyOptions.LowRiskRequiredScore > policyOptions.MediumRiskRequiredScore ||
+    policyOptions.MediumRiskRequiredScore > policyOptions.HighRiskRequiredScore)
+{
+    throw new InvalidOperationException("HIP:Policy thresholds must satisfy low <= medium <= high.");
 }
 
 builder.Services.AddLogging(); // performance awareness: central logging pipeline

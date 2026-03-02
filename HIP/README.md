@@ -218,10 +218,11 @@ Plugin UI display mode:
 - `widget` items appear in dashboard widget shortcuts.
 
 Policy tuning config (default policy plugin):
-- `HIP:Policy:Version` (default `default-v1`)
+- `HIP:Policy:Version` (default `default-v1`, must be non-empty)
 - `HIP:Policy:LowRiskRequiredScore` (default 20)
 - `HIP:Policy:MediumRiskRequiredScore` (default 50)
 - `HIP:Policy:HighRiskRequiredScore` (default 80)
+- Startup validation enforces thresholds in `[0..100]` and order `low <= medium <= high`.
 
 High-risk policy guardrail:
 - High-risk requests are denied by default when identity/reputation context is missing or uncertain (`policy.uncertainContext`).
