@@ -64,6 +64,8 @@ public sealed class JarvisIntegrationEndpointTests
         Assert.That(payload!.Decision, Is.EqualTo("block"));
         Assert.That(payload.Risk, Is.EqualTo("high"));
         Assert.That(payload.PolicyVersion, Is.EqualTo("default-v1"));
+        Assert.That(payload.DecisionTrace.IdentityId, Is.EqualTo("hip-system"));
+        Assert.That(payload.DecisionTrace.PolicyVersion, Is.EqualTo("default-v1"));
         Assert.That(payload.SanitizedText, Is.EqualTo(string.Empty));
         Assert.That(payload.ToolAccessAllowed, Is.False);
     }
@@ -145,5 +147,6 @@ public sealed class JarvisIntegrationEndpointTests
         Assert.That(payload!.Decision, Is.EqualTo("block"));
         Assert.That(payload.PolicyCode, Is.EqualTo("policy.uncertainContext"));
         Assert.That(payload.ToolAccessReason, Is.EqualTo("uncertain_context"));
+        Assert.That(payload.DecisionTrace.IdentityExists, Is.False);
     }
 }

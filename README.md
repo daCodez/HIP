@@ -226,6 +226,10 @@ Policy tuning config (default policy plugin):
 High-risk policy guardrail:
 - High-risk requests are denied by default when identity/reputation context is missing or uncertain (`policy.uncertainContext`).
 
+Decision trace contract:
+- Policy evaluation responses now include `decisionTrace` with identity presence, reputation score/factors, policy code/version, and tool-access reason.
+- Audit entries for `jarvis.policy.evaluate` include correlated identity/reputation summary fields.
+
 ---
 
 ## Roadmap: AI-assisted trust

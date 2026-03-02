@@ -11,6 +11,7 @@ namespace HIP.ApiService.Application.Contracts;
 /// <param name="ToolAccessReason">Reason for tool allow/deny outcome.</param>
 /// <param name="PolicyCode">Stable policy code associated with the evaluation.</param>
 /// <param name="PolicyVersion">Policy-pack version used to produce this decision.</param>
+/// <param name="DecisionTrace">Cross-pillar trace snapshot for this decision.</param>
 public sealed record JarvisPolicyEvaluationResultDto(
     string Decision,
     string Risk,
@@ -19,4 +20,5 @@ public sealed record JarvisPolicyEvaluationResultDto(
     bool ToolAccessAllowed,
     string ToolAccessReason,
     string PolicyCode,
-    string PolicyVersion);
+    string PolicyVersion,
+    JarvisPolicyDecisionTraceDto DecisionTrace);

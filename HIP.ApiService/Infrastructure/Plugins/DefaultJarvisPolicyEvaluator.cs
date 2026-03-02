@@ -67,20 +67,22 @@ public sealed class DefaultJarvisPolicyEvaluator(
         }
 
         IdentityDto? identity;
-        int score;
+        ReputationScoreBreakdown breakdown;
         var contextUnavailable = false;
 
         try
         {
             identity = await identityService.GetByIdAsync(request.IdentityId, cancellationToken);
-            score = await reputationService.GetScoreAsync(request.IdentityId, cancellationToken);
+            breakdown = await reputationService.GetScoreBreakdownAsync(request.IdentityId, cancellationToken);
         }
         catch
         {
             identity = null;
-            score = 0;
             contextUnavailable = true;
+            breakdown = new ReputationScoreBreakdown(request.IdentityId, 0, 0, 0, 0, 0, 0, 0, DateTimeOffset.UtcNow);
         }
+
+        var score = breakdown.Score;
 
         var riskLevelKnown = request.RiskLevel is "low" or "medium" or "high";
         var requiredScore = request.RiskLevel switch
@@ -135,6 +137,22 @@ public sealed class DefaultJarvisPolicyEvaluator(
         logger.LogInformation("Jarvis policy evaluated for {IdentityId}: decision={Decision}, risk={Risk}, toolAccess={ToolAccessReason}",
             request.IdentityId, decision, risk, toolAccessReason);
 
+        var trace = new JarvisPolicyDecisionTraceDto(
+            IdentityId: request.IdentityId,
+            IdentityExists: identity is not null,
+            ReputationScore: score,
+            AcceptanceComponent: breakdown.AcceptanceComponent,
+            FeedbackComponent: breakdown.FeedbackComponent,
+            TrustComponent: breakdown.TrustComponent,
+            AggregatePenaltyComponent: breakdown.AggregatePenaltyComponent,
+            EventPenaltyComponent: breakdown.EventPenaltyComponent,
+            EventCount: breakdown.EventCount,
+            Decision: decision,
+            PolicyCode: policyCode,
+            PolicyVersion: options.Value.Version,
+            ToolAccessReason: toolAccessReason,
+            ComputedAtUtc: breakdown.ComputedAtUtc);
+
         return new JarvisPolicyEvaluationResultDto(
             decision,
             risk,
@@ -143,6 +161,7 @@ public sealed class DefaultJarvisPolicyEvaluator(
             toolAccessAllowed,
             toolAccessReason,
             policyCode,
-            options.Value.Version);
+            options.Value.Version,
+            trace);
     }
 }

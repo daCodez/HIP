@@ -36,6 +36,8 @@ public sealed class PolicyDecisionGoldenTests
         Assert.That(result.PolicyCode, Is.EqualTo(scenario.ExpectedPolicyCode), scenario.Name);
         Assert.That(result.ToolAccessReason, Is.EqualTo(scenario.ExpectedToolAccessReason), scenario.Name);
         Assert.That(result.PolicyVersion, Is.EqualTo("default-v1"), scenario.Name);
+        Assert.That(result.DecisionTrace.PolicyVersion, Is.EqualTo("default-v1"), scenario.Name);
+        Assert.That(result.DecisionTrace.PolicyCode, Is.EqualTo(result.PolicyCode), scenario.Name);
     }
 
     private static IEnumerable<Scenario> Cases()

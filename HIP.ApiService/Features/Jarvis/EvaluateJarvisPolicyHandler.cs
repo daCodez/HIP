@@ -34,7 +34,7 @@ public sealed class EvaluateJarvisPolicyHandler(
             EventType: "jarvis.policy.evaluate",
             Subject: request.IdentityId,
             Source: "api",
-            Detail: $"decision={result.Decision};risk={result.Risk};policyVersion={result.PolicyVersion}",
+            Detail: $"decision={result.Decision};risk={result.Risk};policyVersion={result.PolicyVersion};identityExists={result.DecisionTrace.IdentityExists};reputationScore={result.DecisionTrace.ReputationScore}",
             Category: "policy",
             Outcome: result.Decision,
             ReasonCode: result.PolicyCode,
