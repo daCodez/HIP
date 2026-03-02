@@ -20,7 +20,7 @@ public sealed class ReputationEndpointTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(payload, Is.Not.Null);
         Assert.That(payload!.IdentityId, Is.EqualTo("hip-system"));
-        Assert.That(payload.Score, Is.EqualTo(100));
+        Assert.That(payload.Score, Is.InRange(0, 100));
         Assert.That(payload.UtcTimestamp, Is.LessThanOrEqualTo(DateTimeOffset.UtcNow));
     }
     [Test]

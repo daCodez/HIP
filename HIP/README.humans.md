@@ -34,6 +34,28 @@ It tells you:
 
 Think of it like a checkout receipt for security decisions.
 
+Example (simplified):
+```json
+{
+  "decision": "block",
+  "policyCode": "policy.uncertainContext",
+  "policyVersion": "default-v1",
+  "decisionTrace": {
+    "identityExists": false,
+    "reputationScore": 14,
+    "toolAccessReason": "uncertain_context"
+  }
+}
+```
+
+Matching audit event (simplified):
+```text
+eventType=jarvis.policy.evaluate
+outcome=block
+reasonCode=policy.uncertainContext
+detail=decision=block;risk=high;policyVersion=default-v1;identityExists=False;reputationScore=14
+```
+
 ---
 
 ## High-risk default safety rule

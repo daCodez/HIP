@@ -230,6 +230,13 @@ Decision trace contract:
 - Policy evaluation responses now include `decisionTrace` with identity presence, reputation score/factors, policy code/version, and tool-access reason.
 - Audit entries for `jarvis.policy.evaluate` include correlated identity/reputation summary fields.
 
+Rollback toggles (quick safety controls):
+- **Policy strictness:** keep `core.policy.strict` disabled in `HIP:Plugins:Enabled` to use default thresholds.
+- **Policy version pin:** set `HIP:Policy:Version` explicitly (for example `default-v1`) to avoid ambiguity during rollbacks.
+- **Envelope enforcement troubleshooting:** for non-BFF traffic, ensure `x-hip-origin` is not set to `bff` unless signed-envelope headers are fully provided.
+- **Transport safety:** `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` is Development-only; remove/disable it outside Development.
+- **Feature isolation:** if a plugin causes regression, remove that plugin id from `HIP:Plugins:Enabled` and retest baseline endpoints.
+
 ---
 
 ## Roadmap: AI-assisted trust
