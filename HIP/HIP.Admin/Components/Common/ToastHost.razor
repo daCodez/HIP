@@ -1,0 +1,46 @@
+@implements IDisposable
+@inject ToastService ToastService
+
+<div class="toast-container position-fixed top-0 end-0 p-3">
+    @foreach (var toast in _toasts)
+    {
+        <div class="toast show mb-2 border-0 text-white @LevelClass(toast.Level)">
+            <div class="toast-header">
+                <strong class="me-auto">@toast.Title</strong>
+            </div>
+            <div class="toast-body">@toast.Message</div>
+        </div>
+    }
+</div>
+
+@code {
+    private readonly List<ToastMessage> _toasts = [];
+
+    protected override void OnInitialized()
+    {
+        ToastService.OnShow += HandleToast;
+    }
+
+    private async void HandleToast(ToastMessage message)
+    {
+        _toasts.Insert(0, message);
+        if (_toasts.Count > 4) _toasts.RemoveAt(_toasts.Count - 1);
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3200);
+        _toasts.Remove(message);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string LevelClass(string level) => level switch
+    {
+        "success" => "bg-success",
+        "warning" => "bg-warning",
+        "error" => "bg-danger",
+        _ => "bg-primary"
+    };
+
+    public void Dispose()
+    {
+        ToastService.OnShow -= HandleToast;
+    }
+}

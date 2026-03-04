@@ -1,0 +1,11 @@
+@if (IsNew)
+{
+    <span class="badge text-bg-warning text-dark ms-2" title="New in the last 30 minutes">NEW</span>
+}
+
+@code {
+    [Parameter] public DateTime AddedUtc { get; set; }
+    [Parameter] public int VisibleMinutes { get; set; } = 30;
+
+    private bool IsNew => AddedUtc != default && DateTime.UtcNow < AddedUtc.AddMinutes(VisibleMinutes);
+}

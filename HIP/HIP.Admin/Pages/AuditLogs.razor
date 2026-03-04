@@ -1,0 +1,160 @@
+@page "/audit-logs"
+@inject HipAdminApiClient Api
+@inject IJSRuntime JS
+
+<PageTitle>Audit Logs</PageTitle>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small mb-1">From (UTC)</label>
+                <input class="form-control" type="date" @bind-value="_fromDate" @bind-value:format="yyyy-MM-dd" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">To (UTC)</label>
+                <input class="form-control" type="date" @bind-value="_toDate" @bind-value:format="yyyy-MM-dd" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Severity</label>
+                <select class="form-select" @bind="_severity">
+                    <option value="">All</option>
+                    <option>Info</option>
+                    <option>Warning</option>
+                    <option>Critical</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Actor</label>
+                <input class="form-control" placeholder="admin@@..." @bind="_actorFilter" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Event type</label>
+                <input class="form-control" placeholder="PolicyTest" @bind="_eventTypeFilter" />
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button class="btn btn-outline-secondary w-100" @onclick="ResetFilters">Reset</button>
+                <button class="btn btn-outline-primary w-100" @onclick="ExportCsv">Export CSV</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Timestamp (UTC)</th>
+                        <th>Severity</th>
+                        <th>Actor</th>
+                        <th>Event</th>
+                        <th>Category</th>
+                        <th>Result</th>
+                        <th>Detail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Filtered.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">No audit records match current filters.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var x in Paged)
+                        {
+                            <tr>
+                                <td class="small">@x.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                <td>
+                                    <span class="badge @SeverityBadgeClass(x.Severity)">@x.Severity</span>
+                                </td>
+                                <td class="small">@x.Actor</td>
+                                <td class="small">@x.EventType</td>
+                                <td class="small">@x.Category</td>
+                                <td class="small">@x.Result</td>
+                                <td class="small">@x.Detail</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-2">
+            <div class="small text-muted">Showing @Paged.Count of @Filtered.Count records</div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="PrevPage" disabled="@(_page == 1)">Prev</button>
+                <span class="small align-self-center">Page @_page / @TotalPages</span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<AuditLogEntry> _logs = [];
+    private string _actorFilter = string.Empty;
+    private string _eventTypeFilter = string.Empty;
+    private string _severity = string.Empty;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+
+    private int _page = 1;
+    private int _pageSize = 15;
+
+    private List<AuditLogEntry> Filtered => _logs
+        .Where(x => string.IsNullOrWhiteSpace(_actorFilter) || x.Actor.Contains(_actorFilter, StringComparison.OrdinalIgnoreCase))
+        .Where(x => string.IsNullOrWhiteSpace(_eventTypeFilter) || x.EventType.Contains(_eventTypeFilter, StringComparison.OrdinalIgnoreCase))
+        .Where(x => string.IsNullOrWhiteSpace(_severity) || x.Severity.Equals(_severity, StringComparison.OrdinalIgnoreCase))
+        .Where(x => DateInRange(x.Timestamp))
+        .OrderByDescending(x => x.Timestamp)
+        .ToList();
+
+    private List<AuditLogEntry> Paged => Filtered.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(Filtered.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Api.GetAuditLogsAsync();
+        _logs = result.Data ?? [];
+    }
+
+    private bool DateInRange(DateTime ts)
+    {
+        var date = ts.Date;
+        if (_fromDate.HasValue && date < _fromDate.Value.Date) return false;
+        if (_toDate.HasValue && date > _toDate.Value.Date) return false;
+        return true;
+    }
+
+    private void PrevPage() => _page = Math.Max(1, _page - 1);
+    private void NextPage() => _page = Math.Min(TotalPages, _page + 1);
+
+    private void ResetFilters()
+    {
+        _actorFilter = string.Empty;
+        _eventTypeFilter = string.Empty;
+        _severity = string.Empty;
+        _fromDate = null;
+        _toDate = null;
+        _page = 1;
+    }
+
+    private string SeverityBadgeClass(string severity) => severity switch
+    {
+        "Critical" => "text-bg-danger",
+        "Warning" => "text-bg-warning text-dark",
+        _ => "text-bg-secondary"
+    };
+
+    private async Task ExportCsv()
+    {
+        var rows = Filtered.Select(x =>
+            $"{x.Timestamp:O},{x.Severity},{x.Actor},{x.EventType},{x.Category},{x.Result},\"{x.Detail.Replace("\"", "\"\"")}\"");
+        var csv = "timestamp,severity,actor,eventType,category,result,detail\n" + string.Join('\n', rows);
+        await JS.InvokeVoidAsync("hipTheme.downloadCsv", $"audit-{DateTime.UtcNow:yyyyMMddHHmm}.csv", csv);
+    }
+}

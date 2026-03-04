@@ -1,0 +1,68 @@
+@inject AdminContextService AdminContext
+
+<div class="menu-item depth-@Depth">
+    @if (!string.IsNullOrWhiteSpace(Item.Href))
+    {
+        <a href="@Item.Href" class="menu-link @(IsActive(Item.Href) ? "active" : string.Empty)">
+            @if (Depth == 0 && !string.IsNullOrWhiteSpace(Item.Icon))
+            {
+                <i class="@Item.Icon menu-icon" aria-hidden="true"></i>
+            }
+            <span class="menu-text">@Item.Title</span>
+            @if (Item.AddedUtc.HasValue)
+            {
+                <NewBadge AddedUtc="@Item.AddedUtc.Value" />
+            }
+        </a>
+    }
+    else
+    {
+        <button class="menu-link menu-toggle" @onclick="Toggle">
+            @if (Depth == 0 && !string.IsNullOrWhiteSpace(Item.Icon))
+            {
+                <i class="@Item.Icon menu-icon" aria-hidden="true"></i>
+            }
+            <span class="menu-text">@Item.Title</span>
+            @if (Item.AddedUtc.HasValue)
+            {
+                <NewBadge AddedUtc="@Item.AddedUtc.Value" />
+            }
+            <i class="fa fa-angle-down ms-auto small" aria-hidden="true"></i>
+        </button>
+    }
+
+    @if (Item.Children.Any() && _expanded)
+    {
+        <div class="submenu">
+            @foreach (var child in Item.Children.Where(c => c.VisibleTo.Contains(AdminContext.CurrentRole)))
+            {
+                <SidebarMenuItem Item="child" CurrentUri="CurrentUri" Depth="@(Depth + 1)" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public required MenuItemModel Item { get; set; }
+    [Parameter] public required string CurrentUri { get; set; }
+    [Parameter] public int Depth { get; set; }
+
+    private bool _expanded = true;
+
+    private bool IsActive(string href)
+    {
+        var current = new Uri(CurrentUri).AbsolutePath.TrimEnd('/');
+        var candidate = href.TrimEnd('/');
+
+        if (!candidate.StartsWith('/'))
+        {
+            candidate = string.IsNullOrWhiteSpace(candidate)
+                ? "/admin"
+                : $"/admin/{candidate}";
+        }
+
+        return current.Equals(candidate, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void Toggle() => _expanded = !_expanded;
+}

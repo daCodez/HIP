@@ -1,0 +1,43 @@
+<div class="card stat-card king-kpi h-100">
+    <div class="card-body">
+        <div class="kpi-content">
+            <div class="kpi-value">@Value</div>
+            <div class="kpi-meta">
+                <div class="kpi-title">@Title</div>
+                <div class="kpi-delta @(Trend == "up" ? "up" : "down")">
+                    @Delta <span class="kpi-arrow">@(Trend == "up" ? "▲" : "▼")</span>
+                </div>
+            </div>
+        </div>
+        <div class="kpi-sparkline" aria-hidden="true">
+            <svg viewBox="0 0 320 72" preserveAspectRatio="none">
+                <path class="kpi-area" d="@GetAreaPath()"></path>
+                <path class="kpi-line" d="@GetLinePath()"></path>
+            </svg>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public string Delta { get; set; } = string.Empty;
+    [Parameter] public string Trend { get; set; } = "up";
+
+    private string GetLinePath()
+    {
+        var seed = Math.Abs(Title.GetHashCode()) % 3;
+        return seed switch
+        {
+            0 => "M0 64 L40 42 L80 56 L120 46 L160 26 L200 44 L240 38 L280 22 L320 30",
+            1 => "M0 52 L40 46 L80 58 L120 40 L160 44 L200 22 L240 18 L280 28 L320 24",
+            _ => "M0 60 L40 48 L80 36 L120 50 L160 46 L200 40 L240 42 L280 30 L320 24"
+        };
+    }
+
+    private string GetAreaPath()
+    {
+        var line = GetLinePath();
+        return $"{line} L320 72 L0 72 Z";
+    }
+}

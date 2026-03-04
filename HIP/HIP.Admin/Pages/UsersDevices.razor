@@ -1,0 +1,36 @@
+@page "/users-devices"
+@inject HipAdminApiClient Api
+
+<PageTitle>Users & Devices</PageTitle>
+
+@if (_selected is not null)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h6>Row Details</h6>
+            <div><b>User:</b> @_selected.User</div>
+            <div><b>Email:</b> @_selected.Email</div>
+            <div><b>Device:</b> @_selected.Device</div>
+            <div><b>Status:</b> @_selected.DeviceStatus</div>
+        </div>
+    </div>
+}
+
+<DataTable TItem="UserDeviceRecord" Items="_records" OnRowClick="SelectRow" />
+
+@code {
+    private List<UserDeviceRecord> _records = [];
+    private UserDeviceRecord? _selected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Api.GetUsersDevicesAsync();
+        _records = result.Data ?? [];
+    }
+
+    private Task SelectRow(UserDeviceRecord row)
+    {
+        _selected = row;
+        return Task.CompletedTask;
+    }
+}

@@ -1,0 +1,37 @@
+@page "/reputation"
+@inject ActionLogService ActionLog
+
+<PageTitle>Reputation</PageTitle>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <h5>Formula Inputs</h5>
+                <label class="form-label">Trust Weight</label>
+                <input type="range" min="1" max="100" class="form-range" @bind="_trustWeight" />
+                <label class="form-label">Risk Weight</label>
+                <input type="range" min="1" max="100" class="form-range" @bind="_riskWeight" />
+                <button class="btn btn-primary btn-sm" @onclick="Save">Save formula</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <h5>Trend (placeholder)</h5>
+                <div class="bg-light border rounded p-5 text-center">Trend chart placeholder</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private int _trustWeight = 65;
+    private int _riskWeight = 35;
+
+    private void Save()
+    {
+        ActionLog.Log($"Reputation formula updated: trust={_trustWeight}, risk={_riskWeight}");
+    }
+}

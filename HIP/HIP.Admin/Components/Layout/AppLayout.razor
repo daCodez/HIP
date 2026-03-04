@@ -1,0 +1,181 @@
+@implements IDisposable
+@inject NavigationManager Nav
+@inject ThemeService Theme
+@inject AdminContextService AdminContext
+
+<header class="logo-header">
+    <div class="logo-header-inner">
+        <div class="brand-mark">HIP</div>
+        <div class="brand-text">Admin Dashboard</div>
+    </div>
+</header>
+
+<div class="admin-shell @(SidebarClass)">
+    <aside class="sidebar">
+        <div class="sidebar-brand">HIP <span>Admin</span></div>
+        <nav class="menu-tree">
+            @foreach (var item in MenuItems.Where(IsVisible))
+            {
+                <SidebarMenuItem Item="item" CurrentUri="@Nav.Uri" Depth="0" />
+            }
+        </nav>
+
+    </aside>
+
+    <div class="content-wrap">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="btn btn-light btn-sm top-icon-btn" title="Toggle sidebar" @onclick="ToggleSidebar"><i class="fa fa-bars"></i></button>
+                <button class="btn btn-light btn-sm btn-styles" @onclick="ToggleStyleDrawer">Styles</button>
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" checked="@AdminContext.MockModeEnabled" @onchange="ToggleMockMode" id="mockModeToggle" />
+                    <label class="form-check-label small" for="mockModeToggle">Mock mode</label>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <DropdownMenu Label="<i class='fa fa-envelope-o'></i>" ButtonClass="btn-light top-icon-btn">
+                    <li><span class="dropdown-item">No new messages</span></li>
+                </DropdownMenu>
+                <DropdownMenu Label="<i class='fa fa-bell-o'></i>" ButtonClass="btn-light top-icon-btn">
+                    <li><span class="dropdown-item">System nominal</span></li>
+                </DropdownMenu>
+                <DropdownMenu Label="<i class='fa fa-user'></i>" ButtonClass="btn-light top-icon-btn">
+                    <li><span class="dropdown-item">Profile (placeholder)</span></li>
+                    <li><span class="dropdown-item">Sign out (placeholder)</span></li>
+                </DropdownMenu>
+            </div>
+        </header>
+
+        <div class="breadcrumb-row mb-3">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item text-muted">Home</li>
+                    <li class="breadcrumb-item active" aria-current="page">@PageName</li>
+                </ol>
+            </nav>
+        </div>
+
+        <main class="main-content">
+            @ChildContent
+        </main>
+    </div>
+
+    <div class="style-drawer @( _styleDrawerOpen ? "open" : string.Empty)">
+        <h6>Theme Controls</h6>
+        <div class="mb-2">
+            @foreach (var preset in Theme.Presets)
+            {
+                <button class="btn btn-sm btn-outline-secondary me-1 mb-1" @onclick="() => Theme.SetPresetAsync(preset.Key)">@preset.Name</button>
+            }
+        </div>
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" checked="@Theme.State.DarkMode" @onchange="ToggleDark" />
+            <label class="form-check-label">Full Dark</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" checked="@Theme.State.BrightMode" @onchange="ToggleBright" />
+            <label class="form-check-label">Full Bright</label>
+        </div>
+        <button class="btn btn-sm btn-outline-danger" @onclick="Theme.ResetAsync">Reset Style</button>
+    </div>
+
+    <ToastHost />
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _styleDrawerOpen;
+    private string _sidebarMode = "normal";
+
+    private string SidebarClass => _sidebarMode switch
+    {
+        "collapsed" => "sidebar-collapsed",
+        "minified" => "sidebar-minified",
+        _ => string.Empty
+    };
+
+    private string PageName => Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0] switch
+    {
+        "" => "Dashboard",
+        var p => ToTitleWords(p.Replace('-', ' '))
+    };
+
+    private static string ToTitleWords(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return value;
+        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => char.ToUpperInvariant(w[0]) + w[1..].ToLowerInvariant());
+        return string.Join(' ', parts);
+    }
+
+    private List<MenuItemModel> MenuItems =>
+    [
+        new() { Title = "Dashboard", Icon = "fa fa-dashboard", Href = "/admin/" },
+        new() { Title = "Audit Logs", Icon = "fa fa-file-text-o", Href = "audit-logs", AddedUtc = new DateTime(2026, 3, 4, 22, 54, 0, DateTimeKind.Utc) },
+        new()
+        {
+            Title = "Security",
+            Icon = "fa fa-shield", 
+            Children =
+            [
+                new() { Title = "Security Status", Href = "security-status" },
+                new() { Title = "Policy & Rules", Href = "policy-rules", VisibleTo = [AdminRole.Admin, AdminRole.Support] },
+                new() { Title = "Tokens & Sessions", Href = "tokens-sessions", VisibleTo = [AdminRole.Admin] }
+            ]
+        },
+        new() { Title = "Users & Devices", Icon = "fa fa-users", Href = "users-devices", VisibleTo = [AdminRole.Admin, AdminRole.Support] },
+        new() { Title = "Reputation", Icon = "fa fa-line-chart", Href = "reputation", VisibleTo = [AdminRole.Admin, AdminRole.Analyst] },
+        new() { Title = "System Health", Icon = "fa fa-heartbeat", Href = "system-health" },
+        new() { Title = "Admin Settings", Icon = "fa fa-cog", Href = "admin-settings", VisibleTo = [AdminRole.Admin] }
+    ];
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        AdminContext.Changed += ContextChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Theme.InitializeAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ToggleSidebar()
+    {
+        _sidebarMode = _sidebarMode switch
+        {
+            "normal" => "collapsed",
+            "collapsed" => "minified",
+            _ => "normal"
+        };
+    }
+
+    private void ToggleStyleDrawer() => _styleDrawerOpen = !_styleDrawerOpen;
+    private Task ToggleDark(ChangeEventArgs e) => Theme.SetDarkModeAsync((bool)e.Value!);
+    private Task ToggleBright(ChangeEventArgs e) => Theme.SetBrightModeAsync((bool)e.Value!);
+
+    private void ToggleMockMode(ChangeEventArgs e) => AdminContext.SetMockMode((bool)e.Value!);
+
+    private void OnRoleChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<AdminRole>(e.Value?.ToString(), out var role))
+        {
+            AdminContext.SetRole(role);
+        }
+    }
+
+    private bool IsVisible(MenuItemModel item) => item.VisibleTo.Contains(AdminContext.CurrentRole);
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
+    private void ContextChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        AdminContext.Changed -= ContextChanged;
+    }
+}

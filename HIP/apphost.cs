@@ -13,8 +13,8 @@ var api = builder.AddProject("hip-api", "/home/jarvis_bot/.openclaw/workspace/HI
     .WithReplicas(apiReplicas)
     .WithUrlForEndpoint("http", url =>
     {
-        url.Url = "https://srv1377835-1.tailb59890.ts.net:8445/swagger/index.html";
-        url.DisplayText = "Swagger";
+        url.Url = "https://srv1377835-1.tailb59890.ts.net:8443/swagger";
+        url.DisplayText = "HIP.API";
     });
 
 builder.AddProject("hip-web", "/home/jarvis_bot/.openclaw/workspace/HIP/HIP.Web/HIP.Web.csproj")
@@ -25,6 +25,44 @@ builder.AddProject("hip-web", "/home/jarvis_bot/.openclaw/workspace/HIP/HIP.Web/
     {
         url.Url = "https://srv1377835-1.tailb59890.ts.net:8444";
         url.DisplayText = "HIP.Web";
+    });
+
+builder.AddProject("hip-admin", "/home/jarvis_bot/.openclaw/workspace/HIP/HIP.Admin/HIP.Admin.csproj")
+    .WithHttpEndpoint(name: "admin-http", port: 45728, isProxied: false)
+    .WithReference(api)
+    .WaitFor(api)
+    .WithUrlForEndpoint("admin-http", url =>
+    {
+        url.Url = "https://srv1377835-1.tailb59890.ts.net:8443/admin";
+        url.DisplayText = "HIP.Admin";
+    })
+    .WithUrls(c =>
+    {
+        c.Urls.Clear();
+        c.Urls.Add(new Aspire.Hosting.ApplicationModel.ResourceUrlAnnotation
+        {
+            Url = "https://srv1377835-1.tailb59890.ts.net:8443/admin",
+            DisplayText = "HIP.Admin"
+        });
+    });
+
+builder.AddProject("hip-proxy", "/home/jarvis_bot/.openclaw/workspace/HIP/HIP.Proxy/HIP.Proxy.csproj")
+    .WithHttpEndpoint(name: "proxy-http", port: 45729, isProxied: false)
+    .WithReference(api)
+    .WaitFor(api)
+    .WithUrlForEndpoint("proxy-http", url =>
+    {
+        url.Url = "https://srv1377835-1.tailb59890.ts.net:8443";
+        url.DisplayText = "HIP.Proxy";
+    })
+    .WithUrls(c =>
+    {
+        c.Urls.Clear();
+        c.Urls.Add(new Aspire.Hosting.ApplicationModel.ResourceUrlAnnotation
+        {
+            Url = "https://srv1377835-1.tailb59890.ts.net:8443",
+            DisplayText = "HIP.Proxy"
+        });
     });
 
 builder.Build().Run();

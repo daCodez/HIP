@@ -1,0 +1,13 @@
+<span class="badge @CssClass">@Text</span>
+
+@code {
+    [Parameter] public string Text { get; set; } = "Unknown";
+
+    private string CssClass => Text.ToLowerInvariant() switch
+    {
+        "healthy" or "success" or "compliant" => "text-bg-success",
+        "warning" or "pending" => "text-bg-warning",
+        "critical" or "blocked" or "denied" => "text-bg-danger",
+        _ => "text-bg-secondary"
+    };
+}

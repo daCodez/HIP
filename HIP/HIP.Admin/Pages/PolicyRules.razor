@@ -1,0 +1,56 @@
+@page "/policy-rules"
+@inject HipAdminApiClient Api
+@inject ActionLogService ActionLog
+
+<PageTitle>Policy & Rules</PageTitle>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <h5>Rules List</h5>
+                @foreach (var rule in _rules)
+                {
+                    <div class="d-flex justify-content-between border-bottom py-2">
+                        <div>
+                            <div class="fw-semibold">@rule.RuleId - @rule.Name</div>
+                            <small class="text-muted">Severity: @rule.Severity</small>
+                        </div>
+                        <input type="checkbox" @bind="rule.Enabled" @bind:after="() => ToggleRule(rule)" />
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <h6>Policy Sandbox</h6>
+                <textarea class="form-control mb-2" rows="6" @bind="_sandboxInput"></textarea>
+                <button class="btn btn-outline-primary btn-sm" @onclick="Test">Test Input</button>
+                <div class="small text-muted mt-2">@_sandboxResult</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<PolicyRule> _rules = [];
+    private string _sandboxInput = "{\"ip\":\"10.2.2.8\",\"mfa\":false}";
+    private string _sandboxResult = "Awaiting test";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Api.GetPolicyRulesAsync();
+        _rules = result.Data ?? [];
+    }
+
+    private void ToggleRule(PolicyRule rule) => ActionLog.Log($"Rule {rule.RuleId} set to {rule.Enabled}");
+
+    private void Test()
+    {
+        _sandboxResult = _sandboxInput.Contains("false", StringComparison.OrdinalIgnoreCase)
+            ? "Result: would trigger MFA violation"
+            : "Result: clean";
+    }
+}

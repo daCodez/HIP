@@ -1,0 +1,107 @@
+@typeparam TItem
+
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <input class="form-control w-auto" style="min-width:240px" placeholder="Search..." @bind="_search" />
+            <select class="form-select w-auto" @bind="_pageSize">
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+            </select>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        @foreach (var p in _properties)
+                        {
+                            <th role="button" @onclick="() => SortBy(p.Name)">@p.Name</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in PagedItems)
+                    {
+                        <tr @onclick="() => OnRowClick.InvokeAsync(item)">
+                            @foreach (var p in _properties)
+                            {
+                                <td>@(p.GetValue(item))</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2">
+            <button class="btn btn-sm btn-outline-secondary" @onclick="PrevPage" disabled="@(_page == 1)">Prev</button>
+            <span class="small align-self-center">Page @_page / @TotalPages</span>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<TItem> Items { get; set; } = [];
+    [Parameter] public EventCallback<TItem> OnRowClick { get; set; }
+
+    private string _search = string.Empty;
+    private int _page = 1;
+    private int _pageSize = 10;
+    private string? _sortBy;
+    private bool _descending;
+
+    private IReadOnlyList<System.Reflection.PropertyInfo> _properties = [];
+
+    protected override void OnParametersSet()
+    {
+        _properties = typeof(TItem).GetProperties().Where(p => p.PropertyType.IsPrimitive || p.PropertyType == typeof(string) || p.PropertyType == typeof(DateTime) || p.PropertyType == typeof(bool)).ToList();
+    }
+
+    private IEnumerable<TItem> FilteredItems
+    {
+        get
+        {
+            var query = Items.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                query = query.Where(i => _properties.Any(p => (p.GetValue(i)?.ToString() ?? string.Empty).Contains(_search, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_sortBy))
+            {
+                var prop = _properties.FirstOrDefault(x => x.Name == _sortBy);
+                if (prop is not null)
+                {
+                    query = _descending
+                        ? query.OrderByDescending(i => prop.GetValue(i)?.ToString())
+                        : query.OrderBy(i => prop.GetValue(i)?.ToString());
+                }
+            }
+
+            return query;
+        }
+    }
+
+    private IEnumerable<TItem> PagedItems => FilteredItems.Skip((_page - 1) * _pageSize).Take(_pageSize);
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredItems.Count() / (double)_pageSize));
+
+    private void SortBy(string property)
+    {
+        if (_sortBy == property)
+        {
+            _descending = !_descending;
+        }
+        else
+        {
+            _sortBy = property;
+            _descending = false;
+        }
+    }
+
+    private void PrevPage() => _page = Math.Max(1, _page - 1);
+    private void NextPage() => _page = Math.Min(TotalPages, _page + 1);
+}
