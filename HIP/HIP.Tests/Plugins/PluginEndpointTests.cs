@@ -21,6 +21,7 @@ public sealed class PluginEndpointTests
         Assert.That(payload, Is.Not.Null);
         Assert.That(payload!.Any(x => x.Id == "sample"), Is.False);
         Assert.That(payload!.Any(x => x.Id == "core.policy.default"), Is.True);
+        Assert.That(payload!.Any(x => x.Id == "core.widget.richard"), Is.True);
     }
 
     [Test]
@@ -124,6 +125,7 @@ public sealed class PluginEndpointTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(payload, Is.Not.Null);
         Assert.That(payload!.Any(x => x.Display == "widget"), Is.True);
+        Assert.That(payload!.Any(x => x.Label == "Richard"), Is.True);
         Assert.That(payload!.Any(x => x.Display == "page"), Is.False);
     }
 

@@ -94,6 +94,17 @@ This helps answer: **“Which rule set made this decision?”**
 4. Confirm request risk level is correct
 5. Retry only after fixing the root cause
 
+## Quick health checks
+For simple liveness/status checks:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:5101/health
+curl -s http://127.0.0.1:5101/api/status
+```
+
+- `/health` is the built-in ASP.NET health check probe.
+- `/api/status` includes service/version/timestamp metadata.
+
 ## If preflight fails, what to do (simple runbook)
 Run:
 ```bash
@@ -129,6 +140,16 @@ Then use this quick map:
 - **Policy**: rules that decide allow/review/block
 - **Audit**: historical log of what happened
 - **Decision trace**: explanation snapshot for one decision
+
+---
+
+## Local UI tunnel note (for stable debugging)
+When tunneling from your laptop to the VPS, this setup is the most stable:
+
+- `:18789` → OpenClaw gateway / Aspire / Swagger
+- `:45727` → HIP Web directly
+
+If HIP UI loads but browser console shows `/_framework/blazor.web.js` errors on `:45727`, HIP Web now proxies that asset from Aspire internally so the UI can continue to render.
 
 ---
 

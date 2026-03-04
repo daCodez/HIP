@@ -58,6 +58,18 @@
                         </div>
                     }
 
+                    @if (_richardWidget is not null)
+                    {
+                        <div class="col-md-4">
+                            <div class="widget">
+                                <div class="widget-header"><h3><i class="fa fa-user"></i> Richard</h3></div>
+                                <div class="widget-content">
+                                    <p><strong>Richard</strong></p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
                     @if (_showSystemMetrics)
                     {
                         <div class="col-md-4">
@@ -123,7 +135,7 @@
                             </div>
                             <div class="widget-content">
                                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                                    @foreach (var widget in _pluginWidgets.Where(w => w.Label != "Policy Pack"))
+                                    @foreach (var widget in _pluginWidgets.Where(w => w.Label != "Policy Pack" && w.Label != "Richard"))
                                     {
                                         <a class="btn btn-default btn-sm" href="@widget.Route">
                                             <i class="fa @(string.IsNullOrWhiteSpace(widget.Icon) ? "fa-cube" : widget.Icon)"></i>
@@ -287,6 +299,7 @@
 
     private List<PluginWidgetDto> _pluginWidgets = new();
     private PluginWidgetDto? _policyWidget;
+    private PluginWidgetDto? _richardWidget;
     private PolicyCurrentDto? _policyWidgetInfo;
 
     private bool _showSystemMetrics;
@@ -355,6 +368,7 @@
             var client = HttpClientFactory.CreateClient("hip-bff");
             _pluginWidgets = await client.GetFromJsonAsync<List<PluginWidgetDto>>("/bff/plugins/widgets") ?? new();
             _policyWidget = _pluginWidgets.FirstOrDefault(x => x.Label == "Policy Pack");
+            _richardWidget = _pluginWidgets.FirstOrDefault(x => x.Label == "Richard");
             _showSystemMetrics = _pluginWidgets.Any(x => x.Label == "CPU Usage") || _pluginWidgets.Any(x => x.Label == "Memory Usage");
             _showRiskIdentities = _pluginWidgets.Any(x => x.Label == "Risk Identities");
 

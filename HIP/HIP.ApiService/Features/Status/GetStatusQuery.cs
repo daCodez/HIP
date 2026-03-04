@@ -15,3 +15,5 @@ public sealed record GetStatusQuery : IRequest<StatusResponse>;
 /// <param name="UtcTimestamp">The UtcTimestamp value used by this operation.</param>
 /// <returns>The operation result.</returns>
 public sealed record StatusResponse(string ServiceName, string AssemblyVersion, DateTimeOffset UtcTimestamp);
+
+

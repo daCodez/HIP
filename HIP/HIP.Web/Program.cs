@@ -15,18 +15,66 @@ builder.Services.AddServiceDiscovery();
 
 builder.Services.AddHttpClient("hip-api", client =>
 {
-    client.BaseAddress = new Uri("https+http://hip-api");
-}).AddServiceDiscovery();
+    client.BaseAddress = new Uri("http://127.0.0.1:44985");
+});
 
 builder.Services.AddHttpClient("hip-bff", client =>
 {
-    client.BaseAddress = new Uri("http://100.67.76.107:5102");
+    // BFF routes are served by HIP.Web itself, not HIP.ApiService.
+    client.BaseAddress = new Uri("http://127.0.0.1:45727");
 });
 
 builder.Services.AddSingleton<HipEnvelopeSigner>();
 builder.Services.AddScoped<HipApiClient>();
 
 var app = builder.Build();
+
+var frameworkProxyClient = new HttpClient(new HttpClientHandler
+{
+    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+});
+
+async Task<IResult> ProxyAspireFrameworkAsset(string? assetPath, HttpContext httpContext, CancellationToken cancellationToken)
+{
+    var normalized = (assetPath ?? string.Empty).TrimStart('/');
+    if (!normalized.StartsWith("blazor.web", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.NotFound();
+    }
+
+    var upstream = new Uri($"https://127.0.0.1:17193/framework/{normalized}{httpContext.Request.QueryString}");
+    using var upstreamRequest = new HttpRequestMessage(new HttpMethod(httpContext.Request.Method), upstream);
+    using var upstreamResponse = await frameworkProxyClient.SendAsync(
+        upstreamRequest,
+        HttpCompletionOption.ResponseHeadersRead,
+        cancellationToken);
+
+    var response = httpContext.Response;
+    response.StatusCode = (int)upstreamResponse.StatusCode;
+
+    foreach (var header in upstreamResponse.Headers)
+    {
+        response.Headers[header.Key] = header.Value.ToArray();
+    }
+
+    foreach (var header in upstreamResponse.Content.Headers)
+    {
+        response.Headers[header.Key] = header.Value.ToArray();
+    }
+
+    response.Headers.Remove("transfer-encoding");
+
+    if (HttpMethods.IsHead(httpContext.Request.Method))
+    {
+        return Results.Empty;
+    }
+
+    await upstreamResponse.Content.CopyToAsync(response.Body, cancellationToken);
+    return Results.Empty;
+}
+
+app.MapMethods("/_framework/{**assetPath}", new[] { "GET", "HEAD" }, ProxyAspireFrameworkAsset);
+app.MapMethods("/framework/{**assetPath}", new[] { "GET", "HEAD" }, ProxyAspireFrameworkAsset);
 
 app.UseStaticFiles();
 app.UseAntiforgery();

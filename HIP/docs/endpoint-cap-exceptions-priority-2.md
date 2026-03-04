@@ -34,6 +34,7 @@ If any criterion fails, keep current cap and route caller to a dedicated upload/
 | Endpoint | Method | Auth/Gate Profile | Current Cap | Exception Candidate? | Recommendation |
 |---|---|---|---:|---|---|
 | `/api/status` | GET | public read | global only | No | Keep strict default; no body expected. |
+| `/health` | GET | public read | global only | No | Keep strict default; liveness probe only, no body expected. |
 | `/api/identity/{id}` | GET | envelope check when `x-hip-origin=bff` | global only | No | Keep strict default + existing tighter rate limit. |
 | `/api/reputation/{identityId}` | GET | envelope check when `x-hip-origin=bff` | global only | No | Keep strict default + existing tighter rate limit. |
 | `/api/jarvis/context/{identityId}` | GET | app-level validation | global only | No | Keep strict default. |

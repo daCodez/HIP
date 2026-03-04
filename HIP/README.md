@@ -90,6 +90,9 @@ Just like HTTPS became the default for privacy, HIP aims to become the default f
 
 ---
 
+## 🧩 Dashboard Widget Notes
+HIP includes a simple built-in widget plugin (`core.widget.richard`) that renders a "Richard" widget on the main dashboard for UI verification.
+
 ## 📘 Also Read
 - `README.humans.md` for plain-English operator guidance
 - `scripts/preflight.sh` for deployment preflight checks

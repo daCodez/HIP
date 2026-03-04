@@ -32,4 +32,15 @@ public sealed class StatusEndpointTests
         Assert.That(payload.UtcTimestamp, Is.LessThanOrEqualTo(DateTimeOffset.UtcNow));
         Assert.That(payload.UtcTimestamp, Is.GreaterThan(DateTimeOffset.UtcNow.AddMinutes(-1)));
     }
+
+    [Test]
+    public async Task GetHealth_Returns200()
+    {
+        await using var app = new WebApplicationFactory<Program>();
+        using var client = app.CreateClient();
+
+        var response = await client.GetAsync("/health");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
 }

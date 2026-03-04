@@ -23,6 +23,7 @@ using HIP.ServiceDefaults;
 using MediatR;
 using HIP.ApiService;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.HttpOverrides;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -34,6 +35,14 @@ builder.AddServiceDefaults();
 
 builder.Services.Configure<CryptoProviderOptions>(builder.Configuration.GetSection(CryptoProviderOptions.SectionName)); // validation/security awareness: options bind from env/config only
 builder.Services.Configure<AuditRetentionOptions>(builder.Configuration.GetSection(AuditRetentionOptions.SectionName));
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 var cryptoOptions = builder.Configuration
     .GetSection(CryptoProviderOptions.SectionName)
@@ -110,6 +119,7 @@ builder.Services.AddSingleton<IHipPluginRegistry>(pluginRegistry);
 // Core plugins: always provide default audit + policy implementations.
 pluginRegistry.Register(new AuditDatabasePlugin());
 pluginRegistry.Register(new PolicyDefaultPlugin());
+pluginRegistry.Register(new RichardWidgetPlugin());
 
 var enabledPlugins = (builder.Configuration.GetSection("HIP:Plugins:Enabled").Get<string[]>() ?? [])
     .Select(x => x?.Trim())
@@ -290,6 +300,7 @@ if (!app.Environment.IsDevelopment() && insecureTransportAllowed)
 }
 
 app.UseExceptionHandler(); // security awareness: prevent leaking internals
+app.UseForwardedHeaders(); // honor reverse-proxy X-Forwarded-* headers for scheme/client metadata
 
 app.Use(async (httpContext, next) =>
 {
@@ -352,6 +363,7 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.MapGet("/", () => Results.Redirect("/swagger/index.html", permanent: false));
     app.MapGet("/api/admin/crypto-config", async (HttpContext httpContext, string? keyId, IConfiguration configuration, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
         {
             var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
