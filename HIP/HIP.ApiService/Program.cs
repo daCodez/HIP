@@ -107,6 +107,7 @@ builder.Services.AddDbContext<HipDbContext>(options =>
 builder.Services.AddScoped<IIdentityService, DatabaseIdentityService>();
 builder.Services.AddScoped<IReputationService, DatabaseReputationService>();
 builder.Services.AddSingleton<PolicyRuleStore>();
+builder.Services.AddSingleton<AuthzPolicyStore>();
 builder.Services.AddSingleton<ISecurityEventCounter, InMemorySecurityEventCounter>();
 builder.Services.AddSingleton<ISecurityRejectLog, InMemorySecurityRejectLog>();
 builder.Services.AddScoped<IReplayProtectionService, InMemoryReplayProtectionService>();
@@ -436,6 +437,7 @@ if (exposeInternalApis)
     app.MapAuditEndpoints();
     app.MapSecurityEndpoints();
     app.MapPolicyEndpoints();
+    app.MapAuthzPolicyEndpoints();
 }
 
 var runtimePluginRegistry = app.Services.GetRequiredService<IHipPluginRegistry>();

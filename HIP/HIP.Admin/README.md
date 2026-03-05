@@ -23,7 +23,7 @@ Direct app URL in local dev (from launch profile):
 - `Components/Common`
   - `StatCard`, `BadgeStatus`, `ConfirmModal`, `DataTable`, `DropdownMenu`, `ToastHost`
 - `Pages`
-  - Dashboard, Security Status, Users & Devices, Reputation, Policy & Rules, Audit Logs
+  - Dashboard, Security Status, Users & Devices, Reputation, Security Policies, Authorization Policies, Audit Logs
   - Optional read-only pages: Tokens & Sessions, System Health, Admin Settings
 - `Services`
   - `ThemeService`: localStorage persistence + CSS variable application
@@ -49,6 +49,9 @@ The dashboard is optimized for a 5-second health read:
 - Clear "Demo Data" badge when mock mode is enabled
 - Reputation page follows summary-first layout with deep-dive tabs (Summary, Activity, History, Risk, Network)
 - Policy & Rules page includes a visual policy builder and AI-draft assist bones (draft generation + save path)
+- Added Authorization Policies page and sandbox (separate from Security Policies)
+- Added login page scaffold (`/login`) without enforcement yet
+- Added pluggable OIDC config scaffold under `HipAdmin:Auth` (provider-agnostic, enforcement optional)
 - Recent Security Events feed (icon-driven)
 - Threat Monitor (24h) with compact bar chart
 - Reputation Watch with quick jump to Reputation page

@@ -111,7 +111,8 @@
             Children =
             [
                 new() { Title = "Security Status", Href = "security-status" },
-                new() { Title = "Policy & Rules", Href = "policy-rules", VisibleTo = [AdminRole.Admin, AdminRole.Support] },
+                new() { Title = "Security Policies", Href = "policy-rules", VisibleTo = [AdminRole.Admin, AdminRole.Support] },
+                new() { Title = "Authorization Policies", Href = "authorization-policies", VisibleTo = [AdminRole.Admin, AdminRole.Support] },
                 new() { Title = "Tokens & Sessions", Href = "tokens-sessions", VisibleTo = [AdminRole.Admin] }
             ]
         },

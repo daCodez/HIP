@@ -1,4 +1,7 @@
+using HIP.Admin.Models;
 using HIP.Admin.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.HttpOverrides;
 
 namespace HIP.Admin;
@@ -14,6 +17,10 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
+        var authOptions = new AdminAuthOptions();
+        Configuration.GetSection("HipAdmin:Auth").Bind(authOptions);
+        services.Configure<AdminAuthOptions>(Configuration.GetSection("HipAdmin:Auth"));
+
         services.AddRazorPages();
         services.AddServerSideBlazor();
 
@@ -30,6 +37,43 @@ public class Startup
             client.BaseAddress = new Uri(baseUrl);
         });
 
+        if (authOptions.EnableOidc)
+        {
+            services
+                .AddAuthentication(options =>
+                {
+                    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+                    options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+                })
+                .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)
+                .AddOpenIdConnect(OpenIdConnectDefaults.AuthenticationScheme, options =>
+                {
+                    options.Authority = authOptions.Authority;
+                    options.ClientId = authOptions.ClientId;
+                    options.ClientSecret = authOptions.ClientSecret;
+                    options.ResponseType = "code";
+                    options.SaveTokens = true;
+                    options.GetClaimsFromUserInfoEndpoint = true;
+                    options.CallbackPath = authOptions.CallbackPath;
+                    options.SignedOutCallbackPath = authOptions.SignedOutCallbackPath;
+                    options.TokenValidationParameters.RoleClaimType = authOptions.RoleClaimType;
+
+                    options.Scope.Clear();
+                    foreach (var scope in authOptions.Scopes.Distinct(StringComparer.OrdinalIgnoreCase))
+                    {
+                        options.Scope.Add(scope);
+                    }
+                });
+
+            services.AddAuthorization(options =>
+            {
+                if (authOptions.EnforceLogin)
+                {
+                    options.FallbackPolicy = options.DefaultPolicy;
+                }
+            });
+        }
+
         services.AddScoped<ThemeService>();
         services.AddScoped<AdminContextService>();
         services.AddScoped<ActionLogService>();
@@ -38,6 +82,9 @@ public class Startup
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
     {
+        var authOptions = new AdminAuthOptions();
+        Configuration.GetSection("HipAdmin:Auth").Bind(authOptions);
+
         if (env.IsDevelopment())
         {
             app.UseDeveloperExceptionPage();
@@ -55,6 +102,12 @@ public class Startup
 
         app.UseStaticFiles();
         app.UseRouting();
+
+        if (authOptions.EnableOidc)
+        {
+            app.UseAuthentication();
+            app.UseAuthorization();
+        }
 
         app.UseEndpoints(endpoints =>
         {

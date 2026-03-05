@@ -150,6 +150,57 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
             return items;
         }, MockReputationWatch(), "api/plugins/identity/insights/top-risk?take=5");
 
+    public async Task<ApiResult<List<AuthzPolicyRule>>> GetAuthzPolicyRulesAsync(CancellationToken ct = default)
+    {
+        if (context.MockModeEnabled)
+        {
+            return ApiResult<List<AuthzPolicyRule>>.Ok(
+            [
+                new() { RuleId = "AUTHZ-001", Name = "Support can view audit logs", Role = "Support", Resource = "audit", Action = "read", Decision = "Allow", Enabled = true },
+                new() { RuleId = "AUTHZ-002", Name = "Support cannot export audit logs", Role = "Support", Resource = "audit", Action = "export", Decision = "Deny", Enabled = true }
+            ]);
+        }
+
+        try
+        {
+            var data = await httpClient.GetFromJsonAsync<List<AuthzPolicyRule>>("api/admin/authz-policies", ct);
+            return ApiResult<List<AuthzPolicyRule>>.Ok(data ?? []);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<List<AuthzPolicyRule>>.Fail($"Failed to load data from 'api/admin/authz-policies'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>> SimulateAuthzAsync(string jsonInput, CancellationToken ct = default)
+    {
+        try
+        {
+            using var req = new StringContent(jsonInput, Encoding.UTF8, "application/json");
+            using var response = await httpClient.PostAsync("api/admin/authz/simulate", req, ct);
+            response.EnsureSuccessStatusCode();
+
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            var root = doc.RootElement;
+            var decision = root.TryGetProperty("decision", out var dEl) ? dEl.GetString() ?? "DENY" : "DENY";
+            var triggered = root.TryGetProperty("triggeredRules", out var tEl) && tEl.ValueKind == JsonValueKind.Array
+                ? tEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                : new List<string>();
+            var actions = root.TryGetProperty("actions", out var aEl) && aEl.ValueKind == JsonValueKind.Array
+                ? aEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                : new List<string>();
+            var trace = root.TryGetProperty("trace", out var trEl) && trEl.ValueKind == JsonValueKind.Array
+                ? trEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                : new List<string>();
+
+            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Ok((decision, triggered, actions, trace));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/admin/authz/simulate'. {ex.Message}");
+        }
+    }
+
     public async Task<ApiResult<PolicyRule>> GeneratePolicyDraftAsync(string prompt, CancellationToken ct = default)
     {
         if (context.MockModeEnabled)

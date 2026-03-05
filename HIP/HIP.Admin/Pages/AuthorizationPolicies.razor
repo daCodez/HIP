@@ -1,0 +1,86 @@
+@page "/authorization-policies"
+@inject HipAdminApiClient Api
+
+<PageTitle>Authorization Policies</PageTitle>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-warning py-2 small">@_error</div>
+}
+
+<section class="widget widget-table table-widget-frame mb-3">
+    <div class="widget-header">
+        <h3><i class="fa fa-key"></i> Authorization Policies</h3>
+    </div>
+    <div class="widget-content">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                <tr><th>Rule</th><th>Role</th><th>Resource</th><th>Action</th><th>Decision</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var r in _rules)
+                {
+                    <tr>
+                        <td>@r.Name</td>
+                        <td>@r.Role</td>
+                        <td>@r.Resource</td>
+                        <td>@r.Action</td>
+                        <td><span class="badge @(r.Decision.Equals("Allow", StringComparison.OrdinalIgnoreCase) ? "text-bg-success" : "text-bg-danger")">@r.Decision</span></td>
+                        <td><span class="badge @(r.Enabled ? "text-bg-success" : "text-bg-secondary")">@(r.Enabled ? "Active" : "Disabled")</span></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section class="widget">
+    <div class="widget-header"><h3><i class="fa fa-flask"></i> Authorization Sandbox</h3></div>
+    <div class="widget-content">
+        <textarea class="form-control mb-2" rows="6" @bind="_input"></textarea>
+        <button class="btn btn-outline-primary btn-sm" @onclick="SimulateAsync">Simulate</button>
+
+        <div class="small mt-3">
+            <div><strong>Decision:</strong> <span class="badge @(_decision == "ALLOW" ? "text-bg-success" : "text-bg-danger")">@_decision</span></div>
+            <div class="mt-2"><strong>Triggered Rules:</strong></div>
+            <ul>@foreach (var x in _triggered) { <li>@x</li> }</ul>
+            <div><strong>Trace:</strong></div>
+            <ul>@foreach (var x in _trace) { <li>@x</li> }</ul>
+        </div>
+    </div>
+</section>
+
+@code {
+    private List<AuthzPolicyRule> _rules = [];
+    private string? _error;
+
+    private string _input = "{\n  \"role\":\"Support\",\n  \"resource\":\"audit\",\n  \"action\":\"export\"\n}";
+    private string _decision = "N/A";
+    private List<string> _triggered = [];
+    private List<string> _trace = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Api.GetAuthzPolicyRulesAsync();
+        _error = result.Success ? null : result.Error;
+        _rules = result.Data ?? [];
+    }
+
+    private async Task SimulateAsync()
+    {
+        var result = await Api.SimulateAuthzAsync(_input);
+        if (!result.Success)
+        {
+            _decision = "DENY";
+            _triggered = ["Simulation failed"];
+            _trace = [result.Error ?? "Unknown error"];
+            return;
+        }
+
+        _decision = result.Data.Decision;
+        _triggered = result.Data.TriggeredRules;
+        _trace = result.Data.Trace;
+    }
+}

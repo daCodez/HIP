@@ -87,6 +87,17 @@ public sealed class ReputationInsight
     public required List<(string ReasonCode, int Count)> ReasonBreakdown { get; init; }
 }
 
+public sealed class AuthzPolicyRule
+{
+    public required string RuleId { get; init; }
+    public required string Name { get; init; }
+    public required string Role { get; init; }
+    public required string Resource { get; init; }
+    public required string Action { get; init; }
+    public required string Decision { get; init; }
+    public bool Enabled { get; set; }
+}
+
 public sealed class ApiResult<T>
 {
     public bool Success { get; init; }
