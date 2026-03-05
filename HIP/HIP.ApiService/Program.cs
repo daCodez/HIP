@@ -19,6 +19,7 @@ using HIP.ApiService.Features.Admin;
 using HIP.ApiService.Features.Messages;
 using HIP.ApiService.Features.Jarvis;
 using HIP.ApiService.Observability;
+using HIP.ApiService.Swagger;
 using HIP.ServiceDefaults;
 using MediatR;
 using HIP.ApiService;
@@ -298,6 +299,8 @@ builder.Services.AddSwaggerGen(options =>
     {
         options.IncludeXmlComments(xmlPath);
     }
+
+    options.DocumentFilter<ApiVersionDocumentFilter>();
 });
 
 var app = builder.Build();
@@ -316,6 +319,30 @@ if (!app.Environment.IsDevelopment() && insecureTransportAllowed)
 
 app.UseExceptionHandler(); // security awareness: prevent leaking internals
 app.UseForwardedHeaders(); // honor reverse-proxy X-Forwarded-* headers for scheme/client metadata
+
+// API versioning bridge: support /api/v1/* while keeping existing /api/* routes during migration.
+app.Use(async (httpContext, next) =>
+{
+    var path = httpContext.Request.Path.Value ?? string.Empty;
+
+    if (path.StartsWith("/api/v1/", StringComparison.OrdinalIgnoreCase))
+    {
+        var rewritten = "/api/" + path[8..];
+        httpContext.Request.Path = rewritten;
+        httpContext.Items["api.version"] = "v1";
+        httpContext.Response.Headers["X-API-Version"] = "v1";
+    }
+
+    await next();
+
+    // Temporary compatibility notice for unversioned API calls.
+    if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) && !path.StartsWith("/api/v", StringComparison.OrdinalIgnoreCase))
+    {
+        httpContext.Response.Headers.TryAdd("Deprecation", "true");
+        httpContext.Response.Headers.TryAdd("Sunset", "Tue, 30 Jun 2026 00:00:00 GMT");
+        httpContext.Response.Headers.TryAdd("Link", "</api/v1>; rel=\"successor-version\"");
+    }
+});
 
 app.Use(async (httpContext, next) =>
 {
