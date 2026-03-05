@@ -36,7 +36,7 @@
         <div class="submenu">
             @foreach (var child in Item.Children.Where(c => c.VisibleTo.Contains(AdminContext.CurrentRole)))
             {
-                <SidebarMenuItem Item="child" CurrentUri="CurrentUri" Depth="@(Depth + 1)" />
+                <SidebarMenuItem Item="child" CurrentUri="@CurrentUri" Depth="@(Depth + 1)" />
             }
         </div>
     }
@@ -48,6 +48,7 @@
     [Parameter] public int Depth { get; set; }
 
     private bool _expanded;
+    private bool _initialized;
 
     private bool IsActive(string href)
     {
@@ -66,6 +67,12 @@
 
     protected override void OnParametersSet()
     {
+        if (!_initialized)
+        {
+            _expanded = Item.Children.Any();
+            _initialized = true;
+        }
+
         if (Item.Children.Any(c => !string.IsNullOrWhiteSpace(c.Href) && IsActive(c.Href!)))
         {
             _expanded = true;

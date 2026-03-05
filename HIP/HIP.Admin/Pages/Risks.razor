@@ -12,45 +12,139 @@
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>
-                        <th>Identity</th>
-                        <th>Score</th>
+                        <th role="button" @onclick='() => SortBy("Identity")'>Identity</th>
+                        <th role="button" @onclick='() => SortBy("Score")'>Score</th>
                         <th>Risk Level</th>
-                        <th>Blocked (24h)</th>
-                        <th>Review (24h)</th>
+                        <th role="button" @onclick='() => SortBy("Blocked")'>Blocked (24h)</th>
+                        <th role="button" @onclick='() => SortBy("Review")'>Review (24h)</th>
                         <th>Trend</th>
                         <th>Action</th>
                     </tr>
+                    <tr>
+                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fIdentity" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
+                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fScore" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
+                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fRisk" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
+                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fBlocked" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
+                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fReview" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
+                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fTrend" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
+                        <th></th>
+                    </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>support@hip.local</td>
-                        <td>52</td>
-                        <td><span class="badge text-bg-warning">Attention</span></td>
-                        <td>1</td>
-                        <td>3</td>
-                        <td>↓</td>
-                        <td><a href="/admin/reputation" class="btn btn-sm btn-outline-secondary">View</a></td>
-                    </tr>
-                    <tr>
-                        <td>guest@hip.local</td>
-                        <td>34</td>
-                        <td><span class="badge text-bg-danger">Critical</span></td>
-                        <td>3</td>
-                        <td>2</td>
-                        <td>↓</td>
-                        <td><a href="/admin/reputation" class="btn btn-sm btn-outline-secondary">View</a></td>
-                    </tr>
-                    <tr>
-                        <td>admin@hip.local</td>
-                        <td>81</td>
-                        <td><span class="badge text-bg-success">Trusted</span></td>
-                        <td>0</td>
-                        <td>1</td>
-                        <td>↑</td>
-                        <td><a href="/admin/reputation" class="btn btn-sm btn-outline-secondary">View</a></td>
-                    </tr>
+                    @if (Paged.Count == 0)
+                    {
+                        <tr><td colspan="7" class="text-center text-muted py-4">No risky identities match current filters.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in Paged)
+                        {
+                            <tr>
+                                <td>@row.Identity</td>
+                                <td>@row.Score</td>
+                                <td><span class="badge @RiskBadgeClass(row.RiskLevel)">@row.RiskLevel</span></td>
+                                <td>@row.Blocked</td>
+                                <td>@row.Review</td>
+                                <td>@row.Trend</td>
+                                <td><a href="/admin/reputation" class="btn btn-sm btn-outline-secondary">View</a></td>
+                            </tr>
+                        }
+                    }
                 </tbody>
             </table>
         </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-2">
+            <div class="small text-muted">Showing @StartEntry to @EndEntry of @Filtered.Count entries</div>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" @onclick="PrevPage" disabled="@(_page == 1)">Previous</button>
+                @for (var i = 1; i <= TotalPages; i++)
+                {
+                    if (i == 1 || i == TotalPages || Math.Abs(i - _page) <= 1)
+                    {
+                        <button class="btn @(i == _page ? "btn-primary" : "btn-outline-secondary")" @onclick="(() => GoToPage(i))">@i</button>
+                    }
+                }
+                <button class="btn btn-outline-secondary" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+        </div>
     </div>
 </section>
+
+@code {
+    private sealed record RiskRow(string Identity, int Score, string RiskLevel, int Blocked, int Review, string Trend);
+
+    private readonly List<RiskRow> _rows =
+    [
+        new("support@hip.local", 52, "Attention", 1, 3, "↓"),
+        new("guest@hip.local", 34, "Critical", 3, 2, "↓"),
+        new("admin@hip.local", 81, "Trusted", 0, 1, "↑"),
+        new("qa@hip.local", 64, "Attention", 1, 1, "→"),
+        new("staging-bot@hip.local", 47, "Critical", 2, 3, "↓")
+    ];
+
+    private string _fIdentity = string.Empty;
+    private string _fScore = string.Empty;
+    private string _fRisk = string.Empty;
+    private string _fBlocked = string.Empty;
+    private string _fReview = string.Empty;
+    private string _fTrend = string.Empty;
+
+    private int _page = 1;
+    private int _pageSize = 10;
+    private string _sortBy = "Score";
+    private bool _sortDesc = false;
+
+    private List<RiskRow> Filtered
+    {
+        get
+        {
+            IEnumerable<RiskRow> q = _rows
+                .Where(x => string.IsNullOrWhiteSpace(_fIdentity) || x.Identity.Contains(_fIdentity, StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.IsNullOrWhiteSpace(_fScore) || x.Score.ToString().Contains(_fScore, StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.IsNullOrWhiteSpace(_fRisk) || x.RiskLevel.Contains(_fRisk, StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.IsNullOrWhiteSpace(_fBlocked) || x.Blocked.ToString().Contains(_fBlocked, StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.IsNullOrWhiteSpace(_fReview) || x.Review.ToString().Contains(_fReview, StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.IsNullOrWhiteSpace(_fTrend) || x.Trend.Contains(_fTrend, StringComparison.OrdinalIgnoreCase));
+
+            q = (_sortBy, _sortDesc) switch
+            {
+                ("Identity", true) => q.OrderByDescending(x => x.Identity),
+                ("Identity", false) => q.OrderBy(x => x.Identity),
+                ("Score", true) => q.OrderByDescending(x => x.Score),
+                ("Score", false) => q.OrderBy(x => x.Score),
+                ("Blocked", true) => q.OrderByDescending(x => x.Blocked),
+                ("Blocked", false) => q.OrderBy(x => x.Blocked),
+                ("Review", true) => q.OrderByDescending(x => x.Review),
+                ("Review", false) => q.OrderBy(x => x.Review),
+                _ => q
+            };
+
+            return q.ToList();
+        }
+    }
+
+    private List<RiskRow> Paged => Filtered.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(Filtered.Count / (double)_pageSize));
+    private int StartEntry => Filtered.Count == 0 ? 0 : ((_page - 1) * _pageSize) + 1;
+    private int EndEntry => Math.Min(_page * _pageSize, Filtered.Count);
+
+    private void ApplyFilters() => _page = 1;
+    private void SortBy(string column)
+    {
+        if (_sortBy == column) _sortDesc = !_sortDesc;
+        else { _sortBy = column; _sortDesc = false; }
+        _page = 1;
+    }
+
+    private void PrevPage() => _page = Math.Max(1, _page - 1);
+    private void NextPage() => _page = Math.Min(TotalPages, _page + 1);
+    private void GoToPage(int page) => _page = Math.Clamp(page, 1, TotalPages);
+
+    private static string RiskBadgeClass(string risk) => risk switch
+    {
+        "Trusted" => "text-bg-success",
+        "Attention" => "text-bg-warning",
+        _ => "text-bg-danger"
+    };
+}

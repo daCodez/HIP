@@ -36,6 +36,9 @@ public sealed class PolicyRule
     public required string RuleId { get; init; }
     public required string Name { get; init; }
     public required string Severity { get; init; }
+    public string? Category { get; init; }
+    public string? Condition { get; init; }
+    public string? Action { get; init; }
     public bool Enabled { get; set; }
 }
 

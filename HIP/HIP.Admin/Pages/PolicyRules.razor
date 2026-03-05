@@ -1,56 +1,344 @@
 @page "/policy-rules"
 @inject HipAdminApiClient Api
 @inject ActionLogService ActionLog
+@inject AdminContextService AdminContext
 
 <PageTitle>Policy & Rules</PageTitle>
 
-<div class="row g-3">
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-body">
-                <h5>Rules List</h5>
-                @foreach (var rule in _rules)
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-warning py-2 small">@_error</div>
+}
+
+<section class="dashboard-security-grid mb-3">
+    <div class="widget"><div class="widget-header"><h3>Active Rules</h3></div><div class="widget-content"><div class="rep-score">@ActiveRules</div></div></div>
+    <div class="widget"><div class="widget-header"><h3>Blocks Today</h3></div><div class="widget-content"><div class="rep-score">@BlocksToday</div></div></div>
+    <div class="widget"><div class="widget-header"><h3>Warnings Today</h3></div><div class="widget-content"><div class="rep-score">@WarningsToday</div></div></div>
+    <div class="widget"><div class="widget-header"><h3>Violations Today</h3></div><div class="widget-content"><div class="rep-score">@ViolationsToday</div></div></div>
+</section>
+
+<section class="widget widget-table table-widget-frame mb-3">
+    <div class="widget-header d-flex justify-content-between align-items-center">
+        <h3><i class="fa fa-list"></i> Rules</h3>
+        <div class="d-flex align-items-center gap-2">
+            @if (AdminContext.MockModeEnabled)
+            {
+                <span class="widget-label">Demo Data</span>
+            }
+            else
+            {
+                <span class="widget-label @(_degraded ? "degraded" : "live")">@(_degraded ? "Degraded" : "Live Data")</span>
+            }
+            <button class="btn btn-sm btn-outline-primary">+ New Policy Rule</button>
+        </div>
+    </div>
+    <div class="widget-content">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Rule</th><th>Category</th><th>Condition</th><th>Action</th><th>Severity</th><th>Status</th><th>Ops</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in RuleRows)
+                    {
+                        <tr>
+                            <td><strong>@r.Name</strong></td>
+                            <td><span class="badge @CategoryClass(r.Category)">@r.Category</span></td>
+                            <td class="small">@r.Condition</td>
+                            <td>@r.Action</td>
+                            <td><span class="badge @SeverityClass(r.Severity)">@r.Severity</span></td>
+                            <td><span class="badge @(r.Enabled ? "text-bg-success" : "text-bg-secondary")">@(r.Enabled ? "Active" : "Disabled")</span></td>
+                            <td class="d-flex gap-1">
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => TestRule(r)">Test</button>
+                                <button class="btn btn-sm btn-outline-secondary">Edit</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => ToggleRule(r)">@((r.Enabled) ? "Disable" : "Enable")</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section class="widget mb-3">
+    <div class="widget-header"><h3><i class="fa fa-magic"></i> Policy Builder</h3></div>
+    <div class="widget-content">
+        <div class="row g-2">
+            <div class="col-md-3"><input class="form-control form-control-sm" placeholder="Rule Id" @bind="_newRuleId" /></div>
+            <div class="col-md-3"><input class="form-control form-control-sm" placeholder="Rule Name" @bind="_newRuleName" /></div>
+            <div class="col-md-2"><input class="form-control form-control-sm" placeholder="Category" @bind="_newRuleCategory" /></div>
+            <div class="col-md-2"><input class="form-control form-control-sm" placeholder="Action" @bind="_newRuleAction" /></div>
+            <div class="col-md-2"><input class="form-control form-control-sm" placeholder="Severity" @bind="_newRuleSeverity" /></div>
+            <div class="col-12"><input class="form-control form-control-sm" placeholder="Condition" @bind="_newRuleCondition" /></div>
+        </div>
+        <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-outline-primary" @onclick="SaveVisualRuleAsync">Save Rule</button>
+            <input class="form-control form-control-sm" style="max-width:420px" placeholder="AI prompt (bones)" @bind="_aiPrompt" />
+            <button class="btn btn-sm btn-outline-secondary" @onclick="GenerateAiDraftAsync">Generate AI Draft</button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_builderNote))
+        {
+            <div class="small text-muted mt-2">@_builderNote</div>
+        }
+    </div>
+</section>
+
+<section class="widget">
+    <div class="widget-header"><h3><i class="fa fa-flask"></i> Policy Sandbox</h3></div>
+    <div class="widget-content">
+        <textarea class="form-control mb-2" rows="8" @bind="_sandboxInput"></textarea>
+        <button class="btn btn-outline-primary btn-sm" @onclick="RunSandboxAsync">Test Input</button>
+
+        <div class="mt-3 small">
+            <div><strong>Decision:</strong> <span class="badge @DecisionClass">@_decision</span></div>
+            <div class="mt-2"><strong>Triggered Rules:</strong></div>
+            <ul>
+                @foreach (var t in _triggered)
                 {
-                    <div class="d-flex justify-content-between border-bottom py-2">
-                        <div>
-                            <div class="fw-semibold">@rule.RuleId - @rule.Name</div>
-                            <small class="text-muted">Severity: @rule.Severity</small>
-                        </div>
-                        <input type="checkbox" @bind="rule.Enabled" @bind:after="() => ToggleRule(rule)" />
-                    </div>
+                    <li>@t</li>
                 }
-            </div>
+            </ul>
+            <div><strong>Actions:</strong></div>
+            <ul>
+                @foreach (var a in _actions)
+                {
+                    <li>@a</li>
+                }
+            </ul>
+            <div><strong>Policy trace:</strong></div>
+            <ul>
+                @foreach (var tr in _trace)
+                {
+                    <li>@tr</li>
+                }
+            </ul>
         </div>
     </div>
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-body">
-                <h6>Policy Sandbox</h6>
-                <textarea class="form-control mb-2" rows="6" @bind="_sandboxInput"></textarea>
-                <button class="btn btn-outline-primary btn-sm" @onclick="Test">Test Input</button>
-                <div class="small text-muted mt-2">@_sandboxResult</div>
-            </div>
-        </div>
-    </div>
-</div>
+</section>
 
 @code {
+    private sealed class RuleRow
+    {
+        public required string Id { get; init; }
+        public required string Name { get; init; }
+        public required string Category { get; init; }
+        public required string Condition { get; init; }
+        public required string Action { get; init; }
+        public required string Severity { get; init; }
+        public bool Enabled { get; set; }
+    }
+
     private List<PolicyRule> _rules = [];
-    private string _sandboxInput = "{\"ip\":\"10.2.2.8\",\"mfa\":false}";
-    private string _sandboxResult = "Awaiting test";
+    private List<RuleRow> RuleRows = [];
+    private bool _degraded;
+    private string? _error;
+
+    private string _sandboxInput = "{\n  \"ip\":\"10.2.2.8\",\n  \"mfa\":false,\n  \"deviceTrusted\":false,\n  \"reputation\":25,\n  \"replayDetected\":false\n}";
+    private string _decision = "N/A";
+
+    private string _newRuleId = "POL-CUSTOM";
+    private string _newRuleName = "Custom rule";
+    private string _newRuleCategory = "Reputation";
+    private string _newRuleCondition = "reputation < 20";
+    private string _newRuleAction = "Block";
+    private string _newRuleSeverity = "Critical";
+    private string _aiPrompt = string.Empty;
+    private string? _builderNote;
+    private List<string> _triggered = [];
+    private List<string> _actions = [];
+    private List<string> _trace = [];
+
+    private int ActiveRules => RuleRows.Count(r => r.Enabled);
+    private int BlocksToday => 3;
+    private int WarningsToday => 7;
+    private int ViolationsToday => 2;
+
+    private string DecisionClass => _decision switch
+    {
+        "BLOCK" => "text-bg-danger",
+        "CHALLENGE" => "text-bg-warning text-dark",
+        "WARN" => "text-bg-secondary",
+        _ => "text-bg-success"
+    };
 
     protected override async Task OnInitializedAsync()
     {
         var result = await Api.GetPolicyRulesAsync();
+        _degraded = !result.Success;
+        _error = result.Success ? null : result.Error;
+
         _rules = result.Data ?? [];
+        RuleRows = _rules.Count > 0
+            ? _rules.Select(MapRule).ToList()
+            : StarterRules();
     }
 
-    private void ToggleRule(PolicyRule rule) => ActionLog.Log($"Rule {rule.RuleId} set to {rule.Enabled}");
-
-    private void Test()
+    private void ToggleRule(RuleRow rule)
     {
-        _sandboxResult = _sandboxInput.Contains("false", StringComparison.OrdinalIgnoreCase)
-            ? "Result: would trigger MFA violation"
-            : "Result: clean";
+        rule.Enabled = !rule.Enabled;
+        ActionLog.Log($"Rule {rule.Id} set to {rule.Enabled}");
     }
+
+    private void TestRule(RuleRow rule)
+    {
+        _decision = rule.Action.ToUpperInvariant() switch
+        {
+            "BLOCK" => "BLOCK",
+            "CHALLENGE" => "CHALLENGE",
+            "RESTRICT" => "WARN",
+            _ => "ALLOW"
+        };
+        _triggered = [rule.Name];
+        _actions = [rule.Action];
+        _trace = [$"✔ {rule.Id} ({rule.Name}) → triggered"];
+    }
+
+    private async Task SaveVisualRuleAsync()
+    {
+        var rule = new PolicyRule
+        {
+            RuleId = string.IsNullOrWhiteSpace(_newRuleId) ? $"POL-{DateTimeOffset.UtcNow:HHmmss}" : _newRuleId,
+            Name = string.IsNullOrWhiteSpace(_newRuleName) ? "Custom rule" : _newRuleName,
+            Category = _newRuleCategory,
+            Condition = _newRuleCondition,
+            Action = _newRuleAction,
+            Severity = _newRuleSeverity,
+            Enabled = true
+        };
+
+        var save = await Api.UpsertPolicyRuleAsync(rule);
+        if (!save.Success)
+        {
+            _builderNote = save.Error;
+            return;
+        }
+
+        var refresh = await Api.GetPolicyRulesAsync();
+        RuleRows = (refresh.Data ?? []).Select(MapRule).ToList();
+        _builderNote = $"Saved {rule.RuleId}";
+    }
+
+    private async Task GenerateAiDraftAsync()
+    {
+        var draft = await Api.GeneratePolicyDraftAsync(_aiPrompt);
+        if (!draft.Success || draft.Data is null)
+        {
+            _builderNote = draft.Error ?? "AI draft failed";
+            return;
+        }
+
+        _newRuleId = draft.Data.RuleId;
+        _newRuleName = draft.Data.Name;
+        _newRuleCategory = draft.Data.Category ?? _newRuleCategory;
+        _newRuleCondition = draft.Data.Condition ?? _newRuleCondition;
+        _newRuleAction = draft.Data.Action ?? _newRuleAction;
+        _newRuleSeverity = draft.Data.Severity;
+        _builderNote = "AI draft loaded into visual builder. Review before saving.";
+    }
+
+    private async Task RunSandboxAsync()
+    {
+        _triggered = [];
+        _actions = [];
+        _trace = [];
+        _decision = "ALLOW";
+
+        var result = await Api.SimulatePolicyAsync(_sandboxInput);
+        if (!result.Success)
+        {
+            _decision = "WARN";
+            _triggered = ["Simulation failed"];
+            _actions = ["Check API policy simulate endpoint"];
+            _trace = [result.Error ?? "Unknown simulation error"];
+            return;
+        }
+
+        var data = result.Data;
+        _decision = data.Decision;
+        _triggered = data.TriggeredRules;
+        _actions = data.Actions;
+        _trace = data.Trace;
+    }
+
+    private static RuleRow MapRule(PolicyRule r)
+    {
+        var lower = $"{r.RuleId} {r.Name}".ToLowerInvariant();
+
+        var inferredCategory = lower.Contains("mfa") || lower.Contains("login") ? "Login"
+            : lower.Contains("device") ? "Device"
+            : lower.Contains("token") || lower.Contains("replay") ? "Token"
+            : lower.Contains("reputation") ? "Reputation"
+            : lower.Contains("spam") || lower.Contains("phish") || lower.Contains("message") ? "Messaging"
+            : "System";
+
+        var category = string.IsNullOrWhiteSpace(r.Category) ? inferredCategory : r.Category!;
+
+        var inferredAction = r.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ? "Block"
+            : r.Severity.Equals("High", StringComparison.OrdinalIgnoreCase) ? "Challenge"
+            : r.Severity.Equals("Medium", StringComparison.OrdinalIgnoreCase) ? "Warn"
+            : "Allow";
+
+        var action = string.IsNullOrWhiteSpace(r.Action) ? inferredAction : r.Action!;
+
+        var inferredCondition = category switch
+        {
+            "Login" => "mfa == false",
+            "Device" => "deviceTrusted == false",
+            "Token" => "replayDetected == true",
+            "Reputation" => "reputation < 30",
+            "Messaging" => "domainFlagged == true",
+            _ => "event matches rule"
+        };
+
+        var condition = string.IsNullOrWhiteSpace(r.Condition) ? inferredCondition : r.Condition!;
+
+        return new RuleRow
+        {
+            Id = r.RuleId,
+            Name = r.Name,
+            Category = category,
+            Condition = condition,
+            Action = action,
+            Severity = NormalizeSeverity(r.Severity),
+            Enabled = r.Enabled
+        };
+    }
+
+    private static List<RuleRow> StarterRules() =>
+    [
+        new() { Id = "POL-001", Name = "Require MFA", Category = "Login", Condition = "mfa == false", Action = "Challenge", Severity = "Medium", Enabled = true },
+        new() { Id = "POL-002", Name = "Untrusted Device", Category = "Device", Condition = "deviceTrusted == false", Action = "Challenge", Severity = "Medium", Enabled = true },
+        new() { Id = "POL-003", Name = "Low Reputation", Category = "Reputation", Condition = "reputation < 30", Action = "Restrict", Severity = "Warning", Enabled = true },
+        new() { Id = "POL-004", Name = "Replay Attack", Category = "Token", Condition = "replayDetected == true", Action = "Block", Severity = "Critical", Enabled = true },
+        new() { Id = "POL-005", Name = "Phishing Domain", Category = "Messaging", Condition = "domainFlagged == true", Action = "Block", Severity = "Critical", Enabled = true }
+    ];
+
+    private static string NormalizeSeverity(string severity) => severity.ToLowerInvariant() switch
+    {
+        "critical" => "Critical",
+        "high" => "Medium",
+        "medium" => "Warning",
+        _ => "Info"
+    };
+
+    private static string CategoryClass(string c) => c switch
+    {
+        "Login" => "text-bg-primary",
+        "Reputation" => "text-bg-secondary",
+        "Messaging" => "text-bg-warning text-dark",
+        "Token" => "text-bg-danger",
+        "Device" => "text-bg-success",
+        _ => "text-bg-light text-dark"
+    };
+
+    private static string SeverityClass(string s) => s switch
+    {
+        "Critical" => "text-bg-danger",
+        "Medium" => "text-bg-warning text-dark",
+        "Warning" => "text-bg-secondary",
+        _ => "text-bg-light text-dark"
+    };
 }

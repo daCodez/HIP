@@ -241,6 +241,22 @@ h1,h2,h3,h4,h5,h6 { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   color: #7f8a94;
 }
 
+.audit-download-btn {
+  color: #6f7b86;
+  padding: 0 !important;
+}
+
+.audit-download-btn i {
+  font-size: 18px;
+}
+
+.audit-inline-toolbar {
+  display: grid;
+  grid-template-columns: 140px 140px 170px auto auto;
+  gap: .5rem;
+  align-items: center;
+}
+
 .widget-label {
   background: #58bddc;
   color: #fff;
@@ -278,8 +294,8 @@ h1,h2,h3,h4,h5,h6 { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 
 .widget-table .table thead th {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-weight: 600;
-  font-size: .78rem;
+  font-weight: 700;
+  font-size: .84rem;
   text-transform: uppercase;
   letter-spacing: .025em;
   color: #7a7a7a;
@@ -290,6 +306,11 @@ h1,h2,h3,h4,h5,h6 { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 .widget-table .table tbody td {
   font-size: .82rem;
   color: #4c4c4c;
+}
+
+.widget-table .table .badge {
+  font-size: .8rem;
+  padding: .35rem .5rem;
 }
 
 .breadcrumb-row { margin-bottom: .65rem !important; background: transparent; border: 0; padding: .15rem .2rem; }

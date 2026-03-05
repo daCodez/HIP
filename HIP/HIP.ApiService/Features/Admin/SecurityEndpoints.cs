@@ -26,6 +26,8 @@ public static class SecurityEndpoints
             })
             .RequireRateLimiting("read-api")
             .WithName("GetSecurityStatus")
+            .WithSummary("Get aggregate security status counters")
+            .WithDescription("Returns current aggregate security counters (replay detections, expired messages, and policy blocks) for admin dashboard health views.")
             .WithTags("Admin")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
@@ -43,6 +45,8 @@ public static class SecurityEndpoints
             })
             .RequireRateLimiting("read-api")
             .WithName("GetSecurityEvents")
+            .WithSummary("Get recent security rejection events")
+            .WithDescription("Returns recent security rejection events for investigation, including reason, identity, and timestamp. Supports optional take parameter.")
             .WithTags("Admin")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
@@ -60,6 +64,8 @@ public static class SecurityEndpoints
             })
             .RequireRateLimiting("read-api")
             .WithName("GetAdminReputationBreakdown")
+            .WithSummary("Get reputation score breakdown for an identity")
+            .WithDescription("Returns a reasoned score breakdown for the specified identity to explain current reputation and risk drivers.")
             .WithTags("Admin")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);

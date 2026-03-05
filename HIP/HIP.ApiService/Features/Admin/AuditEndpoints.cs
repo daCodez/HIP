@@ -54,6 +54,8 @@ public static class AuditEndpoints
                 })
             .RequireRateLimiting("read-api")
             .WithName("GetAuditEvents")
+            .WithSummary("Query admin audit events")
+            .WithDescription("Returns filtered audit events for admin review. Supports filtering by event type, identity, outcome, reason code, and UTC date range.")
             .WithTags("Admin")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
@@ -122,6 +124,8 @@ public static class AuditEndpoints
                 })
             .RequireRateLimiting("read-api")
             .WithName("ExportAuditEvents")
+            .WithSummary("Export admin audit events")
+            .WithDescription("Exports filtered audit events as CSV (format=csv) or returns JSON payload with count and items.")
             .WithTags("Admin")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);

@@ -48,6 +48,7 @@ The dashboard is optimized for a 5-second health read:
 - Security Health score card with status color bands
 - Clear "Demo Data" badge when mock mode is enabled
 - Reputation page follows summary-first layout with deep-dive tabs (Summary, Activity, History, Risk, Network)
+- Policy & Rules page includes a visual policy builder and AI-draft assist bones (draft generation + save path)
 - Recent Security Events feed (icon-driven)
 - Threat Monitor (24h) with compact bar chart
 - Reputation Watch with quick jump to Reputation page

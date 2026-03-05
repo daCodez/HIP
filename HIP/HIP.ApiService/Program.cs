@@ -106,6 +106,7 @@ builder.Services.AddDbContext<HipDbContext>(options =>
 
 builder.Services.AddScoped<IIdentityService, DatabaseIdentityService>();
 builder.Services.AddScoped<IReputationService, DatabaseReputationService>();
+builder.Services.AddSingleton<PolicyRuleStore>();
 builder.Services.AddSingleton<ISecurityEventCounter, InMemorySecurityEventCounter>();
 builder.Services.AddSingleton<ISecurityRejectLog, InMemorySecurityRejectLog>();
 builder.Services.AddScoped<IReplayProtectionService, InMemoryReplayProtectionService>();
@@ -288,7 +289,15 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = System.IO.Path.Combine(System.AppContext.BaseDirectory, xmlFile);
+    if (System.IO.File.Exists(xmlPath))
+    {
+        options.IncludeXmlComments(xmlPath);
+    }
+});
 
 var app = builder.Build();
 
@@ -426,6 +435,7 @@ if (exposeInternalApis)
     app.MapJarvisEndpoints();
     app.MapAuditEndpoints();
     app.MapSecurityEndpoints();
+    app.MapPolicyEndpoints();
 }
 
 var runtimePluginRegistry = app.Services.GetRequiredService<IHipPluginRegistry>();

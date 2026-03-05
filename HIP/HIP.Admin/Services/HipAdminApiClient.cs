@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using HIP.Admin.Models;
 
@@ -69,8 +70,55 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
     public Task<ApiResult<List<UserDeviceRecord>>> GetUsersDevicesAsync(CancellationToken ct = default)
         => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<UserDeviceRecord>>("api/admin/users-devices", ct)!, MockUsers(), "api/admin/users-devices");
 
-    public Task<ApiResult<List<PolicyRule>>> GetPolicyRulesAsync(CancellationToken ct = default)
-        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<PolicyRule>>("api/admin/policy", ct)!, MockRules(), "api/admin/policy");
+    public async Task<ApiResult<List<PolicyRule>>> GetPolicyRulesAsync(CancellationToken ct = default)
+    {
+        if (context.MockModeEnabled)
+        {
+            return ApiResult<List<PolicyRule>>.Ok(MockRules());
+        }
+
+        try
+        {
+            var list = await httpClient.GetFromJsonAsync<List<PolicyRule>>("api/admin/policy", ct);
+            if (list is { Count: > 0 })
+            {
+                return ApiResult<List<PolicyRule>>.Ok(list);
+            }
+        }
+        catch
+        {
+            // fall through to effective-policy adapter
+        }
+
+        try
+        {
+            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/policy/effective", ct);
+            var root = doc?.RootElement;
+            if (root is not null && root.Value.TryGetProperty("requiredScores", out var scores))
+            {
+                var low = scores.TryGetProperty("low", out var lowEl) && lowEl.TryGetInt32(out var l) ? l : 30;
+                var medium = scores.TryGetProperty("medium", out var medEl) && medEl.TryGetInt32(out var m) ? m : 50;
+                var high = scores.TryGetProperty("high", out var highEl) && highEl.TryGetInt32(out var h) ? h : 70;
+
+                var adapted = new List<PolicyRule>
+                {
+                    new() { RuleId = "POL-LOW", Name = $"Low risk threshold >= {low}", Category = "Reputation", Condition = $"reputation >= {low}", Action = "Warn", Severity = "Medium", Enabled = true },
+                    new() { RuleId = "POL-MED", Name = $"Medium risk threshold >= {medium}", Category = "Reputation", Condition = $"reputation >= {medium}", Action = "Challenge", Severity = "High", Enabled = true },
+                    new() { RuleId = "POL-HIGH", Name = $"High risk threshold >= {high}", Category = "Reputation", Condition = $"reputation >= {high}", Action = "Allow", Severity = "Critical", Enabled = true },
+                    new() { RuleId = "POL-REPLAY", Name = "Replay protection required", Category = "Token", Condition = "replayDetected == true", Action = "Block", Severity = "Critical", Enabled = true },
+                    new() { RuleId = "POL-EXP", Name = "Token expiry enforced", Category = "Token", Condition = "tokenExpired == true", Action = "Block", Severity = "High", Enabled = true }
+                };
+
+                return ApiResult<List<PolicyRule>>.Ok(adapted);
+            }
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<List<PolicyRule>>.Fail($"Failed to load data from 'api/admin/policy' and fallback 'api/policy/effective'. {ex.Message}");
+        }
+
+        return ApiResult<List<PolicyRule>>.Fail("Failed to load data from 'api/admin/policy' and fallback 'api/policy/effective'. Empty response.");
+    }
 
     public async Task<ApiResult<List<ReputationWatchItem>>> GetTopRiskIdentitiesAsync(CancellationToken ct = default)
         => await ExecuteWithMockFallback(async () =>
@@ -101,6 +149,112 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
             return items;
         }, MockReputationWatch(), "api/plugins/identity/insights/top-risk?take=5");
+
+    public async Task<ApiResult<PolicyRule>> GeneratePolicyDraftAsync(string prompt, CancellationToken ct = default)
+    {
+        if (context.MockModeEnabled)
+        {
+            return ApiResult<PolicyRule>.Ok(new PolicyRule
+            {
+                RuleId = "AI-LOCAL",
+                Name = "AI Draft: Low reputation link block",
+                Category = "Messaging",
+                Condition = "reputation < 20 && sendingLink == true",
+                Action = "Block",
+                Severity = "Critical",
+                Enabled = false
+            });
+        }
+
+        try
+        {
+            var payload = JsonSerializer.Serialize(new { prompt });
+            using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var res = await httpClient.PostAsync("api/admin/policy/ai-draft", req, ct);
+            res.EnsureSuccessStatusCode();
+            var json = await res.Content.ReadAsStringAsync(ct);
+            var rule = JsonSerializer.Deserialize<PolicyRule>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return rule is null ? ApiResult<PolicyRule>.Fail("Empty AI draft response.") : ApiResult<PolicyRule>.Ok(rule);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<PolicyRule>.Fail($"Failed to load data from 'api/admin/policy/ai-draft'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<bool>> UpsertPolicyRuleAsync(PolicyRule rule, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = JsonSerializer.Serialize(new
+            {
+                ruleId = rule.RuleId,
+                name = rule.Name,
+                category = rule.Category,
+                condition = rule.Condition,
+                action = rule.Action,
+                severity = rule.Severity,
+                enabled = rule.Enabled
+            });
+            using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var res = await httpClient.PostAsync("api/admin/policy", req, ct);
+            res.EnsureSuccessStatusCode();
+            return ApiResult<bool>.Ok(true);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<bool>.Fail($"Failed to load data from 'api/admin/policy'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>> SimulatePolicyAsync(string jsonInput, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(jsonInput))
+        {
+            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail("Sandbox input is required.");
+        }
+
+        if (context.MockModeEnabled)
+        {
+            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Ok((
+                "CHALLENGE",
+                new List<string> { "Require MFA", "Untrusted Device" },
+                new List<string> { "Require MFA", "Send device alert" },
+                new List<string>
+                {
+                    "✔ LoginPolicy.MfaRequired → triggered",
+                    "✔ DevicePolicy.TrustedDevice → triggered",
+                    "✘ ReputationPolicy.LowScore → not triggered"
+                }));
+        }
+
+        try
+        {
+            using var req = new StringContent(jsonInput, Encoding.UTF8, "application/json");
+            using var response = await httpClient.PostAsync("api/admin/policy/simulate", req, ct);
+            response.EnsureSuccessStatusCode();
+
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            var root = doc.RootElement;
+
+            var decision = root.TryGetProperty("decision", out var dEl) ? dEl.GetString() ?? "ALLOW" : "ALLOW";
+            var triggered = root.TryGetProperty("triggeredRules", out var tEl) && tEl.ValueKind == JsonValueKind.Array
+                ? tEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                : new List<string>();
+            var actions = root.TryGetProperty("actions", out var aEl) && aEl.ValueKind == JsonValueKind.Array
+                ? aEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                : new List<string>();
+            var trace = root.TryGetProperty("trace", out var trEl) && trEl.ValueKind == JsonValueKind.Array
+                ? trEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                : new List<string>();
+
+            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Ok((decision, triggered, actions, trace));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/admin/policy/simulate'. {ex.Message}");
+        }
+    }
 
     public async Task<ApiResult<ReputationInsight>> GetIdentityInsightAsync(string identityId, CancellationToken ct = default)
     {
@@ -335,9 +489,9 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
     private static List<PolicyRule> MockRules() =>
     [
-        new() { RuleId = "POL-001", Name = "MFA Required for Admin Actions", Severity = "Critical", Enabled = true },
-        new() { RuleId = "POL-017", Name = "Block impossible travel login", Severity = "High", Enabled = true },
-        new() { RuleId = "POL-033", Name = "Session renewal every 12h", Severity = "Medium", Enabled = false }
+        new() { RuleId = "POL-001", Name = "MFA Required for Admin Actions", Category = "Login", Condition = "mfa == false", Action = "Challenge", Severity = "Critical", Enabled = true },
+        new() { RuleId = "POL-017", Name = "Block impossible travel login", Category = "Login", Condition = "geoJump < 2h", Action = "Block", Severity = "High", Enabled = true },
+        new() { RuleId = "POL-033", Name = "Session renewal every 12h", Category = "Token", Condition = "sessionAge > 12h", Action = "Warn", Severity = "Medium", Enabled = false }
     ];
 
     private static PolicyPackSummary MockPolicyPack() => new()
