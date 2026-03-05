@@ -116,7 +116,16 @@
             ]
         },
         new() { Title = "Users & Devices", Icon = "fa fa-users", Href = "users-devices", VisibleTo = [AdminRole.Admin, AdminRole.Support] },
-        new() { Title = "Reputation", Icon = "fa fa-line-chart", Href = "reputation", VisibleTo = [AdminRole.Admin, AdminRole.Analyst] },
+        new()
+        {
+            Title = "Reputation",
+            Icon = "fa fa-line-chart",
+            Children =
+            [
+                new() { Title = "Reputation", Href = "reputation" },
+                new() { Title = "Risks", Href = "reputation/risks" }
+            ]
+        },
         new() { Title = "System Health", Icon = "fa fa-heartbeat", Href = "system-health" },
         new() { Title = "Admin Settings", Icon = "fa fa-cog", Href = "admin-settings", VisibleTo = [AdminRole.Admin] }
     ];

@@ -67,6 +67,23 @@ public sealed class SystemUsageSummary
     public required DateTime SampledUtc { get; init; }
 }
 
+public sealed class ReputationWatchItem
+{
+    public required string IdentityId { get; init; }
+    public required int Score { get; init; }
+    public required int Blocked { get; init; }
+    public required int Review { get; init; }
+}
+
+public sealed class ReputationInsight
+{
+    public required string IdentityId { get; init; }
+    public required int ReputationScore { get; init; }
+    public required int PolicyBlockCount { get; init; }
+    public required int PolicyReviewCount { get; init; }
+    public required List<(string ReasonCode, int Count)> ReasonBreakdown { get; init; }
+}
+
 public sealed class ApiResult<T>
 {
     public bool Success { get; init; }

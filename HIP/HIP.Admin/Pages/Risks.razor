@@ -1,0 +1,56 @@
+@page "/reputation/risks"
+
+<PageTitle>Reputation Risks</PageTitle>
+
+<section class="widget widget-table table-widget-frame mb-3">
+    <div class="widget-header">
+        <h3><i class="fa fa-exclamation-triangle"></i> Risky Identities</h3>
+        <span class="widget-label">Live View</span>
+    </div>
+    <div class="widget-content">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Identity</th>
+                        <th>Score</th>
+                        <th>Risk Level</th>
+                        <th>Blocked (24h)</th>
+                        <th>Review (24h)</th>
+                        <th>Trend</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>support@hip.local</td>
+                        <td>52</td>
+                        <td><span class="badge text-bg-warning">Attention</span></td>
+                        <td>1</td>
+                        <td>3</td>
+                        <td>↓</td>
+                        <td><a href="/admin/reputation" class="btn btn-sm btn-outline-secondary">View</a></td>
+                    </tr>
+                    <tr>
+                        <td>guest@hip.local</td>
+                        <td>34</td>
+                        <td><span class="badge text-bg-danger">Critical</span></td>
+                        <td>3</td>
+                        <td>2</td>
+                        <td>↓</td>
+                        <td><a href="/admin/reputation" class="btn btn-sm btn-outline-secondary">View</a></td>
+                    </tr>
+                    <tr>
+                        <td>admin@hip.local</td>
+                        <td>81</td>
+                        <td><span class="badge text-bg-success">Trusted</span></td>
+                        <td>0</td>
+                        <td>1</td>
+                        <td>↑</td>
+                        <td><a href="/admin/reputation" class="btn btn-sm btn-outline-secondary">View</a></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>

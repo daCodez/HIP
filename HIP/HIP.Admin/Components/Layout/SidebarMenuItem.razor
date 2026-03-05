@@ -47,7 +47,7 @@
     [Parameter] public required string CurrentUri { get; set; }
     [Parameter] public int Depth { get; set; }
 
-    private bool _expanded = true;
+    private bool _expanded;
 
     private bool IsActive(string href)
     {
@@ -62,6 +62,14 @@
         }
 
         return current.Equals(candidate, StringComparison.OrdinalIgnoreCase);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Item.Children.Any(c => !string.IsNullOrWhiteSpace(c.Href) && IsActive(c.Href!)))
+        {
+            _expanded = true;
+        }
     }
 
     private void Toggle() => _expanded = !_expanded;

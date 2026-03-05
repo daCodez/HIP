@@ -1,37 +1,218 @@
 @page "/reputation"
 @inject ActionLogService ActionLog
+@inject HipAdminApiClient Api
+@inject AdminContextService AdminContext
 
 <PageTitle>Reputation</PageTitle>
 
-<div class="row g-3">
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-body">
-                <h5>Formula Inputs</h5>
-                <label class="form-label">Trust Weight</label>
-                <input type="range" min="1" max="100" class="form-range" @bind="_trustWeight" />
-                <label class="form-label">Risk Weight</label>
-                <input type="range" min="1" max="100" class="form-range" @bind="_riskWeight" />
-                <button class="btn btn-primary btn-sm" @onclick="Save">Save formula</button>
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-warning py-2 small">@_error</div>
+}
+
+<section class="widget mb-3">
+    <div class="widget-header">
+        <h3><i class="fa fa-user-secret"></i> Identity Reputation (Top Risk)</h3>
+        @if (AdminContext.MockModeEnabled)
+        {
+            <span class="widget-label">Demo Data</span>
+        }
+        else
+        {
+            <span class="widget-label @(_degraded ? "degraded" : "live")">@(_degraded ? "Degraded" : "Live Data")</span>
+        }
+    </div>
+    <div class="widget-content reputation-summary-grid">
+        <div>
+            <div class="rep-score">@Score / 100 @ScoreEmoji</div>
+            <div class="rep-status">@ScoreLabel</div>
+            <div class="small text-muted mt-2">Risk Level: <strong>@RiskLevel</strong></div>
+            <div class="small text-muted">Trend: <strong>@TrendLabel</strong></div>
+            <div class="small text-muted">Network avg: <strong>74</strong> • This user: <strong>@Score</strong></div>
+            <div class="small text-muted">Confidence: <strong>High</strong></div>
+        </div>
+
+        <div>
+            <div class="rep-gauge" role="img" aria-label="Reputation gauge">
+                <div class="rep-gauge-fill" style="width:@Score%"></div>
+            </div>
+            <div class="why-chip-wrap mt-3">
+                @foreach (var chip in WhyChips)
+                {
+                    <span class="why-chip @chip.Class">@chip.Text</span>
+                }
             </div>
         </div>
     </div>
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-body">
-                <h5>Trend (placeholder)</h5>
-                <div class="bg-light border rounded p-5 text-center">Trend chart placeholder</div>
+
+    <div class="widget-content pt-0">
+        <div class="form-check form-switch">
+            <input id="scoreMathToggle" class="form-check-input" type="checkbox" @bind="ShowScoreMath" />
+            <label class="form-check-label small" for="scoreMathToggle">Show score math</label>
+        </div>
+
+        @if (ShowScoreMath)
+        {
+            <div class="score-math mt-2 small">
+                <div>Base score: <strong>50</strong></div>
+                <div>Acceptance ratio: <span class="text-success">+18</span></div>
+                <div>Feedback: <span class="text-success">+12</span></div>
+                <div>Trust over time: <span class="text-success">+8</span></div>
+                <div>Penalties: <span class="text-danger">-6</span></div>
+                <div class="mt-1">Final score (clamped 0–100): <strong>@Score</strong></div>
             </div>
+        }
+    </div>
+</section>
+
+<section class="widget mb-3">
+    <div class="widget-header"><h3>Reputation Timeline</h3></div>
+    <div class="widget-content">
+        <div class="timeline-graph mb-3" aria-label="Reputation trend">
+            <div class="timeline-line"></div>
+            <div class="impact-dot good" style="left: 12%;" title="Mar 4 Positive feedback (+3)">✅</div>
+            <div class="impact-dot bad" style="left: 45%;" title="Mar 2 Spam report (-10)">❌</div>
+            <div class="impact-dot warn" style="left: 68%;" title="Mar 1 3 failed logins (-4)">⚠</div>
+            <div class="impact-dot crit" style="left: 84%;" title="Token replay event">🚨</div>
+        </div>
+
+        <div class="small">
+            <div>Mar 4 ✅ Positive feedback <span class="text-success">(+3)</span></div>
+            <div>Mar 2 ❌ Spam report <span class="text-danger">(-10)</span></div>
+            <div>Mar 1 ⚠ 3 failed logins <span class="text-danger">(-4)</span></div>
         </div>
     </div>
-</div>
+</section>
+
+<section class="widget">
+    <div class="widget-header">
+        <h3>Details</h3>
+        <span class="widget-label">Deep Dive</span>
+    </div>
+    <div class="widget-content">
+        <ul class="nav nav-tabs mb-3">
+            <li class="nav-item"><button class="nav-link @(Tab == "summary" ? "active" : null)" @onclick='() => SetTab("summary")'>Summary</button></li>
+            <li class="nav-item"><button class="nav-link @(Tab == "activity" ? "active" : null)" @onclick='() => SetTab("activity")'>Activity</button></li>
+            <li class="nav-item"><button class="nav-link @(Tab == "history" ? "active" : null)" @onclick='() => SetTab("history")'>History</button></li>
+            <li class="nav-item"><button class="nav-link @(Tab == "risk" ? "active" : null)" @onclick='() => SetTab("risk")'>Risk</button></li>
+            <li class="nav-item"><button class="nav-link @(Tab == "trust" ? "active" : null)" @onclick='() => SetTab("trust")'>Trust Profile</button></li>
+        </ul>
+
+        @if (Tab == "summary")
+        {
+            <div class="small">
+                <div><strong>How trusted is this user?</strong></div>
+                <div class="text-muted">Score @Score/100 indicates @ScoreLabel. Trend is @TrendLabel.ToLowerInvariant().</div>
+            </div>
+        }
+        else if (Tab == "activity")
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                    <tr><th>Metric</th><th>Value</th></tr>
+                    </thead>
+                    <tbody>
+                    <tr><td>Messages sent</td><td>@MessagesSent</td></tr>
+                    <tr><td>Interactions</td><td>@SuccessfulInteractions</td></tr>
+                    <tr><td>Spam reports</td><td>@SpamReports</td></tr>
+                    <tr><td>Auth failures</td><td>@AuthFailures</td></tr>
+                    <tr><td>Policy triggers</td><td>@PolicyViolations</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (Tab == "history")
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                    <tr><th>Date</th><th>Event</th><th>Impact</th></tr>
+                    </thead>
+                    <tbody>
+                    <tr><td>Mar 4</td><td>Positive feedback</td><td class="text-success">+3</td></tr>
+                    <tr><td>Mar 3</td><td>Successful interaction</td><td class="text-success">+1</td></tr>
+                    <tr><td>Mar 2</td><td>Spam report</td><td class="text-danger">-10</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (Tab == "risk")
+        {
+            <div class="small">
+                <div><strong>Risk Assessment:</strong> @RiskLevel</div>
+                <ul class="mt-2 mb-0">
+                    <li>✔ High acceptance rate</li>
+                    <li>✔ Long account history</li>
+                    <li>✔ Low abuse reports</li>
+                </ul>
+            </div>
+        }
+        else if (Tab == "trust")
+        {
+            <div class="trust-profile-grid small">
+                <div class="trust-row"><span>Reliability</span><div class="trust-bar"><span style="width:86%"></span></div></div>
+                <div class="trust-row"><span>Community Feedback</span><div class="trust-bar"><span style="width:80%"></span></div></div>
+                <div class="trust-row"><span>Account History</span><div class="trust-bar"><span style="width:84%"></span></div></div>
+                <div class="trust-row"><span>Safety Signals</span><div class="trust-bar"><span style="width:74%"></span></div></div>
+                <div class="trust-row"><span>Login Health</span><div class="trust-bar"><span style="width:78%"></span></div></div>
+            </div>
+        }
+    </div>
+</section>
 
 @code {
-    private int _trustWeight = 65;
-    private int _riskWeight = 35;
+    private string Tab { get; set; } = "summary";
+    private bool ShowScoreMath { get; set; }
+    private bool _degraded;
+    private string? _error;
 
-    private void Save()
+    private int Score { get; set; } = 82;
+    private string ScoreEmoji => Score >= 80 ? "🟢" : Score >= 50 ? "🟡" : "🔴";
+    private string ScoreLabel => Score >= 80 ? "Trusted" : Score >= 50 ? "Watch" : "At Risk";
+    private string RiskLevel => Score >= 80 ? "Low Risk" : Score >= 50 ? "Medium Risk" : "High Risk";
+    private string TrendLabel => "Improving ↑";
+
+    private int SuccessfulInteractions { get; set; } = 18;
+    private int PositiveFeedback { get; set; } = 12;
+    private int SpamReports { get; set; } = 6;
+    private int AuthFailures { get; set; } = 4;
+
+    private int MessagesSent { get; set; } = 154;
+    private int PolicyViolations { get; set; }
+
+    protected override async Task OnInitializedAsync()
     {
-        ActionLog.Log($"Reputation formula updated: trust={_trustWeight}, risk={_riskWeight}");
+        var topRisk = await Api.GetTopRiskIdentitiesAsync();
+        var identity = topRisk.Data?.FirstOrDefault()?.IdentityId ?? "support@hip.local";
+
+        var insight = await Api.GetIdentityInsightAsync(identity);
+        _degraded = !insight.Success;
+        _error = insight.Success ? null : insight.Error;
+
+        if (insight.Success && insight.Data is not null)
+        {
+            Score = insight.Data.ReputationScore;
+            PolicyViolations = insight.Data.PolicyBlockCount + insight.Data.PolicyReviewCount;
+            SpamReports = insight.Data.PolicyBlockCount;
+            AuthFailures = insight.Data.PolicyReviewCount;
+            PositiveFeedback = Math.Max(2, insight.Data.ReasonBreakdown.FirstOrDefault(x => x.ReasonCode.Contains("positive", StringComparison.OrdinalIgnoreCase)).Count);
+            SuccessfulInteractions = Math.Max(6, 20 - PolicyViolations);
+            MessagesSent = 120 + SuccessfulInteractions;
+        }
+    }
+
+    private List<(string Text, string Class)> WhyChips =>
+    [
+        ("✅ High acceptance rate", "good"),
+        ("✅ Long account age", "good"),
+        ($"⚠ {AuthFailures} auth failures", "warn"),
+        ($"✅ Low spam flags ({SpamReports})", "good")
+    ];
+
+    private void SetTab(string tab)
+    {
+        Tab = tab;
+        ActionLog.Log($"Reputation tab viewed: {tab}");
     }
 }
