@@ -42,9 +42,20 @@ public sealed class IdentityInsightsPlugin : IHipPlugin
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest);
 
+        endpoints.MapGet("/api/v1/plugins/identity/insights/{identityId}", HandleIdentityInsightsAsync)
+            .WithName("GetIdentityInsightsV1")
+            .WithTags("Plugins", "v1")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest);
+
         endpoints.MapGet("/api/plugins/identity/insights/top-risk", HandleTopRiskAsync)
             .WithName("GetTopRiskIdentities")
             .WithTags("Plugins")
+            .Produces(StatusCodes.Status200OK);
+
+        endpoints.MapGet("/api/v1/plugins/identity/insights/top-risk", HandleTopRiskAsync)
+            .WithName("GetTopRiskIdentitiesV1")
+            .WithTags("Plugins", "v1")
             .Produces(StatusCodes.Status200OK);
     }
 

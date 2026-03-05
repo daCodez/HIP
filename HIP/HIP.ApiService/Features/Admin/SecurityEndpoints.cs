@@ -14,16 +14,18 @@ public static class SecurityEndpoints
     /// <returns>The operation result.</returns>
     public static IEndpointRouteBuilder MapSecurityEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/admin/security-status", async (HttpContext httpContext, ISecurityEventCounter counter, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
+        async Task<IResult> securityStatusHandler(HttpContext httpContext, ISecurityEventCounter counter, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken)
+        {
+            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            if (gate is not null)
             {
-                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
-                if (gate is not null)
-                {
-                    return gate;
-                }
+                return gate;
+            }
 
-                return Results.Ok(counter.Snapshot());
-            })
+            return Results.Ok(counter.Snapshot());
+        }
+
+        endpoints.MapGet("/api/admin/security-status", securityStatusHandler)
             .RequireRateLimiting("read-api")
             .WithName("GetSecurityStatus")
             .WithSummary("Get aggregate security status counters")
@@ -32,22 +34,42 @@ public static class SecurityEndpoints
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
 
-        endpoints.MapGet("/api/admin/security-events", async (HttpContext httpContext, int? take, ISecurityRejectLog rejectLog, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken) =>
-            {
-                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
-                if (gate is not null)
-                {
-                    return gate;
-                }
+        endpoints.MapGet("/api/v1/admin/security-status", securityStatusHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("GetSecurityStatusV1")
+            .WithSummary("Get aggregate security status counters")
+            .WithDescription("Versioned alias of admin security status endpoint.")
+            .WithTags("Admin", "v1")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
 
-                var count = Math.Clamp(take ?? 10, 1, 100);
-                return Results.Ok(rejectLog.Recent(count));
-            })
+        async Task<IResult> securityEventsHandler(HttpContext httpContext, int? take, ISecurityRejectLog rejectLog, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken)
+        {
+            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            if (gate is not null)
+            {
+                return gate;
+            }
+
+            var count = Math.Clamp(take ?? 10, 1, 100);
+            return Results.Ok(rejectLog.Recent(count));
+        }
+
+        endpoints.MapGet("/api/admin/security-events", securityEventsHandler)
             .RequireRateLimiting("read-api")
             .WithName("GetSecurityEvents")
             .WithSummary("Get recent security rejection events")
             .WithDescription("Returns recent security rejection events for investigation, including reason, identity, and timestamp. Supports optional take parameter.")
             .WithTags("Admin")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapGet("/api/v1/admin/security-events", securityEventsHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("GetSecurityEventsV1")
+            .WithSummary("Get recent security rejection events")
+            .WithDescription("Versioned alias of admin security events endpoint.")
+            .WithTags("Admin", "v1")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
 

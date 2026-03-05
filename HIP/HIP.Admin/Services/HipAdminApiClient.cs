@@ -9,7 +9,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
     public async Task<ApiResult<List<DashboardMetric>>> GetDashboardMetricsAsync(CancellationToken ct = default)
         => await ExecuteWithMockFallback(async () =>
         {
-            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/admin/security-status", ct);
+            using var doc = await GetJsonDocumentWithRetryAsync("api/admin/security-status", ct);
             var root = doc?.RootElement;
             if (root is null || root.Value.ValueKind != JsonValueKind.Object)
             {
@@ -37,7 +37,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
     public async Task<ApiResult<List<ActivityItem>>> GetActivityAsync(CancellationToken ct = default)
         => await ExecuteWithMockFallback(async () =>
         {
-            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/admin/security-events?take=25", ct);
+            using var doc = await GetJsonDocumentWithRetryAsync("api/admin/security-events?take=25", ct);
             var root = doc?.RootElement;
             if (root is null || root.Value.ValueKind != JsonValueKind.Array)
             {
@@ -65,10 +65,10 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }, MockActivity(), "api/admin/security-events?take=25");
 
     public Task<ApiResult<List<SecurityCheck>>> GetSecurityChecksAsync(CancellationToken ct = default)
-        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<SecurityCheck>>("api/admin/security", ct)!, MockSecurity(), "api/admin/security");
+        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<SecurityCheck>>("api/v1/admin/security", ct)!, MockSecurity(), "api/v1/admin/security");
 
     public Task<ApiResult<List<UserDeviceRecord>>> GetUsersDevicesAsync(CancellationToken ct = default)
-        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<UserDeviceRecord>>("api/admin/users-devices", ct)!, MockUsers(), "api/admin/users-devices");
+        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<UserDeviceRecord>>("api/v1/admin/users-devices", ct)!, MockUsers(), "api/v1/admin/users-devices");
 
     public async Task<ApiResult<List<PolicyRule>>> GetPolicyRulesAsync(CancellationToken ct = default)
     {
@@ -79,7 +79,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
         try
         {
-            var list = await httpClient.GetFromJsonAsync<List<PolicyRule>>("api/admin/policy", ct);
+            var list = await httpClient.GetFromJsonAsync<List<PolicyRule>>("api/v1/admin/policy", ct);
             if (list is { Count: > 0 })
             {
                 return ApiResult<List<PolicyRule>>.Ok(list);
@@ -92,7 +92,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
         try
         {
-            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/policy/effective", ct);
+            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/v1/policy/effective", ct);
             var root = doc?.RootElement;
             if (root is not null && root.Value.TryGetProperty("requiredScores", out var scores))
             {
@@ -114,16 +114,16 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
         catch (Exception ex)
         {
-            return ApiResult<List<PolicyRule>>.Fail($"Failed to load data from 'api/admin/policy' and fallback 'api/policy/effective'. {ex.Message}");
+            return ApiResult<List<PolicyRule>>.Fail($"Failed to load data from 'api/v1/admin/policy' and fallback 'api/v1/policy/effective'. {ex.Message}");
         }
 
-        return ApiResult<List<PolicyRule>>.Fail("Failed to load data from 'api/admin/policy' and fallback 'api/policy/effective'. Empty response.");
+        return ApiResult<List<PolicyRule>>.Fail("Failed to load data from 'api/v1/admin/policy' and fallback 'api/v1/policy/effective'. Empty response.");
     }
 
     public async Task<ApiResult<List<ReputationWatchItem>>> GetTopRiskIdentitiesAsync(CancellationToken ct = default)
         => await ExecuteWithMockFallback(async () =>
         {
-            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/plugins/identity/insights/top-risk?take=5", ct);
+            using var doc = await GetJsonDocumentWithRetryAsync("api/plugins/identity/insights/top-risk?take=5", ct);
             var root = doc?.RootElement;
             if (root is null || !root.Value.TryGetProperty("identities", out var identities) || identities.ValueKind != JsonValueKind.Array)
             {
@@ -163,12 +163,12 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
         try
         {
-            var data = await httpClient.GetFromJsonAsync<List<AuthzPolicyRule>>("api/admin/authz-policies", ct);
+            var data = await httpClient.GetFromJsonAsync<List<AuthzPolicyRule>>("api/v1/admin/authz-policies", ct);
             return ApiResult<List<AuthzPolicyRule>>.Ok(data ?? []);
         }
         catch (Exception ex)
         {
-            return ApiResult<List<AuthzPolicyRule>>.Fail($"Failed to load data from 'api/admin/authz-policies'. {ex.Message}");
+            return ApiResult<List<AuthzPolicyRule>>.Fail($"Failed to load data from 'api/v1/admin/authz-policies'. {ex.Message}");
         }
     }
 
@@ -177,7 +177,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         try
         {
             using var req = new StringContent(jsonInput, Encoding.UTF8, "application/json");
-            using var response = await httpClient.PostAsync("api/admin/authz/simulate", req, ct);
+            using var response = await httpClient.PostAsync("api/v1/admin/authz/simulate", req, ct);
             response.EnsureSuccessStatusCode();
 
             using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -197,7 +197,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
         catch (Exception ex)
         {
-            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/admin/authz/simulate'. {ex.Message}");
+            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/v1/admin/authz/simulate'. {ex.Message}");
         }
     }
 
@@ -221,7 +221,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         {
             var payload = JsonSerializer.Serialize(new { prompt });
             using var req = new StringContent(payload, Encoding.UTF8, "application/json");
-            using var res = await httpClient.PostAsync("api/admin/policy/ai-draft", req, ct);
+            using var res = await httpClient.PostAsync("api/v1/admin/policy/ai-draft", req, ct);
             res.EnsureSuccessStatusCode();
             var json = await res.Content.ReadAsStringAsync(ct);
             var rule = JsonSerializer.Deserialize<PolicyRule>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -229,7 +229,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
         catch (Exception ex)
         {
-            return ApiResult<PolicyRule>.Fail($"Failed to load data from 'api/admin/policy/ai-draft'. {ex.Message}");
+            return ApiResult<PolicyRule>.Fail($"Failed to load data from 'api/v1/admin/policy/ai-draft'. {ex.Message}");
         }
     }
 
@@ -248,13 +248,13 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
                 enabled = rule.Enabled
             });
             using var req = new StringContent(payload, Encoding.UTF8, "application/json");
-            using var res = await httpClient.PostAsync("api/admin/policy", req, ct);
+            using var res = await httpClient.PostAsync("api/v1/admin/policy", req, ct);
             res.EnsureSuccessStatusCode();
             return ApiResult<bool>.Ok(true);
         }
         catch (Exception ex)
         {
-            return ApiResult<bool>.Fail($"Failed to load data from 'api/admin/policy'. {ex.Message}");
+            return ApiResult<bool>.Fail($"Failed to load data from 'api/v1/admin/policy'. {ex.Message}");
         }
     }
 
@@ -282,7 +282,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         try
         {
             using var req = new StringContent(jsonInput, Encoding.UTF8, "application/json");
-            using var response = await httpClient.PostAsync("api/admin/policy/simulate", req, ct);
+            using var response = await httpClient.PostAsync("api/v1/admin/policy/simulate", req, ct);
             response.EnsureSuccessStatusCode();
 
             using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -303,7 +303,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
         catch (Exception ex)
         {
-            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/admin/policy/simulate'. {ex.Message}");
+            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/v1/admin/policy/simulate'. {ex.Message}");
         }
     }
 
@@ -321,11 +321,11 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
         try
         {
-            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>($"api/plugins/identity/insights/{Uri.EscapeDataString(identityId)}", ct);
+            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>($"api/v1/plugins/identity/insights/{Uri.EscapeDataString(identityId)}", ct);
             var root = doc?.RootElement;
             if (root is null || root.Value.ValueKind != JsonValueKind.Object)
             {
-                return ApiResult<ReputationInsight>.Fail($"Failed to load data from 'api/plugins/identity/insights/{identityId}'. Empty response.");
+                return ApiResult<ReputationInsight>.Fail($"Failed to load data from 'api/v1/plugins/identity/insights/{identityId}'. Empty response.");
             }
 
             var score = root.Value.TryGetProperty("reputationScore", out var sEl) && sEl.TryGetInt32(out var s) ? s : 0;
@@ -358,7 +358,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
         catch (Exception ex)
         {
-            return ApiResult<ReputationInsight>.Fail($"Failed to load data from 'api/plugins/identity/insights/{identityId}'. {ex.Message}");
+            return ApiResult<ReputationInsight>.Fail($"Failed to load data from 'api/v1/plugins/identity/insights/{identityId}'. {ex.Message}");
         }
     }
 
@@ -371,7 +371,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
         try
         {
-            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/admin/audit?take=250", ct);
+            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/v1/admin/audit?take=250", ct);
             var root = doc?.RootElement;
             if (root is null || root.Value.ValueKind != JsonValueKind.Array)
             {
@@ -424,7 +424,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         // First real endpoint wiring: plugin metadata route from API service.
         try
         {
-            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/plugins/policy/current", ct);
+            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/v1/plugins/policy/current", ct);
             var root = doc?.RootElement;
             if (root is not null && root.Value.TryGetProperty("policyVersion", out var policyVersion))
             {
@@ -455,7 +455,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         // First real endpoint wiring: system metrics plugin route.
         try
         {
-            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/plugins/system-metrics?take=1", ct);
+            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/v1/plugins/system-metrics?take=1", ct);
             var root = doc?.RootElement;
             if (root is not null && root.Value.TryGetProperty("samples", out var samples) && samples.ValueKind == JsonValueKind.Array)
             {
@@ -506,6 +506,31 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
                 ? ApiResult<List<T>>.Ok(mock)
                 : ApiResult<List<T>>.Fail($"Failed to load data from '{endpoint}'. {ex.Message}");
         }
+    }
+
+    private async Task<JsonDocument?> GetJsonDocumentWithRetryAsync(string path, CancellationToken ct)
+    {
+        Exception? last = null;
+
+        for (var attempt = 1; attempt <= 2; attempt++)
+        {
+            try
+            {
+                return await httpClient.GetFromJsonAsync<JsonDocument>(path, ct);
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+                if (!ex.Message.Contains("ResponseEnded", StringComparison.OrdinalIgnoreCase) || attempt == 2)
+                {
+                    throw;
+                }
+
+                await Task.Delay(120, ct);
+            }
+        }
+
+        throw last ?? new InvalidOperationException($"Failed to load '{path}'.");
     }
 
     private static List<DashboardMetric> MockMetrics() =>

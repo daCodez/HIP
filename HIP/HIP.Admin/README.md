@@ -60,12 +60,12 @@ The dashboard is optimized for a 5-second health read:
 
 ## Mock mode + API integration
 - `HipAdminApiClient` endpoints to wire:
-  - `api/admin/dashboard/metrics`
-  - `api/admin/audit/latest`
-  - `api/admin/security`
-  - `api/admin/users-devices`
-  - `api/admin/policy`
-  - `api/admin/audit`
+  - `api/v1/admin/dashboard/metrics`
+  - `api/v1/admin/audit/latest`
+  - `api/v1/admin/security`
+  - `api/v1/admin/users-devices`
+  - `api/v1/admin/policy`
+  - `api/v1/admin/audit`
 - Set optional API base URL via config key `HipAdmin:ApiBaseUrl`.
 - Friendly fallback behavior:
   - Mock mode ON => uses local sample data
