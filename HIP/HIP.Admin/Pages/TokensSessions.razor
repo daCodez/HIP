@@ -1,3 +1,162 @@
 @page "/tokens-sessions"
+@inject HipAdminApiClient Api
 
-<div class="card"><div class="card-body"><h5>Tokens & Sessions</h5><p class="text-muted">Read-only placeholder for phase 2 live data.</p></div></div>
+<PageTitle>Tokens & Sessions</PageTitle>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-warning py-2 small">@_error</div>
+}
+
+<section class="dashboard-security-grid mb-3">
+    <div class="widget"><div class="widget-header"><h3>Active Sessions</h3></div><div class="widget-content"><div class="rep-score">@_activeSessions</div></div></div>
+    <div class="widget"><div class="widget-header"><h3>Token Issues (24h)</h3></div><div class="widget-content"><div class="rep-score">@_issues24h</div></div></div>
+    <div class="widget"><div class="widget-header"><h3>Token Refreshes (24h)</h3></div><div class="widget-content"><div class="rep-score">@_refresh24h</div></div></div>
+    <div class="widget"><div class="widget-header"><h3>Revokes (24h)</h3></div><div class="widget-content"><div class="rep-score">@_revoke24h</div></div></div>
+</section>
+
+<section class="widget mb-3">
+    <div class="widget-header"><h3><i class="fa fa-key"></i> Token Operations</h3></div>
+    <div class="widget-content">
+        <div class="row g-2">
+            <div class="col-md-3"><input class="form-control form-control-sm" placeholder="Identity Id" @bind="_identityId" /></div>
+            <div class="col-md-3"><input class="form-control form-control-sm" placeholder="Audience" @bind="_audience" /></div>
+            <div class="col-md-3"><input class="form-control form-control-sm" placeholder="Device Id (optional)" @bind="_deviceId" /></div>
+        </div>
+        <div class="d-flex gap-2 mt-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-primary" @onclick="IssueAsync">Issue</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="ValidateAsync">Validate</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshAsync">Refresh</button>
+            <button class="btn btn-sm btn-outline-danger" @onclick="RevokeAsync">Revoke</button>
+        </div>
+
+        <div class="mt-2">
+            <textarea class="form-control form-control-sm" rows="4" placeholder="Access token (for validate/revoke)" @bind="_accessToken"></textarea>
+        </div>
+        <div class="mt-2">
+            <textarea class="form-control form-control-sm" rows="3" placeholder="Refresh token (for refresh/revoke)" @bind="_refreshToken"></textarea>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_opResult))
+        {
+            <pre class="small mt-2 mb-0" style="white-space: pre-wrap">@_opResult</pre>
+        }
+    </div>
+</section>
+
+<section class="widget widget-table table-widget-frame">
+    <div class="widget-header">
+        <h3><i class="fa fa-clock-o"></i> Token & Session Events</h3>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="LoadEventsAsync">Refresh</button>
+    </div>
+    <div class="widget-content">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr><th>Time (UTC)</th><th>Event</th><th>Subject</th><th>Outcome</th><th>Reason</th><th>Detail</th></tr>
+                </thead>
+                <tbody>
+                    @if (_events.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center text-muted py-4">No token/session events found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var e in _events)
+                        {
+                            <tr>
+                                <td>@e.Time</td>
+                                <td>@e.EventType</td>
+                                <td>@e.Subject</td>
+                                <td><span class="badge @(e.Outcome.Equals("allowed", StringComparison.OrdinalIgnoreCase) ? "text-bg-success" : "text-bg-danger")">@e.Outcome</span></td>
+                                <td>@e.Reason</td>
+                                <td>@e.Detail</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+@code {
+    private sealed record TokenEventRow(string Time, string EventType, string Subject, string Outcome, string Reason, string Detail);
+
+    private string _identityId = "support@hip.local";
+    private string _audience = "hip-admin";
+    private string _deviceId = "";
+    private string _accessToken = "";
+    private string _refreshToken = "";
+
+    private string? _error;
+    private string? _opResult;
+    private readonly List<TokenEventRow> _events = [];
+
+    private int _activeSessions;
+    private int _issues24h;
+    private int _refresh24h;
+    private int _revoke24h;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEventsAsync();
+    }
+
+    private async Task LoadEventsAsync()
+    {
+        var res = await Api.GetTokenEventsAsync(80);
+        _error = res.Success ? null : res.Error;
+        _events.Clear();
+
+        if (!res.Success || res.Data is null)
+        {
+            return;
+        }
+
+        foreach (var e in res.Data.RootElement.EnumerateArray())
+        {
+            var ts = e.TryGetProperty("createdAtUtc", out var tsEl) ? tsEl.GetString() ?? "" : "";
+            var eventType = e.TryGetProperty("eventType", out var etEl) ? etEl.GetString() ?? "" : "";
+            var subject = e.TryGetProperty("subject", out var sEl) ? sEl.GetString() ?? "" : "";
+            var outcome = e.TryGetProperty("outcome", out var oEl) ? oEl.GetString() ?? "" : "";
+            var reason = e.TryGetProperty("reasonCode", out var rEl) ? rEl.GetString() ?? "" : "";
+            var detail = e.TryGetProperty("detail", out var dEl) ? dEl.GetString() ?? "" : "";
+
+            _events.Add(new TokenEventRow(ts, eventType, subject, outcome, reason, detail));
+        }
+
+        _issues24h = _events.Count(x => x.EventType.Contains("issue", StringComparison.OrdinalIgnoreCase));
+        _refresh24h = _events.Count(x => x.EventType.Contains("refresh", StringComparison.OrdinalIgnoreCase));
+        _revoke24h = _events.Count(x => x.EventType.Contains("revoke", StringComparison.OrdinalIgnoreCase));
+        _activeSessions = Math.Max(0, _issues24h - _revoke24h);
+    }
+
+    private async Task IssueAsync()
+    {
+        var r = await Api.IssueTokenAsync(_identityId, _audience, string.IsNullOrWhiteSpace(_deviceId) ? null : _deviceId);
+        _opResult = r.Success && r.Data is not null ? r.Data.RootElement.ToString() : r.Error;
+        await LoadEventsAsync();
+    }
+
+    private async Task ValidateAsync()
+    {
+        var r = await Api.ValidateTokenAsync(_accessToken, _audience, string.IsNullOrWhiteSpace(_deviceId) ? null : _deviceId);
+        _opResult = r.Success && r.Data is not null ? r.Data.RootElement.ToString() : r.Error;
+        await LoadEventsAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        var r = await Api.RefreshTokenAsync(_refreshToken);
+        _opResult = r.Success && r.Data is not null ? r.Data.RootElement.ToString() : r.Error;
+        await LoadEventsAsync();
+    }
+
+    private async Task RevokeAsync()
+    {
+        var r = await Api.RevokeTokenAsync(string.IsNullOrWhiteSpace(_accessToken) ? null : _accessToken, string.IsNullOrWhiteSpace(_refreshToken) ? null : _refreshToken, string.IsNullOrWhiteSpace(_identityId) ? null : _identityId);
+        _opResult = r.Success && r.Data is not null ? r.Data.RootElement.ToString() : r.Error;
+        await LoadEventsAsync();
+    }
+}

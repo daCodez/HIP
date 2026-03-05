@@ -275,6 +275,83 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
     }
 
+    public async Task<ApiResult<JsonDocument>> GetTokenEventsAsync(int take = 50, CancellationToken ct = default)
+    {
+        try
+        {
+            var doc = await GetJsonDocumentWithRetryAsync($"api/admin/audit?take={Math.Clamp(take, 1, 200)}&eventType=jarvis.token", ct);
+            return ApiResult<JsonDocument>.Ok(doc ?? JsonDocument.Parse("[]"));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<JsonDocument>.Fail($"Failed to load data from 'api/admin/audit?eventType=jarvis.token'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<JsonDocument>> IssueTokenAsync(string identityId, string audience, string? deviceId, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = JsonSerializer.Serialize(new { identityId, audience, deviceId });
+            using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var res = await httpClient.PostAsync("api/token/issue", req, ct);
+            res.EnsureSuccessStatusCode();
+            return ApiResult<JsonDocument>.Ok(JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct)));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<JsonDocument>.Fail($"Failed to load data from 'api/token/issue'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<JsonDocument>> ValidateTokenAsync(string accessToken, string? audience, string? deviceId, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = JsonSerializer.Serialize(new { accessToken, audience, deviceId });
+            using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var res = await httpClient.PostAsync("api/token/validate", req, ct);
+            res.EnsureSuccessStatusCode();
+            return ApiResult<JsonDocument>.Ok(JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct)));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<JsonDocument>.Fail($"Failed to load data from 'api/token/validate'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<JsonDocument>> RefreshTokenAsync(string refreshToken, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = JsonSerializer.Serialize(new { refreshToken });
+            using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var res = await httpClient.PostAsync("api/token/refresh", req, ct);
+            res.EnsureSuccessStatusCode();
+            return ApiResult<JsonDocument>.Ok(JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct)));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<JsonDocument>.Fail($"Failed to load data from 'api/token/refresh'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<JsonDocument>> RevokeTokenAsync(string? accessToken, string? refreshToken, string? identityId, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = JsonSerializer.Serialize(new { accessToken, refreshToken, identityId });
+            using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var res = await httpClient.PostAsync("api/token/revoke", req, ct);
+            res.EnsureSuccessStatusCode();
+            return ApiResult<JsonDocument>.Ok(JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct)));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<JsonDocument>.Fail($"Failed to load data from 'api/token/revoke'. {ex.Message}");
+        }
+    }
+
     public async Task<ApiResult<PolicyRule>> GeneratePolicyDraftAsync(string prompt, CancellationToken ct = default)
     {
         if (context.MockModeEnabled)

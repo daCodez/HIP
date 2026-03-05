@@ -52,6 +52,7 @@ The dashboard is optimized for a 5-second health read:
 - Added Authorization Policies page and sandbox (separate from Security Policies)
 - Added login page scaffold (`/login`) without enforcement yet
 - Added pluggable OIDC config scaffold under `HipAdmin:Auth` (provider-agnostic, enforcement optional)
+- Tokens & Sessions page now supports live token issue/validate/refresh/revoke operations and event feed from admin audit trail
 - Recent Security Events feed (icon-driven)
 - Threat Monitor (24h) with compact bar chart
 - Reputation Watch with quick jump to Reputation page
