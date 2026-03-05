@@ -98,6 +98,19 @@ public sealed class AuthzPolicyRule
     public bool Enabled { get; set; }
 }
 
+public sealed class PolicyVersionSummary
+{
+    public required string VersionId { get; init; }
+    public required string Name { get; init; }
+    public required string Status { get; init; }
+    public DateTimeOffset CreatedUtc { get; init; }
+    public DateTimeOffset? ActivatedUtc { get; init; }
+    public required string Actor { get; init; }
+    public required string Reason { get; init; }
+    public string? ApprovedBy { get; init; }
+    public int RuleCount { get; init; }
+}
+
 public sealed class ApiResult<T>
 {
     public bool Success { get; init; }

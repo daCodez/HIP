@@ -10,6 +10,45 @@
     <div class="alert alert-warning py-2 small">@_error</div>
 }
 
+<section class="widget mb-3">
+    <div class="widget-header"><h3><i class="fa fa-code-fork"></i> Policy Versions</h3></div>
+    <div class="widget-content">
+        <div class="d-flex gap-2 mb-2">
+            <button class="btn btn-sm btn-outline-primary" @onclick="CreateDraftAsync">Create Draft</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="PreviewImpactAsync" disabled="@string.IsNullOrWhiteSpace(_selectedVersionId)">Impact Preview</button>
+            <button class="btn btn-sm btn-outline-success" @onclick="ActivateSelectedAsync" disabled="@string.IsNullOrWhiteSpace(_selectedVersionId)">Activate</button>
+            <button class="btn btn-sm btn-outline-danger" @onclick="RollbackAsync">Rollback</button>
+            @if (!string.IsNullOrWhiteSpace(_versionNote))
+            {
+                <span class="small text-muted align-self-center">@_versionNote</span>
+            }
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead><tr><th></th><th>Version</th><th>Status</th><th>Rules</th><th>Actor</th><th>Reason</th><th>Created</th></tr></thead>
+                <tbody>
+                @foreach (var v in _versions)
+                {
+                    <tr>
+                        <td><input type="radio" name="ver" checked="@(v.VersionId == _selectedVersionId)" @onchange="(() => _selectedVersionId = v.VersionId)" /></td>
+                        <td>@v.VersionId</td>
+                        <td><span class="badge @(v.Status == "Active" ? "text-bg-success" : v.Status == "Draft" ? "text-bg-warning text-dark" : "text-bg-secondary")">@v.Status</span></td>
+                        <td>@v.RuleCount</td>
+                        <td>@v.Actor</td>
+                        <td>@v.Reason</td>
+                        <td>@v.CreatedUtc.ToLocalTime().ToString("MM-dd HH:mm")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_impactText))
+        {
+            <div class="small mt-2"><strong>Impact preview:</strong> @_impactText</div>
+        }
+    </div>
+</section>
+
 <section class="dashboard-security-grid mb-3">
     <div class="widget"><div class="widget-header"><h3>Active Rules</h3></div><div class="widget-content"><div class="rep-score">@ActiveRules</div></div></div>
     <div class="widget"><div class="widget-header"><h3>Blocks Today</h3></div><div class="widget-content"><div class="rep-score">@BlocksToday</div></div></div>
@@ -133,6 +172,10 @@
 
     private List<PolicyRule> _rules = [];
     private List<RuleRow> RuleRows = [];
+    private List<PolicyVersionSummary> _versions = [];
+    private string? _selectedVersionId;
+    private string? _impactText;
+    private string? _versionNote;
     private bool _degraded;
     private string? _error;
 
@@ -166,14 +209,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var result = await Api.GetPolicyRulesAsync();
-        _degraded = !result.Success;
-        _error = result.Success ? null : result.Error;
-
-        _rules = result.Data ?? [];
-        RuleRows = _rules.Count > 0
-            ? _rules.Select(MapRule).ToList()
-            : StarterRules();
+        await RefreshPoliciesAsync();
+        await RefreshVersionsAsync();
     }
 
     private void ToggleRule(RuleRow rule)
@@ -216,8 +253,8 @@
             return;
         }
 
-        var refresh = await Api.GetPolicyRulesAsync();
-        RuleRows = (refresh.Data ?? []).Select(MapRule).ToList();
+        await RefreshPoliciesAsync();
+        await RefreshVersionsAsync();
         _builderNote = $"Saved {rule.RuleId}";
     }
 
@@ -261,6 +298,66 @@
         _triggered = data.TriggeredRules;
         _actions = data.Actions;
         _trace = data.Trace;
+    }
+
+    private async Task RefreshPoliciesAsync()
+    {
+        var result = await Api.GetPolicyRulesAsync();
+        _degraded = !result.Success;
+        _error = result.Success ? null : result.Error;
+
+        _rules = result.Data ?? [];
+        RuleRows = _rules.Count > 0
+            ? _rules.Select(MapRule).ToList()
+            : StarterRules();
+    }
+
+    private async Task RefreshVersionsAsync()
+    {
+        var res = await Api.GetPolicyVersionsAsync();
+        _versions = res.Data ?? [];
+        _selectedVersionId ??= _versions.FirstOrDefault()?.VersionId;
+    }
+
+    private async Task CreateDraftAsync()
+    {
+        var r = await Api.CreatePolicyDraftAsync("admin", "draft from UI");
+        _versionNote = r.Success ? "Draft ready" : r.Error;
+        await RefreshVersionsAsync();
+        await RefreshPoliciesAsync();
+    }
+
+    private async Task PreviewImpactAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedVersionId)) return;
+        var r = await Api.GetPolicyImpactPreviewAsync(_selectedVersionId);
+        if (!r.Success || r.Data is null)
+        {
+            _versionNote = r.Error;
+            return;
+        }
+
+        var root = r.Data.RootElement;
+        var ifActivated = root.TryGetProperty("ifActivated", out var ia) ? ia : default;
+        var delta = root.TryGetProperty("delta", out var de) ? de : default;
+        _impactText = $"If activated: Block {ifActivated.GetProperty("block").GetInt32()}, Challenge {ifActivated.GetProperty("challenge").GetInt32()}, Warn {ifActivated.GetProperty("warn").GetInt32()} (Δ B{delta.GetProperty("block").GetInt32():+0;-0;0}, C{delta.GetProperty("challenge").GetInt32():+0;-0;0}, W{delta.GetProperty("warn").GetInt32():+0;-0;0})";
+    }
+
+    private async Task ActivateSelectedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedVersionId)) return;
+        var r = await Api.ActivatePolicyVersionAsync(_selectedVersionId, "admin", "activate from UI", approvedBy: null);
+        _versionNote = r.Success ? $"Activated {_selectedVersionId}" : r.Error;
+        await RefreshVersionsAsync();
+        await RefreshPoliciesAsync();
+    }
+
+    private async Task RollbackAsync()
+    {
+        var r = await Api.RollbackPolicyVersionAsync("admin", "rollback from UI");
+        _versionNote = r.Success ? "Rolled back to previous active version" : r.Error;
+        await RefreshVersionsAsync();
+        await RefreshPoliciesAsync();
     }
 
     private static RuleRow MapRule(PolicyRule r)

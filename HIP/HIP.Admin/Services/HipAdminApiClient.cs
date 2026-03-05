@@ -79,7 +79,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
         try
         {
-            var list = await httpClient.GetFromJsonAsync<List<PolicyRule>>("api/v1/admin/policy", ct);
+            var list = await httpClient.GetFromJsonAsync<List<PolicyRule>>("api/admin/policy", ct);
             if (list is { Count: > 0 })
             {
                 return ApiResult<List<PolicyRule>>.Ok(list);
@@ -92,7 +92,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
         try
         {
-            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/v1/policy/effective", ct);
+            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/policy/effective", ct);
             var root = doc?.RootElement;
             if (root is not null && root.Value.TryGetProperty("requiredScores", out var scores))
             {
@@ -114,10 +114,10 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
         catch (Exception ex)
         {
-            return ApiResult<List<PolicyRule>>.Fail($"Failed to load data from 'api/v1/admin/policy' and fallback 'api/v1/policy/effective'. {ex.Message}");
+            return ApiResult<List<PolicyRule>>.Fail($"Failed to load data from 'api/admin/policy' and fallback 'api/policy/effective'. {ex.Message}");
         }
 
-        return ApiResult<List<PolicyRule>>.Fail("Failed to load data from 'api/v1/admin/policy' and fallback 'api/v1/policy/effective'. Empty response.");
+        return ApiResult<List<PolicyRule>>.Fail("Failed to load data from 'api/admin/policy' and fallback 'api/policy/effective'. Empty response.");
     }
 
     public async Task<ApiResult<List<ReputationWatchItem>>> GetTopRiskIdentitiesAsync(CancellationToken ct = default)
@@ -163,12 +163,12 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
         try
         {
-            var data = await httpClient.GetFromJsonAsync<List<AuthzPolicyRule>>("api/v1/admin/authz-policies", ct);
+            var data = await httpClient.GetFromJsonAsync<List<AuthzPolicyRule>>("api/admin/authz-policies", ct);
             return ApiResult<List<AuthzPolicyRule>>.Ok(data ?? []);
         }
         catch (Exception ex)
         {
-            return ApiResult<List<AuthzPolicyRule>>.Fail($"Failed to load data from 'api/v1/admin/authz-policies'. {ex.Message}");
+            return ApiResult<List<AuthzPolicyRule>>.Fail($"Failed to load data from 'api/admin/authz-policies'. {ex.Message}");
         }
     }
 
@@ -177,7 +177,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         try
         {
             using var req = new StringContent(jsonInput, Encoding.UTF8, "application/json");
-            using var response = await httpClient.PostAsync("api/v1/admin/authz/simulate", req, ct);
+            using var response = await httpClient.PostAsync("api/admin/authz/simulate", req, ct);
             response.EnsureSuccessStatusCode();
 
             using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -197,7 +197,81 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
         catch (Exception ex)
         {
-            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/v1/admin/authz/simulate'. {ex.Message}");
+            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/admin/authz/simulate'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<List<PolicyVersionSummary>>> GetPolicyVersionsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var data = await httpClient.GetFromJsonAsync<List<PolicyVersionSummary>>("api/admin/policy/versions", ct);
+            return ApiResult<List<PolicyVersionSummary>>.Ok(data ?? []);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<List<PolicyVersionSummary>>.Fail($"Failed to load data from 'api/admin/policy/versions'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<bool>> CreatePolicyDraftAsync(string actor, string reason, CancellationToken ct = default)
+    {
+        var payload = JsonSerializer.Serialize(new { actor, reason });
+        using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+        try
+        {
+            using var res = await httpClient.PostAsync("api/admin/policy/versions/draft", req, ct);
+            res.EnsureSuccessStatusCode();
+            return ApiResult<bool>.Ok(true);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<bool>.Fail($"Failed to load data from 'api/admin/policy/versions/draft'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<JsonDocument>> GetPolicyImpactPreviewAsync(string versionId, CancellationToken ct = default)
+    {
+        try
+        {
+            var doc = await httpClient.GetFromJsonAsync<JsonDocument>($"api/admin/policy/versions/{Uri.EscapeDataString(versionId)}/impact", ct);
+            return ApiResult<JsonDocument>.Ok(doc ?? JsonDocument.Parse("{}"));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<JsonDocument>.Fail($"Failed to load data from 'api/admin/policy/versions/{versionId}/impact'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<bool>> ActivatePolicyVersionAsync(string versionId, string actor, string reason, string? approvedBy, CancellationToken ct = default)
+    {
+        var payload = JsonSerializer.Serialize(new { actor, reason, approvedBy });
+        using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+        try
+        {
+            using var res = await httpClient.PostAsync($"api/admin/policy/versions/{Uri.EscapeDataString(versionId)}/activate", req, ct);
+            res.EnsureSuccessStatusCode();
+            return ApiResult<bool>.Ok(true);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<bool>.Fail($"Failed to load data from 'api/admin/policy/versions/{versionId}/activate'. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<bool>> RollbackPolicyVersionAsync(string actor, string reason, CancellationToken ct = default)
+    {
+        var payload = JsonSerializer.Serialize(new { actor, reason });
+        using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+        try
+        {
+            using var res = await httpClient.PostAsync("api/admin/policy/versions/rollback", req, ct);
+            res.EnsureSuccessStatusCode();
+            return ApiResult<bool>.Ok(true);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<bool>.Fail($"Failed to load data from 'api/admin/policy/versions/rollback'. {ex.Message}");
         }
     }
 
@@ -221,7 +295,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         {
             var payload = JsonSerializer.Serialize(new { prompt });
             using var req = new StringContent(payload, Encoding.UTF8, "application/json");
-            using var res = await httpClient.PostAsync("api/v1/admin/policy/ai-draft", req, ct);
+            using var res = await httpClient.PostAsync("api/admin/policy/ai-draft", req, ct);
             res.EnsureSuccessStatusCode();
             var json = await res.Content.ReadAsStringAsync(ct);
             var rule = JsonSerializer.Deserialize<PolicyRule>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -229,7 +303,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
         catch (Exception ex)
         {
-            return ApiResult<PolicyRule>.Fail($"Failed to load data from 'api/v1/admin/policy/ai-draft'. {ex.Message}");
+            return ApiResult<PolicyRule>.Fail($"Failed to load data from 'api/admin/policy/ai-draft'. {ex.Message}");
         }
     }
 
@@ -248,13 +322,13 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
                 enabled = rule.Enabled
             });
             using var req = new StringContent(payload, Encoding.UTF8, "application/json");
-            using var res = await httpClient.PostAsync("api/v1/admin/policy", req, ct);
+            using var res = await httpClient.PostAsync("api/admin/policy", req, ct);
             res.EnsureSuccessStatusCode();
             return ApiResult<bool>.Ok(true);
         }
         catch (Exception ex)
         {
-            return ApiResult<bool>.Fail($"Failed to load data from 'api/v1/admin/policy'. {ex.Message}");
+            return ApiResult<bool>.Fail($"Failed to load data from 'api/admin/policy'. {ex.Message}");
         }
     }
 
@@ -282,7 +356,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         try
         {
             using var req = new StringContent(jsonInput, Encoding.UTF8, "application/json");
-            using var response = await httpClient.PostAsync("api/v1/admin/policy/simulate", req, ct);
+            using var response = await httpClient.PostAsync("api/admin/policy/simulate", req, ct);
             response.EnsureSuccessStatusCode();
 
             using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -303,7 +377,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
         catch (Exception ex)
         {
-            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/v1/admin/policy/simulate'. {ex.Message}");
+            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/admin/policy/simulate'. {ex.Message}");
         }
     }
 

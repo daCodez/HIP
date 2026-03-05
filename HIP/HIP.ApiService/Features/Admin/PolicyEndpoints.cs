@@ -17,7 +17,7 @@ public static class PolicyEndpoints
     {
         endpoints.MapGet("/api/admin/policy", async (
                 HttpContext httpContext,
-                PolicyRuleStore store,
+                PolicyVersionStore store,
                 IHipEnvelopeVerifier envelopeVerifier,
                 IIdentityService identityService,
                 IReputationService reputationService,
@@ -29,7 +29,7 @@ public static class PolicyEndpoints
                     return gate;
                 }
 
-                return Results.Ok(store.GetAll().Select(x => new
+                return Results.Ok(store.GetEditableRules().Select(x => new
                 {
                     ruleId = x.RuleId,
                     name = x.Name,
@@ -51,7 +51,7 @@ public static class PolicyEndpoints
         endpoints.MapPost("/api/admin/policy", async (
                 HttpContext httpContext,
                 JsonElement input,
-                PolicyRuleStore store,
+                PolicyVersionStore store,
                 IHipEnvelopeVerifier envelopeVerifier,
                 IIdentityService identityService,
                 IReputationService reputationService,
@@ -75,9 +75,11 @@ public static class PolicyEndpoints
                 var action = input.TryGetProperty("action", out var actEl) ? actEl.GetString() ?? "Warn" : "Warn";
                 var severity = input.TryGetProperty("severity", out var sevEl) ? sevEl.GetString() ?? "Medium" : "Medium";
                 var enabled = input.TryGetProperty("enabled", out var enEl) ? enEl.ValueKind != JsonValueKind.False : true;
+                var actor = input.TryGetProperty("actor", out var actorEl) ? actorEl.GetString() ?? "admin" : "admin";
+                var reason = input.TryGetProperty("reason", out var reasonEl) ? reasonEl.GetString() ?? "manual update" : "manual update";
 
-                store.Upsert(new PolicyRuleEntry(ruleId, name, category, condition, action, severity, enabled));
-                return Results.Ok(new { saved = true, ruleId });
+                var (_, draftId) = store.UpsertRule(new PolicyRuleEntry(ruleId, name, category, condition, action, severity, enabled), actor, reason);
+                return Results.Ok(new { saved = true, ruleId, draftId });
             })
             .RequireRateLimiting("read-api")
             .WithName("UpsertAdminPolicyRule")
@@ -86,6 +88,161 @@ public static class PolicyEndpoints
             .WithTags("Admin", "Policy")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapGet("/api/admin/policy/versions", async (
+                HttpContext httpContext,
+                PolicyVersionStore store,
+                IHipEnvelopeVerifier envelopeVerifier,
+                IIdentityService identityService,
+                IReputationService reputationService,
+                CancellationToken cancellationToken) =>
+            {
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+                if (gate is not null) return gate;
+
+                var versions = store.List().Select(v => new
+                {
+                    versionId = v.VersionId,
+                    name = v.Name,
+                    status = v.Status,
+                    createdUtc = v.CreatedUtc,
+                    activatedUtc = v.ActivatedUtc,
+                    actor = v.Actor,
+                    reason = v.Reason,
+                    approvedBy = v.ApprovedBy,
+                    ruleCount = v.Rules.Count
+                });
+
+                return Results.Ok(versions);
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("GetPolicyVersions")
+            .WithSummary("List policy pack versions")
+            .WithDescription("Returns draft/active/archived policy versions with metadata.")
+            .WithTags("Admin", "Policy")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/admin/policy/versions/draft", async (
+                HttpContext httpContext,
+                JsonElement input,
+                PolicyVersionStore store,
+                IHipEnvelopeVerifier envelopeVerifier,
+                IIdentityService identityService,
+                IReputationService reputationService,
+                CancellationToken cancellationToken) =>
+            {
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+                if (gate is not null) return gate;
+
+                var actor = input.TryGetProperty("actor", out var aEl) ? aEl.GetString() ?? "admin" : "admin";
+                var reason = input.TryGetProperty("reason", out var rEl) ? rEl.GetString() ?? "draft requested" : "draft requested";
+                var draft = store.CreateDraft(actor, reason);
+                return Results.Ok(new { draft.VersionId, draft.Name, draft.Status, draft.CreatedUtc, draft.Actor, draft.Reason, ruleCount = draft.Rules.Count });
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("CreatePolicyDraft")
+            .WithSummary("Create policy draft from active version")
+            .WithDescription("Creates (or returns existing) draft policy pack for editing and simulation.")
+            .WithTags("Admin", "Policy")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapGet("/api/admin/policy/versions/{versionId}/impact", async (
+                HttpContext httpContext,
+                string versionId,
+                PolicyVersionStore store,
+                IHipEnvelopeVerifier envelopeVerifier,
+                IIdentityService identityService,
+                IReputationService reputationService,
+                CancellationToken cancellationToken) =>
+            {
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+                if (gate is not null) return gate;
+                return Results.Ok(store.PreviewImpact(versionId));
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("PreviewPolicyImpact")
+            .WithSummary("Preview policy impact")
+            .WithDescription("Shows block/challenge/warn counts and deltas if a version is activated.")
+            .WithTags("Admin", "Policy")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapGet("/api/admin/policy/versions/{versionId}/diff", async (
+                HttpContext httpContext,
+                string versionId,
+                string? against,
+                PolicyVersionStore store,
+                IHipEnvelopeVerifier envelopeVerifier,
+                IIdentityService identityService,
+                IReputationService reputationService,
+                CancellationToken cancellationToken) =>
+            {
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+                if (gate is not null) return gate;
+                return Results.Ok(store.Diff(versionId, against));
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("DiffPolicyVersion")
+            .WithSummary("Diff policy versions")
+            .WithDescription("Compares target policy version against active (or specified) baseline and returns added/removed/changed rules.")
+            .WithTags("Admin", "Policy")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/admin/policy/versions/{versionId}/activate", async (
+                HttpContext httpContext,
+                string versionId,
+                JsonElement input,
+                PolicyVersionStore store,
+                IHipEnvelopeVerifier envelopeVerifier,
+                IIdentityService identityService,
+                IReputationService reputationService,
+                CancellationToken cancellationToken) =>
+            {
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+                if (gate is not null) return gate;
+
+                var actor = input.TryGetProperty("actor", out var aEl) ? aEl.GetString() ?? "admin" : "admin";
+                var reason = input.TryGetProperty("reason", out var rEl) ? rEl.GetString() ?? "activate" : "activate";
+                var approvedBy = input.TryGetProperty("approvedBy", out var apEl) ? apEl.GetString() : null;
+
+                var activated = store.Activate(versionId, actor, reason, approvedBy);
+                return Results.Ok(new { activated.VersionId, activated.Status, activated.ActivatedUtc, activated.Actor, activated.Reason, activated.ApprovedBy });
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("ActivatePolicyVersion")
+            .WithSummary("Activate policy version")
+            .WithDescription("Promotes a draft/archived version to active and archives previous active version.")
+            .WithTags("Admin", "Policy")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/admin/policy/versions/rollback", async (
+                HttpContext httpContext,
+                JsonElement input,
+                PolicyVersionStore store,
+                IHipEnvelopeVerifier envelopeVerifier,
+                IIdentityService identityService,
+                IReputationService reputationService,
+                CancellationToken cancellationToken) =>
+            {
+                var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+                if (gate is not null) return gate;
+
+                var actor = input.TryGetProperty("actor", out var aEl) ? aEl.GetString() ?? "admin" : "admin";
+                var reason = input.TryGetProperty("reason", out var rEl) ? rEl.GetString() ?? "rollback" : "rollback";
+                var rolled = store.Rollback(actor, reason);
+                return Results.Ok(new { rolled.VersionId, rolled.Status, rolled.ActivatedUtc, rolled.Actor, rolled.Reason });
+            })
+            .RequireRateLimiting("read-api")
+            .WithName("RollbackPolicyVersion")
+            .WithSummary("Rollback to previous active policy version")
+            .WithDescription("One-click rollback to previously active policy version.")
+            .WithTags("Admin", "Policy")
+            .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
 
         endpoints.MapPost("/api/admin/policy/ai-draft", async (
