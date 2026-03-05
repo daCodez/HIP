@@ -18,7 +18,7 @@ Direct app URL in local dev (from launch profile):
 ## Architecture
 
 - `Components/Layout`
-  - `AppLayout`: fixed sidebar + topbar + breadcrumb + style drawer
+  - `AppLayout`: fixed logo header + sidebar + breadcrumb + style drawer
   - `SidebarMenuItem`: recursive menu rendering up to 3 levels with active route highlighting
 - `Components/Common`
   - `StatCard`, `BadgeStatus`, `ConfirmModal`, `DataTable`, `DropdownMenu`, `ToastHost`
@@ -38,17 +38,22 @@ Direct app URL in local dev (from launch profile):
 
 ## Theme controls
 
-Open **Styles** button in topbar:
-- 6 skin presets: Ocean, Violet, Emerald, Sunset, Graphite, Royal
-- Full Dark toggle
-- Full Bright toggle
-- Reset Style button
+Theme controls remain available in the style drawer component.
 
 Theme state persists in `localStorage` key: `hip.admin.theme`.
 
-## Mock mode + API integration
+## Dashboard (Security-first)
 
-- Mock mode toggle is in topbar and defaults ON.
+The dashboard is optimized for a 5-second health read:
+- Security Health score card with status color bands
+- Clear "Demo Data" badge when mock mode is enabled
+- Recent Security Events feed (icon-driven)
+- Threat Monitor (24h) with compact bar chart
+- Reputation Watch with quick jump to Reputation page
+- Activity (24h) mini graph panel
+- Security Insights + Quick Actions panel
+
+## Mock mode + API integration
 - `HipAdminApiClient` endpoints to wire:
   - `api/admin/dashboard/metrics`
   - `api/admin/audit/latest`

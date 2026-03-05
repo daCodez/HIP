@@ -1,8 +1,34 @@
 @page "/audit-logs"
+@using System.Text.Json
+@using Microsoft.AspNetCore.WebUtilities
 @inject HipAdminApiClient Api
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <PageTitle>Audit Logs</PageTitle>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h6 class="mb-2">Security Summary (Last 24h)</h6>
+        <div class="d-flex flex-wrap gap-3 small align-items-center">
+            <span>✔ @Last24Allowed allowed</span>
+            <span>⚠ @Last24Suspicious suspicious</span>
+            <span>❌ @Last24Blocked blocked</span>
+            <span>🚨 @Last24Critical critical events</span>
+            <span class="ms-auto"><strong>Security Score:</strong> @SecurityScore/100 (@SecurityStatusEmoji @SecurityStatusLabel)</span>
+        </div>
+    </div>
+</div>
+
+@if (LatestCritical is not null)
+{
+    <div class="card mb-3 border-danger-subtle">
+        <div class="card-body py-2">
+            <div class="small"><strong>🚨 Critical Security Event</strong></div>
+            <div class="small">@HumanDetail(LatestCritical) · Actor: @LatestCritical.Actor · Time: @LatestCritical.Timestamp.ToString("HH:mm")</div>
+        </div>
+    </div>
+}
 
 <div class="card mb-3">
     <div class="card-body">
@@ -17,71 +43,140 @@
             </div>
             <div class="col-md-2">
                 <label class="form-label small mb-1">Severity</label>
-                <select class="form-select" @bind="_severity">
+                <select class="form-select" value="@_severity" @onchange="OnSeverityChanged">
                     <option value="">All</option>
-                    <option>Info</option>
-                    <option>Warning</option>
-                    <option>Critical</option>
+                    <option value="Info">Info</option>
+                    <option value="Warning">Warning</option>
+                    <option value="Critical">Critical</option>
                 </select>
             </div>
             <div class="col-md-2">
                 <label class="form-label small mb-1">Actor</label>
-                <input class="form-control" placeholder="admin@@..." @bind="_actorFilter" />
+                <input class="form-control" placeholder="hip-system" @bind="_actorFilter" @bind:event="oninput" @bind:after="ApplyFilters" />
             </div>
             <div class="col-md-2">
                 <label class="form-label small mb-1">Event type</label>
-                <input class="form-control" placeholder="PolicyTest" @bind="_eventTypeFilter" />
+                <input class="form-control" placeholder="identity.read" @bind="_eventTypeFilter" @bind:event="oninput" @bind:after="ApplyFilters" />
             </div>
             <div class="col-md-2 d-flex gap-2">
-                <button class="btn btn-outline-secondary w-100" @onclick="ResetFilters">Reset</button>
-                <button class="btn btn-outline-primary w-100" @onclick="ExportCsv">Export CSV</button>
+                <button type="button" class="btn btn-outline-primary w-100" @onclick="ApplyFilters">Apply</button>
             </div>
+        </div>
+
+        <div class="mt-3 small">
+            <label class="form-label mb-1">Show:</label>
+            <div class="d-flex flex-wrap gap-3">
+                <label><input type="checkbox" @bind="_showLogin" @bind:after="ApplyFilters" /> Login activity</label>
+                <label><input type="checkbox" @bind="_showSecurity" @bind:after="ApplyFilters" /> Security alerts</label>
+                <label><input type="checkbox" @bind="_showToken" @bind:after="ApplyFilters" /> Token usage</label>
+                <label><input type="checkbox" @bind="_showSystem" @bind:after="ApplyFilters" /> System actions</label>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-2 align-items-center flex-wrap">
+            <button class="btn btn-outline-secondary" @onclick="ResetFilters">Reset</button>
+            <button class="btn btn-outline-secondary" @onclick="SavePreset">Save Preset</button>
+            <button class="btn btn-outline-secondary" @onclick="LoadPreset">Load Preset</button>
+            <div class="form-check form-switch ms-2">
+                <input class="form-check-input" type="checkbox" id="timelineMode" @bind="_timelineMode" />
+                <label class="form-check-label" for="timelineMode">Timeline mode</label>
+            </div>
+            <button class="btn btn-outline-primary ms-auto" @onclick="ExportCsv">Export CSV</button>
         </div>
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-sm table-hover align-middle">
-                <thead>
-                    <tr>
-                        <th>Timestamp (UTC)</th>
-                        <th>Severity</th>
-                        <th>Actor</th>
-                        <th>Event</th>
-                        <th>Category</th>
-                        <th>Result</th>
-                        <th>Detail</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (Filtered.Count == 0)
+<div class="card mb-3">
+    <div class="card-body py-2 small text-muted">
+        <strong>Legend:</strong>
+        <span class="ms-2">Info = normal system activity</span>
+        <span class="ms-2">Warning = unusual event</span>
+        <span class="ms-2">Critical = possible security issue</span>
+    </div>
+</div>
+
+<section class="widget widget-table table-widget-frame mb-3">
+    <div class="widget-header">
+        <h3><i class="fa fa-table"></i> Audit Log Table</h3>
+    </div>
+    <div class="widget-content">
+        <div class="small text-muted mb-2">
+            <strong>Filtered:</strong> @Filtered.Count / @_logs.Count
+            @if (!string.IsNullOrWhiteSpace(_severity)) { <span class="ms-2">Severity=@_severity</span> }
+            @if (!string.IsNullOrWhiteSpace(_actorFilter)) { <span class="ms-2">Actor=@_actorFilter</span> }
+            @if (!string.IsNullOrWhiteSpace(_eventTypeFilter)) { <span class="ms-2">Event=@_eventTypeFilter</span> }
+        </div>
+
+        @if (_timelineMode)
+        {
+            <div class="d-flex flex-column gap-2">
+                @if (Paged.Count == 0)
+                {
+                    <div class="text-center text-muted py-4">No audit records match current filters.</div>
+                }
+                else
+                {
+                    @foreach (var x in Paged)
                     {
-                        <tr>
-                            <td colspan="7" class="text-center text-muted py-4">No audit records match current filters.</td>
-                        </tr>
+                        <div class="border rounded p-2 small">
+                            <div><strong>@RelativeTime(x.Timestamp)</strong> — @HumanResult(x) @HumanEventName(x.EventType) (@x.Actor)</div>
+                            <div class="text-muted">@HumanDetail(x)</div>
+                            <div>@RiskLabel(x) · <button class="btn btn-link btn-sm p-0" @onclick="() => ExplainEvent(x)">Explain this event</button></div>
+                        </div>
                     }
-                    else
-                    {
-                        @foreach (var x in Paged)
+                }
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th role="button" @onclick="() => SortBy(nameof(AuditLogEntry.Timestamp))">Time @SortIndicator(nameof(AuditLogEntry.Timestamp))</th>
+                            <th role="button" @onclick="() => SortBy(nameof(AuditLogEntry.Severity))">Severity @SortIndicator(nameof(AuditLogEntry.Severity))</th>
+                            <th>Risk</th>
+                            <th role="button" @onclick="() => SortBy(nameof(AuditLogEntry.Actor))">Actor @SortIndicator(nameof(AuditLogEntry.Actor))</th>
+                            <th role="button" @onclick="() => SortBy(nameof(AuditLogEntry.EventType))">Event @SortIndicator(nameof(AuditLogEntry.EventType))</th>
+                            <th>Result</th>
+                            <th>Detail</th>
+                            <th>What should I do?</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Filtered.Count == 0)
                         {
                             <tr>
-                                <td class="small">@x.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
-                                <td>
-                                    <span class="badge @SeverityBadgeClass(x.Severity)">@x.Severity</span>
-                                </td>
-                                <td class="small">@x.Actor</td>
-                                <td class="small">@x.EventType</td>
-                                <td class="small">@x.Category</td>
-                                <td class="small">@x.Result</td>
-                                <td class="small">@x.Detail</td>
+                                <td colspan="8" class="text-center text-muted py-4">No audit records match current filters.</td>
                             </tr>
                         }
-                    }
-                </tbody>
-            </table>
-        </div>
+                        else
+                        {
+                            @foreach (var x in Paged)
+                            {
+                                <tr class="@(x.Severity == "Critical" ? "table-danger" : string.Empty)">
+                                    <td class="small" title="@x.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")">@RelativeTime(x.Timestamp)</td>
+                                    <td><span class="badge @SeverityBadgeClass(x.Severity)">@x.Severity</span></td>
+                                    <td class="small">@RiskText(x)</td>
+                                    <td class="small">@x.Actor</td>
+                                    <td class="small">@HumanEventName(x.EventType)
+                                        <button class="btn btn-link btn-sm p-0 ms-1" title="Why did this happen? @ExplanationText(x)">Why?</button>
+                                    </td>
+                                    <td class="small">@HumanResult(x)</td>
+                                    <td class="small">@HumanDetail(x)</td>
+                                    <td class="small">@Recommendation(x)</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_explanation))
+        {
+            <div class="alert alert-info py-2 small mt-2 mb-2">@_explanation</div>
+        }
 
         <div class="d-flex justify-content-between align-items-center mt-2">
             <div class="small text-muted">Showing @Paged.Count of @Filtered.Count records</div>
@@ -92,9 +187,11 @@
             </div>
         </div>
     </div>
-</div>
+</section>
 
 @code {
+    private const string PresetStorageKey = "hip.admin.audit.preset";
+
     private List<AuditLogEntry> _logs = [];
     private string _actorFilter = string.Empty;
     private string _eventTypeFilter = string.Empty;
@@ -102,25 +199,103 @@
     private DateTime? _fromDate;
     private DateTime? _toDate;
 
+    private bool _showLogin = true;
+    private bool _showSecurity = true;
+    private bool _showToken = true;
+    private bool _showSystem = true;
+    private bool _timelineMode;
+    private string? _explanation;
+
     private int _page = 1;
     private int _pageSize = 15;
+    private string _sortBy = nameof(AuditLogEntry.Timestamp);
+    private bool _sortDesc = true;
 
-    private List<AuditLogEntry> Filtered => _logs
-        .Where(x => string.IsNullOrWhiteSpace(_actorFilter) || x.Actor.Contains(_actorFilter, StringComparison.OrdinalIgnoreCase))
-        .Where(x => string.IsNullOrWhiteSpace(_eventTypeFilter) || x.EventType.Contains(_eventTypeFilter, StringComparison.OrdinalIgnoreCase))
-        .Where(x => string.IsNullOrWhiteSpace(_severity) || x.Severity.Equals(_severity, StringComparison.OrdinalIgnoreCase))
-        .Where(x => DateInRange(x.Timestamp))
-        .OrderByDescending(x => x.Timestamp)
-        .ToList();
+    private int Last24Allowed => Last24.Count(x => HumanResult(x).Contains("Allowed"));
+    private int Last24Blocked => Last24.Count(x => HumanResult(x).Contains("Blocked"));
+    private int Last24Suspicious => Last24.Count(x => HumanResult(x).Contains("Suspicious"));
+    private int Last24Critical => Last24.Count(x => x.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase));
+    private List<AuditLogEntry> Last24 => _logs.Where(x => x.Timestamp >= DateTime.UtcNow.AddHours(-24)).ToList();
+    private AuditLogEntry? LatestCritical => Last24.Where(x => x.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase)).OrderByDescending(x => x.Timestamp).FirstOrDefault();
+
+    private int SecurityScore
+    {
+        get
+        {
+            var score = 100 - (Last24Blocked * 2) - (Last24Suspicious * 3) - (Last24Critical * 8);
+            return Math.Clamp(score, 0, 100);
+        }
+    }
+
+    private string SecurityStatusLabel => SecurityScore >= 90 ? "Secure" : SecurityScore >= 70 ? "Watch" : "At Risk";
+    private string SecurityStatusEmoji => SecurityScore >= 90 ? "🟢" : SecurityScore >= 70 ? "🟠" : "🔴";
+
+    protected override async Task OnInitializedAsync()
+    {
+        ReadFiltersFromQuery();
+        var result = await Api.GetAuditLogsAsync();
+        _logs = result.Data ?? [];
+    }
+
+    private IEnumerable<AuditLogEntry> BaseFiltered()
+    {
+        return _logs
+            .Where(x => string.IsNullOrWhiteSpace(_actorFilter) || x.Actor.Contains(_actorFilter, StringComparison.OrdinalIgnoreCase))
+            .Where(x => string.IsNullOrWhiteSpace(_eventTypeFilter) || x.EventType.Contains(_eventTypeFilter, StringComparison.OrdinalIgnoreCase))
+            .Where(x => string.IsNullOrWhiteSpace(_severity) || x.Severity.Equals(_severity, StringComparison.OrdinalIgnoreCase))
+            .Where(x => DateInRange(x.Timestamp))
+            .Where(x => MatchesSmartFilter(x));
+    }
+
+    private List<AuditLogEntry> Filtered
+    {
+        get
+        {
+            var query = BaseFiltered();
+            query = (_sortBy, _sortDesc) switch
+            {
+                (nameof(AuditLogEntry.Timestamp), true) => query.OrderByDescending(x => x.Timestamp),
+                (nameof(AuditLogEntry.Timestamp), false) => query.OrderBy(x => x.Timestamp),
+                (nameof(AuditLogEntry.Severity), true) => query.OrderByDescending(x => x.Severity),
+                (nameof(AuditLogEntry.Severity), false) => query.OrderBy(x => x.Severity),
+                (nameof(AuditLogEntry.Actor), true) => query.OrderByDescending(x => x.Actor),
+                (nameof(AuditLogEntry.Actor), false) => query.OrderBy(x => x.Actor),
+                (nameof(AuditLogEntry.EventType), true) => query.OrderByDescending(x => x.EventType),
+                (nameof(AuditLogEntry.EventType), false) => query.OrderBy(x => x.EventType),
+                _ => query.OrderByDescending(x => x.Timestamp)
+            };
+            return query.ToList();
+        }
+    }
 
     private List<AuditLogEntry> Paged => Filtered.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(Filtered.Count / (double)_pageSize));
 
-    protected override async Task OnInitializedAsync()
+    private bool MatchesSmartFilter(AuditLogEntry x)
     {
-        var result = await Api.GetAuditLogsAsync();
-        _logs = result.Data ?? [];
+        var c = x.Category?.ToLowerInvariant() ?? string.Empty;
+        var e = x.EventType?.ToLowerInvariant() ?? string.Empty;
+
+        var login = e.Contains("login") || c.Contains("identity");
+        var security = c.Contains("policy") || c.Contains("security") || x.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase);
+        var token = e.Contains("token") || c.Contains("token");
+        var system = c.Contains("api") || e.Contains("read");
+
+        var anySelected = _showLogin || _showSecurity || _showToken || _showSystem;
+        if (!anySelected) return true;
+
+        return (_showLogin && login) || (_showSecurity && security) || (_showToken && token) || (_showSystem && system);
     }
+
+    private void SortBy(string column)
+    {
+        if (_sortBy == column) _sortDesc = !_sortDesc;
+        else { _sortBy = column; _sortDesc = column == nameof(AuditLogEntry.Timestamp); }
+        _page = 1;
+        SyncQuery();
+    }
+
+    private string SortIndicator(string column) => _sortBy == column ? (_sortDesc ? "▼" : "▲") : string.Empty;
 
     private bool DateInRange(DateTime ts)
     {
@@ -130,8 +305,21 @@
         return true;
     }
 
-    private void PrevPage() => _page = Math.Max(1, _page - 1);
-    private void NextPage() => _page = Math.Min(TotalPages, _page + 1);
+    private void ApplyFilters()
+    {
+        _page = 1;
+        SyncQuery();
+        StateHasChanged();
+    }
+
+    private void OnSeverityChanged(ChangeEventArgs e)
+    {
+        _severity = e.Value?.ToString() ?? string.Empty;
+        ApplyFilters();
+    }
+
+    private void PrevPage() { _page = Math.Max(1, _page - 1); SyncQuery(); }
+    private void NextPage() { _page = Math.Min(TotalPages, _page + 1); SyncQuery(); }
 
     private void ResetFilters()
     {
@@ -140,7 +328,11 @@
         _severity = string.Empty;
         _fromDate = null;
         _toDate = null;
+        _showLogin = _showSecurity = _showToken = _showSystem = true;
         _page = 1;
+        _sortBy = nameof(AuditLogEntry.Timestamp);
+        _sortDesc = true;
+        SyncQuery();
     }
 
     private string SeverityBadgeClass(string severity) => severity switch
@@ -150,11 +342,178 @@
         _ => "text-bg-secondary"
     };
 
+
+    private string HumanEventName(string eventType) => eventType switch
+    {
+        "identity.read" => "User Login Attempt",
+        "reputation.read" => "Security Policy Check",
+        "PolicyTest" => "Security Policy Check",
+        "TokenAction" => "Security Token Used",
+        _ => eventType
+    };
+
+    private string HumanResult(AuditLogEntry x) => x.Result.ToLowerInvariant() switch
+    {
+        "success" => "✅ Allowed",
+        "denied" => "❌ Blocked",
+        "review" => "⚠️ Suspicious",
+        _ => x.Result
+    };
+
+    private string HumanDetail(AuditLogEntry x)
+    {
+        var e = x.EventType.ToLowerInvariant();
+        if (e.Contains("identity")) return "User login succeeded";
+        if (e.Contains("reputation")) return "Security policy triggered";
+        if (e.Contains("token")) return "Security token validated";
+        if (x.Result.Equals("Denied", StringComparison.OrdinalIgnoreCase)) return "Login blocked due to invalid token";
+        return string.IsNullOrWhiteSpace(x.Detail) ? "System event recorded" : x.Detail;
+    }
+
+    private string ExplanationText(AuditLogEntry x)
+    {
+        var e = x.EventType.ToLowerInvariant();
+        if (e.Contains("policy") || e.Contains("reputation"))
+            return "The system tested/enforced a security policy rule to protect the platform.";
+        if (e.Contains("identity") || e.Contains("login"))
+            return "A login identity check was performed for this actor.";
+        if (e.Contains("token"))
+            return "A token validation event occurred to verify session authenticity.";
+        return "This is a normal system audit event recorded for traceability.";
+    }
+
+    private string Recommendation(AuditLogEntry x) => x.Severity switch
+    {
+        "Critical" => "Investigate immediately and review related actor/session.",
+        "Warning" => "Review policy configuration and recent actor actions.",
+        _ => "No action required."
+    };
+
+    private void ExplainEvent(AuditLogEntry x)
+    {
+        _explanation = $"{HumanEventName(x.EventType)}: {ExplanationText(x)}";
+    }
+
+    private string RiskLabel(AuditLogEntry x) => x.Severity switch
+    {
+        "Critical" => "🔴 High",
+        "Warning" => "🟠 Medium",
+        _ => "🟢 Low"
+    };
+
+    private string RiskText(AuditLogEntry x) => x.Severity switch
+    {
+        "Critical" => "High",
+        "Warning" => "Medium",
+        _ => "Low"
+    };
+
+    private string RelativeTime(DateTime ts)
+    {
+        var span = DateTime.UtcNow - ts;
+        if (span.TotalMinutes < 1) return "just now";
+        if (span.TotalHours < 1) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalDays < 1) return $"{(int)span.TotalHours}h ago";
+        return $"{(int)span.TotalDays}d ago";
+    }
+
+    private async Task SavePreset()
+    {
+        var preset = new AuditPreset
+        {
+            FromDate = _fromDate,
+            ToDate = _toDate,
+            Severity = _severity,
+            Actor = _actorFilter,
+            EventType = _eventTypeFilter,
+            SortBy = _sortBy,
+            SortDesc = _sortDesc,
+            PageSize = _pageSize,
+            ShowLogin = _showLogin,
+            ShowSecurity = _showSecurity,
+            ShowToken = _showToken,
+            ShowSystem = _showSystem
+        };
+        await JS.InvokeVoidAsync("hipTheme.set", PresetStorageKey, JsonSerializer.Serialize(preset));
+    }
+
+    private async Task LoadPreset()
+    {
+        var json = await JS.InvokeAsync<string?>("hipTheme.get", PresetStorageKey);
+        if (string.IsNullOrWhiteSpace(json)) return;
+        var preset = JsonSerializer.Deserialize<AuditPreset>(json);
+        if (preset is null) return;
+
+        _fromDate = preset.FromDate;
+        _toDate = preset.ToDate;
+        _severity = preset.Severity ?? string.Empty;
+        _actorFilter = preset.Actor ?? string.Empty;
+        _eventTypeFilter = preset.EventType ?? string.Empty;
+        _sortBy = string.IsNullOrWhiteSpace(preset.SortBy) ? nameof(AuditLogEntry.Timestamp) : preset.SortBy;
+        _sortDesc = preset.SortDesc;
+        _pageSize = preset.PageSize <= 0 ? 15 : preset.PageSize;
+        _showLogin = preset.ShowLogin;
+        _showSecurity = preset.ShowSecurity;
+        _showToken = preset.ShowToken;
+        _showSystem = preset.ShowSystem;
+        _page = 1;
+        SyncQuery();
+    }
+
     private async Task ExportCsv()
     {
         var rows = Filtered.Select(x =>
             $"{x.Timestamp:O},{x.Severity},{x.Actor},{x.EventType},{x.Category},{x.Result},\"{x.Detail.Replace("\"", "\"\"")}\"");
         var csv = "timestamp,severity,actor,eventType,category,result,detail\n" + string.Join('\n', rows);
         await JS.InvokeVoidAsync("hipTheme.downloadCsv", $"audit-{DateTime.UtcNow:yyyyMMddHHmm}.csv", csv);
+    }
+
+    private void ReadFiltersFromQuery()
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var q = QueryHelpers.ParseQuery(uri.Query);
+        _actorFilter = q.TryGetValue("actor", out var actor) ? actor.ToString() : string.Empty;
+        _eventTypeFilter = q.TryGetValue("event", out var evt) ? evt.ToString() : string.Empty;
+        _severity = q.TryGetValue("severity", out var sev) ? sev.ToString() : string.Empty;
+        _fromDate = q.TryGetValue("from", out var from) && DateTime.TryParse(from, out var fromDate) ? fromDate : null;
+        _toDate = q.TryGetValue("to", out var to) && DateTime.TryParse(to, out var toDate) ? toDate : null;
+        _sortBy = q.TryGetValue("sort", out var sort) && !string.IsNullOrWhiteSpace(sort) ? sort.ToString() : nameof(AuditLogEntry.Timestamp);
+        _sortDesc = q.TryGetValue("desc", out var desc) && bool.TryParse(desc, out var isDesc) ? isDesc : true;
+        _page = q.TryGetValue("page", out var page) && int.TryParse(page, out var p) ? Math.Max(1, p) : 1;
+    }
+
+    private void SyncQuery()
+    {
+        var query = new Dictionary<string, string?>
+        {
+            ["actor"] = string.IsNullOrWhiteSpace(_actorFilter) ? null : _actorFilter,
+            ["event"] = string.IsNullOrWhiteSpace(_eventTypeFilter) ? null : _eventTypeFilter,
+            ["severity"] = string.IsNullOrWhiteSpace(_severity) ? null : _severity,
+            ["from"] = _fromDate?.ToString("yyyy-MM-dd"),
+            ["to"] = _toDate?.ToString("yyyy-MM-dd"),
+            ["sort"] = _sortBy,
+            ["desc"] = _sortDesc.ToString().ToLowerInvariant(),
+            ["page"] = _page.ToString()
+        };
+
+        var clean = query.Where(kv => !string.IsNullOrWhiteSpace(kv.Value)).ToDictionary(k => k.Key, v => v.Value);
+        var target = QueryHelpers.AddQueryString("/admin/audit-logs", clean!);
+        Nav.NavigateTo(target, replace: true);
+    }
+
+    private sealed class AuditPreset
+    {
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+        public string? Severity { get; set; }
+        public string? Actor { get; set; }
+        public string? EventType { get; set; }
+        public string? SortBy { get; set; }
+        public bool SortDesc { get; set; }
+        public int PageSize { get; set; } = 15;
+        public bool ShowLogin { get; set; } = true;
+        public bool ShowSecurity { get; set; } = true;
+        public bool ShowToken { get; set; } = true;
+        public bool ShowSystem { get; set; } = true;
     }
 }

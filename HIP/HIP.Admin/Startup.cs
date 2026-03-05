@@ -21,10 +21,13 @@ public class Startup
         services.AddHttpClient<HipAdminApiClient>(client =>
         {
             var baseUrl = Configuration["HipAdmin:ApiBaseUrl"];
-            if (!string.IsNullOrWhiteSpace(baseUrl))
+            if (string.IsNullOrWhiteSpace(baseUrl))
             {
-                client.BaseAddress = new Uri(baseUrl);
+                // Default to local API service in this HIP deployment.
+                baseUrl = "http://127.0.0.1:44985/";
             }
+
+            client.BaseAddress = new Uri(baseUrl);
         });
 
         services.AddScoped<ThemeService>();

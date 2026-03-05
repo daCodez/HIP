@@ -5,7 +5,7 @@ namespace HIP.Admin.Services;
 public sealed class AdminContextService
 {
     public AdminRole CurrentRole { get; private set; } = AdminRole.Admin;
-    public bool MockModeEnabled { get; private set; } = true;
+    public bool MockModeEnabled { get; private set; } = false;
 
     public event Action? Changed;
 

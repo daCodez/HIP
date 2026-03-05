@@ -1,7 +1,11 @@
 @typeparam TItem
 
-<div class="card">
-    <div class="card-body">
+<section class="widget widget-table table-widget-frame mb-3">
+    <div class="widget-header">
+        <h3><i class="fa fa-table"></i> @Title</h3>
+    </div>
+
+    <div class="widget-content">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <input class="form-control w-auto" style="min-width:240px" placeholder="Search..." @bind="_search" />
             <select class="form-select w-auto" @bind="_pageSize">
@@ -17,7 +21,7 @@
                     <tr>
                         @foreach (var p in _properties)
                         {
-                            <th role="button" @onclick="() => SortBy(p.Name)">@p.Name</th>
+                            <th role="button" @onclick="() => SortBy(p.Name)">@FormatHeader(p.Name)</th>
                         }
                     </tr>
                 </thead>
@@ -41,11 +45,12 @@
             <button class="btn btn-sm btn-outline-secondary" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
         </div>
     </div>
-</div>
+</section>
 
 @code {
     [Parameter] public IReadOnlyList<TItem> Items { get; set; } = [];
     [Parameter] public EventCallback<TItem> OnRowClick { get; set; }
+    [Parameter] public string Title { get; set; } = "Table";
 
     private string _search = string.Empty;
     private int _page = 1;
@@ -88,6 +93,12 @@
     private IEnumerable<TItem> PagedItems => FilteredItems.Skip((_page - 1) * _pageSize).Take(_pageSize);
 
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredItems.Count() / (double)_pageSize));
+
+    private static string FormatHeader(string property)
+    {
+        return System.Text.RegularExpressions.Regex
+            .Replace(property, "([a-z])([A-Z])", "$1 $2");
+    }
 
     private void SortBy(string property)
     {

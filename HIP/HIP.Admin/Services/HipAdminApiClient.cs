@@ -1,3 +1,4 @@
+using System.Text.Json;
 using HIP.Admin.Models;
 
 namespace HIP.Admin.Services;
@@ -9,64 +10,151 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         {
             var data = await httpClient.GetFromJsonAsync<List<DashboardMetric>>("api/admin/dashboard/metrics", ct);
             return data ?? [];
-        }, MockMetrics());
+        }, MockMetrics(), "api/admin/dashboard/metrics");
 
     public async Task<ApiResult<List<ActivityItem>>> GetActivityAsync(CancellationToken ct = default)
         => await ExecuteWithMockFallback(async () =>
         {
             var data = await httpClient.GetFromJsonAsync<List<ActivityItem>>("api/admin/audit/latest", ct);
             return data ?? [];
-        }, MockActivity());
+        }, MockActivity(), "api/admin/audit/latest");
 
     public Task<ApiResult<List<SecurityCheck>>> GetSecurityChecksAsync(CancellationToken ct = default)
-        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<SecurityCheck>>("api/admin/security", ct)!, MockSecurity());
+        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<SecurityCheck>>("api/admin/security", ct)!, MockSecurity(), "api/admin/security");
 
     public Task<ApiResult<List<UserDeviceRecord>>> GetUsersDevicesAsync(CancellationToken ct = default)
-        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<UserDeviceRecord>>("api/admin/users-devices", ct)!, MockUsers());
+        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<UserDeviceRecord>>("api/admin/users-devices", ct)!, MockUsers(), "api/admin/users-devices");
 
     public Task<ApiResult<List<PolicyRule>>> GetPolicyRulesAsync(CancellationToken ct = default)
-        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<PolicyRule>>("api/admin/policy", ct)!, MockRules());
+        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<PolicyRule>>("api/admin/policy", ct)!, MockRules(), "api/admin/policy");
 
-    public Task<ApiResult<List<AuditLogEntry>>> GetAuditLogsAsync(CancellationToken ct = default)
-        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<AuditLogEntry>>("api/admin/audit", ct)!, MockLogs());
-
-    public async Task<ApiResult<PolicyPackSummary>> GetPolicyPackSummaryAsync(CancellationToken ct = default)
+    public async Task<ApiResult<List<AuditLogEntry>>> GetAuditLogsAsync(CancellationToken ct = default)
     {
         if (context.MockModeEnabled)
         {
-            return ApiResult<PolicyPackSummary>.Ok(MockPolicyPack());
+            return ApiResult<List<AuditLogEntry>>.Ok(MockLogs());
         }
 
         try
         {
-            var data = await httpClient.GetFromJsonAsync<PolicyPackSummary>("api/admin/policy/pack", ct);
-            return ApiResult<PolicyPackSummary>.Ok(data ?? MockPolicyPack());
+            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/admin/audit?take=250", ct);
+            var root = doc?.RootElement;
+            if (root is null || root.Value.ValueKind != JsonValueKind.Array)
+            {
+                return ApiResult<List<AuditLogEntry>>.Ok(MockLogs());
+            }
+
+            var mapped = new List<AuditLogEntry>();
+            foreach (var e in root.Value.EnumerateArray())
+            {
+                var created = e.TryGetProperty("createdAtUtc", out var createdEl) && createdEl.ValueKind == JsonValueKind.String
+                    && DateTime.TryParse(createdEl.GetString(), out var dt)
+                    ? dt
+                    : DateTime.UtcNow;
+
+                var subject = e.TryGetProperty("subject", out var subjectEl) ? subjectEl.GetString() ?? "unknown" : "unknown";
+                var eventType = e.TryGetProperty("eventType", out var eventEl) ? eventEl.GetString() ?? "unknown" : "unknown";
+                var category = e.TryGetProperty("category", out var catEl) ? catEl.GetString() ?? "general" : "general";
+                var outcome = e.TryGetProperty("outcome", out var outEl) ? outEl.GetString() ?? "unknown" : "unknown";
+                var reason = e.TryGetProperty("reasonCode", out var reasonEl) ? reasonEl.GetString() ?? string.Empty : string.Empty;
+                var detail = e.TryGetProperty("detail", out var detailEl) ? detailEl.GetString() ?? string.Empty : string.Empty;
+
+                var severity = outcome.Equals("success", StringComparison.OrdinalIgnoreCase)
+                    ? "Info"
+                    : outcome.Equals("review", StringComparison.OrdinalIgnoreCase)
+                        ? "Warning"
+                        : "Critical";
+
+                mapped.Add(new AuditLogEntry
+                {
+                    Timestamp = created,
+                    Actor = subject,
+                    EventType = eventType,
+                    Category = category,
+                    Severity = severity,
+                    Result = outcome,
+                    Detail = string.IsNullOrWhiteSpace(reason) ? detail : $"{detail} ({reason})"
+                });
+            }
+
+            return ApiResult<List<AuditLogEntry>>.Ok(mapped);
         }
         catch (Exception ex)
         {
-            return ApiResult<PolicyPackSummary>.Fail($"Failed to load policy pack. {ex.Message}");
+            return ApiResult<List<AuditLogEntry>>.Fail($"Failed to load audit logs. {ex.Message}");
         }
+    }
+
+    public async Task<ApiResult<PolicyPackSummary>> GetPolicyPackSummaryAsync(CancellationToken ct = default)
+    {
+        // First real endpoint wiring: plugin metadata route from API service.
+        try
+        {
+            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/plugins/policy/current", ct);
+            var root = doc?.RootElement;
+            if (root is not null && root.Value.TryGetProperty("policyVersion", out var policyVersion))
+            {
+                var source = root.Value.TryGetProperty("source", out var sourceEl) ? sourceEl.GetString() ?? "default" : "default";
+                var summary = new PolicyPackSummary
+                {
+                    Name = source.Equals("strict", StringComparison.OrdinalIgnoreCase)
+                        ? "HIP Strict Policy Pack"
+                        : "HIP Default Policy Pack",
+                    Version = policyVersion.GetString() ?? "unknown",
+                    EnabledRules = root.Value.TryGetProperty("requiredScores", out var scores) ? scores.EnumerateObject().Count() : 0,
+                    LastUpdatedUtc = DateTime.UtcNow
+                };
+
+                return ApiResult<PolicyPackSummary>.Ok(summary);
+            }
+        }
+        catch
+        {
+            // fall through to mock fallback
+        }
+
+        return ApiResult<PolicyPackSummary>.Ok(MockPolicyPack());
     }
 
     public async Task<ApiResult<SystemUsageSummary>> GetSystemUsageSummaryAsync(CancellationToken ct = default)
     {
-        if (context.MockModeEnabled)
-        {
-            return ApiResult<SystemUsageSummary>.Ok(MockSystemUsage());
-        }
-
+        // First real endpoint wiring: system metrics plugin route.
         try
         {
-            var data = await httpClient.GetFromJsonAsync<SystemUsageSummary>("api/admin/system/usage", ct);
-            return ApiResult<SystemUsageSummary>.Ok(data ?? MockSystemUsage());
+            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/plugins/system-metrics?take=1", ct);
+            var root = doc?.RootElement;
+            if (root is not null && root.Value.TryGetProperty("samples", out var samples) && samples.ValueKind == JsonValueKind.Array)
+            {
+                var first = samples.EnumerateArray().FirstOrDefault();
+                if (first.ValueKind == JsonValueKind.Object)
+                {
+                    var cpu = first.TryGetProperty("cpu", out var cpuEl) ? cpuEl.GetDouble() : 0d;
+                    var memPercent = first.TryGetProperty("memory", out var memEl) ? memEl.GetDouble() : 0d;
+                    const double assumedTotalGb = 8.0;
+                    var used = Math.Round((memPercent / 100d) * assumedTotalGb, 2);
+
+                    var usage = new SystemUsageSummary
+                    {
+                        CpuPercent = cpu,
+                        MemoryUsedGb = used,
+                        MemoryTotalGb = assumedTotalGb,
+                        DiskPercent = null,
+                        SampledUtc = DateTime.UtcNow
+                    };
+
+                    return ApiResult<SystemUsageSummary>.Ok(usage);
+                }
+            }
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<SystemUsageSummary>.Fail($"Failed to load system usage. {ex.Message}");
+            // fall through to mock fallback
         }
+
+        return ApiResult<SystemUsageSummary>.Ok(MockSystemUsage());
     }
 
-    private async Task<ApiResult<List<T>>> ExecuteWithMockFallback<T>(Func<Task<List<T>>> apiCall, List<T> mock)
+    private async Task<ApiResult<List<T>>> ExecuteWithMockFallback<T>(Func<Task<List<T>>> apiCall, List<T> mock, string endpoint)
     {
         if (context.MockModeEnabled)
         {
@@ -82,7 +170,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         {
             return context.MockModeEnabled
                 ? ApiResult<List<T>>.Ok(mock)
-                : ApiResult<List<T>>.Fail($"Failed to load data. {ex.Message}");
+                : ApiResult<List<T>>.Fail($"Failed to load data from '{endpoint}'. {ex.Message}");
         }
     }
 

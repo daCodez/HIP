@@ -5,14 +5,28 @@
 
 <header class="logo-header">
     <div class="logo-header-inner">
-        <div class="brand-mark">HIP</div>
-        <div class="brand-text">Admin Dashboard</div>
+        <div class="logo-header-left">
+            <button class="btn btn-link btn-sm top-icon-btn king-top-btn logo-hamburger" title="Toggle sidebar" @onclick="ToggleSidebar"><i class="fa fa-bars"></i></button>
+            <img class="brand-logo" src="img/hip-logo.svg" alt="HIP" />
+            <div class="brand-text">Admin</div>
+        </div>
+        <div class="logo-header-right">
+            <DropdownMenu Label="<span class='icon-stack'><i class='fa fa-envelope'></i><span class='notify-badge'>2</span></span>" ButtonClass="btn-link top-icon-btn king-top-btn">
+                <li><span class="dropdown-item">2 unread messages</span></li>
+            </DropdownMenu>
+            <DropdownMenu Label="<span class='icon-stack'><i class='fa fa-bell'></i><span class='notify-badge'>8</span></span>" ButtonClass="btn-link top-icon-btn king-top-btn">
+                <li><span class="dropdown-item">8 notifications</span></li>
+            </DropdownMenu>
+            <DropdownMenu Label="<span class='user-chip'><img src='img/001f.jpg' alt='avatar' /><span>Stacy Rose</span><i class='fa fa-caret-down'></i></span>" ButtonClass="btn-link king-user-btn">
+                <li><span class="dropdown-item">Profile (placeholder)</span></li>
+                <li><span class="dropdown-item">Sign out (placeholder)</span></li>
+            </DropdownMenu>
+        </div>
     </div>
 </header>
 
 <div class="admin-shell @(SidebarClass)">
     <aside class="sidebar">
-        <div class="sidebar-brand">HIP <span>Admin</span></div>
         <nav class="menu-tree">
             @foreach (var item in MenuItems.Where(IsVisible))
             {
@@ -23,29 +37,6 @@
     </aside>
 
     <div class="content-wrap">
-        <header class="topbar">
-            <div class="topbar-left">
-                <button class="btn btn-light btn-sm top-icon-btn" title="Toggle sidebar" @onclick="ToggleSidebar"><i class="fa fa-bars"></i></button>
-                <button class="btn btn-light btn-sm btn-styles" @onclick="ToggleStyleDrawer">Styles</button>
-                <div class="form-check form-switch m-0">
-                    <input class="form-check-input" type="checkbox" checked="@AdminContext.MockModeEnabled" @onchange="ToggleMockMode" id="mockModeToggle" />
-                    <label class="form-check-label small" for="mockModeToggle">Mock mode</label>
-                </div>
-            </div>
-            <div class="topbar-right">
-                <DropdownMenu Label="<i class='fa fa-envelope-o'></i>" ButtonClass="btn-light top-icon-btn">
-                    <li><span class="dropdown-item">No new messages</span></li>
-                </DropdownMenu>
-                <DropdownMenu Label="<i class='fa fa-bell-o'></i>" ButtonClass="btn-light top-icon-btn">
-                    <li><span class="dropdown-item">System nominal</span></li>
-                </DropdownMenu>
-                <DropdownMenu Label="<i class='fa fa-user'></i>" ButtonClass="btn-light top-icon-btn">
-                    <li><span class="dropdown-item">Profile (placeholder)</span></li>
-                    <li><span class="dropdown-item">Sign out (placeholder)</span></li>
-                </DropdownMenu>
-            </div>
-        </header>
-
         <div class="breadcrumb-row mb-3">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-0">

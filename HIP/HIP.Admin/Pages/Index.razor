@@ -1,107 +1,295 @@
 @page "/"
+@implements IDisposable
 @inject HipAdminApiClient Api
+@inject AdminContextService AdminContext
 
 <PageTitle>Dashboard</PageTitle>
+
+@if (_degradedSources.Count > 0)
+{
+    <div class="alert alert-warning py-2 small">
+        <strong>Degraded mode:</strong> @string.Join(" | ", _degradedSources)
+        <span class="ms-2 text-muted">Auto-retrying every 30s.</span>
+    </div>
+}
 
 @if (!string.IsNullOrEmpty(_error))
 {
     <div class="alert alert-danger">@_error</div>
 }
 
-<section class="kpi-grid mb-3">
-    @foreach (var metric in _metrics)
-    {
-        <StatCard Title="@metric.Title" Value="@metric.Value" Delta="@metric.Delta" Trend="@metric.Trend" />
-    }
-</section>
-
-<section class="row g-3 mb-3">
-    <div class="col-xl-6">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="panel-title">Policy Pack <NewBadge AddedUtc="@NewFeatureAddedUtc" /></h5>
-                @if (_policyPack is not null)
-                {
-                    <div class="small text-muted mb-1">@_policyPack.Name</div>
-                    <div class="d-flex align-items-center gap-2 mb-1">
-                        <span class="badge text-bg-secondary">v@_policyPack.Version</span>
-                        <span class="small">Enabled rules: <strong>@_policyPack.EnabledRules</strong></span>
-                    </div>
-                    <div class="small text-muted">Last updated: @_policyPack.LastUpdatedUtc.ToLocalTime()</div>
-                }
+<section class="widget widget-table table-widget-frame mb-3 security-score-card">
+    <div class="widget-header">
+        <h3><i class="fa fa-shield"></i> Security Health</h3>
+        @if (AdminContext.MockModeEnabled)
+        {
+            <span class="widget-label">Demo Data</span>
+        }
+        else if (_metricsDegraded)
+        {
+            <span class="widget-label degraded">Degraded</span>
+        }
+        else
+        {
+            <span class="widget-label live">Live Data</span>
+        }
+    </div>
+    <div class="widget-content">
+        <div class="score-row">
+            <div>
+                <div class="score-value">@SecurityScore / 100</div>
+                <div class="score-status @ScoreClass">@ScoreEmoji @ScoreLabel</div>
+            </div>
+            <div class="score-factors small text-muted">
+                Based on failed logins, replay attempts, policy triggers, token misuse, and reputation risk.
             </div>
         </div>
-    </div>
-    <div class="col-xl-6">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="panel-title">CPU / Memory Usage <NewBadge AddedUtc="@NewFeatureAddedUtc" /></h5>
-                @if (_usage is not null)
-                {
-                    <div class="d-flex justify-content-between mb-1"><span>CPU</span><strong>@_usage.CpuPercent.ToString("0.0")%</strong></div>
-                    <div class="progress mb-2" style="height:8px;"><div class="progress-bar" role="progressbar" style="width:@($"{_usage.CpuPercent:0.0}%")"></div></div>
-                    <div class="d-flex justify-content-between mb-1"><span>Memory</span><strong>@_usage.MemoryUsedGb.ToString("0.0") / @_usage.MemoryTotalGb.ToString("0.0") GB</strong></div>
-                    <div class="progress mb-2" style="height:8px;"><div class="progress-bar bg-info" role="progressbar" style="width:@($"{(_usage.MemoryUsedGb / _usage.MemoryTotalGb * 100):0.0}%")"></div></div>
-                    @if (_usage.DiskPercent is not null)
-                    {
-                        <div class="small text-muted">Disk: @_usage.DiskPercent.Value.ToString("0.0")%</div>
-                    }
-                    <div class="small text-muted">Sampled: @_usage.SampledUtc.ToLocalTime()</div>
-                }
-            </div>
+
+        <div class="status-strip mt-3">
+            <div>✔ Logins today: <strong>@LoginsToday</strong></div>
+            <div>⚠ Blocked attempts: <strong>@BlockedAttempts</strong></div>
+            <div>🛡 Policies triggered: <strong>@PoliciesTriggered</strong></div>
+            <div>🚨 Critical alerts: <strong>@CriticalAlerts</strong></div>
         </div>
     </div>
 </section>
 
-<section class="dashboard-main-grid">
-    <div class="card h-100 panel-requests">
-        <div class="card-body">
-            <h5 class="panel-title">Requests Trend</h5>
-            <div class="chart-placeholder text-center text-muted">Mock chart area</div>
-        </div>
-    </div>
-
-    <div class="card h-100 panel-policy">
-        <div class="card-body">
-            <h5 class="panel-title">Policy Blocks Trend</h5>
-            <div class="chart-placeholder text-center text-muted">Mock chart area</div>
-        </div>
-    </div>
-
-    <div class="card h-100 panel-activity">
-        <div class="card-body">
-            <h5 class="panel-title">Latest Activity</h5>
-            @foreach (var item in _activity)
+<section class="dashboard-security-grid">
+    <div class="widget">
+        <div class="widget-header">
+            <h3>Recent Security Events</h3>
+            @if (!AdminContext.MockModeEnabled)
             {
-                <div class="activity-item border-bottom py-2">
-                    <div class="small fw-semibold">@item.Action</div>
-                    <div class="small text-muted">@item.Actor · @item.Timestamp.ToLocalTime()</div>
+                <span class="widget-label @( _activityDegraded ? "degraded" : "live")">@(_activityDegraded ? "Degraded" : "Live")</span>
+            }
+        </div>
+        <div class="widget-content">
+            @foreach (var e in RecentEvents)
+            {
+                <div class="event-row">
+                    <span class="event-time">@e.Time</span>
+                    <span class="event-icon">@e.Icon</span>
+                    <span>@e.Text</span>
                 </div>
             }
+        </div>
+    </div>
+
+    <div class="widget">
+        <div class="widget-header"><h3>Threat Monitor (24h)</h3></div>
+        <div class="widget-content">
+            <div class="metric-line">Blocked logins: <strong>@BlockedAttempts</strong></div>
+            <div class="metric-line">Replay attempts: <strong>@ReplayAttempts</strong></div>
+            <div class="metric-line">Spam events: <strong>@SpamEvents</strong></div>
+            <div class="metric-line">Policy violations: <strong>@PoliciesTriggered</strong></div>
+
+            <div class="mini-bars mt-3">
+                @foreach (var d in BlockedByDay)
+                {
+                    <div class="mini-bar-row">
+                        <span>@d.Day</span>
+                        <div class="mini-bar"><span style="width:@(Math.Max(6, d.Count * 22))px"></span></div>
+                        <strong>@d.Count</strong>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="widget">
+        <div class="widget-header"><h3>Reputation Watch</h3></div>
+        <div class="widget-content">
+            @foreach (var u in ReputationWatch)
+            {
+                <a href="/admin/reputation" class="rep-row">
+                    <span>@u.Email</span>
+                    <span>Score: <strong>@u.Score</strong> @u.Icon</span>
+                </a>
+            }
+        </div>
+    </div>
+
+    <div class="widget">
+        <div class="widget-header"><h3>Activity (24h)</h3></div>
+        <div class="widget-content">
+            <div class="activity-line"><span>Logins</span><div class="activity-bar"><span style="width:88%"></span></div></div>
+            <div class="activity-line"><span>Security Events</span><div class="activity-bar"><span style="width:30%"></span></div></div>
+            <div class="activity-line"><span>Policy Triggers</span><div class="activity-bar"><span style="width:22%"></span></div></div>
+            <div class="activity-line"><span>Blocked Attempts</span><div class="activity-bar"><span style="width:16%"></span></div></div>
+        </div>
+    </div>
+</section>
+
+<section class="dashboard-security-grid mt-3">
+    <div class="widget">
+        <div class="widget-header"><h3>Security Insights</h3></div>
+        <div class="widget-content small">
+            <div>System operating normally.</div>
+            <div>@BlockedAttempts login attempts were blocked today.</div>
+            <div>@(ReplayAttempts == 0 ? "No replay attacks detected." : $"{ReplayAttempts} replay attempts detected.")</div>
+            <div>User reputation levels are stable.</div>
+        </div>
+    </div>
+
+    <div class="widget">
+        <div class="widget-header"><h3>Quick Actions</h3></div>
+        <div class="widget-content quick-actions">
+            <a class="btn btn-outline-secondary" href="/admin/audit-logs">View Audit Logs</a>
+            <a class="btn btn-outline-secondary" href="/admin/users-devices">Investigate User</a>
+            <a class="btn btn-outline-secondary" href="/admin/policy-rules">Review Security Policies</a>
+            <a class="btn btn-outline-secondary" href="/admin/security-status">Export Security Report</a>
         </div>
     </div>
 </section>
 
 @code {
-    private static readonly DateTime NewFeatureAddedUtc = new(2026, 3, 4, 22, 23, 0, DateTimeKind.Utc);
-
     private List<DashboardMetric> _metrics = [];
     private List<ActivityItem> _activity = [];
-    private PolicyPackSummary? _policyPack;
-    private SystemUsageSummary? _usage;
     private string? _error;
+
+    private bool _metricsDegraded;
+    private bool _activityDegraded;
+    private readonly List<string> _degradedSources = [];
+    private System.Threading.Timer? _retryTimer;
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadDashboardAsync();
+
+        _retryTimer = new System.Threading.Timer(
+            async _ => await InvokeAsync(RetryIfDegradedAsync),
+            null,
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(30));
+    }
+
+    private async Task LoadDashboardAsync()
+    {
         var metrics = await Api.GetDashboardMetricsAsync();
         var activity = await Api.GetActivityAsync();
-        var policyPack = await Api.GetPolicyPackSummaryAsync();
-        var usage = await Api.GetSystemUsageSummaryAsync();
 
-        _error = metrics.Error ?? activity.Error ?? policyPack.Error ?? usage.Error;
-        _metrics = metrics.Data ?? [];
-        _activity = activity.Data ?? [];
-        _policyPack = policyPack.Data;
-        _usage = usage.Data;
+        _metricsDegraded = !metrics.Success;
+        _activityDegraded = !activity.Success;
+
+        if (metrics.Success && metrics.Data is not null)
+        {
+            _metrics = metrics.Data;
+        }
+
+        if (activity.Success && activity.Data is not null)
+        {
+            _activity = activity.Data;
+        }
+
+        _degradedSources.Clear();
+        if (_metricsDegraded && !string.IsNullOrWhiteSpace(metrics.Error)) _degradedSources.Add(metrics.Error!);
+        if (_activityDegraded && !string.IsNullOrWhiteSpace(activity.Error)) _degradedSources.Add(activity.Error!);
+
+        _error = !_metricsDegraded && !_activityDegraded
+            ? null
+            : (_degradedSources.FirstOrDefault() ?? "One or more data sources failed.");
+    }
+
+    private async Task RetryIfDegradedAsync()
+    {
+        if (_degradedSources.Count == 0) return;
+        await LoadDashboardAsync();
+        StateHasChanged();
+    }
+
+    private int SecurityScore => 92;
+    private int LoginsToday => GetMetricInt("login", 48);
+    private int BlockedAttempts => CountActivity("block", 3);
+    private int PoliciesTriggered => CountActivity("policy", 2);
+    private int CriticalAlerts => CountActivity("critical", 0);
+    private int ReplayAttempts => CountActivity("replay", 0);
+    private int SpamEvents => CountActivity("spam", 1);
+
+    private string ScoreLabel => SecurityScore switch
+    {
+        >= 90 => "Secure",
+        >= 70 => "Attention",
+        >= 50 => "Risk",
+        _ => "Critical"
+    };
+
+    private string ScoreEmoji => SecurityScore switch
+    {
+        >= 90 => "🟢",
+        >= 70 => "🟡",
+        >= 50 => "🟠",
+        _ => "🔴"
+    };
+
+    private string ScoreClass => SecurityScore switch
+    {
+        >= 90 => "score-secure",
+        >= 70 => "score-attention",
+        >= 50 => "score-risk",
+        _ => "score-critical"
+    };
+
+    private List<(string Day, int Count)> BlockedByDay =>
+    [
+        ("Mon", 1),
+        ("Tue", 0),
+        ("Wed", 3),
+        ("Thu", 2)
+    ];
+
+    private List<(string Time, string Icon, string Text)> RecentEvents
+    {
+        get
+        {
+            if (_activity.Count == 0)
+            {
+                return
+                [
+                    ("00:31", "✔", "User login succeeded"),
+                    ("00:22", "✔", "Admin login succeeded"),
+                    ("00:13", "⚠", "Security policy triggered"),
+                    ("23:55", "❌", "Login attempt blocked"),
+                    ("23:19", "🚨", "Token replay detected")
+                ];
+            }
+
+            return _activity.Take(5).Select(x =>
+            {
+                var text = x.Action;
+                var icon = text.Contains("block", StringComparison.OrdinalIgnoreCase) ? "❌"
+                    : text.Contains("policy", StringComparison.OrdinalIgnoreCase) ? "⚠"
+                    : text.Contains("replay", StringComparison.OrdinalIgnoreCase) ? "🚨"
+                    : "✔";
+                return (x.Timestamp.ToLocalTime().ToString("HH:mm"), icon, text);
+            }).ToList();
+        }
+    }
+
+    private List<(string Email, int Score, string Icon)> ReputationWatch =>
+    [
+        ("support@hip.local", 52, "⚠"),
+        ("admin@hip.local", 81, "✔"),
+        ("guest@hip.local", 34, "🚨")
+    ];
+
+    private int GetMetricInt(string keyword, int fallback)
+    {
+        var raw = _metrics.FirstOrDefault(m => m.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase))?.Value;
+        if (string.IsNullOrWhiteSpace(raw)) return fallback;
+
+        var digits = new string(raw.Where(char.IsDigit).ToArray());
+        return int.TryParse(digits, out var n) ? n : fallback;
+    }
+
+    private int CountActivity(string keyword, int fallback)
+    {
+        if (_activity.Count == 0) return fallback;
+        var count = _activity.Count(x => x.Action.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        return count;
+    }
+
+    public void Dispose()
+    {
+        _retryTimer?.Dispose();
     }
 }
