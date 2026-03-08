@@ -107,15 +107,20 @@ const getModalBackgroundTargetsToInert = (backdrop) => {
 window.hipTheme = {
   get: (key) => window.localStorage.getItem(key),
   set: (key, value) => window.localStorage.setItem(key, value),
-  apply: (preset, darkMode, brightMode) => {
+  apply: (preset, appearance) => {
     const root = document.documentElement;
     root.style.setProperty('--hip-primary', preset.primary);
     root.style.setProperty('--hip-accent', preset.accent);
     root.style.setProperty('--hip-sidebar', preset.sidebar);
     root.style.setProperty('--hip-surface', preset.surface);
 
-    document.body.classList.toggle('hip-dark', !!darkMode);
-    document.body.classList.toggle('hip-bright', !!brightMode);
+    const mode = (appearance || 'system').toLowerCase();
+    const prefersDark = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const effectiveDark = mode === 'dark' || (mode === 'system' && prefersDark);
+
+    document.body.classList.toggle('hip-dark', effectiveDark);
+    document.body.classList.remove('hip-bright');
   },
   downloadCsv: (filename, content) => {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });

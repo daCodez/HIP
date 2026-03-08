@@ -1,0 +1,37 @@
+<aside class="hip-admin-sidebar @(Collapsed ? "collapsed" : string.Empty)" aria-label="Primary" id="primary-nav">
+    <nav role="navigation" aria-label="Admin primary navigation">
+        <ul>
+            @foreach (var route in Routes)
+            {
+                <li>
+                    <a href="@ResolveHref(route.Path)"
+                       class="@(IsActive(route.Path) ? "active" : string.Empty)"
+                       aria-current="@(IsActive(route.Path) ? "page" : null)">
+                        @if (!string.IsNullOrWhiteSpace(route.Icon))
+                        {
+                            <i class="@route.Icon" aria-hidden="true"></i>
+                        }
+                        <span>@route.Title</span>
+                    </a>
+                </li>
+            }
+        </ul>
+    </nav>
+</aside>
+
+@inject NavigationManager Nav
+
+@code {
+    [Parameter] public IReadOnlyList<HIP.Admin.Navigation.AdminRouteEntry> Routes { get; set; } = [];
+    [Parameter] public string CurrentPath { get; set; } = "/";
+    [Parameter] public bool Collapsed { get; set; }
+
+    private bool IsActive(string path)
+        => string.Equals(HIP.Admin.Navigation.AdminRoutes.NormalizePath(path), HIP.Admin.Navigation.AdminRoutes.NormalizePath(CurrentPath), StringComparison.OrdinalIgnoreCase);
+
+    private string ResolveHref(string path)
+    {
+        var normalized = HIP.Admin.Navigation.AdminRoutes.NormalizePath(path).TrimStart('/');
+        return new Uri(new Uri(Nav.BaseUri), normalized).ToString();
+    }
+}

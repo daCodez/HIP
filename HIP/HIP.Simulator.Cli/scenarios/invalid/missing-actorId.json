@@ -1,0 +1,25 @@
+{
+  "id": "missing-actorId",
+  "name": "Missing Actorid",
+  "description": "Invalid event scenario",
+  "category": "invalid",
+  "tags": [
+    "invalid"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "login.attempt",
+      "actorId": "",
+      "targetId": "x",
+      "payload": {
+        "mfa": false
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": false
+}

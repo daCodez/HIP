@@ -1,0 +1,26 @@
+{
+  "id": "recovery_email_changed",
+  "name": "Recovery Email Changed",
+  "description": "Uncovered gap scenario",
+  "category": "uncovered",
+  "tags": [
+    "gap",
+    "uncovered"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "recovery_email_changed",
+      "actorId": "user-2",
+      "targetId": "target-2",
+      "payload": {
+        "indicator": "recovery_email_changed"
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": true
+}

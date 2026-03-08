@@ -1,7 +1,7 @@
 @implements IDisposable
 @inject ToastService ToastService
 
-<div class="toast-container position-fixed top-0 end-0 p-3">
+<div class="toast-container hip-toast-container position-fixed end-0 p-3">
     @foreach (var toast in _toasts)
     {
         <div class="toast show mb-2 border-0 text-white @LevelClass(toast.Level)">
@@ -26,7 +26,7 @@
         _toasts.Insert(0, message);
         if (_toasts.Count > 4) _toasts.RemoveAt(_toasts.Count - 1);
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3200);
+        await Task.Delay(8000);
         _toasts.Remove(message);
         await InvokeAsync(StateHasChanged);
     }

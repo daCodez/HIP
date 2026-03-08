@@ -1,0 +1,26 @@
+{
+  "id": "oauth_consent_grant",
+  "name": "Oauth Consent Grant",
+  "description": "Uncovered gap scenario",
+  "category": "uncovered",
+  "tags": [
+    "gap",
+    "uncovered"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "oauth_consent_grant",
+      "actorId": "user-2",
+      "targetId": "target-2",
+      "payload": {
+        "indicator": "oauth_consent_grant"
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": true
+}

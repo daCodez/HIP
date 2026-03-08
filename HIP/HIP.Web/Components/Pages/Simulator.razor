@@ -1,0 +1,288 @@
+@page "/simulator"
+@using HIP.Web.Services.Simulator
+@using Microsoft.AspNetCore.SignalR.Client
+@inject SimulatorBffClient Client
+@inject NavigationManager Nav
+
+@implements IAsyncDisposable
+
+<PageTitle>Security Event Simulator</PageTitle>
+
+<h3>Security Event Simulator</h3>
+
+<div class="mb-3">
+    <label>Suite</label>
+    <select @bind="SelectedSuite">
+        <option value="">(all)</option>
+        @foreach (var s in Suites)
+        {
+            <option value="@s">@s</option>
+        }
+    </select>
+    <button @onclick="LoadScenarios">Load Scenarios</button>
+</div>
+
+<div class="mb-3">
+    <label>Scenario</label>
+    <select @bind="SelectedScenarioId">
+        <option value="">(suite/all)</option>
+        @foreach (var s in Scenarios)
+        {
+            <option value="@s.Id">@s.Id - @s.Name</option>
+        }
+    </select>
+    <label class="ms-2">Mode</label>
+    <select @bind="SelectedMode">
+        <option value="">(scenario default)</option>
+        <option value="application">application</option>
+        <option value="protocol">protocol</option>
+        <option value="hybrid">hybrid</option>
+    </select>
+    <button @onclick="Run">Run</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(RunId))
+{
+    <p><b>Run:</b> @RunId | <b>Status:</b> @Status | <b>Stage:</b> @ProgressStage | <b>Progress:</b> @Processed/@Total
+        @if (Status == "running")
+        {
+            <button @onclick="CancelRun" class="btn btn-sm btn-warning">Cancel</button>
+        }
+    </p>
+    @if (Total > 0)
+    {
+        <div style="width:420px;height:10px;background:#eee;border-radius:6px;overflow:hidden;">
+            <div style="height:10px;background:#2f7ed8;width:@(Math.Clamp((int)(Processed * 100.0 / Total), 0, 100))%"></div>
+        </div>
+    }
+}
+
+@if (Result is not null)
+{
+    <h4>Summary</h4>
+    <ul>
+        <li>Total: @Result.TotalScenarios</li>
+        <li>Passed: @Result.Passed</li>
+        <li>Failed: @Result.Failed</li>
+        <li>Uncovered: @Result.Uncovered</li>
+        <li>Invalid: @Result.Invalid</li>
+        <li>Suggested Policies: @Result.SuggestedPoliciesGenerated</li>
+    </ul>
+
+    <h4>Execution Split</h4>
+    <ul>
+        <li>Application scenarios: @Result.Scenarios.Count(x => x.ExecutionMode == HIP.Simulator.Core.Models.SimulationExecutionMode.Application)</li>
+        <li>Protocol scenarios: @Result.Scenarios.Count(x => x.ExecutionMode == HIP.Simulator.Core.Models.SimulationExecutionMode.Protocol)</li>
+        <li>Hybrid scenarios: @Result.Scenarios.Count(x => x.ExecutionMode == HIP.Simulator.Core.Models.SimulationExecutionMode.Hybrid)</li>
+    </ul>
+
+    <h4>Coverage Snapshot</h4>
+    <ul>
+        <li>Event types tracked: @Result.Coverage.EventCoverage.Count</li>
+        <li>Rules tracked: @Result.Coverage.RuleCoverage.Count</li>
+        <li>Fields tracked: @Result.Coverage.FieldCoverage.Count</li>
+    </ul>
+
+    <h4>Scenario Details</h4>
+    <table class="table">
+        <thead><tr><th>Scenario</th><th>Pass</th><th>Action</th><th>Coverage</th><th>Trace</th></tr></thead>
+        <tbody>
+        @foreach (var s in Result.Scenarios)
+        {
+            <tr>
+                <td>@s.ScenarioId</td>
+                <td>@s.Passed</td>
+                <td>@s.FinalAction/@s.FinalSeverity</td>
+                <td>@(s.IsCovered ? "Covered" : "Gap")</td>
+                <td>@string.Join(" | ", s.RuleTrace.Select(t => $"{t.RuleName}:{(t.Matched ? "✓" : "x")}"))</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    <h4>Suggestions</h4>
+    @foreach (var suggestion in Result.Scenarios.Where(x => x.Suggestion is not null).Select(x => x.Suggestion!))
+    {
+        <pre>@suggestion.ToTemplate()</pre>
+    }
+
+    <p>
+        <a href="/bff/simulator/runs/@RunId/report/json" target="_blank">Download JSON report</a> |
+        <a href="/bff/simulator/runs/@RunId/report/html" target="_blank">Download HTML report</a>
+    </p>
+}
+
+<h4>Coverage Trend (Recent Runs)</h4>
+<table class="table">
+    <thead><tr><th>Run</th><th>Status</th><th>Coverage Snapshot</th><th>Uncovered/Invalid</th></tr></thead>
+    <tbody>
+    @foreach (var h in History.Take(10))
+    {
+        var covered = (h.Total ?? 0) - (h.Uncovered ?? 0) - (h.Invalid ?? 0);
+        var total = Math.Max(h.Total ?? 0, 1);
+        var pct = Math.Clamp((int)(covered * 100.0 / total), 0, 100);
+        <tr>
+            <td>@h.RunId[..Math.Min(8, h.RunId.Length)]</td>
+            <td>@h.Status</td>
+            <td>
+                <div style="width:220px;height:8px;background:#eee;border-radius:5px;overflow:hidden;"><div style="height:8px;background:#2f7ed8;width:@pct%"></div></div>
+                <small>Events:@h.EventTypes Rules:@h.Rules Fields:@h.Fields Covered:@covered/@(h.Total ?? 0)</small>
+            </td>
+            <td>@h.Uncovered / @h.Invalid</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h4>Recent Runs</h4>
+<table class="table">
+    <thead><tr><th>Run</th><th>Status</th><th>Mode</th><th>Suite</th><th>Scenario</th><th>Started</th><th>Completed</th></tr></thead>
+    <tbody>
+    @foreach (var h in History)
+    {
+        <tr>
+            <td>@h.RunId</td><td>@h.Status</td><td>@h.Mode</td><td>@h.Suite</td><td>@h.ScenarioId</td><td>@h.StartedUtc</td><td>@h.CompletedUtc</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@code {
+    private IReadOnlyList<string> Suites = [];
+    private IReadOnlyList<SimulatorBffClient.ScenarioListItem> Scenarios = [];
+    private string? SelectedSuite;
+    private string? SelectedScenarioId;
+    private string? SelectedMode;
+    private string? RunId;
+    private string Status = "idle";
+    private HIP.Simulator.Core.Models.SimulationRunResult? Result;
+    private IReadOnlyList<SimulatorBffClient.RunHistoryItem> History = [];
+    private HubConnection? _hub;
+    private TaskCompletionSource<bool>? _runCompletion;
+    private string ProgressStage = "idle";
+    private int Processed;
+    private int Total;
+
+    private sealed record RunStatusChangedEvent(string RunId, string Status);
+    private sealed record RunProgressEvent(string RunId, string Stage, int ProcessedScenarios, int TotalScenarios, string? ScenarioId, string Message);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Suites = await Client.GetSuitesAsync();
+        await LoadScenarios();
+        History = await Client.GetHistoryAsync();
+        await ReattachActiveRunIfAny();
+
+        _hub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/hubs/simulator-runs"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hub.On<RunStatusChangedEvent>("runStatusChanged", async update =>
+        {
+            if (!string.IsNullOrWhiteSpace(RunId) && RunId.Equals(update.RunId, StringComparison.OrdinalIgnoreCase))
+            {
+                var run = await Client.GetRunAsync(update.RunId);
+                if (run is not null)
+                {
+                    Status = run.Status;
+                    Result = run.Result;
+                }
+
+                if (update.Status is "completed" or "failed" or "cancelled")
+                {
+                    _runCompletion?.TrySetResult(true);
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+
+        _hub.On<RunProgressEvent>("runProgress", async update =>
+        {
+            if (!string.IsNullOrWhiteSpace(RunId) && RunId.Equals(update.RunId, StringComparison.OrdinalIgnoreCase))
+            {
+                ProgressStage = string.IsNullOrWhiteSpace(update.ScenarioId) ? update.Stage : $"{update.Stage} ({update.ScenarioId})";
+                Processed = update.ProcessedScenarios;
+                Total = update.TotalScenarios;
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+
+        await _hub.StartAsync();
+    }
+
+    private async Task LoadScenarios()
+    {
+        Scenarios = await Client.GetScenariosAsync(SelectedSuite);
+    }
+
+    private async Task ReattachActiveRunIfAny()
+    {
+        var active = History
+            .OrderByDescending(x => x.StartedUtc)
+            .FirstOrDefault(x => x.Status is "running" or "cancelling");
+
+        if (active is null) return;
+
+        RunId = active.RunId;
+        var run = await Client.GetRunAsync(active.RunId);
+        if (run is null) return;
+
+        Status = run.Status;
+        Result = run.Result;
+        ProgressStage = run.Status;
+    }
+
+    private async Task Run()
+    {
+        Result = null;
+        ProgressStage = "starting";
+        Processed = 0;
+        Total = 0;
+        RunId = await Client.StartRunAsync(SelectedSuite, SelectedScenarioId, null, SelectedMode);
+        if (string.IsNullOrWhiteSpace(RunId))
+        {
+            Status = "failed-to-start";
+            return;
+        }
+
+        Status = "running";
+        _runCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var initial = await Client.GetRunAsync(RunId);
+        if (initial is not null)
+        {
+            Status = initial.Status;
+            Result = initial.Result;
+        }
+
+        var completed = await Task.WhenAny(_runCompletion.Task, Task.Delay(TimeSpan.FromMinutes(2)));
+        if (completed != _runCompletion.Task)
+        {
+            var run = await Client.GetRunAsync(RunId);
+            if (run is not null)
+            {
+                Status = run.Status;
+                Result = run.Result;
+            }
+        }
+
+        History = await Client.GetHistoryAsync();
+    }
+
+    private async Task CancelRun()
+    {
+        if (string.IsNullOrWhiteSpace(RunId)) return;
+        await Client.CancelRunAsync(RunId);
+        Status = "cancelling";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub is not null)
+        {
+            await _hub.DisposeAsync();
+        }
+    }
+}

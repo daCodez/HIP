@@ -1,0 +1,514 @@
+@page "/alerts"
+@implements IDisposable
+@inject HipAdminApiClient Api
+@inject AdminContextService AdminContext
+
+<PageTitle>Alerts &amp; Incidents</PageTitle>
+
+<PageHeader Title="Alerts &amp; Incidents"
+            Subtitle="Work queue with list and detail view"
+            LastUpdatedUtc="@_lastUpdatedUtc"
+            Breadcrumbs="@_breadcrumbs">
+    <Actions>
+        <div class="hip-alerts-header-counts" aria-label="Queue counts by status">
+            @foreach (var count in _statusCounts)
+            {
+                <span class="hip-alerts-count-chip">@count.Key: @count.Value</span>
+            }
+        </div>
+        <button type="button" class="btn btn-outline-secondary" @onclick="ReloadAsync">Refresh</button>
+    </Actions>
+</PageHeader>
+
+@if (!string.IsNullOrWhiteSpace(_actionFeedback))
+{
+    <AlertBanner Kind="@_actionFeedbackKind" Title="Queue update" Message="@_actionFeedback" />
+}
+
+@if (_state == StateViewMode.Error)
+{
+    <AlertBanner Kind="AlertBannerKind.Error" Title="Alerts unavailable" Message="@_error" />
+}
+
+<FilterBar SearchText="@_searchText"
+           SearchTextChanged="OnSearchTextChanged"
+           SearchPlaceholder="Search alerts"
+           Fields="@_filters"
+           OnChanged="OnFiltersChanged">
+    <Actions>
+        <button type="button" class="btn btn-primary" @onclick="ReloadAsync">Apply</button>
+    </Actions>
+</FilterBar>
+
+<StateView Mode="@_state"
+           EmptyMessage="No alerts or incidents have been detected yet."
+           FilteredMessage="No queue items match the selected filters."
+           ErrorMessage="@_error"
+           OnRetry="ReloadAsync">
+    <div class="hip-alerts-split-layout">
+        <div>
+            <DataTable TItem="AlertQueueItem"
+                       Title="Alert queue"
+                       Caption="Sortable work queue"
+                       Items="@_filteredItems"
+                       Columns="@_columns"
+                       EmptyMessage="No queue items available for the current filters."
+                       ShowSearch="false"
+                       IsRowSelected="@(x => _selected?.Id == x.Id)"
+                       OnRowClick="OnRowSelected" />
+        </div>
+
+        <aside class="hip-alerts-detail" aria-live="polite" aria-label="Selected alert details">
+            @if (_selected is null)
+            {
+                <p class="hip-state-title">No item selected</p>
+                <p class="hip-state-subtitle">Select a row to review the summary, linked records, and available actions.</p>
+            }
+            else
+            {
+                <header class="d-flex justify-content-between gap-2 flex-wrap align-items-start">
+                    <div>
+                        <h2 class="h5 mb-1">@_selected.Title</h2>
+                        <p class="text-muted mb-2">@_selected.Actor • @_selected.Timestamp.ToLocalTime():u</p>
+                        <p class="mb-2">
+                            Severity: <StatusBadge Severity="@_selected.Severity" />
+                            <span class="mx-1">|</span>
+                            Status: <StatusBadge Status="@_selected.Status" />
+                        </p>
+                    </div>
+                </header>
+
+                <section class="mb-3">
+                    <h3 class="h6">Summary</h3>
+                    <p class="mb-0">@_selected.Summary</p>
+                </section>
+
+                <section class="mb-3">
+                    <h3 class="h6">Linked records</h3>
+                    @if (_selected.EvidenceLinks.Count == 0)
+                    {
+                        <p class="text-muted mb-0">Linked record pages are not connected yet in this environment. Use correlation ID and actor filters in Audit Logs to dig deeper.</p>
+                    }
+                    else
+                    {
+                        <ul class="mb-0">
+                            @foreach (var link in _selected.EvidenceLinks)
+                            {
+                                <li><a href="@link.Href">@link.Label</a></li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                <section class="mb-3">
+                    <h3 class="h6">Timeline</h3>
+                    <ul class="mb-0">
+                        @foreach (var item in _selected.Timeline)
+                        {
+                            <li>@item</li>
+                        }
+                    </ul>
+                </section>
+
+                @if (!string.IsNullOrWhiteSpace(_detailWarning))
+                {
+                    <AlertBanner Kind="AlertBannerKind.Warning" Title="Action blocked" Message="@_detailWarning" />
+                }
+
+                <section>
+                    <h3 class="h6">Triage actions</h3>
+                    <p class="text-muted">Current role: @AdminContext.CurrentRole</p>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-outline-primary" disabled="@(!CanAcknowledge(_selected))" @onclick="() => OpenActionDialog(_selected, WorkflowStatus.Acknowledged)">Acknowledge</button>
+                        <button type="button" class="btn btn-outline-warning" disabled="@(!CanEscalate(_selected))" @onclick="() => OpenActionDialog(_selected, WorkflowStatus.Escalated)">Escalate</button>
+                        <button type="button" class="btn btn-outline-success" disabled="@(!CanResolve(_selected))" @onclick="() => OpenActionDialog(_selected, WorkflowStatus.Resolved)">Resolve</button>
+                    </div>
+                </section>
+            }
+        </aside>
+    </div>
+</StateView>
+
+<ModalDialog IsOpen="@_isActionDialogOpen"
+             Title="@_dialogTitle"
+             ConfirmText="Submit"
+             CancelText="Cancel"
+             OnClose="CloseActionDialog"
+             OnConfirm="ApplyActionAsync">
+    <Body>
+        <p class="mb-2">Provide rationale for status change.</p>
+        <label class="form-label" for="alerts-action-rationale">Rationale</label>
+        <textarea id="alerts-action-rationale"
+                  class="form-control"
+                  rows="4"
+                  placeholder="Required note for audit trail"
+                  aria-invalid="@(!string.IsNullOrWhiteSpace(_dialogValidationError))"
+                  aria-describedby="alerts-action-rationale-error"
+                  @bind="_actionRationale"></textarea>
+        @if (!string.IsNullOrWhiteSpace(_dialogValidationError))
+        {
+            <p id="alerts-action-rationale-error" class="text-danger mt-2 mb-0">@_dialogValidationError</p>
+        }
+    </Body>
+</ModalDialog>
+
+@code {
+    private readonly IReadOnlyList<BreadcrumbItem> _breadcrumbs = [new("Dashboard", "/"), new("Alerts & Incidents", "/alerts")];
+    private readonly List<AlertQueueItem> _items = [];
+    private List<AlertQueueItem> _filteredItems = [];
+    private AlertQueueItem? _selected;
+    private DateTimeOffset? _lastUpdatedUtc;
+    private StateViewMode _state = StateViewMode.Loading;
+    private string _error = "Please try again.";
+    private string _searchText = string.Empty;
+    private IReadOnlyDictionary<string, int> _statusCounts = new Dictionary<string, int>();
+
+    private string? _actionFeedback;
+    private AlertBannerKind _actionFeedbackKind = AlertBannerKind.Info;
+    private string? _detailWarning;
+
+    private bool _isActionDialogOpen;
+    private string _dialogTitle = "Update status";
+    private string _actionRationale = string.Empty;
+    private string? _dialogValidationError;
+    private WorkflowStatus? _pendingStatus;
+    private string? _pendingItemId;
+    private WorkflowStatus? _statusAtDialogOpen;
+
+    private readonly List<FilterField> _filters =
+    [
+        new()
+        {
+            Key = "severity",
+            Label = "Severity",
+            Value = "all",
+            Options =
+            [
+                new FilterFieldOption { Value = "all", Label = "All severities" },
+                new FilterFieldOption { Value = "critical", Label = "Critical" },
+                new FilterFieldOption { Value = "high", Label = "High" },
+                new FilterFieldOption { Value = "medium", Label = "Medium" },
+                new FilterFieldOption { Value = "low", Label = "Low" }
+            ]
+        },
+        new()
+        {
+            Key = "status",
+            Label = "Status",
+            Value = "all",
+            Options =
+            [
+                new FilterFieldOption { Value = "all", Label = "All statuses" },
+                new FilterFieldOption { Value = "new", Label = "New" },
+                new FilterFieldOption { Value = "acknowledged", Label = "Acknowledged" },
+                new FilterFieldOption { Value = "escalated", Label = "Escalated" },
+                new FilterFieldOption { Value = "inprogress", Label = "In Progress" },
+                new FilterFieldOption { Value = "resolved", Label = "Resolved" }
+            ]
+        },
+        new()
+        {
+            Key = "owner",
+            Label = "Owner",
+            Value = "all",
+            Options = [new FilterFieldOption { Value = "all", Label = "Any owner" }]
+        },
+        new()
+        {
+            Key = "window",
+            Label = "Window",
+            Value = "24h",
+            Options =
+            [
+                new FilterFieldOption { Value = "24h", Label = "Last 24h" },
+                new FilterFieldOption { Value = "7d", Label = "Last 7d" }
+            ]
+        }
+    ];
+
+    private readonly IReadOnlyList<DataTableColumn<AlertQueueItem>> _columns =
+    [
+        new() { Header = "Time", ValueSelector = x => x.Timestamp.ToLocalTime().ToString("u"), SortSelector = x => x.Timestamp },
+        new() { Header = "Title", ValueSelector = x => x.Title, SortSelector = x => x.Title },
+        new() { Header = "Owner", ValueSelector = x => x.Owner, SortSelector = x => x.Owner },
+        new() { Header = "Severity", CellTemplate = row => @<StatusBadge Severity="@row.Severity" />, SortSelector = x => x.Severity },
+        new() { Header = "Status", CellTemplate = row => @<StatusBadge Status="@row.Status" />, SortSelector = x => x.Status }
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        AdminContext.Changed += OnAdminContextChanged;
+        await ReloadAsync();
+    }
+
+    public void Dispose() => AdminContext.Changed -= OnAdminContextChanged;
+
+    private async void OnAdminContextChanged() => await InvokeAsync(StateHasChanged);
+
+    private async Task ReloadAsync()
+    {
+        _state = StateViewMode.Loading;
+        _error = "Please try again.";
+        _actionFeedback = null;
+        _detailWarning = null;
+
+        var alerts = await Api.GetAuditLogsAsync();
+        _items.Clear();
+
+        if (!alerts.Success)
+        {
+            _state = StateViewMode.Error;
+            _error = alerts.Error ?? "Unable to load alert queue.";
+            return;
+        }
+
+        if (alerts.Data is { Count: > 0 })
+        {
+            var queue = alerts.Data
+                .Take(60)
+                .Select((entry, index) => ToAlertQueueItem(entry, index))
+                .OrderByDescending(x => x.Timestamp)
+                .ToList();
+
+            _items.AddRange(queue);
+            SyncOwnerOptions();
+        }
+
+        ApplyFilters(new FilterBarChangeSet
+        {
+            SearchText = _searchText,
+            Values = _filters.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)
+        });
+
+        _selected ??= _filteredItems.FirstOrDefault();
+        _lastUpdatedUtc = DateTimeOffset.UtcNow;
+        _state = _items.Count == 0
+            ? StateViewMode.EmptyTrue
+            : _filteredItems.Count == 0
+                ? StateViewMode.EmptyFiltered
+                : StateViewMode.Success;
+    }
+
+    private Task OnSearchTextChanged(string text)
+    {
+        _searchText = text;
+        return Task.CompletedTask;
+    }
+
+    private Task OnFiltersChanged(FilterBarChangeSet changeSet)
+    {
+        ApplyFilters(changeSet);
+        _selected = _filteredItems.FirstOrDefault(x => x.Id == _selected?.Id) ?? _filteredItems.FirstOrDefault();
+        _state = _items.Count == 0
+            ? StateViewMode.EmptyTrue
+            : _filteredItems.Count == 0
+                ? StateViewMode.EmptyFiltered
+                : StateViewMode.Success;
+        return Task.CompletedTask;
+    }
+
+    private Task OnRowSelected(AlertQueueItem item)
+    {
+        _selected = item;
+        _detailWarning = null;
+        return Task.CompletedTask;
+    }
+
+    private void OpenActionDialog(AlertQueueItem item, WorkflowStatus targetStatus)
+    {
+        _pendingItemId = item.Id;
+        _pendingStatus = targetStatus;
+        _statusAtDialogOpen = item.Status;
+        _dialogTitle = $"Set status to {FormatStatus(targetStatus)}";
+        _actionRationale = string.Empty;
+        _dialogValidationError = null;
+        _isActionDialogOpen = true;
+    }
+
+    private Task CloseActionDialog()
+    {
+        _isActionDialogOpen = false;
+        _dialogValidationError = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task ApplyActionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_actionRationale))
+        {
+            _dialogValidationError = "Rationale is required for auditability.";
+            return;
+        }
+
+        if (_pendingItemId is null || _pendingStatus is null)
+        {
+            await CloseActionDialog();
+            return;
+        }
+
+        var item = _items.FirstOrDefault(x => x.Id == _pendingItemId);
+        if (item is null)
+        {
+            _dialogValidationError = "Selected queue item is no longer available.";
+            return;
+        }
+
+        if (_statusAtDialogOpen.HasValue && item.Status != _statusAtDialogOpen.Value)
+        {
+            _detailWarning = "Status changed elsewhere before submit. Review current state and retry.";
+            _actionFeedback = "Update canceled because status changed concurrently.";
+            _actionFeedbackKind = AlertBannerKind.Warning;
+            await CloseActionDialog();
+            return;
+        }
+
+        var previous = item.Status;
+        item.Status = _pendingStatus.Value;
+        item.LastActionNote = _actionRationale.Trim();
+        item.Timeline.Insert(0, $"{DateTimeOffset.Now:u}: {FormatStatus(_pendingStatus.Value)} by {AdminContext.CurrentRole} ({item.LastActionNote})");
+
+        var reverted = false;
+        if ((_pendingStatus == WorkflowStatus.Escalated || _pendingStatus == WorkflowStatus.Resolved) && AdminContext.CurrentRole == AdminRole.Support)
+        {
+            item.Status = previous;
+            reverted = true;
+        }
+
+        ApplyFilters(new FilterBarChangeSet
+        {
+            SearchText = _searchText,
+            Values = _filters.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)
+        });
+
+        if (reverted)
+        {
+            _actionFeedback = "Action not permitted for current role. Status was restored.";
+            _actionFeedbackKind = AlertBannerKind.Warning;
+        }
+        else
+        {
+            _actionFeedback = $"Status updated to {FormatStatus(_pendingStatus.Value)}.";
+            _actionFeedbackKind = AlertBannerKind.Success;
+        }
+
+        _detailWarning = null;
+        await CloseActionDialog();
+    }
+
+    private void ApplyFilters(FilterBarChangeSet changeSet)
+    {
+        var severity = changeSet.Values.TryGetValue("severity", out var severityValue) ? severityValue : "all";
+        var status = changeSet.Values.TryGetValue("status", out var statusValue) ? statusValue : "all";
+        var owner = changeSet.Values.TryGetValue("owner", out var ownerValue) ? ownerValue : "all";
+        var window = changeSet.Values.TryGetValue("window", out var windowValue) ? windowValue : "24h";
+
+        var threshold = window == "7d" ? DateTime.UtcNow.AddDays(-7) : DateTime.UtcNow.AddHours(-24);
+
+        _filteredItems = _items
+            .Where(x => x.Timestamp >= threshold)
+            .Where(x => string.IsNullOrWhiteSpace(changeSet.SearchText)
+                        || x.Title.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase)
+                        || x.Actor.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase)
+                        || x.Summary.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase)
+                        || x.Detail.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase))
+            .Where(x => AdminUiSemantics.MatchesSeverity(x.Severity, severity))
+            .Where(x => AdminUiSemantics.MatchesStatus(x.Status, status))
+            .Where(x => owner is null || owner == "all" || x.Owner.Equals(owner, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.Timestamp)
+            .ToList();
+
+        _statusCounts = _filteredItems
+            .GroupBy(x => FormatStatus(x.Status))
+            .OrderBy(g => g.Key)
+            .ToDictionary(g => g.Key, g => g.Count());
+    }
+
+    private void SyncOwnerOptions()
+    {
+        var ownerField = _filters.First(x => x.Key == "owner");
+        var owners = _items.Select(x => x.Owner).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+
+        ownerField.Options =
+        [
+            new FilterFieldOption { Value = "all", Label = "Any owner" },
+            ..owners.Select(owner => new FilterFieldOption { Value = owner, Label = owner })
+        ];
+    }
+
+    private static AlertQueueItem ToAlertQueueItem(AuditLogEntry entry, int index)
+    {
+        var severity = AdminUiSemantics.ParseSeverity(entry.Severity);
+        var inferredStatus = InferStatus(entry.Result, severity, entry.Timestamp, index);
+        var title = entry.EventType.Replace('_', ' ');
+
+        return new AlertQueueItem
+        {
+            Id = $"alert-{index}-{entry.Timestamp:yyyyMMddHHmmss}",
+            Timestamp = entry.Timestamp,
+            Title = title,
+            Actor = entry.Actor,
+            Owner = index % 2 == 0 ? "SOC Tier 1" : "SOC Tier 2",
+            Summary = $"{entry.Category} signal from {entry.Actor}",
+            Detail = entry.Detail,
+            Severity = severity,
+            Status = inferredStatus,
+            EvidenceLinks = [],
+            Timeline =
+            [
+                $"{entry.Timestamp:u}: Detected ({entry.Result})",
+                $"{entry.Timestamp.AddMinutes(2):u}: Correlation complete"
+            ]
+        };
+    }
+
+    private static WorkflowStatus InferStatus(string result, SeverityLevel severity, DateTime timestamp, int index)
+    {
+        if (result.Equals("Denied", StringComparison.OrdinalIgnoreCase) && severity is SeverityLevel.Critical or SeverityLevel.High)
+        {
+            return WorkflowStatus.Escalated;
+        }
+
+        if (timestamp < DateTime.UtcNow.AddHours(-18))
+        {
+            return WorkflowStatus.Resolved;
+        }
+
+        return index % 3 == 0 ? WorkflowStatus.New : WorkflowStatus.Acknowledged;
+    }
+
+    private bool CanAcknowledge(AlertQueueItem item)
+        => item.Status is WorkflowStatus.New or WorkflowStatus.Escalated;
+
+    private bool CanEscalate(AlertQueueItem item)
+        => AdminContext.CurrentRole is AdminRole.Admin or AdminRole.Analyst
+           && item.Status is WorkflowStatus.New or WorkflowStatus.Acknowledged;
+
+    private bool CanResolve(AlertQueueItem item)
+        => AdminContext.CurrentRole == AdminRole.Admin
+           && item.Status is WorkflowStatus.Acknowledged or WorkflowStatus.Escalated or WorkflowStatus.InProgress;
+
+    private static string FormatStatus(WorkflowStatus status)
+        => AdminUiSemantics.ToDisplayStatus(status);
+
+    private sealed class AlertQueueItem
+    {
+        public required string Id { get; init; }
+        public required DateTime Timestamp { get; init; }
+        public required string Title { get; init; }
+        public required string Actor { get; init; }
+        public required string Owner { get; init; }
+        public required string Summary { get; init; }
+        public required string Detail { get; init; }
+        public required SeverityLevel Severity { get; init; }
+        public WorkflowStatus Status { get; set; }
+        public string? LastActionNote { get; set; }
+        public List<AlertEvidenceLink> EvidenceLinks { get; init; } = [];
+        public List<string> Timeline { get; init; } = [];
+    }
+
+    private sealed class AlertEvidenceLink
+    {
+        public required string Label { get; init; }
+        public required string Href { get; init; }
+    }
+}

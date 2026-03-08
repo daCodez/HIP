@@ -1,0 +1,119 @@
+[
+  {
+    "threatId": "TH-IDENTITY-MFA-BYPASS",
+    "title": "MFA bypass on authentication",
+    "family": "Identity compromise",
+    "severity": "High",
+    "mitreTechnique": "T1078",
+    "scenarioIds": ["require-mfa", "suspicious-ip-challenge"]
+  },
+  {
+    "threatId": "TH-AUTH-BRUTEFORCE",
+    "title": "Credential brute force",
+    "family": "Identity compromise",
+    "severity": "Critical",
+    "mitreTechnique": "T1110",
+    "scenarioIds": ["brute-force-lock"]
+  },
+  {
+    "threatId": "TH-AUTH-IMPOSSIBLE-TRAVEL",
+    "title": "Impossible travel account takeover",
+    "family": "Identity compromise",
+    "severity": "Critical",
+    "mitreTechnique": "T1078",
+    "scenarioIds": ["impossible-travel-block", "suspicious-ip-alert"]
+  },
+  {
+    "threatId": "TH-DEVICE-UNTRUSTED",
+    "title": "Untrusted device access",
+    "family": "Device trust bypass",
+    "severity": "High",
+    "scenarioIds": ["untrusted-device-challenge"]
+  },
+  {
+    "threatId": "TH-TOKEN-REPLAY",
+    "title": "Token replay abuse",
+    "family": "Session/token abuse",
+    "severity": "Critical",
+    "mitreTechnique": "T1528",
+    "scenarioIds": ["replay-attempt-block", "token_used_from_two_ips"]
+  },
+  {
+    "threatId": "TH-TOKEN-EXPIRED-ABUSE",
+    "title": "Expired token abuse",
+    "family": "Session/token abuse",
+    "severity": "High",
+    "scenarioIds": ["token-expiration-block"]
+  },
+  {
+    "threatId": "TH-SESSION-HIJACK",
+    "title": "Session hijack",
+    "family": "Session/token abuse",
+    "severity": "Critical",
+    "mitreTechnique": "T1539",
+    "scenarioIds": ["session-hijack-detection"]
+  },
+  {
+    "threatId": "TH-MSG-PHISHING",
+    "title": "Phishing link delivery",
+    "family": "Messaging/social engineering abuse",
+    "severity": "Critical",
+    "scenarioIds": ["phishing-domain-block"]
+  },
+  {
+    "threatId": "TH-MSG-SPAM-BURST",
+    "title": "Spam burst amplification",
+    "family": "Messaging/social engineering abuse",
+    "severity": "High",
+    "scenarioIds": ["spam-rate-limit"]
+  },
+  {
+    "threatId": "TH-REP-LOW-SCORE-ABUSE",
+    "title": "Low reputation abuse",
+    "family": "Reputation gaming",
+    "severity": "Medium",
+    "scenarioIds": ["low-reputation-restriction", "very-low-reputation-quarantine"]
+  },
+  {
+    "threatId": "TH-OAUTH-CONSENT-ABUSE",
+    "title": "OAuth consent grant abuse",
+    "family": "Admin/API abuse",
+    "severity": "Critical",
+    "scenarioIds": ["oauth_consent_grant"]
+  },
+  {
+    "threatId": "TH-API-KEY-SPRAWL",
+    "title": "Unauthorized API key creation",
+    "family": "Admin/API abuse",
+    "severity": "High",
+    "scenarioIds": ["api_key_created"]
+  },
+  {
+    "threatId": "TH-DATA-EXPORT-EXFIL",
+    "title": "Unusual bulk data export",
+    "family": "Data exfiltration patterns",
+    "severity": "Critical",
+    "scenarioIds": ["unusual_data_export"]
+  },
+  {
+    "threatId": "TH-EVASION-SLOWBURN",
+    "title": "Slow-burn account manipulation",
+    "family": "Evasion/slow-burn attacks",
+    "severity": "High",
+    "scenarioIds": ["recovery_email_changed", "mfa_method_removed", "password_reset_spike"]
+  },
+  {
+    "threatId": "TH-CONTROLPLANE-UNKNOWN-EVENT",
+    "title": "Unknown event type / telemetry drift",
+    "family": "Misconfiguration and control-plane failures",
+    "severity": "Medium",
+    "scenarioIds": ["unknown_event_type"]
+  },
+  {
+    "threatId": "TH-INSIDER-FORWARDING",
+    "title": "Insider mailbox forwarding rule abuse",
+    "family": "Insider and privilege escalation paths",
+    "severity": "High",
+    "scenarioIds": ["inbox_forwarding_rule_created"]
+  }
+]

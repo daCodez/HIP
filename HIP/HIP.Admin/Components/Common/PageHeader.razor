@@ -1,0 +1,44 @@
+<header class="hip-page-header" aria-labelledby="@HeadingId">
+    @if (Breadcrumbs?.Any() == true)
+    {
+        <nav class="hip-breadcrumbs" aria-label="Breadcrumb">
+            <ol>
+                @foreach (var crumb in Breadcrumbs)
+                {
+                    <li><a href="@crumb.Href">@crumb.Label</a></li>
+                }
+            </ol>
+        </nav>
+    }
+
+    <div class="hip-page-header-row">
+        <div>
+            <h1 id="@HeadingId" tabindex="-1">@Title</h1>
+            @if (!string.IsNullOrWhiteSpace(Subtitle))
+            {
+                <p class="hip-page-subtitle">@Subtitle</p>
+            }
+        </div>
+
+        @if (Actions is not null)
+        {
+            <div class="hip-page-actions" aria-label="Page actions">
+                @Actions
+            </div>
+        }
+    </div>
+
+    @if (LastUpdatedUtc.HasValue)
+    {
+        <p class="hip-page-timestamp">Last updated @LastUpdatedUtc.Value.ToLocalTime():u</p>
+    }
+</header>
+
+@code {
+    [Parameter] public string HeadingId { get; set; } = "page-title";
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public DateTimeOffset? LastUpdatedUtc { get; set; }
+    [Parameter] public IReadOnlyList<HIP.Admin.Navigation.BreadcrumbItem>? Breadcrumbs { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+}

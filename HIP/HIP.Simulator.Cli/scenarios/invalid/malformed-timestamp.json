@@ -1,0 +1,25 @@
+{
+  "id": "malformed-timestamp",
+  "name": "Malformed Timestamp",
+  "description": "Invalid event scenario",
+  "category": "invalid",
+  "tags": [
+    "invalid"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": -9,
+      "eventType": "login.attempt",
+      "actorId": "u",
+      "targetId": "x",
+      "payload": {
+        "mfa": false
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": false
+}

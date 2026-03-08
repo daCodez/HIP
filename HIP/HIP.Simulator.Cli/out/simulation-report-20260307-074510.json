@@ -1,0 +1,109 @@
+{
+  "TotalScenarios": 3,
+  "Passed": 2,
+  "Failed": 1,
+  "Uncovered": 0,
+  "Invalid": 1,
+  "SuggestedPoliciesGenerated": 0,
+  "Scenarios": [
+    {
+      "ScenarioId": "protocol-timestamp-skew-block",
+      "Passed": true,
+      "IsCovered": true,
+      "IsValid": true,
+      "FinalAction": "Block",
+      "FinalSeverity": "High",
+      "MatchedRules": [
+        "Protocol:TimestampPolicy"
+      ],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Protocol:TimestampPolicy",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Timestamp outside allowed skew."
+        }
+      ],
+      "SideEffects": [
+        "Executed against HIP.Protocol target"
+      ],
+      "Suggestion": null
+    },
+    {
+      "ScenarioId": "protocol-envelope-verify-allow",
+      "Passed": false,
+      "IsCovered": false,
+      "IsValid": false,
+      "FinalAction": "LogOnly",
+      "FinalSeverity": "Info",
+      "MatchedRules": [],
+      "ValidationIssues": [
+        "expectedAction is not supported"
+      ],
+      "RuleTrace": [],
+      "SideEffects": [],
+      "Suggestion": null
+    },
+    {
+      "ScenarioId": "protocol-replay-attempt-block",
+      "Passed": true,
+      "IsCovered": true,
+      "IsValid": true,
+      "FinalAction": "Block",
+      "FinalSeverity": "Critical",
+      "MatchedRules": [
+        "Protocol:EnvelopeVerify",
+        "Protocol:ReplayGuard"
+      ],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Protocol:EnvelopeVerify",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Nonce already used."
+        },
+        {
+          "RuleName": "Protocol:ReplayGuard",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Nonce already used."
+        }
+      ],
+      "SideEffects": [
+        "Executed against HIP.Protocol target"
+      ],
+      "Suggestion": null
+    }
+  ],
+  "Coverage": {
+    "EventCoverage": [],
+    "RuleCoverage": [
+      {
+        "RuleName": "Protocol:TimestampPolicy",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Protocol:EnvelopeVerify",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Protocol:ReplayGuard",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      }
+    ],
+    "FieldCoverage": [],
+    "UncoveredPatterns": [],
+    "InvalidPatterns": [
+      "protocol-envelope-verify-allow"
+    ],
+    "SuggestedPoliciesCount": 0
+  }
+}

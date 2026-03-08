@@ -1,0 +1,47 @@
+{
+  "event": { "type": "UserLoginAttempt" },
+  "auth": {
+    "mfa": false,
+    "newDevice": true,
+    "loginAttempts_5m": 2
+  },
+  "device": {
+    "trusted": false,
+    "fingerprintKnown": false,
+    "trustState": "untrusted"
+  },
+  "security": {
+    "replayDetected": false
+  },
+  "token": {
+    "expired": false,
+    "createAttempts_1m": 0,
+    "usedFromMultipleIps": false
+  },
+  "reputation": {
+    "score": 22,
+    "drop_10m": 5,
+    "accountInactiveDays": 10
+  },
+  "messaging": {
+    "domainFlagged": false,
+    "messagesSent_5m": 0,
+    "messagesSent_1m": 0,
+    "sameMessageRecipients": 0,
+    "attachmentRisk": "low"
+  },
+  "ip": {
+    "risk": "high",
+    "torProxy": false
+  },
+  "geo": {
+    "newCountry": true,
+    "newLocation": true,
+    "impossibleTravel": false
+  },
+  "session": { "ipChanged": false },
+  "data": { "filesDownloaded_10m": 0 },
+  "authz": { "roleChangedToAdmin": false },
+  "system": { "policyChanged": false },
+  "risk": { "score": 84 }
+}

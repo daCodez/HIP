@@ -1,0 +1,90 @@
+<section class="hip-tabs">
+    <div class="hip-tab-list" role="tablist" aria-label="@Label">
+        @foreach (var tab in Items)
+        {
+            var selected = string.Equals(tab.Id, ActiveTabId, StringComparison.OrdinalIgnoreCase);
+            <button type="button"
+                    id="@GetTabId(tab)"
+                    role="tab"
+                    tabindex="@(selected ? 0 : -1)"
+                    class="hip-tab @(selected ? "active" : string.Empty)"
+                    aria-selected="@selected"
+                    aria-controls="@GetPanelId(tab)"
+                    disabled="@tab.Disabled"
+                    @onclick="() => SelectTab(tab.Id)"
+                    @onkeydown="(args => HandleKeyDown(args, tab.Id))">
+                <span>@tab.Label</span>
+                @if (!string.IsNullOrWhiteSpace(tab.BadgeText))
+                {
+                    <span class="hip-tab-badge">@tab.BadgeText</span>
+                }
+            </button>
+        }
+    </div>
+
+    @if (ActiveTab is not null)
+    {
+        <div id="@GetPanelId(ActiveTab)"
+             class="hip-tab-panel"
+             role="tabpanel"
+             tabindex="0"
+             aria-labelledby="@GetTabId(ActiveTab)">
+            @if (PanelTemplate is not null)
+            {
+                @PanelTemplate(ActiveTab)
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Tabs";
+    [Parameter] public IReadOnlyList<TabItem> Items { get; set; } = [];
+    [Parameter] public string? ActiveTabId { get; set; }
+    [Parameter] public EventCallback<string> ActiveTabIdChanged { get; set; }
+    [Parameter] public RenderFragment<TabItem>? PanelTemplate { get; set; }
+
+    private TabItem? ActiveTab => Items.FirstOrDefault(x => string.Equals(x.Id, ActiveTabId, StringComparison.OrdinalIgnoreCase)) ?? Items.FirstOrDefault();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ActiveTabId) && Items.Count > 0)
+        {
+            var firstEnabled = Items.FirstOrDefault(x => !x.Disabled);
+            if (firstEnabled is not null)
+            {
+                await ActiveTabIdChanged.InvokeAsync(firstEnabled.Id);
+            }
+        }
+    }
+
+    private Task SelectTab(string tabId) => ActiveTabIdChanged.InvokeAsync(tabId);
+
+    private Task HandleKeyDown(KeyboardEventArgs args, string tabId)
+    {
+        var enabledTabs = Items.Where(x => !x.Disabled).ToList();
+        if (enabledTabs.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var currentIndex = enabledTabs.FindIndex(x => string.Equals(x.Id, tabId, StringComparison.OrdinalIgnoreCase));
+        if (currentIndex < 0)
+        {
+            currentIndex = 0;
+        }
+
+        return args.Key switch
+        {
+            "ArrowRight" or "ArrowDown" => SelectTab(enabledTabs[(currentIndex + 1) % enabledTabs.Count].Id),
+            "ArrowLeft" or "ArrowUp" => SelectTab(enabledTabs[(currentIndex - 1 + enabledTabs.Count) % enabledTabs.Count].Id),
+            "Home" => SelectTab(enabledTabs[0].Id),
+            "End" => SelectTab(enabledTabs[^1].Id),
+            "Enter" or " " => SelectTab(tabId),
+            _ => Task.CompletedTask
+        };
+    }
+
+    private static string GetTabId(TabItem item) => $"hip-tab-{item.Id}";
+    private static string GetPanelId(TabItem item) => $"hip-panel-{item.Id}";
+}

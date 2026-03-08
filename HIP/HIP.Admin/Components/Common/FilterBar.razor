@@ -1,0 +1,89 @@
+<section class="hip-filter-bar" aria-label="Data filters">
+    <div class="hip-filter-controls">
+        <label class="visually-hidden" for="@SearchInputId">Search</label>
+        <input id="@SearchInputId"
+               class="form-control"
+               value="@_searchText"
+               @oninput="OnSearchInput"
+               placeholder="@SearchPlaceholder" />
+
+        @foreach (var field in Fields)
+        {
+            var selected = _selectedValues.TryGetValue(field.Key, out var value) ? value : field.Value;
+            <div class="hip-filter-field">
+                <label for="@GetFieldId(field)">@field.Label</label>
+                <select id="@GetFieldId(field)" class="form-select" value="@selected" @onchange="e => OnFieldChanged(field.Key, e.Value?.ToString())">
+                    @foreach (var option in field.Options)
+                    {
+                        <option value="@option.Value">@option.Label</option>
+                    }
+                </select>
+            </div>
+        }
+    </div>
+
+    <div class="hip-filter-actions" aria-label="Filter actions">
+        @if (Actions is not null)
+        {
+            @Actions
+        }
+        <button type="button" class="btn btn-outline-secondary" @onclick="Reset">Reset</button>
+    </div>
+</section>
+
+@code {
+    [Parameter] public string SearchPlaceholder { get; set; } = "Search";
+    [Parameter] public string SearchText { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> SearchTextChanged { get; set; }
+    [Parameter] public IReadOnlyList<FilterField> Fields { get; set; } = [];
+    [Parameter] public EventCallback<FilterBarChangeSet> OnChanged { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+
+    private readonly string _idPrefix = $"hip-filter-{Guid.NewGuid():N}";
+    private string SearchInputId => $"{_idPrefix}-search";
+    private string _searchText = string.Empty;
+    private readonly Dictionary<string, string?> _selectedValues = new(StringComparer.OrdinalIgnoreCase);
+
+    protected override void OnParametersSet()
+    {
+        _searchText = SearchText;
+        foreach (var field in Fields)
+        {
+            _selectedValues[field.Key] = field.Value;
+        }
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs args)
+    {
+        _searchText = args.Value?.ToString() ?? string.Empty;
+        await SearchTextChanged.InvokeAsync(_searchText);
+        await RaiseChangedAsync();
+    }
+
+    private async Task OnFieldChanged(string key, string? value)
+    {
+        _selectedValues[key] = value;
+        await RaiseChangedAsync();
+    }
+
+    private async Task Reset()
+    {
+        _searchText = string.Empty;
+        foreach (var field in Fields)
+        {
+            _selectedValues[field.Key] = field.Options.FirstOrDefault()?.Value;
+        }
+
+        await SearchTextChanged.InvokeAsync(_searchText);
+        await RaiseChangedAsync();
+    }
+
+    private Task RaiseChangedAsync()
+        => OnChanged.InvokeAsync(new FilterBarChangeSet
+        {
+            SearchText = _searchText,
+            Values = new Dictionary<string, string?>(_selectedValues, StringComparer.OrdinalIgnoreCase)
+        });
+
+    private string GetFieldId(FilterField field) => $"{_idPrefix}-{field.Key}";
+}

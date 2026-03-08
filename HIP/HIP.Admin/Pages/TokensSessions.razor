@@ -8,7 +8,7 @@
     <div class="alert alert-warning py-2 small">@_error</div>
 }
 
-<section class="dashboard-security-grid mb-3">
+<section class="dashboard-security-grid security-kpi-grid mb-3">
     <div class="widget"><div class="widget-header"><h3>Active Sessions</h3></div><div class="widget-content"><div class="rep-score">@_activeSessions</div></div></div>
     <div class="widget"><div class="widget-header"><h3>Token Issues (24h)</h3></div><div class="widget-content"><div class="rep-score">@_issues24h</div></div></div>
     <div class="widget"><div class="widget-header"><h3>Token Refreshes (24h)</h3></div><div class="widget-content"><div class="rep-score">@_refresh24h</div></div></div>
@@ -19,9 +19,18 @@
     <div class="widget-header"><h3><i class="fa fa-key"></i> Token Operations</h3></div>
     <div class="widget-content">
         <div class="row g-2">
-            <div class="col-md-3"><input class="form-control form-control-sm" placeholder="Identity Id" @bind="_identityId" /></div>
-            <div class="col-md-3"><input class="form-control form-control-sm" placeholder="Audience" @bind="_audience" /></div>
-            <div class="col-md-3"><input class="form-control form-control-sm" placeholder="Device Id (optional)" @bind="_deviceId" /></div>
+            <div class="col-md-3">
+                <label class="form-label form-label-sm" for="token-identity-id">Identity ID</label>
+                <input id="token-identity-id" class="form-control form-control-sm" autocomplete="username" @bind="_identityId" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label form-label-sm" for="token-audience">Audience</label>
+                <input id="token-audience" class="form-control form-control-sm" @bind="_audience" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label form-label-sm" for="token-device-id">Device ID (optional)</label>
+                <input id="token-device-id" class="form-control form-control-sm" @bind="_deviceId" />
+            </div>
         </div>
         <div class="d-flex gap-2 mt-2 flex-wrap">
             <button class="btn btn-sm btn-outline-primary" @onclick="IssueAsync">Issue</button>
@@ -31,10 +40,12 @@
         </div>
 
         <div class="mt-2">
-            <textarea class="form-control form-control-sm" rows="4" placeholder="Access token (for validate/revoke)" @bind="_accessToken"></textarea>
+            <label class="form-label form-label-sm" for="access-token-input">Access token (for validate/revoke)</label>
+            <textarea id="access-token-input" class="form-control form-control-sm" rows="4" @bind="_accessToken"></textarea>
         </div>
         <div class="mt-2">
-            <textarea class="form-control form-control-sm" rows="3" placeholder="Refresh token (for refresh/revoke)" @bind="_refreshToken"></textarea>
+            <label class="form-label form-label-sm" for="refresh-token-input">Refresh token (for refresh/revoke)</label>
+            <textarea id="refresh-token-input" class="form-control form-control-sm" rows="3" @bind="_refreshToken"></textarea>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(_opResult))

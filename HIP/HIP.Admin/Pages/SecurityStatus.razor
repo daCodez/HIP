@@ -5,40 +5,52 @@
 
 <PageTitle>Security Status</PageTitle>
 
-<div class="card">
-    <div class="card-body">
-        <div class="d-flex justify-content-between mb-3">
-            <h5>Security Status</h5>
-            <div class="d-flex gap-2 align-items-center">
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" @bind="_autoRefresh" />
-                    <label class="form-check-label">Auto refresh</label>
-                </div>
-                <button class="btn btn-primary btn-sm" @onclick="Load">Refresh</button>
+<section class="widget widget-table table-widget-frame">
+    <div class="widget-header">
+        <h3><i class="fa fa-shield"></i> Security Status</h3>
+        <div class="d-flex gap-2 align-items-center">
+            <div class="form-check form-switch m-0">
+                <input id="auto-refresh-toggle" class="form-check-input" type="checkbox" @bind="_autoRefresh" />
+                <label class="form-check-label" for="auto-refresh-toggle">Auto refresh</label>
             </div>
+            <button class="btn btn-primary btn-sm" @onclick="() => Load(true)">Refresh</button>
         </div>
-
-        @foreach (var check in _checks)
+    </div>
+    <div class="widget-content">
+        @if (!string.IsNullOrWhiteSpace(_error))
         {
-            <div class="d-flex justify-content-between border-bottom py-2">
-                <div>
-                    <div class="fw-semibold">@check.Name</div>
-                    <small class="text-muted">@check.LastChecked.ToLocalTime()</small>
+            <div class="alert alert-warning py-2 small">@_error</div>
+        }
+
+        @if (_checks.Count == 0)
+        {
+            <div class="text-muted small">No security checks available yet.</div>
+        }
+        else
+        {
+            @foreach (var check in _checks)
+            {
+                <div class="d-flex justify-content-between border-bottom py-2">
+                    <div>
+                        <div class="fw-semibold">@check.Name</div>
+                        <small class="text-muted">@check.LastChecked.ToLocalTime()</small>
+                    </div>
+                    <BadgeStatus Text="@check.Status" />
                 </div>
-                <BadgeStatus Text="@check.Status" />
-            </div>
+            }
         }
     </div>
-</div>
+</section>
 
 @code {
     private List<SecurityCheck> _checks = [];
     private bool _autoRefresh;
+    private string? _error;
     private PeriodicTimer? _timer;
 
     protected override async Task OnInitializedAsync()
     {
-        await Load();
+        await Load(false);
         _timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
         _ = RunAutoRefresh();
     }
@@ -50,17 +62,22 @@
         {
             if (_autoRefresh)
             {
-                await Load();
+                await Load(false);
                 await InvokeAsync(StateHasChanged);
             }
         }
     }
 
-    private async Task Load()
+    private async Task Load(bool showToast)
     {
         var result = await Api.GetSecurityChecksAsync();
+        _error = result.Success ? null : result.Error;
         _checks = result.Data ?? [];
-        Toast.Show("Security", "Security checks refreshed", "success");
+
+        if (showToast)
+        {
+            Toast.Show("Security", result.Success ? "Security checks refreshed" : "Security checks unavailable", result.Success ? "success" : "warning");
+        }
     }
 
     public void Dispose() => _timer?.Dispose();

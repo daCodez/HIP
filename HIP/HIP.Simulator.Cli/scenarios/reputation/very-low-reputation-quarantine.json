@@ -1,0 +1,28 @@
+{
+  "id": "very-low-reputation-quarantine",
+  "name": "Very Low Reputation Quarantine",
+  "description": "Seed scenario",
+  "category": "reputation",
+  "tags": [
+    "reputation",
+    "seed"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "message.send",
+      "actorId": "user-1",
+      "targetId": "target-1",
+      "payload": {
+        "reputation": 4
+      }
+    }
+  ],
+  "expectedRules": [
+    "Very low reputation quarantine"
+  ],
+  "expectedAction": "Quarantine",
+  "expectedSeverity": "Critical",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

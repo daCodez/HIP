@@ -1,441 +1,486 @@
 @page "/policy-rules"
 @inject HipAdminApiClient Api
-@inject ActionLogService ActionLog
 @inject AdminContextService AdminContext
+@implements IDisposable
 
-<PageTitle>Policy & Rules</PageTitle>
+<PageTitle>Policy Management</PageTitle>
 
-@if (!string.IsNullOrWhiteSpace(_error))
+<PageHeader Title="Policy Management"
+            Subtitle="Review policy health, stage edits safely, and preview impact before confirmation"
+            LastUpdatedUtc="@_lastUpdatedUtc"
+            Breadcrumbs="@_breadcrumbs">
+    <Actions>
+        <button type="button" class="btn btn-outline-secondary" @onclick="ReloadAsync">Refresh</button>
+        <button type="button" class="btn btn-primary" @onclick="StartNewDraft" disabled="@(!CanEditPolicies)">New draft</button>
+    </Actions>
+</PageHeader>
+
+@if (_state == StateViewMode.Error)
 {
-    <div class="alert alert-warning py-2 small">@_error</div>
+    <AlertBanner Kind="AlertBannerKind.Error" Title="Policy list unavailable" Message="@_error" />
 }
 
-<section class="widget mb-3">
-    <div class="widget-header"><h3><i class="fa fa-code-fork"></i> Policy Versions</h3></div>
-    <div class="widget-content">
-        <div class="d-flex gap-2 mb-2">
-            <button class="btn btn-sm btn-outline-primary" @onclick="CreateDraftAsync">Create Draft</button>
-            <button class="btn btn-sm btn-outline-secondary" @onclick="PreviewImpactAsync" disabled="@string.IsNullOrWhiteSpace(_selectedVersionId)">Impact Preview</button>
-            <button class="btn btn-sm btn-outline-success" @onclick="ActivateSelectedAsync" disabled="@string.IsNullOrWhiteSpace(_selectedVersionId)">Activate</button>
-            <button class="btn btn-sm btn-outline-danger" @onclick="RollbackAsync">Rollback</button>
-            @if (!string.IsNullOrWhiteSpace(_versionNote))
+@if (!string.IsNullOrWhiteSpace(_bannerMessage))
+{
+    <AlertBanner Kind="@_bannerKind" Title="Policy workflow" Message="@_bannerMessage">
+        <Actions>
+            @if (_bannerKind == AlertBannerKind.Error)
             {
-                <span class="small text-muted align-self-center">@_versionNote</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ReloadAsync">Retry</button>
             }
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ClearBanner">Dismiss</button>
+        </Actions>
+    </AlertBanner>
+}
+
+<FilterBar SearchText="@_searchText"
+           SearchTextChanged="OnSearchChanged"
+           SearchPlaceholder="Search policy id, name, category, condition, or action"
+           Fields="@_filters"
+           OnChanged="OnFiltersChanged">
+    <Actions>
+        <span class="small text-muted">Role: <strong>@AdminContext.CurrentRole</strong></span>
+    </Actions>
+</FilterBar>
+
+<div class="small text-muted mb-2" aria-live="polite">
+    Showing @_filtered.Count / @_items.Count policies
+</div>
+
+<StateView Mode="@_state"
+           EmptyMessage="No policies are currently configured."
+           FilteredMessage="No policy matches the selected filters."
+           ErrorMessage="@_error"
+           OnRetry="ReloadAsync">
+    <div class="row g-3">
+        <div class="col-xl-8">
+            <DataTable TItem="PolicyRow"
+                       Title="Policy rules"
+                       Caption="Severity and workflow status are shown with icon + text, not color-only cues"
+                       Items="@_filtered"
+                       Columns="@_columns"
+                       ShowSearch="false"
+                       EmptyMessage="No policy rules found for this filter set."
+                       IsRowSelected="@(x => _selected?.Id == x.Id)"
+                       OnRowClick="OnRowSelected" />
         </div>
-        <div class="table-responsive">
-            <table class="table table-sm align-middle">
-                <thead><tr><th></th><th>Version</th><th>Status</th><th>Rules</th><th>Actor</th><th>Reason</th><th>Created</th></tr></thead>
-                <tbody>
-                @foreach (var v in _versions)
-                {
-                    <tr>
-                        <td><input type="radio" name="ver" checked="@(v.VersionId == _selectedVersionId)" @onchange="(() => _selectedVersionId = v.VersionId)" /></td>
-                        <td>@v.VersionId</td>
-                        <td><span class="badge @(v.Status == "Active" ? "text-bg-success" : v.Status == "Draft" ? "text-bg-warning text-dark" : "text-bg-secondary")">@v.Status</span></td>
-                        <td>@v.RuleCount</td>
-                        <td>@v.Actor</td>
-                        <td>@v.Reason</td>
-                        <td>@v.CreatedUtc.ToLocalTime().ToString("MM-dd HH:mm")</td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        </div>
-        @if (!string.IsNullOrWhiteSpace(_impactText))
-        {
-            <div class="small mt-2"><strong>Impact preview:</strong> @_impactText</div>
-        }
+
+        <aside class="col-xl-4" aria-live="polite">
+            <section class="card">
+                <div class="card-body">
+                    <h2 class="h6">Policy detail</h2>
+                    @if (_selected is null)
+                    {
+                        <p class="text-muted mb-0">Select a policy to review status and available actions.</p>
+                    }
+                    else
+                    {
+                        <p class="mb-1"><strong>@_selected.Name</strong></p>
+                        <p class="mb-1">Policy ID: @_selected.Id</p>
+                        <p class="mb-1">Severity: <StatusBadge Severity="@_selected.Severity" /></p>
+                        <p class="mb-1">Status: <StatusBadge Status="@_selected.Status" /></p>
+                        <p class="mb-2">Category: @_selected.Category</p>
+                        <p class="small text-muted mb-3">@_selected.Condition</p>
+
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => OpenEditFlow(_selected)" disabled="@(!CanEditPolicies)">Edit draft</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => PreviewImpactAsync(_selected)" disabled="@(!CanEditPolicies)">Preview impact</button>
+                            <button type="button" class="btn btn-sm btn-outline-success" @onclick="() => OpenConfirmStep(_selected)" disabled="@(!CanApprovePolicies)">Confirm apply</button>
+                        </div>
+
+                        @if (!CanEditPolicies)
+                        {
+                            <p class="small text-muted mt-2 mb-0">Read-only role: editing and apply actions are restricted.</p>
+                        }
+                        else if (!CanApprovePolicies)
+                        {
+                            <p class="small text-muted mt-2 mb-0">You can draft and preview. Apply confirmation requires Admin role.</p>
+                        }
+                    }
+                </div>
+            </section>
+        </aside>
     </div>
-</section>
+</StateView>
 
-<section class="dashboard-security-grid mb-3">
-    <div class="widget"><div class="widget-header"><h3>Active Rules</h3></div><div class="widget-content"><div class="rep-score">@ActiveRules</div></div></div>
-    <div class="widget"><div class="widget-header"><h3>Blocks Today</h3></div><div class="widget-content"><div class="rep-score">@BlocksToday</div></div></div>
-    <div class="widget"><div class="widget-header"><h3>Warnings Today</h3></div><div class="widget-content"><div class="rep-score">@WarningsToday</div></div></div>
-    <div class="widget"><div class="widget-header"><h3>Violations Today</h3></div><div class="widget-content"><div class="rep-score">@ViolationsToday</div></div></div>
-</section>
-
-<section class="widget widget-table table-widget-frame mb-3">
-    <div class="widget-header d-flex justify-content-between align-items-center">
-        <h3><i class="fa fa-list"></i> Rules</h3>
-        <div class="d-flex align-items-center gap-2">
-            @if (AdminContext.MockModeEnabled)
+<ModalDialog IsOpen="@_isFlowModalOpen"
+             Title="@FlowTitle"
+             ConfirmText="@FlowConfirmText"
+             CancelText="Close"
+             OnClose="CloseFlowModal"
+             OnConfirm="AdvanceFlowAsync"
+             CloseOnBackdropClick="false">
+    <Body>
+        @if (_flowPolicy is null)
+        {
+            <p class="mb-0 text-muted">No policy selected.</p>
+        }
+        else if (_flowStep == PolicyFlowStep.Draft)
+        {
+            <p class="mb-2"><strong>Draft</strong> — create a safe working copy before changing production logic.</p>
+            <p class="mb-1">Policy: @_flowPolicy.Name (@_flowPolicy.Id)</p>
+            <p class="small text-muted mb-0">No backend write occurs in this MVP shell. This prepares an in-memory draft only.</p>
+        }
+        else if (_flowStep == PolicyFlowStep.Edit)
+        {
+            <p class="mb-2"><strong>Edit</strong> — update draft placeholders for review.</p>
+            <div class="mb-2">
+                <label class="form-label" for="policy-edit-name">Draft name</label>
+                <input id="policy-edit-name" class="form-control" @bind="_draftName" />
+            </div>
+            <div class="mb-1">
+                <label class="form-label" for="policy-edit-condition">Draft condition</label>
+                <textarea id="policy-edit-condition" class="form-control" rows="3" @bind="_draftCondition"></textarea>
+            </div>
+        }
+        else if (_flowStep == PolicyFlowStep.PreviewImpact)
+        {
+            <p class="mb-2"><strong>Preview impact</strong> — review projected workflow effect before confirmation.</p>
+            @if (string.IsNullOrWhiteSpace(_impactPreviewText))
             {
-                <span class="widget-label">Demo Data</span>
+                <p class="small text-muted mb-0">Preview not generated yet. Continue to simulate placeholder impact.</p>
             }
             else
             {
-                <span class="widget-label @(_degraded ? "degraded" : "live")">@(_degraded ? "Degraded" : "Live Data")</span>
+                <p class="small mb-0">@_impactPreviewText</p>
             }
-            <button class="btn btn-sm btn-outline-primary">+ New Policy Rule</button>
-        </div>
-    </div>
-    <div class="widget-content">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead>
-                    <tr>
-                        <th>Rule</th><th>Category</th><th>Condition</th><th>Action</th><th>Severity</th><th>Status</th><th>Ops</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var r in RuleRows)
-                    {
-                        <tr>
-                            <td><strong>@r.Name</strong></td>
-                            <td><span class="badge @CategoryClass(r.Category)">@r.Category</span></td>
-                            <td class="small">@r.Condition</td>
-                            <td>@r.Action</td>
-                            <td><span class="badge @SeverityClass(r.Severity)">@r.Severity</span></td>
-                            <td><span class="badge @(r.Enabled ? "text-bg-success" : "text-bg-secondary")">@(r.Enabled ? "Active" : "Disabled")</span></td>
-                            <td class="d-flex gap-1">
-                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => TestRule(r)">Test</button>
-                                <button class="btn btn-sm btn-outline-secondary">Edit</button>
-                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => ToggleRule(r)">@((r.Enabled) ? "Disable" : "Enable")</button>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
-</section>
-
-<section class="widget mb-3">
-    <div class="widget-header"><h3><i class="fa fa-magic"></i> Policy Builder</h3></div>
-    <div class="widget-content">
-        <div class="row g-2">
-            <div class="col-md-3"><input class="form-control form-control-sm" placeholder="Rule Id" @bind="_newRuleId" /></div>
-            <div class="col-md-3"><input class="form-control form-control-sm" placeholder="Rule Name" @bind="_newRuleName" /></div>
-            <div class="col-md-2"><input class="form-control form-control-sm" placeholder="Category" @bind="_newRuleCategory" /></div>
-            <div class="col-md-2"><input class="form-control form-control-sm" placeholder="Action" @bind="_newRuleAction" /></div>
-            <div class="col-md-2"><input class="form-control form-control-sm" placeholder="Severity" @bind="_newRuleSeverity" /></div>
-            <div class="col-12"><input class="form-control form-control-sm" placeholder="Condition" @bind="_newRuleCondition" /></div>
-        </div>
-        <div class="d-flex gap-2 mt-2">
-            <button class="btn btn-sm btn-outline-primary" @onclick="SaveVisualRuleAsync">Save Rule</button>
-            <input class="form-control form-control-sm" style="max-width:420px" placeholder="AI prompt (bones)" @bind="_aiPrompt" />
-            <button class="btn btn-sm btn-outline-secondary" @onclick="GenerateAiDraftAsync">Generate AI Draft</button>
-        </div>
-        @if (!string.IsNullOrWhiteSpace(_builderNote))
-        {
-            <div class="small text-muted mt-2">@_builderNote</div>
         }
-    </div>
-</section>
-
-<section class="widget">
-    <div class="widget-header"><h3><i class="fa fa-flask"></i> Policy Sandbox</h3></div>
-    <div class="widget-content">
-        <textarea class="form-control mb-2" rows="8" @bind="_sandboxInput"></textarea>
-        <button class="btn btn-outline-primary btn-sm" @onclick="RunSandboxAsync">Test Input</button>
-
-        <div class="mt-3 small">
-            <div><strong>Decision:</strong> <span class="badge @DecisionClass">@_decision</span></div>
-            <div class="mt-2"><strong>Triggered Rules:</strong></div>
-            <ul>
-                @foreach (var t in _triggered)
-                {
-                    <li>@t</li>
-                }
-            </ul>
-            <div><strong>Actions:</strong></div>
-            <ul>
-                @foreach (var a in _actions)
-                {
-                    <li>@a</li>
-                }
-            </ul>
-            <div><strong>Policy trace:</strong></div>
-            <ul>
-                @foreach (var tr in _trace)
-                {
-                    <li>@tr</li>
-                }
-            </ul>
-        </div>
-    </div>
-</section>
+        else
+        {
+            <p class="mb-2"><strong>Confirm</strong> — final safety checkpoint.</p>
+            <p class="mb-1">Policy: @_flowPolicy.Name (@_flowPolicy.Id)</p>
+            <p class="small text-muted mb-0">This MVP confirms only UI workflow state. No destructive apply call is executed.</p>
+        }
+    </Body>
+</ModalDialog>
 
 @code {
-    private sealed class RuleRow
+    private readonly IReadOnlyList<BreadcrumbItem> _breadcrumbs = [new("Dashboard", "/"), new("Policy Management", "/policy-rules")];
+
+    private readonly List<PolicyRow> _items = [];
+    private List<PolicyRow> _filtered = [];
+    private PolicyRow? _selected;
+
+    private string _searchText = string.Empty;
+    private DateTimeOffset? _lastUpdatedUtc;
+    private StateViewMode _state = StateViewMode.Loading;
+    private string _error = "Please try again.";
+
+    private string? _bannerMessage;
+    private AlertBannerKind _bannerKind = AlertBannerKind.Info;
+
+    private bool _isFlowModalOpen;
+    private PolicyFlowStep _flowStep = PolicyFlowStep.Draft;
+    private PolicyRow? _flowPolicy;
+    private string _draftName = string.Empty;
+    private string _draftCondition = string.Empty;
+    private string? _impactPreviewText;
+
+    private readonly List<FilterField> _filters =
+    [
+        new()
+        {
+            Key = "severity",
+            Label = "Severity",
+            Value = "all",
+            Options =
+            [
+                new FilterFieldOption { Value = "all", Label = "All severities" },
+                new FilterFieldOption { Value = "critical", Label = "Critical" },
+                new FilterFieldOption { Value = "high", Label = "High" },
+                new FilterFieldOption { Value = "medium", Label = "Medium" },
+                new FilterFieldOption { Value = "low", Label = "Low" }
+            ]
+        },
+        new()
+        {
+            Key = "status",
+            Label = "Status",
+            Value = "all",
+            Options =
+            [
+                new FilterFieldOption { Value = "all", Label = "All statuses" },
+                new FilterFieldOption { Value = "new", Label = "New" },
+                new FilterFieldOption { Value = "inprogress", Label = "In Progress" },
+                new FilterFieldOption { Value = "resolved", Label = "Resolved" },
+                new FilterFieldOption { Value = "failed", Label = "Failed" }
+            ]
+        },
+        new()
+        {
+            Key = "enabled",
+            Label = "Enabled",
+            Value = "all",
+            Options =
+            [
+                new FilterFieldOption { Value = "all", Label = "Any" },
+                new FilterFieldOption { Value = "true", Label = "Enabled" },
+                new FilterFieldOption { Value = "false", Label = "Disabled" }
+            ]
+        }
+    ];
+
+    private readonly IReadOnlyList<DataTableColumn<PolicyRow>> _columns =
+    [
+        new() { Header = "Policy", ValueSelector = x => x.Name, SortSelector = x => x.Name },
+        new() { Header = "Severity", CellTemplate = row => @<StatusBadge Severity="@row.Severity" />, SortSelector = x => x.Severity },
+        new() { Header = "Status", CellTemplate = row => @<StatusBadge Status="@row.Status" />, SortSelector = x => x.Status },
+        new() { Header = "Category", ValueSelector = x => x.Category, SortSelector = x => x.Category },
+        new() { Header = "Action", ValueSelector = x => x.Action, SortSelector = x => x.Action },
+        new() { Header = "Mode", ValueSelector = x => x.Enabled ? "Enabled" : "Disabled", SortSelector = x => x.Enabled }
+    ];
+
+    private bool CanEditPolicies => AdminContext.CurrentRole is AdminRole.Admin or AdminRole.Support;
+    private bool CanApprovePolicies => AdminContext.CurrentRole == AdminRole.Admin;
+
+    private string FlowTitle => _flowStep switch
+    {
+        PolicyFlowStep.Draft => "Policy draft",
+        PolicyFlowStep.Edit => "Edit draft",
+        PolicyFlowStep.PreviewImpact => "Preview impact",
+        PolicyFlowStep.Confirm => "Confirm policy apply",
+        _ => "Policy workflow"
+    };
+
+    private string FlowConfirmText => _flowStep == PolicyFlowStep.Confirm ? "Confirm" : "Continue";
+
+    protected override async Task OnInitializedAsync()
+    {
+        AdminContext.Changed += OnAdminContextChanged;
+        await ReloadAsync();
+    }
+
+    public void Dispose() => AdminContext.Changed -= OnAdminContextChanged;
+
+    private async void OnAdminContextChanged()
+    {
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ReloadAsync()
+    {
+        _state = StateViewMode.Loading;
+        _error = "Please try again.";
+        _items.Clear();
+
+        var result = await Api.GetPolicyRulesAsync();
+        if (!result.Success)
+        {
+            _state = StateViewMode.Error;
+            _error = result.Error ?? "Unable to load policies.";
+            return;
+        }
+
+        var rows = (result.Data ?? [])
+            .Select(MapPolicy)
+            .OrderByDescending(x => x.Severity)
+            .ThenBy(x => x.Name)
+            .ToList();
+
+        _items.AddRange(rows);
+
+        ApplyFilters(new FilterBarChangeSet
+        {
+            SearchText = _searchText,
+            Values = _filters.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)
+        });
+
+        _selected = _filtered.FirstOrDefault();
+        _lastUpdatedUtc = DateTimeOffset.UtcNow;
+        _state = _items.Count == 0
+            ? StateViewMode.EmptyTrue
+            : _filtered.Count == 0
+                ? StateViewMode.EmptyFiltered
+                : StateViewMode.Success;
+    }
+
+    private Task OnSearchChanged(string value)
+    {
+        _searchText = value;
+        return Task.CompletedTask;
+    }
+
+    private Task OnFiltersChanged(FilterBarChangeSet changeSet)
+    {
+        ApplyFilters(changeSet);
+        _selected = _filtered.FirstOrDefault(x => x.Id == _selected?.Id) ?? _filtered.FirstOrDefault();
+
+        _state = _items.Count == 0
+            ? StateViewMode.EmptyTrue
+            : _filtered.Count == 0
+                ? StateViewMode.EmptyFiltered
+                : StateViewMode.Success;
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnRowSelected(PolicyRow row)
+    {
+        _selected = row;
+        return Task.CompletedTask;
+    }
+
+    private void ApplyFilters(FilterBarChangeSet changeSet)
+    {
+        var severity = ReadValue(changeSet, "severity", "all");
+        var status = ReadValue(changeSet, "status", "all");
+        var enabled = ReadValue(changeSet, "enabled", "all");
+
+        _filtered = _items
+            .Where(x => string.IsNullOrWhiteSpace(changeSet.SearchText)
+                        || x.Id.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase)
+                        || x.Name.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase)
+                        || x.Category.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase)
+                        || x.Action.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase)
+                        || x.Condition.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase))
+            .Where(x => AdminUiSemantics.MatchesSeverity(x.Severity, severity))
+            .Where(x => AdminUiSemantics.MatchesStatus(x.Status, status))
+            .Where(x => enabled == "all" || x.Enabled.ToString().Equals(enabled, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private void StartNewDraft()
+    {
+        if (!CanEditPolicies)
+        {
+            SetBanner(AlertBannerKind.Warning, "Your role is read-only for policy editing.");
+            return;
+        }
+
+        _flowPolicy = _selected ?? _items.FirstOrDefault();
+        _flowStep = PolicyFlowStep.Draft;
+        _draftName = _flowPolicy?.Name ?? "New policy draft";
+        _draftCondition = _flowPolicy?.Condition ?? "event matches rule";
+        _impactPreviewText = null;
+        _isFlowModalOpen = true;
+    }
+
+    private void OpenEditFlow(PolicyRow row)
+    {
+        if (!CanEditPolicies)
+        {
+            SetBanner(AlertBannerKind.Warning, "Your role is read-only for policy editing.");
+            return;
+        }
+
+        _flowPolicy = row;
+        _flowStep = PolicyFlowStep.Edit;
+        _draftName = row.Name;
+        _draftCondition = row.Condition;
+        _impactPreviewText = null;
+        _isFlowModalOpen = true;
+    }
+
+    private async Task PreviewImpactAsync(PolicyRow row)
+    {
+        if (!CanEditPolicies)
+        {
+            SetBanner(AlertBannerKind.Warning, "Your role is read-only for policy editing.");
+            return;
+        }
+
+        _flowPolicy = row;
+        _flowStep = PolicyFlowStep.PreviewImpact;
+        _isFlowModalOpen = true;
+
+        await Task.Delay(120);
+        _impactPreviewText = $"Projected effect for {row.Id}: Block +1, Challenge +2, Warn +1 (placeholder simulation).";
+    }
+
+    private void OpenConfirmStep(PolicyRow row)
+    {
+        if (!CanApprovePolicies)
+        {
+            SetBanner(AlertBannerKind.Warning, "Apply confirmation requires Admin role.");
+            return;
+        }
+
+        _flowPolicy = row;
+        _flowStep = PolicyFlowStep.Confirm;
+        _isFlowModalOpen = true;
+    }
+
+    private Task AdvanceFlowAsync()
+    {
+        if (_flowPolicy is null)
+        {
+            _isFlowModalOpen = false;
+            return Task.CompletedTask;
+        }
+
+        if (_flowStep == PolicyFlowStep.Confirm)
+        {
+            SetBanner(AlertBannerKind.Success, $"Policy flow confirmed for {_flowPolicy.Id}. Apply remains a non-destructive placeholder in MVP.");
+            _isFlowModalOpen = false;
+            return Task.CompletedTask;
+        }
+
+        _flowStep = _flowStep switch
+        {
+            PolicyFlowStep.Draft => PolicyFlowStep.Edit,
+            PolicyFlowStep.Edit => PolicyFlowStep.PreviewImpact,
+            _ => PolicyFlowStep.Confirm
+        };
+
+        return Task.CompletedTask;
+    }
+
+    private Task CloseFlowModal()
+    {
+        _isFlowModalOpen = false;
+        return Task.CompletedTask;
+    }
+
+    private void ClearBanner() => _bannerMessage = null;
+
+    private void SetBanner(AlertBannerKind kind, string message)
+    {
+        _bannerKind = kind;
+        _bannerMessage = message;
+    }
+
+    private static string ReadValue(FilterBarChangeSet changeSet, string key, string fallback)
+        => changeSet.Values.TryGetValue(key, out var value)
+            ? value ?? fallback
+            : fallback;
+
+    private static PolicyRow MapPolicy(PolicyRule rule)
+    {
+        var severity = AdminUiSemantics.ParseSeverity(rule.Severity);
+        var status = rule.Enabled
+            ? severity == SeverityLevel.Critical ? WorkflowStatus.Escalated : WorkflowStatus.InProgress
+            : WorkflowStatus.Resolved;
+
+        return new PolicyRow
+        {
+            Id = rule.RuleId,
+            Name = rule.Name,
+            Category = string.IsNullOrWhiteSpace(rule.Category) ? "General" : rule.Category!,
+            Condition = string.IsNullOrWhiteSpace(rule.Condition) ? "event matches rule" : rule.Condition!,
+            Action = string.IsNullOrWhiteSpace(rule.Action) ? "Review" : rule.Action!,
+            Severity = severity,
+            Status = status,
+            Enabled = rule.Enabled
+        };
+    }
+
+    private sealed class PolicyRow
     {
         public required string Id { get; init; }
         public required string Name { get; init; }
         public required string Category { get; init; }
         public required string Condition { get; init; }
         public required string Action { get; init; }
-        public required string Severity { get; init; }
-        public bool Enabled { get; set; }
+        public required SeverityLevel Severity { get; init; }
+        public required WorkflowStatus Status { get; init; }
+        public bool Enabled { get; init; }
     }
 
-    private List<PolicyRule> _rules = [];
-    private List<RuleRow> RuleRows = [];
-    private List<PolicyVersionSummary> _versions = [];
-    private string? _selectedVersionId;
-    private string? _impactText;
-    private string? _versionNote;
-    private bool _degraded;
-    private string? _error;
-
-    private string _sandboxInput = "{\n  \"ip\":\"10.2.2.8\",\n  \"mfa\":false,\n  \"deviceTrusted\":false,\n  \"reputation\":25,\n  \"replayDetected\":false\n}";
-    private string _decision = "N/A";
-
-    private string _newRuleId = "POL-CUSTOM";
-    private string _newRuleName = "Custom rule";
-    private string _newRuleCategory = "Reputation";
-    private string _newRuleCondition = "reputation < 20";
-    private string _newRuleAction = "Block";
-    private string _newRuleSeverity = "Critical";
-    private string _aiPrompt = string.Empty;
-    private string? _builderNote;
-    private List<string> _triggered = [];
-    private List<string> _actions = [];
-    private List<string> _trace = [];
-
-    private int ActiveRules => RuleRows.Count(r => r.Enabled);
-    private int BlocksToday => 3;
-    private int WarningsToday => 7;
-    private int ViolationsToday => 2;
-
-    private string DecisionClass => _decision switch
+    private enum PolicyFlowStep
     {
-        "BLOCK" => "text-bg-danger",
-        "CHALLENGE" => "text-bg-warning text-dark",
-        "WARN" => "text-bg-secondary",
-        _ => "text-bg-success"
-    };
-
-    protected override async Task OnInitializedAsync()
-    {
-        await RefreshPoliciesAsync();
-        await RefreshVersionsAsync();
+        Draft,
+        Edit,
+        PreviewImpact,
+        Confirm
     }
-
-    private void ToggleRule(RuleRow rule)
-    {
-        rule.Enabled = !rule.Enabled;
-        ActionLog.Log($"Rule {rule.Id} set to {rule.Enabled}");
-    }
-
-    private void TestRule(RuleRow rule)
-    {
-        _decision = rule.Action.ToUpperInvariant() switch
-        {
-            "BLOCK" => "BLOCK",
-            "CHALLENGE" => "CHALLENGE",
-            "RESTRICT" => "WARN",
-            _ => "ALLOW"
-        };
-        _triggered = [rule.Name];
-        _actions = [rule.Action];
-        _trace = [$"✔ {rule.Id} ({rule.Name}) → triggered"];
-    }
-
-    private async Task SaveVisualRuleAsync()
-    {
-        var rule = new PolicyRule
-        {
-            RuleId = string.IsNullOrWhiteSpace(_newRuleId) ? $"POL-{DateTimeOffset.UtcNow:HHmmss}" : _newRuleId,
-            Name = string.IsNullOrWhiteSpace(_newRuleName) ? "Custom rule" : _newRuleName,
-            Category = _newRuleCategory,
-            Condition = _newRuleCondition,
-            Action = _newRuleAction,
-            Severity = _newRuleSeverity,
-            Enabled = true
-        };
-
-        var save = await Api.UpsertPolicyRuleAsync(rule);
-        if (!save.Success)
-        {
-            _builderNote = save.Error;
-            return;
-        }
-
-        await RefreshPoliciesAsync();
-        await RefreshVersionsAsync();
-        _builderNote = $"Saved {rule.RuleId}";
-    }
-
-    private async Task GenerateAiDraftAsync()
-    {
-        var draft = await Api.GeneratePolicyDraftAsync(_aiPrompt);
-        if (!draft.Success || draft.Data is null)
-        {
-            _builderNote = draft.Error ?? "AI draft failed";
-            return;
-        }
-
-        _newRuleId = draft.Data.RuleId;
-        _newRuleName = draft.Data.Name;
-        _newRuleCategory = draft.Data.Category ?? _newRuleCategory;
-        _newRuleCondition = draft.Data.Condition ?? _newRuleCondition;
-        _newRuleAction = draft.Data.Action ?? _newRuleAction;
-        _newRuleSeverity = draft.Data.Severity;
-        _builderNote = "AI draft loaded into visual builder. Review before saving.";
-    }
-
-    private async Task RunSandboxAsync()
-    {
-        _triggered = [];
-        _actions = [];
-        _trace = [];
-        _decision = "ALLOW";
-
-        var result = await Api.SimulatePolicyAsync(_sandboxInput);
-        if (!result.Success)
-        {
-            _decision = "WARN";
-            _triggered = ["Simulation failed"];
-            _actions = ["Check API policy simulate endpoint"];
-            _trace = [result.Error ?? "Unknown simulation error"];
-            return;
-        }
-
-        var data = result.Data;
-        _decision = data.Decision;
-        _triggered = data.TriggeredRules;
-        _actions = data.Actions;
-        _trace = data.Trace;
-    }
-
-    private async Task RefreshPoliciesAsync()
-    {
-        var result = await Api.GetPolicyRulesAsync();
-        _degraded = !result.Success;
-        _error = result.Success ? null : result.Error;
-
-        _rules = result.Data ?? [];
-        RuleRows = _rules.Count > 0
-            ? _rules.Select(MapRule).ToList()
-            : StarterRules();
-    }
-
-    private async Task RefreshVersionsAsync()
-    {
-        var res = await Api.GetPolicyVersionsAsync();
-        _versions = res.Data ?? [];
-        _selectedVersionId ??= _versions.FirstOrDefault()?.VersionId;
-    }
-
-    private async Task CreateDraftAsync()
-    {
-        var r = await Api.CreatePolicyDraftAsync("admin", "draft from UI");
-        _versionNote = r.Success ? "Draft ready" : r.Error;
-        await RefreshVersionsAsync();
-        await RefreshPoliciesAsync();
-    }
-
-    private async Task PreviewImpactAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_selectedVersionId)) return;
-        var r = await Api.GetPolicyImpactPreviewAsync(_selectedVersionId);
-        if (!r.Success || r.Data is null)
-        {
-            _versionNote = r.Error;
-            return;
-        }
-
-        var root = r.Data.RootElement;
-        var ifActivated = root.TryGetProperty("ifActivated", out var ia) ? ia : default;
-        var delta = root.TryGetProperty("delta", out var de) ? de : default;
-        _impactText = $"If activated: Block {ifActivated.GetProperty("block").GetInt32()}, Challenge {ifActivated.GetProperty("challenge").GetInt32()}, Warn {ifActivated.GetProperty("warn").GetInt32()} (Δ B{delta.GetProperty("block").GetInt32():+0;-0;0}, C{delta.GetProperty("challenge").GetInt32():+0;-0;0}, W{delta.GetProperty("warn").GetInt32():+0;-0;0})";
-    }
-
-    private async Task ActivateSelectedAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_selectedVersionId)) return;
-        var r = await Api.ActivatePolicyVersionAsync(_selectedVersionId, "admin", "activate from UI", approvedBy: null);
-        _versionNote = r.Success ? $"Activated {_selectedVersionId}" : r.Error;
-        await RefreshVersionsAsync();
-        await RefreshPoliciesAsync();
-    }
-
-    private async Task RollbackAsync()
-    {
-        var r = await Api.RollbackPolicyVersionAsync("admin", "rollback from UI");
-        _versionNote = r.Success ? "Rolled back to previous active version" : r.Error;
-        await RefreshVersionsAsync();
-        await RefreshPoliciesAsync();
-    }
-
-    private static RuleRow MapRule(PolicyRule r)
-    {
-        var lower = $"{r.RuleId} {r.Name}".ToLowerInvariant();
-
-        var inferredCategory = lower.Contains("mfa") || lower.Contains("login") ? "Login"
-            : lower.Contains("device") ? "Device"
-            : lower.Contains("token") || lower.Contains("replay") ? "Token"
-            : lower.Contains("reputation") ? "Reputation"
-            : lower.Contains("spam") || lower.Contains("phish") || lower.Contains("message") ? "Messaging"
-            : "System";
-
-        var category = string.IsNullOrWhiteSpace(r.Category) ? inferredCategory : r.Category!;
-
-        var inferredAction = r.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ? "Block"
-            : r.Severity.Equals("High", StringComparison.OrdinalIgnoreCase) ? "Challenge"
-            : r.Severity.Equals("Medium", StringComparison.OrdinalIgnoreCase) ? "Warn"
-            : "Allow";
-
-        var action = string.IsNullOrWhiteSpace(r.Action) ? inferredAction : r.Action!;
-
-        var inferredCondition = category switch
-        {
-            "Login" => "mfa == false",
-            "Device" => "deviceTrusted == false",
-            "Token" => "replayDetected == true",
-            "Reputation" => "reputation < 30",
-            "Messaging" => "domainFlagged == true",
-            _ => "event matches rule"
-        };
-
-        var condition = string.IsNullOrWhiteSpace(r.Condition) ? inferredCondition : r.Condition!;
-
-        return new RuleRow
-        {
-            Id = r.RuleId,
-            Name = r.Name,
-            Category = category,
-            Condition = condition,
-            Action = action,
-            Severity = NormalizeSeverity(r.Severity),
-            Enabled = r.Enabled
-        };
-    }
-
-    private static List<RuleRow> StarterRules() =>
-    [
-        new() { Id = "POL-001", Name = "Require MFA", Category = "Login", Condition = "mfa == false", Action = "Challenge", Severity = "Medium", Enabled = true },
-        new() { Id = "POL-002", Name = "Untrusted Device", Category = "Device", Condition = "deviceTrusted == false", Action = "Challenge", Severity = "Medium", Enabled = true },
-        new() { Id = "POL-003", Name = "Low Reputation", Category = "Reputation", Condition = "reputation < 30", Action = "Restrict", Severity = "Warning", Enabled = true },
-        new() { Id = "POL-004", Name = "Replay Attack", Category = "Token", Condition = "replayDetected == true", Action = "Block", Severity = "Critical", Enabled = true },
-        new() { Id = "POL-005", Name = "Phishing Domain", Category = "Messaging", Condition = "domainFlagged == true", Action = "Block", Severity = "Critical", Enabled = true }
-    ];
-
-    private static string NormalizeSeverity(string severity) => severity.ToLowerInvariant() switch
-    {
-        "critical" => "Critical",
-        "high" => "Medium",
-        "medium" => "Warning",
-        _ => "Info"
-    };
-
-    private static string CategoryClass(string c) => c switch
-    {
-        "Login" => "text-bg-primary",
-        "Reputation" => "text-bg-secondary",
-        "Messaging" => "text-bg-warning text-dark",
-        "Token" => "text-bg-danger",
-        "Device" => "text-bg-success",
-        _ => "text-bg-light text-dark"
-    };
-
-    private static string SeverityClass(string s) => s switch
-    {
-        "Critical" => "text-bg-danger",
-        "Medium" => "text-bg-warning text-dark",
-        "Warning" => "text-bg-secondary",
-        _ => "text-bg-light text-dark"
-    };
 }

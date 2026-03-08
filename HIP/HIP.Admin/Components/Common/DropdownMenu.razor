@@ -1,5 +1,11 @@
 <div class="dropdown">
-    <button class="btn @ButtonClass dropdown-toggle" data-bs-toggle="dropdown" type="button">@((MarkupString)Label)</button>
+    <button class="btn @ButtonClass dropdown-toggle"
+            data-bs-toggle="dropdown"
+            type="button"
+            aria-haspopup="true"
+            aria-label="@ResolvedAriaLabel">
+        @((MarkupString)Label)
+    </button>
     <ul class="dropdown-menu dropdown-menu-end">
         @ChildContent
     </ul>
@@ -8,5 +14,8 @@
 @code {
     [Parameter] public string Label { get; set; } = "Menu";
     [Parameter] public string ButtonClass { get; set; } = "btn-light";
+    [Parameter] public string? AriaLabel { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string ResolvedAriaLabel => string.IsNullOrWhiteSpace(AriaLabel) ? "Menu" : AriaLabel;
 }

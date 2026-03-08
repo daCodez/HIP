@@ -1,0 +1,28 @@
+{
+  "id": "suspicious-ip-challenge",
+  "name": "Suspicious Ip Challenge",
+  "description": "Seed scenario",
+  "category": "authentication",
+  "tags": [
+    "authentication",
+    "seed"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "login.attempt",
+      "actorId": "user-1",
+      "targetId": "target-1",
+      "payload": {
+        "ipRisk": "medium"
+      }
+    }
+  ],
+  "expectedRules": [
+    "Suspicious IP challenge"
+  ],
+  "expectedAction": "Challenge",
+  "expectedSeverity": "Medium",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

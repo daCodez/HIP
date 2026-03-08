@@ -1,0 +1,26 @@
+{
+  "id": "token_used_from_two_ips",
+  "name": "Token Used From Two Ips",
+  "description": "Uncovered gap scenario",
+  "category": "uncovered",
+  "tags": [
+    "gap",
+    "uncovered"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "token_used_from_two_ips",
+      "actorId": "user-2",
+      "targetId": "target-2",
+      "payload": {
+        "indicator": "token_used_from_two_ips"
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": true
+}

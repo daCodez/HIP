@@ -33,6 +33,11 @@
             <i class="fa fa-cog fa-fw"></i><span class="text">Settings</span>
         </NavLink>
     </li>
+    <li>
+        <NavLink href="/simulator" class="active-link" @onclick:preventDefault="false">
+            <i class="fa fa-flask fa-fw"></i><span class="text">Simulator</span>
+        </NavLink>
+    </li>
 
     @foreach (var item in _pluginNavItems)
     {

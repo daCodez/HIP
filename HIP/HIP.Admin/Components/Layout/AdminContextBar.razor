@@ -1,0 +1,14 @@
+<aside class="hip-admin-contextbar" aria-label="Page context">
+    @if (ChildContent is not null)
+    {
+        @ChildContent
+    }
+    else
+    {
+        <span>Context filters and saved views appear here.</span>
+    }
+</aside>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

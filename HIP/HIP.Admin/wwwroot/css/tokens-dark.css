@@ -1,0 +1,14 @@
+body.hip-dark {
+  color-scheme: dark;
+  --bg-canvas: #0f172a;
+  --bg-surface-1: #111827;
+  --bg-surface-2: #1f2937;
+  --bg-elevated: #243244;
+
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-muted: #9ca3af;
+
+  --border-subtle: #374151;
+  --border-strong: #9ca3af;
+}

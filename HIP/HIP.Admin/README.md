@@ -47,25 +47,33 @@ Direct app URL in local dev (from launch profile):
   - `tokens.css`, `tokens-light.css`, `tokens-dark.css` loaded first in `_Host.cshtml`
   - `admin.css` consumes semantic tokens for shell/primitives
 - `_Host.cshtml`
-  - local CSS/JS assets use `asp-append-version="true"` for hash-based cache busting (no manual `?v=` drift)
+  - local CSS/JS assets are versioned with a shared query suffix to keep cache behavior consistent across shell assets
 
 ## Theme controls
 
-Theme controls remain available in the style drawer component.
+Theme mode switcher is available in the top-right of the admin topbar with three options:
+- System (follows OS/browser `prefers-color-scheme`)
+- Light
+- Dark
 
-Theme state persists in `localStorage` key: `hip.admin.theme`.
+Theme state persists in `localStorage` key: `hip.admin.theme`. Theme presets continue to apply brand color tokens.
 
-## Overview (MVP shell)
+Shared data-table surfaces (frame/header/cells/hover states) now consume semantic tokens so they follow light/dark/system mode consistently.
+Dark-mode table contrast was tightened for Incident Queue/DataTable surfaces (row/background balance, text/border contrast, hover/selected states, and pagination control visibility) while keeping light mode unchanged.
+Widget headers were also shifted to a lighter token-based background in both light and dark themes to reduce heavy visual weight while keeping readable contrast.
+Breadcrumb presentation was polished with token-driven styling (clearer link/current-page hierarchy, softer separators, and subtle current-crumb emphasis) while preserving semantic nav/ordered-list accessibility.
 
-The `/` Overview page now uses reusable primitives (`PageHeader`, `FilterBar`, `MetricCard`, `Tabs`, `DataTable<TItem>`, `StateView`) and explicit loading/empty/error/success states.
+## Dashboard (MVP shell)
+
+The `/` Dashboard page now uses reusable primitives (`PageHeader`, `FilterBar`, `MetricCard`, `Tabs`, `DataTable<TItem>`, `StateView`) and explicit loading/empty/error/success states.
 
 ## Alerts & Incidents (MVP shell)
 
-The `/alerts` page now ships as a split list/detail triage workflow built with shared components (`PageHeader`, `FilterBar`, `DataTable<TItem>`, `StatusBadge`, `StateView`, `AlertBanner`, `ModalDialog`). It includes:
+The `/alerts` page now ships as a split list/detail work-queue workflow built with shared components (`PageHeader`, `FilterBar`, `DataTable<TItem>`, `StatusBadge`, `StateView`, `AlertBanner`, `ModalDialog`). It includes:
 - explicit loading/empty/error/success states with retry behavior,
 - separate Severity and Status indicators (text + icon + machine-readable attributes),
-- role-aware triage action controls (acknowledge/escalate/resolve) with rationale capture,
-- safe placeholders for linked evidence where deep APIs are not yet available.
+- role-aware queue action controls (acknowledge/escalate/resolve) with rationale capture,
+- safe placeholders for linked records where deep APIs are not yet available.
 
 Legacy security dashboard details are retained below and can be reintroduced inside the reusable shell as business logic is finalized:
 - Security Health score card with status color bands
@@ -75,6 +83,7 @@ Legacy security dashboard details are retained below and can be reintroduced ins
 - Added Authorization Policies page and sandbox (separate from Security Policies)
 - Added login page scaffold (`/login`) without enforcement yet
 - Added pluggable OIDC config scaffold under `HipAdmin:Auth` (provider-agnostic, enforcement optional)
+- Removed manual topbar role-switch dropdown; role context is intended to come from authentication/authorization flow
 - Tokens & Sessions page now supports live token issue/validate/refresh/revoke operations and event feed from admin audit trail
 - Policy API now exposes schema/bootstrap assets for locked contracts (legacy + v1 aliases): `/api/admin/policy/schema`, `/api/admin/policy/starter`, `/api/admin/policy/context-sample`, `/api/v1/admin/policy/schema`, `/api/v1/admin/policy/starter`, `/api/v1/admin/policy/context-sample`
 - Security event taxonomy + validation contracts exposed for timeline tooling (legacy + v1 aliases): `/api/admin/security/events/types`, `/api/admin/security/events/schema`, `/api/admin/security/events/validate`, `/api/admin/security/risk/evaluate`, `/api/v1/admin/security/events/types`, `/api/v1/admin/security/events/schema`, `/api/v1/admin/security/events/validate`, `/api/v1/admin/security/risk/evaluate`
@@ -96,7 +105,7 @@ The `/policy-rules` page now follows the shared component shell pattern (`PageHe
 
 Status key: ✅ done, ⚠️ partial, ⏳ pending
 
-| Area | Overview | Alerts | Audit Logs | Policy Management | Notes |
+| Area | Dashboard | Alerts | Audit Logs | Policy Management | Notes |
 | --- | --- | --- | --- | --- | --- |
 | Shared shell primitives (`PageHeader`, `FilterBar`, `StateView`, `DataTable`) | ✅ | ✅ | ✅ | ✅ | Consistent reusable shell pattern across MVP pages |
 | Severity vs workflow status semantics (separate badges + matching logic) | ✅ | ✅ | ✅ | ✅ | Shared semantic helper now used for parse/match/display behavior |
@@ -109,6 +118,24 @@ Remaining gaps before release:
 - ⏳ Replace placeholder export/action workflows with backend-backed APIs (non-destructive shells are still in place).
 - ⏳ Add automated UI accessibility checks (axe/playwright) to CI.
 - ⚠️ Add deterministic IDs for non-hashed correlation references once backend emits canonical correlation IDs.
+
+## Accessibility updates (2026-03-08)
+
+This pass focused on high-impact keyboard/form/navigation issues in user-facing pages.
+
+- Added explicit accessible names for icon-only menu buttons (`DropdownMenu` + `AppLayout` usage for messages, notifications, user menu, sidebar toggle).
+- Fixed label/input associations on key forms:
+  - `Login` (email/password/remember me)
+  - `Tokens & Sessions` token operation fields and token text areas
+  - `Simulator` suite/scenario/campaign controls
+  - `Security Status` auto-refresh switch
+- Improved `Reputation Risks` table accessibility:
+  - sortable headers now use real `<button>` controls (keyboard accessible by default) with `aria-sort`
+  - filter row inputs now have explicit labels (visually hidden) and clearer placeholder text
+- Kept copy plain-language where text changed (e.g., filter prompts and field labels).
+
+Validation in this pass:
+- `dotnet build HIP.Admin/HIP.Admin.csproj` ✅
 
 ## Mock mode + API integration
 - `HipAdminApiClient` endpoints to wire:

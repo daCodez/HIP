@@ -1,0 +1,26 @@
+{
+  "id": "mfa_method_removed",
+  "name": "Mfa Method Removed",
+  "description": "Uncovered gap scenario",
+  "category": "uncovered",
+  "tags": [
+    "gap",
+    "uncovered"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "mfa_method_removed",
+      "actorId": "user-2",
+      "targetId": "target-2",
+      "payload": {
+        "indicator": "mfa_method_removed"
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": true
+}

@@ -1,0 +1,28 @@
+{
+  "id": "brute-force-lock",
+  "name": "Brute Force Lock",
+  "description": "Seed scenario",
+  "category": "authentication",
+  "tags": [
+    "authentication",
+    "seed"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "login.failed",
+      "actorId": "user-1",
+      "targetId": "target-1",
+      "payload": {
+        "failedAttempts": 12
+      }
+    }
+  ],
+  "expectedRules": [
+    "Brute force lock"
+  ],
+  "expectedAction": "Lock",
+  "expectedSeverity": "Critical",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

@@ -1,0 +1,1352 @@
+{
+  "TotalScenarios": 10,
+  "Passed": 10,
+  "Failed": 0,
+  "Uncovered": 10,
+  "Invalid": 0,
+  "SuggestedPoliciesGenerated": 10,
+  "Scenarios": [
+    {
+      "ScenarioId": "password_reset_spike",
+      "Passed": true,
+      "IsCovered": false,
+      "IsValid": true,
+      "FinalAction": "LogOnly",
+      "FinalSeverity": "Info",
+      "MatchedRules": [],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Require MFA",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "High",
+          "Reason": "MFA required"
+        },
+        {
+          "RuleName": "Untrusted device challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Device not trusted"
+        },
+        {
+          "RuleName": "Replay attempt block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replay detected"
+        },
+        {
+          "RuleName": "Token expiration block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Token expired"
+        },
+        {
+          "RuleName": "Low reputation restriction",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "Medium",
+          "Reason": "Low reputation"
+        },
+        {
+          "RuleName": "Very low reputation quarantine",
+          "Matched": false,
+          "Action": "Quarantine",
+          "Severity": "Critical",
+          "Reason": "Very low reputation"
+        },
+        {
+          "RuleName": "Phishing domain block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Phishing domain"
+        },
+        {
+          "RuleName": "Spam rate limit",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "High",
+          "Reason": "Spam burst"
+        },
+        {
+          "RuleName": "Suspicious IP alert",
+          "Matched": false,
+          "Action": "Alert",
+          "Severity": "Medium",
+          "Reason": "High IP risk"
+        },
+        {
+          "RuleName": "Impossible travel block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Impossible travel"
+        },
+        {
+          "RuleName": "Suspicious IP challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Medium IP risk"
+        },
+        {
+          "RuleName": "Brute force lock",
+          "Matched": false,
+          "Action": "Lock",
+          "Severity": "Critical",
+          "Reason": "Brute force threshold"
+        },
+        {
+          "RuleName": "Session hijack detection",
+          "Matched": false,
+          "Action": "Kill",
+          "Severity": "Critical",
+          "Reason": "Hijack suspected"
+        }
+      ],
+      "SideEffects": [],
+      "Suggestion": {
+        "RuleName": "Sim.password_reset_spike.Auto",
+        "Category": "uncovered",
+        "ConditionExpression": "eventType == \u0027password_reset_spike\u0027",
+        "RecommendedAction": "Challenge",
+        "RecommendedSeverity": "Medium",
+        "Reason": "No policy rule matched any event step",
+        "NeededSignals": [
+          "indicator"
+        ],
+        "PositiveTestCase": "password_reset_spike with actor user-2",
+        "NegativeTestCase": "different event type than password_reset_spike",
+        "Notes": "Generated from uncovered simulator scenario. Review for false positives before enabling."
+      }
+    },
+    {
+      "ScenarioId": "unusual_data_export",
+      "Passed": true,
+      "IsCovered": false,
+      "IsValid": true,
+      "FinalAction": "LogOnly",
+      "FinalSeverity": "Info",
+      "MatchedRules": [],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Require MFA",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "High",
+          "Reason": "MFA required"
+        },
+        {
+          "RuleName": "Untrusted device challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Device not trusted"
+        },
+        {
+          "RuleName": "Replay attempt block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replay detected"
+        },
+        {
+          "RuleName": "Token expiration block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Token expired"
+        },
+        {
+          "RuleName": "Low reputation restriction",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "Medium",
+          "Reason": "Low reputation"
+        },
+        {
+          "RuleName": "Very low reputation quarantine",
+          "Matched": false,
+          "Action": "Quarantine",
+          "Severity": "Critical",
+          "Reason": "Very low reputation"
+        },
+        {
+          "RuleName": "Phishing domain block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Phishing domain"
+        },
+        {
+          "RuleName": "Spam rate limit",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "High",
+          "Reason": "Spam burst"
+        },
+        {
+          "RuleName": "Suspicious IP alert",
+          "Matched": false,
+          "Action": "Alert",
+          "Severity": "Medium",
+          "Reason": "High IP risk"
+        },
+        {
+          "RuleName": "Impossible travel block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Impossible travel"
+        },
+        {
+          "RuleName": "Suspicious IP challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Medium IP risk"
+        },
+        {
+          "RuleName": "Brute force lock",
+          "Matched": false,
+          "Action": "Lock",
+          "Severity": "Critical",
+          "Reason": "Brute force threshold"
+        },
+        {
+          "RuleName": "Session hijack detection",
+          "Matched": false,
+          "Action": "Kill",
+          "Severity": "Critical",
+          "Reason": "Hijack suspected"
+        }
+      ],
+      "SideEffects": [],
+      "Suggestion": {
+        "RuleName": "Sim.unusual_data_export.Auto",
+        "Category": "uncovered",
+        "ConditionExpression": "eventType == \u0027unusual_data_export\u0027",
+        "RecommendedAction": "Challenge",
+        "RecommendedSeverity": "Medium",
+        "Reason": "No policy rule matched any event step",
+        "NeededSignals": [
+          "indicator"
+        ],
+        "PositiveTestCase": "unusual_data_export with actor user-2",
+        "NegativeTestCase": "different event type than unusual_data_export",
+        "Notes": "Generated from uncovered simulator scenario. Review for false positives before enabling."
+      }
+    },
+    {
+      "ScenarioId": "suspicious_device_fingerprint_change",
+      "Passed": true,
+      "IsCovered": false,
+      "IsValid": true,
+      "FinalAction": "LogOnly",
+      "FinalSeverity": "Info",
+      "MatchedRules": [],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Require MFA",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "High",
+          "Reason": "MFA required"
+        },
+        {
+          "RuleName": "Untrusted device challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Device not trusted"
+        },
+        {
+          "RuleName": "Replay attempt block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replay detected"
+        },
+        {
+          "RuleName": "Token expiration block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Token expired"
+        },
+        {
+          "RuleName": "Low reputation restriction",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "Medium",
+          "Reason": "Low reputation"
+        },
+        {
+          "RuleName": "Very low reputation quarantine",
+          "Matched": false,
+          "Action": "Quarantine",
+          "Severity": "Critical",
+          "Reason": "Very low reputation"
+        },
+        {
+          "RuleName": "Phishing domain block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Phishing domain"
+        },
+        {
+          "RuleName": "Spam rate limit",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "High",
+          "Reason": "Spam burst"
+        },
+        {
+          "RuleName": "Suspicious IP alert",
+          "Matched": false,
+          "Action": "Alert",
+          "Severity": "Medium",
+          "Reason": "High IP risk"
+        },
+        {
+          "RuleName": "Impossible travel block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Impossible travel"
+        },
+        {
+          "RuleName": "Suspicious IP challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Medium IP risk"
+        },
+        {
+          "RuleName": "Brute force lock",
+          "Matched": false,
+          "Action": "Lock",
+          "Severity": "Critical",
+          "Reason": "Brute force threshold"
+        },
+        {
+          "RuleName": "Session hijack detection",
+          "Matched": false,
+          "Action": "Kill",
+          "Severity": "Critical",
+          "Reason": "Hijack suspected"
+        }
+      ],
+      "SideEffects": [],
+      "Suggestion": {
+        "RuleName": "Sim.suspicious_device_fingerprint_change.Auto",
+        "Category": "uncovered",
+        "ConditionExpression": "eventType == \u0027suspicious_device_fingerprint_change\u0027",
+        "RecommendedAction": "Challenge",
+        "RecommendedSeverity": "Medium",
+        "Reason": "No policy rule matched any event step",
+        "NeededSignals": [
+          "indicator"
+        ],
+        "PositiveTestCase": "suspicious_device_fingerprint_change with actor user-2",
+        "NegativeTestCase": "different event type than suspicious_device_fingerprint_change",
+        "Notes": "Generated from uncovered simulator scenario. Review for false positives before enabling."
+      }
+    },
+    {
+      "ScenarioId": "mfa_method_removed",
+      "Passed": true,
+      "IsCovered": false,
+      "IsValid": true,
+      "FinalAction": "LogOnly",
+      "FinalSeverity": "Info",
+      "MatchedRules": [],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Require MFA",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "High",
+          "Reason": "MFA required"
+        },
+        {
+          "RuleName": "Untrusted device challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Device not trusted"
+        },
+        {
+          "RuleName": "Replay attempt block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replay detected"
+        },
+        {
+          "RuleName": "Token expiration block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Token expired"
+        },
+        {
+          "RuleName": "Low reputation restriction",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "Medium",
+          "Reason": "Low reputation"
+        },
+        {
+          "RuleName": "Very low reputation quarantine",
+          "Matched": false,
+          "Action": "Quarantine",
+          "Severity": "Critical",
+          "Reason": "Very low reputation"
+        },
+        {
+          "RuleName": "Phishing domain block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Phishing domain"
+        },
+        {
+          "RuleName": "Spam rate limit",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "High",
+          "Reason": "Spam burst"
+        },
+        {
+          "RuleName": "Suspicious IP alert",
+          "Matched": false,
+          "Action": "Alert",
+          "Severity": "Medium",
+          "Reason": "High IP risk"
+        },
+        {
+          "RuleName": "Impossible travel block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Impossible travel"
+        },
+        {
+          "RuleName": "Suspicious IP challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Medium IP risk"
+        },
+        {
+          "RuleName": "Brute force lock",
+          "Matched": false,
+          "Action": "Lock",
+          "Severity": "Critical",
+          "Reason": "Brute force threshold"
+        },
+        {
+          "RuleName": "Session hijack detection",
+          "Matched": false,
+          "Action": "Kill",
+          "Severity": "Critical",
+          "Reason": "Hijack suspected"
+        }
+      ],
+      "SideEffects": [],
+      "Suggestion": {
+        "RuleName": "Sim.mfa_method_removed.Auto",
+        "Category": "uncovered",
+        "ConditionExpression": "eventType == \u0027mfa_method_removed\u0027",
+        "RecommendedAction": "Challenge",
+        "RecommendedSeverity": "Medium",
+        "Reason": "No policy rule matched any event step",
+        "NeededSignals": [
+          "indicator"
+        ],
+        "PositiveTestCase": "mfa_method_removed with actor user-2",
+        "NegativeTestCase": "different event type than mfa_method_removed",
+        "Notes": "Generated from uncovered simulator scenario. Review for false positives before enabling."
+      }
+    },
+    {
+      "ScenarioId": "inbox_forwarding_rule_created",
+      "Passed": true,
+      "IsCovered": false,
+      "IsValid": true,
+      "FinalAction": "LogOnly",
+      "FinalSeverity": "Info",
+      "MatchedRules": [],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Require MFA",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "High",
+          "Reason": "MFA required"
+        },
+        {
+          "RuleName": "Untrusted device challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Device not trusted"
+        },
+        {
+          "RuleName": "Replay attempt block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replay detected"
+        },
+        {
+          "RuleName": "Token expiration block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Token expired"
+        },
+        {
+          "RuleName": "Low reputation restriction",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "Medium",
+          "Reason": "Low reputation"
+        },
+        {
+          "RuleName": "Very low reputation quarantine",
+          "Matched": false,
+          "Action": "Quarantine",
+          "Severity": "Critical",
+          "Reason": "Very low reputation"
+        },
+        {
+          "RuleName": "Phishing domain block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Phishing domain"
+        },
+        {
+          "RuleName": "Spam rate limit",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "High",
+          "Reason": "Spam burst"
+        },
+        {
+          "RuleName": "Suspicious IP alert",
+          "Matched": false,
+          "Action": "Alert",
+          "Severity": "Medium",
+          "Reason": "High IP risk"
+        },
+        {
+          "RuleName": "Impossible travel block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Impossible travel"
+        },
+        {
+          "RuleName": "Suspicious IP challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Medium IP risk"
+        },
+        {
+          "RuleName": "Brute force lock",
+          "Matched": false,
+          "Action": "Lock",
+          "Severity": "Critical",
+          "Reason": "Brute force threshold"
+        },
+        {
+          "RuleName": "Session hijack detection",
+          "Matched": false,
+          "Action": "Kill",
+          "Severity": "Critical",
+          "Reason": "Hijack suspected"
+        }
+      ],
+      "SideEffects": [],
+      "Suggestion": {
+        "RuleName": "Sim.inbox_forwarding_rule_created.Auto",
+        "Category": "uncovered",
+        "ConditionExpression": "eventType == \u0027inbox_forwarding_rule_created\u0027",
+        "RecommendedAction": "Challenge",
+        "RecommendedSeverity": "Medium",
+        "Reason": "No policy rule matched any event step",
+        "NeededSignals": [
+          "indicator"
+        ],
+        "PositiveTestCase": "inbox_forwarding_rule_created with actor user-2",
+        "NegativeTestCase": "different event type than inbox_forwarding_rule_created",
+        "Notes": "Generated from uncovered simulator scenario. Review for false positives before enabling."
+      }
+    },
+    {
+      "ScenarioId": "token_used_from_two_ips",
+      "Passed": true,
+      "IsCovered": false,
+      "IsValid": true,
+      "FinalAction": "LogOnly",
+      "FinalSeverity": "Info",
+      "MatchedRules": [],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Require MFA",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "High",
+          "Reason": "MFA required"
+        },
+        {
+          "RuleName": "Untrusted device challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Device not trusted"
+        },
+        {
+          "RuleName": "Replay attempt block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replay detected"
+        },
+        {
+          "RuleName": "Token expiration block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Token expired"
+        },
+        {
+          "RuleName": "Low reputation restriction",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "Medium",
+          "Reason": "Low reputation"
+        },
+        {
+          "RuleName": "Very low reputation quarantine",
+          "Matched": false,
+          "Action": "Quarantine",
+          "Severity": "Critical",
+          "Reason": "Very low reputation"
+        },
+        {
+          "RuleName": "Phishing domain block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Phishing domain"
+        },
+        {
+          "RuleName": "Spam rate limit",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "High",
+          "Reason": "Spam burst"
+        },
+        {
+          "RuleName": "Suspicious IP alert",
+          "Matched": false,
+          "Action": "Alert",
+          "Severity": "Medium",
+          "Reason": "High IP risk"
+        },
+        {
+          "RuleName": "Impossible travel block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Impossible travel"
+        },
+        {
+          "RuleName": "Suspicious IP challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Medium IP risk"
+        },
+        {
+          "RuleName": "Brute force lock",
+          "Matched": false,
+          "Action": "Lock",
+          "Severity": "Critical",
+          "Reason": "Brute force threshold"
+        },
+        {
+          "RuleName": "Session hijack detection",
+          "Matched": false,
+          "Action": "Kill",
+          "Severity": "Critical",
+          "Reason": "Hijack suspected"
+        }
+      ],
+      "SideEffects": [],
+      "Suggestion": {
+        "RuleName": "Sim.token_used_from_two_ips.Auto",
+        "Category": "uncovered",
+        "ConditionExpression": "eventType == \u0027token_used_from_two_ips\u0027",
+        "RecommendedAction": "Challenge",
+        "RecommendedSeverity": "Medium",
+        "Reason": "No policy rule matched any event step",
+        "NeededSignals": [
+          "indicator"
+        ],
+        "PositiveTestCase": "token_used_from_two_ips with actor user-2",
+        "NegativeTestCase": "different event type than token_used_from_two_ips",
+        "Notes": "Generated from uncovered simulator scenario. Review for false positives before enabling."
+      }
+    },
+    {
+      "ScenarioId": "api_key_created",
+      "Passed": true,
+      "IsCovered": false,
+      "IsValid": true,
+      "FinalAction": "LogOnly",
+      "FinalSeverity": "Info",
+      "MatchedRules": [],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Require MFA",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "High",
+          "Reason": "MFA required"
+        },
+        {
+          "RuleName": "Untrusted device challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Device not trusted"
+        },
+        {
+          "RuleName": "Replay attempt block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replay detected"
+        },
+        {
+          "RuleName": "Token expiration block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Token expired"
+        },
+        {
+          "RuleName": "Low reputation restriction",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "Medium",
+          "Reason": "Low reputation"
+        },
+        {
+          "RuleName": "Very low reputation quarantine",
+          "Matched": false,
+          "Action": "Quarantine",
+          "Severity": "Critical",
+          "Reason": "Very low reputation"
+        },
+        {
+          "RuleName": "Phishing domain block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Phishing domain"
+        },
+        {
+          "RuleName": "Spam rate limit",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "High",
+          "Reason": "Spam burst"
+        },
+        {
+          "RuleName": "Suspicious IP alert",
+          "Matched": false,
+          "Action": "Alert",
+          "Severity": "Medium",
+          "Reason": "High IP risk"
+        },
+        {
+          "RuleName": "Impossible travel block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Impossible travel"
+        },
+        {
+          "RuleName": "Suspicious IP challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Medium IP risk"
+        },
+        {
+          "RuleName": "Brute force lock",
+          "Matched": false,
+          "Action": "Lock",
+          "Severity": "Critical",
+          "Reason": "Brute force threshold"
+        },
+        {
+          "RuleName": "Session hijack detection",
+          "Matched": false,
+          "Action": "Kill",
+          "Severity": "Critical",
+          "Reason": "Hijack suspected"
+        }
+      ],
+      "SideEffects": [],
+      "Suggestion": {
+        "RuleName": "Sim.api_key_created.Auto",
+        "Category": "uncovered",
+        "ConditionExpression": "eventType == \u0027api_key_created\u0027",
+        "RecommendedAction": "Challenge",
+        "RecommendedSeverity": "Medium",
+        "Reason": "No policy rule matched any event step",
+        "NeededSignals": [
+          "indicator"
+        ],
+        "PositiveTestCase": "api_key_created with actor user-2",
+        "NegativeTestCase": "different event type than api_key_created",
+        "Notes": "Generated from uncovered simulator scenario. Review for false positives before enabling."
+      }
+    },
+    {
+      "ScenarioId": "recovery_email_changed",
+      "Passed": true,
+      "IsCovered": false,
+      "IsValid": true,
+      "FinalAction": "LogOnly",
+      "FinalSeverity": "Info",
+      "MatchedRules": [],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Require MFA",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "High",
+          "Reason": "MFA required"
+        },
+        {
+          "RuleName": "Untrusted device challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Device not trusted"
+        },
+        {
+          "RuleName": "Replay attempt block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replay detected"
+        },
+        {
+          "RuleName": "Token expiration block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Token expired"
+        },
+        {
+          "RuleName": "Low reputation restriction",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "Medium",
+          "Reason": "Low reputation"
+        },
+        {
+          "RuleName": "Very low reputation quarantine",
+          "Matched": false,
+          "Action": "Quarantine",
+          "Severity": "Critical",
+          "Reason": "Very low reputation"
+        },
+        {
+          "RuleName": "Phishing domain block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Phishing domain"
+        },
+        {
+          "RuleName": "Spam rate limit",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "High",
+          "Reason": "Spam burst"
+        },
+        {
+          "RuleName": "Suspicious IP alert",
+          "Matched": false,
+          "Action": "Alert",
+          "Severity": "Medium",
+          "Reason": "High IP risk"
+        },
+        {
+          "RuleName": "Impossible travel block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Impossible travel"
+        },
+        {
+          "RuleName": "Suspicious IP challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Medium IP risk"
+        },
+        {
+          "RuleName": "Brute force lock",
+          "Matched": false,
+          "Action": "Lock",
+          "Severity": "Critical",
+          "Reason": "Brute force threshold"
+        },
+        {
+          "RuleName": "Session hijack detection",
+          "Matched": false,
+          "Action": "Kill",
+          "Severity": "Critical",
+          "Reason": "Hijack suspected"
+        }
+      ],
+      "SideEffects": [],
+      "Suggestion": {
+        "RuleName": "Sim.recovery_email_changed.Auto",
+        "Category": "uncovered",
+        "ConditionExpression": "eventType == \u0027recovery_email_changed\u0027",
+        "RecommendedAction": "Challenge",
+        "RecommendedSeverity": "Medium",
+        "Reason": "No policy rule matched any event step",
+        "NeededSignals": [
+          "indicator"
+        ],
+        "PositiveTestCase": "recovery_email_changed with actor user-2",
+        "NegativeTestCase": "different event type than recovery_email_changed",
+        "Notes": "Generated from uncovered simulator scenario. Review for false positives before enabling."
+      }
+    },
+    {
+      "ScenarioId": "unknown_event_type",
+      "Passed": true,
+      "IsCovered": false,
+      "IsValid": true,
+      "FinalAction": "LogOnly",
+      "FinalSeverity": "Info",
+      "MatchedRules": [],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Require MFA",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "High",
+          "Reason": "MFA required"
+        },
+        {
+          "RuleName": "Untrusted device challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Device not trusted"
+        },
+        {
+          "RuleName": "Replay attempt block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replay detected"
+        },
+        {
+          "RuleName": "Token expiration block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Token expired"
+        },
+        {
+          "RuleName": "Low reputation restriction",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "Medium",
+          "Reason": "Low reputation"
+        },
+        {
+          "RuleName": "Very low reputation quarantine",
+          "Matched": false,
+          "Action": "Quarantine",
+          "Severity": "Critical",
+          "Reason": "Very low reputation"
+        },
+        {
+          "RuleName": "Phishing domain block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Phishing domain"
+        },
+        {
+          "RuleName": "Spam rate limit",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "High",
+          "Reason": "Spam burst"
+        },
+        {
+          "RuleName": "Suspicious IP alert",
+          "Matched": false,
+          "Action": "Alert",
+          "Severity": "Medium",
+          "Reason": "High IP risk"
+        },
+        {
+          "RuleName": "Impossible travel block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Impossible travel"
+        },
+        {
+          "RuleName": "Suspicious IP challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Medium IP risk"
+        },
+        {
+          "RuleName": "Brute force lock",
+          "Matched": false,
+          "Action": "Lock",
+          "Severity": "Critical",
+          "Reason": "Brute force threshold"
+        },
+        {
+          "RuleName": "Session hijack detection",
+          "Matched": false,
+          "Action": "Kill",
+          "Severity": "Critical",
+          "Reason": "Hijack suspected"
+        }
+      ],
+      "SideEffects": [],
+      "Suggestion": {
+        "RuleName": "Sim.unknown_event_type.Auto",
+        "Category": "uncovered",
+        "ConditionExpression": "eventType == \u0027unknown_event_type\u0027",
+        "RecommendedAction": "Challenge",
+        "RecommendedSeverity": "Medium",
+        "Reason": "No policy rule matched any event step",
+        "NeededSignals": [
+          "indicator"
+        ],
+        "PositiveTestCase": "unknown_event_type with actor user-2",
+        "NegativeTestCase": "different event type than unknown_event_type",
+        "Notes": "Generated from uncovered simulator scenario. Review for false positives before enabling."
+      }
+    },
+    {
+      "ScenarioId": "oauth_consent_grant",
+      "Passed": true,
+      "IsCovered": false,
+      "IsValid": true,
+      "FinalAction": "LogOnly",
+      "FinalSeverity": "Info",
+      "MatchedRules": [],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Require MFA",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "High",
+          "Reason": "MFA required"
+        },
+        {
+          "RuleName": "Untrusted device challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Device not trusted"
+        },
+        {
+          "RuleName": "Replay attempt block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replay detected"
+        },
+        {
+          "RuleName": "Token expiration block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Token expired"
+        },
+        {
+          "RuleName": "Low reputation restriction",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "Medium",
+          "Reason": "Low reputation"
+        },
+        {
+          "RuleName": "Very low reputation quarantine",
+          "Matched": false,
+          "Action": "Quarantine",
+          "Severity": "Critical",
+          "Reason": "Very low reputation"
+        },
+        {
+          "RuleName": "Phishing domain block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Phishing domain"
+        },
+        {
+          "RuleName": "Spam rate limit",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "High",
+          "Reason": "Spam burst"
+        },
+        {
+          "RuleName": "Suspicious IP alert",
+          "Matched": false,
+          "Action": "Alert",
+          "Severity": "Medium",
+          "Reason": "High IP risk"
+        },
+        {
+          "RuleName": "Impossible travel block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Impossible travel"
+        },
+        {
+          "RuleName": "Suspicious IP challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Medium IP risk"
+        },
+        {
+          "RuleName": "Brute force lock",
+          "Matched": false,
+          "Action": "Lock",
+          "Severity": "Critical",
+          "Reason": "Brute force threshold"
+        },
+        {
+          "RuleName": "Session hijack detection",
+          "Matched": false,
+          "Action": "Kill",
+          "Severity": "Critical",
+          "Reason": "Hijack suspected"
+        }
+      ],
+      "SideEffects": [],
+      "Suggestion": {
+        "RuleName": "Sim.oauth_consent_grant.Auto",
+        "Category": "uncovered",
+        "ConditionExpression": "eventType == \u0027oauth_consent_grant\u0027",
+        "RecommendedAction": "Challenge",
+        "RecommendedSeverity": "Medium",
+        "Reason": "No policy rule matched any event step",
+        "NeededSignals": [
+          "indicator"
+        ],
+        "PositiveTestCase": "oauth_consent_grant with actor user-2",
+        "NegativeTestCase": "different event type than oauth_consent_grant",
+        "Notes": "Generated from uncovered simulator scenario. Review for false positives before enabling."
+      }
+    }
+  ],
+  "Coverage": {
+    "EventCoverage": [
+      {
+        "EventType": "api_key_created",
+        "Total": 1,
+        "Covered": 0,
+        "Uncovered": 1,
+        "Invalid": 0
+      },
+      {
+        "EventType": "inbox_forwarding_rule_created",
+        "Total": 1,
+        "Covered": 0,
+        "Uncovered": 1,
+        "Invalid": 0
+      },
+      {
+        "EventType": "mfa_method_removed",
+        "Total": 1,
+        "Covered": 0,
+        "Uncovered": 1,
+        "Invalid": 0
+      },
+      {
+        "EventType": "oauth_consent_grant",
+        "Total": 1,
+        "Covered": 0,
+        "Uncovered": 1,
+        "Invalid": 0
+      },
+      {
+        "EventType": "password_reset_spike",
+        "Total": 1,
+        "Covered": 0,
+        "Uncovered": 1,
+        "Invalid": 0
+      },
+      {
+        "EventType": "recovery_email_changed",
+        "Total": 1,
+        "Covered": 0,
+        "Uncovered": 1,
+        "Invalid": 0
+      },
+      {
+        "EventType": "suspicious_device_fingerprint_change",
+        "Total": 1,
+        "Covered": 0,
+        "Uncovered": 1,
+        "Invalid": 0
+      },
+      {
+        "EventType": "token_used_from_two_ips",
+        "Total": 1,
+        "Covered": 0,
+        "Uncovered": 1,
+        "Invalid": 0
+      },
+      {
+        "EventType": "unknown_event_type",
+        "Total": 1,
+        "Covered": 0,
+        "Uncovered": 1,
+        "Invalid": 0
+      },
+      {
+        "EventType": "unusual_data_export",
+        "Total": 1,
+        "Covered": 0,
+        "Uncovered": 1,
+        "Invalid": 0
+      }
+    ],
+    "RuleCoverage": [
+      {
+        "RuleName": "Require MFA",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Untrusted device challenge",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Replay attempt block",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Token expiration block",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Low reputation restriction",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Very low reputation quarantine",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Phishing domain block",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Spam rate limit",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Suspicious IP alert",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Impossible travel block",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Suspicious IP challenge",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Brute force lock",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      },
+      {
+        "RuleName": "Session hijack detection",
+        "MatchedCount": 0,
+        "EvaluatedCount": 10
+      }
+    ],
+    "FieldCoverage": [
+      {
+        "FieldName": "indicator",
+        "PresenceCount": 10,
+        "InvalidCount": 0
+      }
+    ],
+    "UncoveredPatterns": [
+      "password_reset_spike",
+      "unusual_data_export",
+      "suspicious_device_fingerprint_change",
+      "mfa_method_removed",
+      "inbox_forwarding_rule_created",
+      "token_used_from_two_ips",
+      "api_key_created",
+      "recovery_email_changed",
+      "unknown_event_type",
+      "oauth_consent_grant"
+    ],
+    "InvalidPatterns": [],
+    "SuggestedPoliciesCount": 10
+  }
+}

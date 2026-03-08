@@ -12,21 +12,39 @@
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>
-                        <th role="button" @onclick='() => SortBy("Identity")'>Identity</th>
-                        <th role="button" @onclick='() => SortBy("Score")'>Score</th>
-                        <th>Risk Level</th>
-                        <th role="button" @onclick='() => SortBy("Blocked")'>Blocked (24h)</th>
-                        <th role="button" @onclick='() => SortBy("Review")'>Review (24h)</th>
-                        <th>Trend</th>
-                        <th>Action</th>
+                        <th scope="col" aria-sort="@IdentitySort"><button type="button" class="btn btn-link p-0 hip-sort-button" @onclick='() => SortBy("Identity")'>Identity</button></th>
+                        <th scope="col" aria-sort="@ScoreSort"><button type="button" class="btn btn-link p-0 hip-sort-button" @onclick='() => SortBy("Score")'>Score</button></th>
+                        <th scope="col">Risk level</th>
+                        <th scope="col" aria-sort="@BlockedSort"><button type="button" class="btn btn-link p-0 hip-sort-button" @onclick='() => SortBy("Blocked")'>Blocked (24h)</button></th>
+                        <th scope="col" aria-sort="@ReviewSort"><button type="button" class="btn btn-link p-0 hip-sort-button" @onclick='() => SortBy("Review")'>Review (24h)</button></th>
+                        <th scope="col">Trend</th>
+                        <th scope="col">Action</th>
                     </tr>
                     <tr>
-                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fIdentity" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
-                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fScore" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
-                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fRisk" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
-                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fBlocked" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
-                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fReview" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
-                        <th><input class="form-control form-control-sm" placeholder="Search..." @bind="_fTrend" @bind:event="oninput" @bind:after="ApplyFilters" /></th>
+                        <th>
+                            <label class="visually-hidden" for="risk-filter-identity">Filter by identity</label>
+                            <input id="risk-filter-identity" class="form-control form-control-sm" placeholder="Filter identity" @bind="_fIdentity" @bind:event="oninput" @bind:after="ApplyFilters" />
+                        </th>
+                        <th>
+                            <label class="visually-hidden" for="risk-filter-score">Filter by score</label>
+                            <input id="risk-filter-score" class="form-control form-control-sm" placeholder="Filter score" @bind="_fScore" @bind:event="oninput" @bind:after="ApplyFilters" />
+                        </th>
+                        <th>
+                            <label class="visually-hidden" for="risk-filter-level">Filter by risk level</label>
+                            <input id="risk-filter-level" class="form-control form-control-sm" placeholder="Filter risk level" @bind="_fRisk" @bind:event="oninput" @bind:after="ApplyFilters" />
+                        </th>
+                        <th>
+                            <label class="visually-hidden" for="risk-filter-blocked">Filter by blocked count</label>
+                            <input id="risk-filter-blocked" class="form-control form-control-sm" placeholder="Filter blocked" @bind="_fBlocked" @bind:event="oninput" @bind:after="ApplyFilters" />
+                        </th>
+                        <th>
+                            <label class="visually-hidden" for="risk-filter-review">Filter by review count</label>
+                            <input id="risk-filter-review" class="form-control form-control-sm" placeholder="Filter review" @bind="_fReview" @bind:event="oninput" @bind:after="ApplyFilters" />
+                        </th>
+                        <th>
+                            <label class="visually-hidden" for="risk-filter-trend">Filter by trend</label>
+                            <input id="risk-filter-trend" class="form-control form-control-sm" placeholder="Filter trend" @bind="_fTrend" @bind:event="oninput" @bind:after="ApplyFilters" />
+                        </th>
                         <th></th>
                     </tr>
                 </thead>
@@ -95,6 +113,11 @@
     private string _sortBy = "Score";
     private bool _sortDesc = false;
 
+    private string IdentitySort => GetAriaSort("Identity");
+    private string ScoreSort => GetAriaSort("Score");
+    private string BlockedSort => GetAriaSort("Blocked");
+    private string ReviewSort => GetAriaSort("Review");
+
     private List<RiskRow> Filtered
     {
         get
@@ -140,6 +163,16 @@
     private void PrevPage() => _page = Math.Max(1, _page - 1);
     private void NextPage() => _page = Math.Min(TotalPages, _page + 1);
     private void GoToPage(int page) => _page = Math.Clamp(page, 1, TotalPages);
+
+    private string GetAriaSort(string column)
+    {
+        if (!string.Equals(_sortBy, column, StringComparison.OrdinalIgnoreCase))
+        {
+            return "none";
+        }
+
+        return _sortDesc ? "descending" : "ascending";
+    }
 
     private static string RiskBadgeClass(string risk) => risk switch
     {

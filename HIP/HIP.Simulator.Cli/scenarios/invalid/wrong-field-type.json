@@ -1,0 +1,25 @@
+{
+  "id": "wrong-field-type",
+  "name": "Wrong Field Type",
+  "description": "Invalid event scenario",
+  "category": "invalid",
+  "tags": [
+    "invalid"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "login.attempt",
+      "actorId": "u",
+      "targetId": "x",
+      "payload": {
+        "failedAttempts": "many"
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": false
+}

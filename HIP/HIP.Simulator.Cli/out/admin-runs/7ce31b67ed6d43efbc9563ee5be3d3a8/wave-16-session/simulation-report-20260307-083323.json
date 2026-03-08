@@ -1,0 +1,208 @@
+{
+  "TotalScenarios": 1,
+  "Passed": 1,
+  "Failed": 0,
+  "Uncovered": 0,
+  "Invalid": 0,
+  "SuggestedPoliciesGenerated": 0,
+  "Scenarios": [
+    {
+      "ScenarioId": "session-hijack-detection",
+      "Passed": true,
+      "IsCovered": true,
+      "IsValid": true,
+      "FinalAction": "Kill",
+      "FinalSeverity": "Critical",
+      "MatchedRules": [
+        "Session hijack detection"
+      ],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Require MFA",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "High",
+          "Reason": "MFA required"
+        },
+        {
+          "RuleName": "Untrusted device challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Device not trusted"
+        },
+        {
+          "RuleName": "Replay attempt block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replay detected"
+        },
+        {
+          "RuleName": "Token expiration block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Token expired"
+        },
+        {
+          "RuleName": "Low reputation restriction",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "Medium",
+          "Reason": "Low reputation"
+        },
+        {
+          "RuleName": "Very low reputation quarantine",
+          "Matched": false,
+          "Action": "Quarantine",
+          "Severity": "Critical",
+          "Reason": "Very low reputation"
+        },
+        {
+          "RuleName": "Phishing domain block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Phishing domain"
+        },
+        {
+          "RuleName": "Spam rate limit",
+          "Matched": false,
+          "Action": "RateLimit",
+          "Severity": "High",
+          "Reason": "Spam burst"
+        },
+        {
+          "RuleName": "Suspicious IP alert",
+          "Matched": false,
+          "Action": "Alert",
+          "Severity": "Medium",
+          "Reason": "High IP risk"
+        },
+        {
+          "RuleName": "Impossible travel block",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Impossible travel"
+        },
+        {
+          "RuleName": "Suspicious IP challenge",
+          "Matched": false,
+          "Action": "Challenge",
+          "Severity": "Medium",
+          "Reason": "Medium IP risk"
+        },
+        {
+          "RuleName": "Brute force lock",
+          "Matched": false,
+          "Action": "Lock",
+          "Severity": "Critical",
+          "Reason": "Brute force threshold"
+        },
+        {
+          "RuleName": "Session hijack detection",
+          "Matched": true,
+          "Action": "Kill",
+          "Severity": "Critical",
+          "Reason": "Hijack suspected"
+        }
+      ],
+      "SideEffects": [
+        "Winning rule: Session hijack detection due to precedence action=Kill"
+      ],
+      "ExecutionMode": 0,
+      "Suggestion": null
+    }
+  ],
+  "Coverage": {
+    "EventCoverage": [
+      {
+        "EventType": "session.activity",
+        "Total": 1,
+        "Covered": 1,
+        "Uncovered": 0,
+        "Invalid": 0
+      }
+    ],
+    "RuleCoverage": [
+      {
+        "RuleName": "Session hijack detection",
+        "MatchedCount": 1,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Require MFA",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Untrusted device challenge",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Replay attempt block",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Token expiration block",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Low reputation restriction",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Very low reputation quarantine",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Phishing domain block",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Spam rate limit",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Suspicious IP alert",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Impossible travel block",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Suspicious IP challenge",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Brute force lock",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      }
+    ],
+    "FieldCoverage": [
+      {
+        "FieldName": "sessionHijackSuspected",
+        "PresenceCount": 1,
+        "InvalidCount": 0
+      }
+    ],
+    "UncoveredPatterns": [],
+    "InvalidPatterns": [],
+    "SuggestedPoliciesCount": 0
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "TotalScenarios": 2,
+  "Passed": 2,
+  "Failed": 0,
+  "Uncovered": 0,
+  "Invalid": 0,
+  "SuggestedPoliciesGenerated": 0,
+  "Scenarios": [
+    {
+      "ScenarioId": "token-expiration-block",
+      "Passed": true,
+      "IsCovered": true,
+      "IsValid": true,
+      "FinalAction": "Block",
+      "FinalSeverity": "High",
+      "MatchedRules": [
+        "Protocol:TimestampPolicy"
+      ],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Protocol:TimestampPolicy",
+          "Matched": true,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Timestamp outside allowed skew."
+        }
+      ],
+      "SideEffects": [
+        "Executed against HIP.Protocol target"
+      ],
+      "Suggestion": null
+    },
+    {
+      "ScenarioId": "replay-attempt-block",
+      "Passed": true,
+      "IsCovered": true,
+      "IsValid": true,
+      "FinalAction": "Block",
+      "FinalSeverity": "Critical",
+      "MatchedRules": [
+        "Protocol:ReplayGuard"
+      ],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Protocol:ReplayGuard",
+          "Matched": true,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Nonce already used."
+        }
+      ],
+      "SideEffects": [
+        "Executed against HIP.Protocol target"
+      ],
+      "Suggestion": null
+    }
+  ],
+  "Coverage": {
+    "EventCoverage": [
+      {
+        "EventType": "token.use",
+        "Total": 2,
+        "Covered": 2,
+        "Uncovered": 0,
+        "Invalid": 0
+      }
+    ],
+    "RuleCoverage": [
+      {
+        "RuleName": "Protocol:TimestampPolicy",
+        "MatchedCount": 1,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Protocol:ReplayGuard",
+        "MatchedCount": 1,
+        "EvaluatedCount": 1
+      }
+    ],
+    "FieldCoverage": [
+      {
+        "FieldName": "tokenExpired",
+        "PresenceCount": 1,
+        "InvalidCount": 0
+      },
+      {
+        "FieldName": "replayDetected",
+        "PresenceCount": 1,
+        "InvalidCount": 0
+      }
+    ],
+    "UncoveredPatterns": [],
+    "InvalidPatterns": [],
+    "SuggestedPoliciesCount": 0
+  }
+}

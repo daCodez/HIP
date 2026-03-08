@@ -1,0 +1,25 @@
+<header class="hip-admin-topbar" role="banner">
+    <div class="hip-admin-topbar-left">
+        <button type="button" class="btn btn-link" @onclick="ToggleSidebar" aria-label="Toggle navigation menu">☰</button>
+        <img class="brand-logo" src="img/hip-logo.svg" alt="HIP" />
+        <span class="brand-text">Admin</span>
+    </div>
+
+    <div class="hip-admin-topbar-right">
+        <label class="visually-hidden" for="themeModeSelect">Theme mode</label>
+        <select id="themeModeSelect" class="form-select form-select-sm" value="@CurrentAppearance" @onchange="AppearanceChanged">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+        </select>
+    </div>
+</header>
+
+@code {
+    [Parameter] public string CurrentAppearance { get; set; } = "system";
+    [Parameter] public EventCallback ToggleSidebar { get; set; }
+    [Parameter] public EventCallback<string> OnAppearanceChanged { get; set; }
+
+    private Task AppearanceChanged(ChangeEventArgs args)
+        => OnAppearanceChanged.InvokeAsync(args.Value?.ToString() ?? "system");
+}

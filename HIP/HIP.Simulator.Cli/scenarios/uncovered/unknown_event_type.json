@@ -1,0 +1,26 @@
+{
+  "id": "unknown_event_type",
+  "name": "Unknown Event Type",
+  "description": "Uncovered gap scenario",
+  "category": "uncovered",
+  "tags": [
+    "gap",
+    "uncovered"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "unknown_event_type",
+      "actorId": "user-2",
+      "targetId": "target-2",
+      "payload": {
+        "indicator": "unknown_event_type"
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": true
+}

@@ -1,0 +1,9 @@
+{
+  "name": "hmac-v1-basic",
+  "keyId": "key-sender",
+  "secret": "sender-secret-123",
+  "payload": "hello",
+  "canonical": "{\"hipversion\":\"1.0\",\"messagetype\":\"ProtectedHttpRequest\",\"senderhipid\":\"key-sender\",\"receiverhipid\":\"receiver-a\",\"timestamputc\":\"2026-03-06T20:00:00.0000000Z\",\"nonce\":\"nonce-123\",\"payloadhash\":\"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824\",\"correlationid\":\"corr-123\"}",
+  "expectedPayloadHash": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+  "expectedSignature": "dc5e64d0017dcbc919b83ec381477f80b2a3285e1abc53e276f10b3a5deba404"
+}

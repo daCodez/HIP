@@ -1,0 +1,58 @@
+<span class="hip-status-badge @CssClass"
+      data-severity="@Severity?.ToString().ToLowerInvariant()"
+      data-status="@Status?.ToString().ToLowerInvariant()"
+      aria-label="@AriaLabel">
+    <span class="hip-status-icon" aria-hidden="true">@Icon</span>
+    <span class="hip-status-label">@Label</span>
+</span>
+
+@code {
+    [Parameter] public SeverityLevel? Severity { get; set; }
+    [Parameter] public WorkflowStatus? Status { get; set; }
+
+    private string Label => Severity?.ToString() ?? StatusLabel(Status);
+
+    private string CssClass => Severity switch
+    {
+        SeverityLevel.Critical => "sev-critical",
+        SeverityLevel.High => "sev-high",
+        SeverityLevel.Medium => "sev-medium",
+        SeverityLevel.Low => "sev-low",
+        _ => Status switch
+        {
+            WorkflowStatus.Failed => "state-error",
+            WorkflowStatus.Resolved or WorkflowStatus.Closed => "state-success",
+            WorkflowStatus.Queued => "state-neutral",
+            _ => "state-info"
+        }
+    };
+
+    private string Icon => Severity switch
+    {
+        SeverityLevel.Critical => "⯃",
+        SeverityLevel.High => "▲",
+        SeverityLevel.Medium => "●",
+        SeverityLevel.Low => "■",
+        _ => Status switch
+        {
+            WorkflowStatus.New => "✦",
+            WorkflowStatus.Acknowledged => "◔",
+            WorkflowStatus.Escalated => "⇪",
+            WorkflowStatus.InProgress => "◷",
+            WorkflowStatus.Resolved => "✓",
+            WorkflowStatus.Closed => "☑",
+            WorkflowStatus.Failed => "✕",
+            WorkflowStatus.Queued => "⋯",
+            _ => "•"
+        }
+    };
+
+    private string AriaLabel => Severity is not null
+        ? $"{Severity} severity"
+        : $"Workflow status {Label}";
+
+    private static string StatusLabel(WorkflowStatus? status)
+        => status is null
+            ? "Unknown"
+            : AdminUiSemantics.ToDisplayStatus(status.Value);
+}

@@ -1,0 +1,28 @@
+{
+  "id": "token-expiration-block",
+  "name": "Token Expiration Block",
+  "description": "Seed scenario",
+  "category": "token",
+  "tags": [
+    "token",
+    "seed"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "token.use",
+      "actorId": "user-1",
+      "targetId": "target-1",
+      "payload": {
+        "tokenExpired": true
+      }
+    }
+  ],
+  "expectedRules": [
+    "Token expiration block"
+  ],
+  "expectedAction": "Block",
+  "expectedSeverity": "High",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

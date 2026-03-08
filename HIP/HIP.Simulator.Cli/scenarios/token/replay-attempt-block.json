@@ -1,0 +1,28 @@
+{
+  "id": "replay-attempt-block",
+  "name": "Replay Attempt Block",
+  "description": "Seed scenario",
+  "category": "token",
+  "tags": [
+    "token",
+    "seed"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "token.use",
+      "actorId": "user-1",
+      "targetId": "target-1",
+      "payload": {
+        "replayDetected": true
+      }
+    }
+  ],
+  "expectedRules": [
+    "Replay attempt block"
+  ],
+  "expectedAction": "Block",
+  "expectedSeverity": "Critical",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

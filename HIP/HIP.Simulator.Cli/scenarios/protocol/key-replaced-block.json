@@ -1,0 +1,17 @@
+{
+  "id": "protocol-key-replaced-block",
+  "name": "Protocol key replaced block",
+  "description": "Replaced key path should block and signal lifecycle violation.",
+  "category": "protocol",
+  "executionMode": "protocol",
+  "tags": ["protocol", "key-lifecycle", "replaced"],
+  "protocolSteps": [
+    { "stepType": "VerifyEnvelope", "expectSuccess": true },
+    { "stepType": "KeyReplaced", "expectSuccess": false }
+  ],
+  "expectedRules": ["Protocol:KeyReplaced"],
+  "expectedAction": "Block",
+  "expectedSeverity": "Critical",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

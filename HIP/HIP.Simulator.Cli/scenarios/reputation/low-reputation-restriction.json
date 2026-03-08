@@ -1,0 +1,28 @@
+{
+  "id": "low-reputation-restriction",
+  "name": "Low Reputation Restriction",
+  "description": "Seed scenario",
+  "category": "reputation",
+  "tags": [
+    "reputation",
+    "seed"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "message.send",
+      "actorId": "user-1",
+      "targetId": "target-1",
+      "payload": {
+        "reputation": 20
+      }
+    }
+  ],
+  "expectedRules": [
+    "Low reputation restriction"
+  ],
+  "expectedAction": "RateLimit",
+  "expectedSeverity": "Medium",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

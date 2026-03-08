@@ -1,0 +1,109 @@
+@implements IDisposable
+@inject NavigationManager Nav
+@inject AdminContextService AdminContext
+@inject ThemeService Theme
+@inject HipAdminApiClient ApiClient
+@inject HIP.Admin.Navigation.BreadcrumbService Breadcrumbs
+@inject IJSRuntime JS
+
+<a class="hip-skip-link" href="#admin-main">Skip to main content</a>
+
+<AdminTopbar CurrentAppearance="@Theme.State.Appearance" ToggleSidebar="ToggleSidebar" OnAppearanceChanged="ChangeAppearance" />
+
+<div class="hip-admin-shell">
+    <AdminSidebar Routes="@VisibleRoutes" CurrentPath="@CurrentPath" Collapsed="@_sidebarCollapsed" />
+
+    <div class="hip-admin-content">
+        <nav class="hip-breadcrumb-shell" aria-label="Breadcrumb">
+            <ol>
+                @foreach (var crumb in CurrentBreadcrumbs)
+                {
+                    <li><a href="@ResolveHref(crumb.Href)">@crumb.Label</a></li>
+                }
+            </ol>
+        </nav>
+
+        <AdminContextBar>
+            @if (_config?.ServerTimestampUtc is not null)
+            {
+                <span>Config refresh: @_config.ServerTimestampUtc.Value.ToLocalTime():u</span>
+            }
+        </AdminContextBar>
+
+        <main id="admin-main" class="hip-admin-main" role="main" tabindex="-1">
+            @ChildContent
+        </main>
+    </div>
+</div>
+
+<ToastHost />
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private AdminShellConfig? _config;
+    private bool _sidebarCollapsed;
+
+    private string CurrentPath => "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].Trim('/');
+    private IReadOnlyList<HIP.Admin.Navigation.BreadcrumbItem> CurrentBreadcrumbs => Breadcrumbs.Build(CurrentPath);
+
+    private IReadOnlyList<HIP.Admin.Navigation.AdminRouteEntry> VisibleRoutes => HIP.Admin.Navigation.AdminRoutes.All
+        .Where(route => route.RequiredRoles is null || route.RequiredRoles.Contains(AdminContext.CurrentRole))
+        .Where(route => string.IsNullOrWhiteSpace(route.FeatureFlag) || _config is null || _config.EnabledModules.Contains(route.FeatureFlag, StringComparer.OrdinalIgnoreCase))
+        .ToList();
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += HandleLocationChanged;
+        AdminContext.Changed += HandleContextChanged;
+        Theme.Changed += HandleThemeChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Theme.InitializeAsync();
+
+            var result = await ApiClient.GetShellConfigAsync();
+            if (result.Success && result.Data is not null)
+            {
+                _config = result.Data;
+            }
+
+            await JS.InvokeVoidAsync("hipTheme.focusPageHeading");
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private Task ToggleSidebar()
+    {
+        _sidebarCollapsed = !_sidebarCollapsed;
+        return Task.CompletedTask;
+    }
+
+    private Task ChangeAppearance(string appearance)
+        => Theme.SetAppearanceAsync(appearance);
+
+    private string ResolveHref(string path)
+    {
+        var normalized = HIP.Admin.Navigation.AdminRoutes.NormalizePath(path).TrimStart('/');
+        return new Uri(new Uri(Nav.BaseUri), normalized).ToString();
+    }
+
+    private void HandleContextChanged() => InvokeAsync(StateHasChanged);
+    private void HandleThemeChanged() => InvokeAsync(StateHasChanged);
+
+    private async void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        await InvokeAsync(StateHasChanged);
+        await JS.InvokeVoidAsync("hipTheme.focusPageHeading");
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= HandleLocationChanged;
+        AdminContext.Changed -= HandleContextChanged;
+        Theme.Changed -= HandleThemeChanged;
+    }
+}

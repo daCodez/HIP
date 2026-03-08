@@ -1,0 +1,327 @@
+@page "/simulator"
+@inject SimulatorAdminService SimulatorService
+@inject HipAdminApiClient Api
+@inject ToastService Toast
+
+<PageTitle>Simulator</PageTitle>
+
+<h4>Security Event Simulator</h4>
+@if (!string.IsNullOrWhiteSpace(Error))
+{
+    <div class="alert alert-danger">@Error</div>
+}
+
+<div class="card p-3 mb-3">
+    <div class="row g-2">
+        <div class="col-md-4">
+            <label for="sim-suite">Suite</label>
+            <select id="sim-suite" class="form-select" @bind="SelectedSuite">
+                <option value="">(all)</option>
+                @foreach (var suite in Suites)
+                {
+                    <option value="@suite">@suite</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-5">
+            <label for="sim-scenario">Scenario</label>
+            <select id="sim-scenario" class="form-select" @bind="SelectedScenarioId">
+                <option value="">(all for suite)</option>
+                @foreach (var s in Scenarios)
+                {
+                    <option value="@s.Id">@s.Id - @s.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3 d-flex align-items-end gap-2">
+            <button class="btn btn-outline-secondary" @onclick="LoadScenarios">Reload</button>
+            <button class="btn btn-primary" @onclick="RunAsync">Run</button>
+        </div>
+    </div>
+    <hr />
+    <div class="row g-2">
+        <div class="col-md-3">
+            <label for="sim-campaign-profile">Campaign profile</label>
+            <select id="sim-campaign-profile" class="form-select" @bind="CampaignProfile">
+                <option value="default">default</option>
+                <option value="aggressive">aggressive</option>
+                <option value="stealth">stealth</option>
+                <option value="insider">insider</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label for="sim-duration-seconds">Duration (sec)</label>
+            <input id="sim-duration-seconds" type="number" min="10" max="1800" class="form-control" @bind="CampaignDurationSeconds" />
+        </div>
+        <div class="col-md-3">
+            <label for="sim-wave-interval-seconds">Wave interval (sec)</label>
+            <input id="sim-wave-interval-seconds" type="number" min="1" max="300" class="form-control" @bind="CampaignWaveIntervalSeconds" />
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-danger" @onclick="RunCampaignAsync">Run Campaign Mode</button>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(RunId))
+{
+    <div class="card p-3 mb-3">
+        <div><b>Run:</b> @RunId</div>
+        <div><b>Status:</b> @Status</div>
+        <div><b>Stage:</b> @Stage</div>
+        <div><b>Progress:</b> @Processed / @Total</div>
+        @if (Status is "running" or "cancelling")
+        {
+            <button class="btn btn-sm btn-warning mt-2" @onclick="CancelAsync">Cancel</button>
+        }
+    </div>
+}
+
+@if (Result is not null)
+{
+    @if (ThreatCoverage is not null)
+    {
+        <div class="card p-3 mb-3">
+            <h5>Threat Coverage (Taxonomy-first)</h5>
+            <ul>
+                <li>Total threats: @ThreatCoverage.TotalThreats</li>
+                <li>Covered threats: @ThreatCoverage.CoveredThreats</li>
+                <li>Partial threats: @ThreatCoverage.PartialThreats</li>
+                <li>Uncovered threats: @ThreatCoverage.UncoveredThreats</li>
+                <li>Critical uncovered: @ThreatCoverage.CriticalUncovered</li>
+            </ul>
+
+            @if (ThreatCoverage.UncoveredItems.Count > 0)
+            {
+                <h6 class="mt-2">Uncovered Threats</h6>
+                <ul>
+                    @foreach (var t in ThreatCoverage.UncoveredItems)
+                    {
+                        <li><b>@t.ThreatId</b> — @t.Title (@t.Family, @t.Severity)</li>
+                    }
+                </ul>
+            }
+        </div>
+    }
+
+    <div class="card p-3 mb-3">
+        <h5>Run Summary</h5>
+        <ul>
+            <li>Total scenarios: @Result.TotalScenarios</li>
+            <li>Passed: @Result.Passed</li>
+            <li>Failed: @Result.Failed</li>
+            <li>Uncovered scenarios: @Result.Uncovered</li>
+            <li>Invalid scenarios: @Result.Invalid</li>
+            <li>Suggestions: @Result.SuggestedPoliciesGenerated</li>
+        </ul>
+    </div>
+
+    <div class="card p-3">
+        <h5>Suggested Security Policies</h5>
+        @{
+            var suggestions = Result.Scenarios
+                .Where(x => x.Suggestion is not null)
+                .Select(x => new { x.ScenarioId, Suggestion = x.Suggestion! })
+                .ToList();
+        }
+
+        @if (suggestions.Count == 0)
+        {
+            <div class="text-muted">No policy suggestions generated in this run.</div>
+        }
+        else
+        {
+            @foreach (var item in suggestions)
+            {
+                var key = item.ScenarioId;
+                var isApplying = Applying.Contains(key);
+                var isAdded = Added.Contains(key);
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <div><strong>Scenario:</strong> @item.ScenarioId</div>
+                        <button class="btn btn-sm @(isAdded ? "btn-success" : "btn-outline-primary")" disabled="@(isApplying || isAdded)" @onclick="() => AddSuggestionAsync(item.ScenarioId, item.Suggestion)">
+                            @(isApplying ? "Adding..." : isAdded ? "Added" : "Add Policy")
+                        </button>
+                    </div>
+                    <pre class="bg-light p-2 border rounded">@item.Suggestion.ToTemplate()</pre>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<string> Suites = [];
+    private IReadOnlyList<(string Id, string Name, string Suite)> Scenarios = [];
+    private string? SelectedSuite;
+    private string? SelectedScenarioId;
+
+    private string? RunId;
+    private string Status = "idle";
+    private string Stage = "idle";
+    private int Processed;
+    private int Total;
+    private string CampaignProfile = "default";
+    private int CampaignDurationSeconds = 120;
+    private int CampaignWaveIntervalSeconds = 6;
+    private HIP.Simulator.Core.Models.SimulationRunResult? Result;
+    private HIP.Simulator.Core.Models.ThreatCoverageSummary? ThreatCoverage;
+    private string? Error;
+    private HashSet<string> Applying = [];
+    private HashSet<string> Added = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Suites = await SimulatorService.GetSuitesAsync();
+            await LoadScenarios();
+        }
+        catch (Exception ex)
+        {
+            Error = $"Failed to initialize simulator: {ex.Message}";
+        }
+    }
+
+    private async Task LoadScenarios()
+    {
+        Scenarios = await SimulatorService.GetScenariosAsync(SelectedSuite);
+        if (!string.IsNullOrWhiteSpace(SelectedScenarioId) && !Scenarios.Any(x => x.Id == SelectedScenarioId))
+        {
+            SelectedScenarioId = null;
+        }
+    }
+
+    private async Task RunAsync()
+    {
+        Result = null;
+        ThreatCoverage = null;
+        Status = "running";
+        Stage = "starting";
+        Processed = 0;
+        Total = 0;
+
+        RunId = await SimulatorService.StartRunAsync(SelectedSuite, SelectedScenarioId, null);
+        await PollRunAsync(240);
+    }
+
+    private async Task RunCampaignAsync()
+    {
+        Result = null;
+        ThreatCoverage = null;
+        Status = "running-campaign";
+        Stage = "campaign-starting";
+        Processed = 0;
+        Total = 0;
+
+        CampaignDurationSeconds = Math.Clamp(CampaignDurationSeconds, 10, 1800);
+        CampaignWaveIntervalSeconds = Math.Clamp(CampaignWaveIntervalSeconds, 1, 300);
+
+        RunId = await SimulatorService.StartCampaignAsync(CampaignProfile, CampaignDurationSeconds, CampaignWaveIntervalSeconds, null);
+        var pollLoops = Math.Max(240, (CampaignDurationSeconds * 2) + 120);
+        await PollRunAsync(pollLoops);
+    }
+
+    private async Task PollRunAsync(int loops)
+    {
+        if (string.IsNullOrWhiteSpace(RunId)) return;
+
+        for (var i = 0; i < loops; i++)
+        {
+            await Task.Delay(500);
+            var snapshot = SimulatorService.GetRun(RunId);
+            Status = snapshot.Status;
+            Result = snapshot.Result;
+            ThreatCoverage = snapshot.ThreatCoverage;
+            if (snapshot.Progress is not null)
+            {
+                Stage = snapshot.Progress.Stage;
+                Processed = snapshot.Progress.ProcessedScenarios;
+                Total = snapshot.Progress.TotalScenarios;
+            }
+
+            if (Status is "completed" or "failed" or "cancelled")
+            {
+                break;
+            }
+        }
+    }
+
+    private async Task AddSuggestionAsync(string scenarioId, HIP.Simulator.Core.Models.PolicySuggestion suggestion)
+    {
+        if (Applying.Contains(scenarioId) || Added.Contains(scenarioId))
+        {
+            return;
+        }
+
+        Applying.Add(scenarioId);
+        Error = null;
+
+        try
+        {
+            var normalizedCategory = NormalizeCategory(suggestion.Category);
+            var rule = new PolicyRule
+            {
+                RuleId = suggestion.RuleName.Replace('.', '-').Replace(' ', '-'),
+                Name = suggestion.RuleName,
+                Category = normalizedCategory,
+                Condition = suggestion.ConditionExpression,
+                Action = suggestion.RecommendedAction,
+                Severity = suggestion.RecommendedSeverity,
+                Enabled = false
+            };
+
+            var save = await Api.UpsertPolicyRuleAsync(rule);
+            if (save.Success)
+            {
+                Added.Add(scenarioId);
+                Toast.Show("Simulator", $"Policy suggestion added for '{scenarioId}'.", "success");
+            }
+            else
+            {
+                Error = save.Error ?? "Failed to add suggested policy.";
+                Toast.Show("Simulator", Error, "danger");
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Failed to add suggested policy: {ex.Message}";
+            Toast.Show("Simulator", Error, "danger");
+        }
+        finally
+        {
+            Applying.Remove(scenarioId);
+        }
+    }
+
+    private static string NormalizeCategory(string? category)
+    {
+        if (string.IsNullOrWhiteSpace(category)) return "Risk";
+
+        return category.Trim().ToLowerInvariant() switch
+        {
+            "authentication" => "Login",
+            "device" => "Device",
+            "token" => "Token",
+            "messaging" => "Messaging",
+            "reputation" => "Reputation",
+            "session" => "Session",
+            "uncovered" => "Risk",
+            "invalid" => "System",
+            "risk" => "Risk",
+            "system" => "System",
+            _ => "Risk"
+        };
+    }
+
+    private Task CancelAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(RunId))
+        {
+            SimulatorService.Cancel(RunId);
+            Status = "cancelling";
+        }
+
+        return Task.CompletedTask;
+    }
+}

@@ -1,0 +1,28 @@
+{
+  "id": "spam-rate-limit",
+  "name": "Spam Rate Limit",
+  "description": "Seed scenario",
+  "category": "messaging",
+  "tags": [
+    "messaging",
+    "seed"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "message.send",
+      "actorId": "user-1",
+      "targetId": "target-1",
+      "payload": {
+        "messageRatePerMinute": 88
+      }
+    }
+  ],
+  "expectedRules": [
+    "Spam rate limit"
+  ],
+  "expectedAction": "RateLimit",
+  "expectedSeverity": "High",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

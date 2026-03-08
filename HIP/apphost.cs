@@ -65,4 +65,10 @@ builder.AddProject("hip-proxy", "/home/jarvis_bot/.openclaw/workspace/HIP/HIP.Pr
         });
     });
 
+builder.AddProject("hip-simulator-cli", "/home/jarvis_bot/.openclaw/workspace/HIP/HIP.Simulator.Cli/HIP.Simulator.Cli.csproj")
+    .WithReference(api)
+    .WaitFor(api)
+    .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
+    .WithArgs("list-suites", "--input", "/home/jarvis_bot/.openclaw/workspace/HIP/HIP.Simulator.Cli/scenarios");
+
 builder.Build().Run();

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hip.local/schemas/security-event.schema.json",
+  "title": "HIP Security Event",
+  "type": "object",
+  "required": ["eventType", "timestampUtc", "severity", "decision"],
+  "properties": {
+    "eventType": { "type": "string", "minLength": 3, "maxLength": 64 },
+    "timestampUtc": { "type": "string", "format": "date-time" },
+    "severity": { "type": "string", "enum": ["Info", "Warning", "High", "Critical"] },
+    "decision": { "type": "string", "enum": ["Allow", "Warn", "Challenge", "Block", "Quarantine", "Pending"] },
+    "userId": { "type": ["string", "null"] },
+    "deviceId": { "type": ["string", "null"] },
+    "sessionId": { "type": ["string", "null"] },
+    "ip": { "type": ["string", "null"] },
+    "geo": { "type": ["string", "null"] },
+    "riskScore": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+    "policyIdsTriggered": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 3, "maxLength": 64 }
+    },
+    "data": { "type": "object" }
+  },
+  "additionalProperties": true
+}

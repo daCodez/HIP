@@ -1,0 +1,7 @@
+{
+  "name": "receipt-hmac-v1-basic",
+  "keyId": "key-verifier",
+  "secret": "verifier-secret-456",
+  "canonical": "{\"receiptid\":\"receipt-123\",\"hipversion\":\"1.0\",\"interactiontype\":\"ProtectedHttpRequest\",\"senderhipid\":\"key-sender\",\"timestamputc\":\"2026-03-06T20:00:00.0000000Z\",\"messagehash\":\"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824\",\"checks\":[\"signature\",\"nonce\",\"timestamp\"],\"decision\":\"Allow\",\"appliedpolicyids\":[\"policy-1\"],\"reputationsnapshot\":80}",
+  "expectedSignature": "f4cf391f626eff9746ce2ada7016328ce667f1d269b07cebeac33cdaa4bd9a9e"
+}

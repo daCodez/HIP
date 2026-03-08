@@ -1,0 +1,26 @@
+{
+  "id": "suspicious_device_fingerprint_change",
+  "name": "Suspicious Device Fingerprint Change",
+  "description": "Uncovered gap scenario",
+  "category": "uncovered",
+  "tags": [
+    "gap",
+    "uncovered"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "suspicious_device_fingerprint_change",
+      "actorId": "user-2",
+      "targetId": "target-2",
+      "payload": {
+        "indicator": "suspicious_device_fingerprint_change"
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": true
+}

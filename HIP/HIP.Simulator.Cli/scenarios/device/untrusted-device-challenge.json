@@ -1,0 +1,28 @@
+{
+  "id": "untrusted-device-challenge",
+  "name": "Untrusted Device Challenge",
+  "description": "Seed scenario",
+  "category": "device",
+  "tags": [
+    "device",
+    "seed"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "device.login",
+      "actorId": "user-1",
+      "targetId": "target-1",
+      "payload": {
+        "deviceTrusted": false
+      }
+    }
+  ],
+  "expectedRules": [
+    "Untrusted device challenge"
+  ],
+  "expectedAction": "Challenge",
+  "expectedSeverity": "Medium",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

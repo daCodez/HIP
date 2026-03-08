@@ -1,0 +1,26 @@
+{
+  "id": "inbox_forwarding_rule_created",
+  "name": "Inbox Forwarding Rule Created",
+  "description": "Uncovered gap scenario",
+  "category": "uncovered",
+  "tags": [
+    "gap",
+    "uncovered"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "inbox_forwarding_rule_created",
+      "actorId": "user-2",
+      "targetId": "target-2",
+      "payload": {
+        "indicator": "inbox_forwarding_rule_created"
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": true
+}

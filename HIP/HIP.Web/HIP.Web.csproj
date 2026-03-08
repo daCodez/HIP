@@ -1,9 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="9.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HIP.ServiceDefaults\HIP.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\HIP.Simulator.Core\HIP.Simulator.Core.csproj" />
   </ItemGroup>
 </Project>

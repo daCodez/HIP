@@ -1,0 +1,17 @@
+{
+  "id": "protocol-replay-attempt-block",
+  "name": "Protocol replay attempt block",
+  "description": "Second verify of same nonce should be rejected by replay guard.",
+  "category": "protocol",
+  "executionMode": "protocol",
+  "tags": ["protocol", "replay"],
+  "protocolSteps": [
+    { "stepType": "VerifyEnvelope", "expectSuccess": true },
+    { "stepType": "ReplayAttempt", "expectSuccess": false }
+  ],
+  "expectedRules": ["Protocol:ReplayGuard"],
+  "expectedAction": "Block",
+  "expectedSeverity": "Critical",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

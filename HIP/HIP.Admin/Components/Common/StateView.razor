@@ -1,0 +1,38 @@
+<section class="hip-state-view" aria-live="polite" aria-busy="@(Mode == StateViewMode.Loading)">
+    @if (Mode == StateViewMode.Loading)
+    {
+        <p class="hip-state-title">Loading…</p>
+    }
+    else if (Mode == StateViewMode.EmptyTrue)
+    {
+        <p class="hip-state-title">No data yet</p>
+        <p class="hip-state-subtitle">@EmptyMessage</p>
+    }
+    else if (Mode == StateViewMode.EmptyFiltered)
+    {
+        <p class="hip-state-title">No matching results</p>
+        <p class="hip-state-subtitle">@FilteredMessage</p>
+    }
+    else if (Mode == StateViewMode.Error)
+    {
+        <p class="hip-state-title">Something went wrong</p>
+        <p class="hip-state-subtitle">@ErrorMessage</p>
+        @if (OnRetry.HasDelegate)
+        {
+            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="OnRetry">Retry</button>
+        }
+    }
+    else
+    {
+        @ChildContent
+    }
+</section>
+
+@code {
+    [Parameter] public StateViewMode Mode { get; set; } = StateViewMode.Success;
+    [Parameter] public string EmptyMessage { get; set; } = "No records are available yet.";
+    [Parameter] public string FilteredMessage { get; set; } = "Try changing filters or clearing search criteria.";
+    [Parameter] public string ErrorMessage { get; set; } = "Please try again.";
+    [Parameter] public EventCallback OnRetry { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

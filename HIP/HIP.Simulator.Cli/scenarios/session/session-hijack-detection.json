@@ -1,0 +1,28 @@
+{
+  "id": "session-hijack-detection",
+  "name": "Session Hijack Detection",
+  "description": "Seed scenario",
+  "category": "session",
+  "tags": [
+    "session",
+    "seed"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "session.activity",
+      "actorId": "user-1",
+      "targetId": "target-1",
+      "payload": {
+        "sessionHijackSuspected": true
+      }
+    }
+  ],
+  "expectedRules": [
+    "Session hijack detection"
+  ],
+  "expectedAction": "Kill",
+  "expectedSeverity": "Critical",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

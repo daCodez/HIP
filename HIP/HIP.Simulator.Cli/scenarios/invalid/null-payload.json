@@ -1,0 +1,23 @@
+{
+  "id": "null-payload",
+  "name": "Null Payload",
+  "description": "Invalid event scenario",
+  "category": "invalid",
+  "tags": [
+    "invalid"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "login.attempt",
+      "actorId": "u",
+      "targetId": "x",
+      "payload": null
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": false
+}

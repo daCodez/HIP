@@ -1,0 +1,25 @@
+{
+  "id": "unsupported-enum-value",
+  "name": "Unsupported Enum Value",
+  "description": "Invalid event scenario",
+  "category": "invalid",
+  "tags": [
+    "invalid"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "login.attempt",
+      "actorId": "u",
+      "targetId": "x",
+      "payload": {
+        "ipRisk": "extreme"
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": false
+}

@@ -1,0 +1,26 @@
+{
+  "id": "api_key_created",
+  "name": "Api Key Created",
+  "description": "Uncovered gap scenario",
+  "category": "uncovered",
+  "tags": [
+    "gap",
+    "uncovered"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "api_key_created",
+      "actorId": "user-2",
+      "targetId": "target-2",
+      "payload": {
+        "indicator": "api_key_created"
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": true
+}

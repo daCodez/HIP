@@ -7,6 +7,10 @@ namespace HIP.Admin.Services;
 public sealed class ThemeService
 {
     private const string StorageKey = "hip.admin.theme";
+    public const string AppearanceSystem = "system";
+    public const string AppearanceLight = "light";
+    public const string AppearanceDark = "dark";
+
     private readonly IJSRuntime _js;
 
     public ThemeService(IJSRuntime js)
@@ -40,12 +44,19 @@ public sealed class ThemeService
             }
         }
 
+        if (string.IsNullOrWhiteSpace(State.Appearance))
+        {
+            State.Appearance = State.DarkMode ? AppearanceDark : AppearanceLight;
+        }
+
+        State.Appearance = NormalizeAppearance(State.Appearance);
+        State.DarkMode = State.Appearance == AppearanceDark;
+        State.BrightMode = State.Appearance == AppearanceLight;
+
         // Normalize legacy presets to King baseline (prevents old blue skins from overriding current palette).
         if (!Presets.Any(p => p.Key == State.PresetKey) || State.PresetKey == "ocean" || State.PresetKey == "royal")
         {
             State.PresetKey = "king";
-            State.DarkMode = false;
-            State.BrightMode = false;
             var json = JsonSerializer.Serialize(State);
             await _js.InvokeVoidAsync("hipTheme.set", StorageKey, json);
         }
@@ -59,19 +70,19 @@ public sealed class ThemeService
         await PersistAndApplyAsync();
     }
 
-    public async Task SetDarkModeAsync(bool enabled)
+    public async Task SetAppearanceAsync(string appearance)
     {
-        State.DarkMode = enabled;
-        if (enabled) State.BrightMode = false;
+        State.Appearance = NormalizeAppearance(appearance);
+        State.DarkMode = State.Appearance == AppearanceDark;
+        State.BrightMode = State.Appearance == AppearanceLight;
         await PersistAndApplyAsync();
     }
 
-    public async Task SetBrightModeAsync(bool enabled)
-    {
-        State.BrightMode = enabled;
-        if (enabled) State.DarkMode = false;
-        await PersistAndApplyAsync();
-    }
+    public Task SetDarkModeAsync(bool enabled)
+        => SetAppearanceAsync(enabled ? AppearanceDark : AppearanceSystem);
+
+    public Task SetBrightModeAsync(bool enabled)
+        => SetAppearanceAsync(enabled ? AppearanceLight : AppearanceSystem);
 
     public async Task ResetAsync()
     {
@@ -89,7 +100,15 @@ public sealed class ThemeService
     private async Task ApplyAsync()
     {
         var preset = Presets.FirstOrDefault(x => x.Key == State.PresetKey) ?? Presets[0];
-        await _js.InvokeVoidAsync("hipTheme.apply", preset, State.DarkMode, State.BrightMode);
+        await _js.InvokeVoidAsync("hipTheme.apply", preset, State.Appearance);
         Changed?.Invoke();
     }
+
+    private static string NormalizeAppearance(string? appearance)
+        => appearance?.ToLowerInvariant() switch
+        {
+            AppearanceLight => AppearanceLight,
+            AppearanceDark => AppearanceDark,
+            _ => AppearanceSystem
+        };
 }

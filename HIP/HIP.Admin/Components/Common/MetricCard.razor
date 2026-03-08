@@ -1,0 +1,33 @@
+<article class="hip-metric-card" aria-label="@Title">
+    <div class="hip-metric-card-header">
+        <h2 class="hip-metric-title">@Title</h2>
+        @if (Status is not null)
+        {
+            <StatusBadge Status="@Status" />
+        }
+    </div>
+
+    <p class="hip-metric-value">@Value</p>
+
+    @if (!string.IsNullOrWhiteSpace(TrendLabel))
+    {
+        <p class="hip-metric-trend @(TrendDirection == "down" ? "down" : "up")">
+            <span aria-hidden="true">@(TrendDirection == "down" ? "▼" : "▲")</span>
+            @TrendLabel
+        </p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(AssistiveText))
+    {
+        <p class="hip-metric-help">@AssistiveText</p>
+    }
+</article>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Value { get; set; } = "0";
+    [Parameter] public WorkflowStatus? Status { get; set; }
+    [Parameter] public string? TrendLabel { get; set; }
+    [Parameter] public string TrendDirection { get; set; } = "up";
+    [Parameter] public string? AssistiveText { get; set; }
+}

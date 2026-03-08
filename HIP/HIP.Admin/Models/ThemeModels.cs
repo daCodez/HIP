@@ -13,6 +13,9 @@ public sealed class ThemePreset
 public sealed class ThemeState
 {
     public string PresetKey { get; set; } = "king";
+    public string Appearance { get; set; } = "system";
+
+    // Legacy fields kept for backwards-compatible deserialization of older saved theme payloads.
     public bool DarkMode { get; set; }
     public bool BrightMode { get; set; }
 }

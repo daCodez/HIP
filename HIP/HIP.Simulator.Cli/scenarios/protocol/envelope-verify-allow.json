@@ -1,0 +1,21 @@
+{
+  "id": "protocol-envelope-verify-allow",
+  "name": "Protocol envelope verify allow",
+  "description": "Valid signed envelope verifies and proceeds.",
+  "category": "protocol",
+  "executionMode": "protocol",
+  "tags": ["protocol", "verify"],
+  "protocolSteps": [
+    { "stepType": "SignEnvelope" },
+    { "stepType": "VerifyEnvelope", "expectSuccess": true },
+    { "stepType": "IssueReceipt" },
+    { "stepType": "VerifyReceipt", "expectSuccess": true },
+    { "stepType": "ChallengeCreate" },
+    { "stepType": "ChallengeVerify", "expectSuccess": true }
+  ],
+  "expectedRules": ["Protocol:EnvelopeVerify"],
+  "expectedAction": "Allow",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

@@ -1,117 +1,214 @@
 @typeparam TItem
 
-<section class="widget widget-table table-widget-frame mb-3">
+<section class="hip-data-table widget widget-table table-widget-frame mb-3" aria-label="@Title">
     <div class="widget-header">
-        <h3><i class="fa fa-table"></i> @Title</h3>
+        <h3>@Title</h3>
     </div>
 
     <div class="widget-content">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <input class="form-control w-auto" style="min-width:240px" placeholder="Search..." @bind="_search" />
-            <select class="form-select w-auto" @bind="_pageSize">
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="20">20</option>
-            </select>
-        </div>
+        @if (ShowSearch)
+        {
+            <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                <label class="visually-hidden" for="@_searchInputId">Search table</label>
+                <input id="@_searchInputId" class="form-control" style="max-width: 280px;" placeholder="Search rows" @bind="_search" @bind:event="oninput" />
+                <select class="form-select" style="max-width: 110px;" @bind="_pageSize" aria-label="Rows per page">
+                    @foreach (var pageSize in PageSizeOptions)
+                    {
+                        <option value="@pageSize">@pageSize</option>
+                    }
+                </select>
+            </div>
+        }
 
         <div class="table-responsive">
             <table class="table table-hover align-middle">
+                @if (!string.IsNullOrWhiteSpace(Caption))
+                {
+                    <caption>@Caption</caption>
+                }
                 <thead>
                     <tr>
-                        @foreach (var p in _properties)
+                        @foreach (var column in EffectiveColumns)
                         {
-                            <th role="button" @onclick="() => SortBy(p.Name)">@FormatHeader(p.Name)</th>
+                            var isSorted = IsSortedBy(column);
+                            <th scope="col" style="width:@column.Width" aria-sort="@GetAriaSort(column)">
+                                @if (column.SortSelector is not null)
+                                {
+                                    <button type="button"
+                                            class="btn btn-link p-0 hip-sort-button"
+                                            @onclick="() => ToggleSort(column)"
+                                            aria-label="Sort by @column.Header">
+                                        @column.Header
+                                        @if (isSorted)
+                                        {
+                                            <span aria-hidden="true">@(_sortDescending ? " ▼" : " ▲")</span>
+                                        }
+                                    </button>
+                                }
+                                else
+                                {
+                                    @column.Header
+                                }
+                            </th>
                         }
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var item in PagedItems)
+                    @if (PagedItems.Count == 0)
                     {
-                        <tr @onclick="() => OnRowClick.InvokeAsync(item)">
-                            @foreach (var p in _properties)
-                            {
-                                <td>@(p.GetValue(item))</td>
-                            }
+                        <tr>
+                            <td colspan="@EffectiveColumns.Count" class="text-muted">@EmptyMessage</td>
                         </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in PagedItems)
+                        {
+                            var isSelected = IsRowSelected?.Invoke(item) ?? false;
+                            <tr class="hip-data-table-row @(isSelected ? "hip-data-table-row-selected" : string.Empty)"
+                                aria-selected="@isSelected"
+                                tabindex="0"
+                                @onclick="() => OnRowClick.InvokeAsync(item)"
+                                @onkeydown="(args => OnRowKeyDown(args, item))">
+                                @foreach (var column in EffectiveColumns)
+                                {
+                                    <td>
+                                        @if (column.CellTemplate is not null)
+                                        {
+                                            @column.CellTemplate(item)
+                                        }
+                                        else
+                                        {
+                                            @ToDisplayText(column, item)
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
         </div>
 
-        <div class="d-flex justify-content-end gap-2">
-            <button class="btn btn-sm btn-outline-secondary" @onclick="PrevPage" disabled="@(_page == 1)">Prev</button>
-            <span class="small align-self-center">Page @_page / @TotalPages</span>
-            <button class="btn btn-sm btn-outline-secondary" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-        </div>
+        @if (ShowPagination)
+        {
+            <div class="d-flex justify-content-end gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="PrevPage" disabled="@(_page <= 1)">Prev</button>
+                <span class="small">Page @_page / @TotalPages</span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+        }
     </div>
 </section>
 
 @code {
-    [Parameter] public IReadOnlyList<TItem> Items { get; set; } = [];
-    [Parameter] public EventCallback<TItem> OnRowClick { get; set; }
     [Parameter] public string Title { get; set; } = "Table";
+    [Parameter] public string? Caption { get; set; }
+    [Parameter] public string EmptyMessage { get; set; } = "No records found.";
+    [Parameter] public bool ShowSearch { get; set; } = true;
+    [Parameter] public bool ShowPagination { get; set; } = true;
+    [Parameter] public IReadOnlyList<int> PageSizeOptions { get; set; } = [5, 10, 20];
+    [Parameter] public IReadOnlyList<TItem> Items { get; set; } = [];
+    [Parameter] public IReadOnlyList<DataTableColumn<TItem>>? Columns { get; set; }
+    [Parameter] public Func<TItem, bool>? IsRowSelected { get; set; }
+    [Parameter] public EventCallback<TItem> OnRowClick { get; set; }
 
-    private string _search = string.Empty;
+    private readonly string _searchInputId = $"hip-data-search-{Guid.NewGuid():N}";
     private int _page = 1;
     private int _pageSize = 10;
-    private string? _sortBy;
-    private bool _descending;
+    private string _search = string.Empty;
+    private DataTableColumn<TItem>? _sortedColumn;
+    private bool _sortDescending;
+    private IReadOnlyList<DataTableColumn<TItem>> _fallbackColumns = [];
 
-    private IReadOnlyList<System.Reflection.PropertyInfo> _properties = [];
+    private IReadOnlyList<DataTableColumn<TItem>> EffectiveColumns => Columns is { Count: > 0 } ? Columns : _fallbackColumns;
 
     protected override void OnParametersSet()
     {
-        _properties = typeof(TItem).GetProperties().Where(p => p.PropertyType.IsPrimitive || p.PropertyType == typeof(string) || p.PropertyType == typeof(DateTime) || p.PropertyType == typeof(bool)).ToList();
+        _pageSize = PageSizeOptions.Contains(_pageSize) ? _pageSize : (PageSizeOptions.Count > 0 ? PageSizeOptions[0] : 10);
+        _fallbackColumns = BuildFallbackColumns();
+        if (_page > TotalPages)
+        {
+            _page = TotalPages;
+        }
     }
 
-    private IEnumerable<TItem> FilteredItems
+    private List<TItem> FilteredItems
     {
         get
         {
             var query = Items.AsEnumerable();
+
             if (!string.IsNullOrWhiteSpace(_search))
             {
-                query = query.Where(i => _properties.Any(p => (p.GetValue(i)?.ToString() ?? string.Empty).Contains(_search, StringComparison.OrdinalIgnoreCase)));
+                query = query.Where(item => EffectiveColumns.Any(column => ToDisplayText(column, item).Contains(_search, StringComparison.OrdinalIgnoreCase)));
             }
 
-            if (!string.IsNullOrWhiteSpace(_sortBy))
+            if (_sortedColumn?.SortSelector is not null)
             {
-                var prop = _properties.FirstOrDefault(x => x.Name == _sortBy);
-                if (prop is not null)
-                {
-                    query = _descending
-                        ? query.OrderByDescending(i => prop.GetValue(i)?.ToString())
-                        : query.OrderBy(i => prop.GetValue(i)?.ToString());
-                }
+                query = _sortDescending
+                    ? query.OrderByDescending(_sortedColumn.SortSelector)
+                    : query.OrderBy(_sortedColumn.SortSelector);
             }
 
-            return query;
+            return query.ToList();
         }
     }
 
-    private IEnumerable<TItem> PagedItems => FilteredItems.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private List<TItem> PagedItems => ShowPagination
+        ? FilteredItems.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList()
+        : FilteredItems;
 
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredItems.Count() / (double)_pageSize));
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredItems.Count / (double)Math.Max(_pageSize, 1)));
+
+    private void ToggleSort(DataTableColumn<TItem> column)
+    {
+        if (_sortedColumn == column)
+        {
+            _sortDescending = !_sortDescending;
+            return;
+        }
+
+        _sortedColumn = column;
+        _sortDescending = false;
+    }
+
+    private bool IsSortedBy(DataTableColumn<TItem> column) => ReferenceEquals(_sortedColumn, column);
+
+    private string GetAriaSort(DataTableColumn<TItem> column)
+    {
+        if (!IsSortedBy(column))
+        {
+            return "none";
+        }
+
+        return _sortDescending ? "descending" : "ascending";
+    }
+
+    private static string ToDisplayText(DataTableColumn<TItem> column, TItem item)
+        => column.ValueSelector?.Invoke(item)?.ToString() ?? string.Empty;
+
+    private IReadOnlyList<DataTableColumn<TItem>> BuildFallbackColumns()
+    {
+        var props = typeof(TItem).GetProperties()
+            .Where(p => p.PropertyType.IsPrimitive || p.PropertyType == typeof(string) || p.PropertyType == typeof(DateTime) || p.PropertyType == typeof(DateTimeOffset) || p.PropertyType == typeof(bool))
+            .ToArray();
+
+        return props.Select(p => new DataTableColumn<TItem>
+        {
+            Header = FormatHeader(p.Name),
+            ValueSelector = item => p.GetValue(item),
+            SortSelector = item => p.GetValue(item) as IComparable
+        }).ToArray();
+    }
 
     private static string FormatHeader(string property)
-    {
-        return System.Text.RegularExpressions.Regex
-            .Replace(property, "([a-z])([A-Z])", "$1 $2");
-    }
+        => System.Text.RegularExpressions.Regex.Replace(property, "([a-z])([A-Z])", "$1 $2");
 
-    private void SortBy(string property)
-    {
-        if (_sortBy == property)
-        {
-            _descending = !_descending;
-        }
-        else
-        {
-            _sortBy = property;
-            _descending = false;
-        }
-    }
+    private Task OnRowKeyDown(KeyboardEventArgs args, TItem item)
+        => args.Key is "Enter" or " " or "Spacebar"
+            ? OnRowClick.InvokeAsync(item)
+            : Task.CompletedTask;
 
     private void PrevPage() => _page = Math.Max(1, _page - 1);
     private void NextPage() => _page = Math.Min(TotalPages, _page + 1);

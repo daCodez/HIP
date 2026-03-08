@@ -1,0 +1,17 @@
+{
+  "id": "protocol-key-revoked-block",
+  "name": "Protocol key revoked block",
+  "description": "Revoked key should be blocked by protocol lifecycle controls.",
+  "category": "protocol",
+  "executionMode": "protocol",
+  "tags": ["protocol", "key-lifecycle", "revoked"],
+  "protocolSteps": [
+    { "stepType": "VerifyEnvelope", "expectSuccess": true },
+    { "stepType": "KeyRevoked", "expectSuccess": false }
+  ],
+  "expectedRules": ["Protocol:KeyRevoked"],
+  "expectedAction": "Block",
+  "expectedSeverity": "Critical",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

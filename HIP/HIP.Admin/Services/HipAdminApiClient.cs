@@ -6,6 +6,69 @@ namespace HIP.Admin.Services;
 
 public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService context)
 {
+    public async Task<ApiResult<AdminShellConfig>> GetShellConfigAsync(CancellationToken ct = default)
+    {
+        if (context.MockModeEnabled)
+        {
+            return ApiResult<AdminShellConfig>.Ok(new AdminShellConfig
+            {
+                UserRoles = [context.CurrentRole],
+                EnabledModules = ["devices", "simulator", "protocol-health", "settings"],
+                ServerTimestampUtc = DateTimeOffset.UtcNow,
+                CorrelationId = "local-mock"
+            });
+        }
+
+        try
+        {
+            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("bff/admin/shell-config", ct);
+            var root = doc?.RootElement;
+            if (root is null || root.Value.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException("Shell config response was empty.");
+            }
+
+            var roleValues = root.Value.TryGetProperty("roles", out var rolesEl) && rolesEl.ValueKind == JsonValueKind.Array
+                ? rolesEl.EnumerateArray().Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                : [];
+
+            var parsedRoles = roleValues
+                .Select(v => Enum.TryParse<AdminRole>(v, true, out var parsed) ? parsed : (AdminRole?)null)
+                .Where(v => v.HasValue)
+                .Select(v => v!.Value)
+                .Distinct()
+                .ToArray();
+
+            var enabledModules = root.Value.TryGetProperty("enabledModules", out var modulesEl) && modulesEl.ValueKind == JsonValueKind.Array
+                ? modulesEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToArray()
+                : [];
+
+            var serverTimestamp = root.Value.TryGetProperty("serverTimestampUtc", out var tsEl) && tsEl.ValueKind == JsonValueKind.String && DateTimeOffset.TryParse(tsEl.GetString(), out var parsedTs)
+                ? parsedTs
+                : (DateTimeOffset?)null;
+
+            var correlationId = root.Value.TryGetProperty("correlationId", out var corrEl) ? corrEl.GetString() : null;
+
+            return ApiResult<AdminShellConfig>.Ok(new AdminShellConfig
+            {
+                UserRoles = parsedRoles.Length > 0 ? parsedRoles : [context.CurrentRole],
+                EnabledModules = enabledModules,
+                ServerTimestampUtc = serverTimestamp,
+                CorrelationId = correlationId
+            });
+        }
+        catch
+        {
+            return ApiResult<AdminShellConfig>.Ok(new AdminShellConfig
+            {
+                UserRoles = [context.CurrentRole],
+                EnabledModules = ["simulator"],
+                ServerTimestampUtc = DateTimeOffset.UtcNow,
+                CorrelationId = "fallback"
+            });
+        }
+    }
+
     public async Task<ApiResult<List<DashboardMetric>>> GetDashboardMetricsAsync(CancellationToken ct = default)
         => await ExecuteWithMockFallback(async () =>
         {
@@ -64,8 +127,30 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
             return list;
         }, MockActivity(), "api/admin/security-events?take=25");
 
-    public Task<ApiResult<List<SecurityCheck>>> GetSecurityChecksAsync(CancellationToken ct = default)
-        => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<SecurityCheck>>("api/v1/admin/security", ct)!, MockSecurity(), "api/v1/admin/security");
+    public async Task<ApiResult<List<SecurityCheck>>> GetSecurityChecksAsync(CancellationToken ct = default)
+        => await ExecuteWithMockFallback(async () =>
+        {
+            using var doc = await GetJsonDocumentWithRetryAsync("api/admin/security-status", ct);
+            var root = doc?.RootElement;
+            if (root is null || root.Value.ValueKind != JsonValueKind.Object)
+            {
+                return [];
+            }
+
+            static long ReadLong(JsonElement obj, string name)
+                => obj.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.Number && el.TryGetInt64(out var n) ? n : 0;
+
+            var replay = ReadLong(root.Value, "replayDetected");
+            var expired = ReadLong(root.Value, "messageExpired");
+            var blocked = ReadLong(root.Value, "policyBlocked");
+
+            return
+            [
+                new() { Name = "Replay Detection", Status = replay > 0 ? "Warning" : "Healthy", LastChecked = DateTime.UtcNow },
+                new() { Name = "Token Expiry Enforcement", Status = expired > 0 ? "Warning" : "Healthy", LastChecked = DateTime.UtcNow },
+                new() { Name = "Policy Blocking", Status = blocked > 0 ? "Active" : "Quiet", LastChecked = DateTime.UtcNow }
+            ];
+        }, MockSecurity(), "api/admin/security-status");
 
     public Task<ApiResult<List<UserDeviceRecord>>> GetUsersDevicesAsync(CancellationToken ct = default)
         => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<UserDeviceRecord>>("api/v1/admin/users-devices", ct)!, MockUsers(), "api/v1/admin/users-devices");
@@ -79,7 +164,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
         try
         {
-            var list = await httpClient.GetFromJsonAsync<List<PolicyRule>>("api/admin/policy", ct);
+            var list = await httpClient.GetFromJsonAsync<List<PolicyRule>>("api/v1/admin/policy", ct);
             if (list is { Count: > 0 })
             {
                 return ApiResult<List<PolicyRule>>.Ok(list);
@@ -87,7 +172,18 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
         catch
         {
-            // fall through to effective-policy adapter
+            try
+            {
+                var fallback = await httpClient.GetFromJsonAsync<List<PolicyRule>>("api/admin/policy", ct);
+                if (fallback is { Count: > 0 })
+                {
+                    return ApiResult<List<PolicyRule>>.Ok(fallback);
+                }
+            }
+            catch
+            {
+                // fall through to effective-policy adapter
+            }
         }
 
         try
@@ -114,10 +210,10 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         }
         catch (Exception ex)
         {
-            return ApiResult<List<PolicyRule>>.Fail($"Failed to load data from 'api/admin/policy' and fallback 'api/policy/effective'. {ex.Message}");
+            return ApiResult<List<PolicyRule>>.Fail($"Failed to load data from 'api/v1/admin/policy' and fallbacks 'api/admin/policy' + 'api/policy/effective'. {ex.Message}");
         }
 
-        return ApiResult<List<PolicyRule>>.Fail("Failed to load data from 'api/admin/policy' and fallback 'api/policy/effective'. Empty response.");
+        return ApiResult<List<PolicyRule>>.Fail("Failed to load data from 'api/v1/admin/policy' and fallbacks 'api/admin/policy' + 'api/policy/effective'. Empty response.");
     }
 
     public async Task<ApiResult<List<ReputationWatchItem>>> GetTopRiskIdentitiesAsync(CancellationToken ct = default)
@@ -163,12 +259,20 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
         try
         {
-            var data = await httpClient.GetFromJsonAsync<List<AuthzPolicyRule>>("api/admin/authz-policies", ct);
+            var data = await httpClient.GetFromJsonAsync<List<AuthzPolicyRule>>("api/v1/admin/authz-policies", ct);
             return ApiResult<List<AuthzPolicyRule>>.Ok(data ?? []);
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<List<AuthzPolicyRule>>.Fail($"Failed to load data from 'api/admin/authz-policies'. {ex.Message}");
+            try
+            {
+                var fallback = await httpClient.GetFromJsonAsync<List<AuthzPolicyRule>>("api/admin/authz-policies", ct);
+                return ApiResult<List<AuthzPolicyRule>>.Ok(fallback ?? []);
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<List<AuthzPolicyRule>>.Fail($"Failed to load data from 'api/v1/admin/authz-policies' and fallback 'api/admin/authz-policies'. {ex.Message}");
+            }
         }
     }
 
@@ -177,7 +281,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         try
         {
             using var req = new StringContent(jsonInput, Encoding.UTF8, "application/json");
-            using var response = await httpClient.PostAsync("api/admin/authz/simulate", req, ct);
+            using var response = await httpClient.PostAsync("api/v1/admin/authz/simulate", req, ct);
             response.EnsureSuccessStatusCode();
 
             using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -195,9 +299,33 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
             return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Ok((decision, triggered, actions, trace));
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/admin/authz/simulate'. {ex.Message}");
+            try
+            {
+                using var fallbackReq = new StringContent(jsonInput, Encoding.UTF8, "application/json");
+                using var fallbackResponse = await httpClient.PostAsync("api/admin/authz/simulate", fallbackReq, ct);
+                fallbackResponse.EnsureSuccessStatusCode();
+
+                using var fallbackDoc = JsonDocument.Parse(await fallbackResponse.Content.ReadAsStringAsync(ct));
+                var root = fallbackDoc.RootElement;
+                var decision = root.TryGetProperty("decision", out var dEl) ? dEl.GetString() ?? "DENY" : "DENY";
+                var triggered = root.TryGetProperty("triggeredRules", out var tEl) && tEl.ValueKind == JsonValueKind.Array
+                    ? tEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                    : new List<string>();
+                var actions = root.TryGetProperty("actions", out var aEl) && aEl.ValueKind == JsonValueKind.Array
+                    ? aEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                    : new List<string>();
+                var trace = root.TryGetProperty("trace", out var trEl) && trEl.ValueKind == JsonValueKind.Array
+                    ? trEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                    : new List<string>();
+
+                return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Ok((decision, triggered, actions, trace));
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/v1/admin/authz/simulate' and fallback 'api/admin/authz/simulate'. {ex.Message}");
+            }
         }
     }
 
@@ -205,86 +333,173 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
     {
         try
         {
-            var data = await httpClient.GetFromJsonAsync<List<PolicyVersionSummary>>("api/admin/policy/versions", ct);
+            var data = await httpClient.GetFromJsonAsync<List<PolicyVersionSummary>>("api/v1/admin/policy/versions", ct);
             return ApiResult<List<PolicyVersionSummary>>.Ok(data ?? []);
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<List<PolicyVersionSummary>>.Fail($"Failed to load data from 'api/admin/policy/versions'. {ex.Message}");
+            try
+            {
+                var fallback = await httpClient.GetFromJsonAsync<List<PolicyVersionSummary>>("api/admin/policy/versions", ct);
+                return ApiResult<List<PolicyVersionSummary>>.Ok(fallback ?? []);
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<List<PolicyVersionSummary>>.Fail($"Failed to load data from 'api/v1/admin/policy/versions' and fallback 'api/admin/policy/versions'. {ex.Message}");
+            }
         }
     }
 
     public async Task<ApiResult<bool>> CreatePolicyDraftAsync(string actor, string reason, CancellationToken ct = default)
     {
         var payload = JsonSerializer.Serialize(new { actor, reason });
-        using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+
         try
         {
-            using var res = await httpClient.PostAsync("api/admin/policy/versions/draft", req, ct);
+            using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var res = await httpClient.PostAsync("api/v1/admin/policy/versions/draft", req, ct);
             res.EnsureSuccessStatusCode();
             return ApiResult<bool>.Ok(true);
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<bool>.Fail($"Failed to load data from 'api/admin/policy/versions/draft'. {ex.Message}");
+            try
+            {
+                using var fallbackReq = new StringContent(payload, Encoding.UTF8, "application/json");
+                using var fallbackRes = await httpClient.PostAsync("api/admin/policy/versions/draft", fallbackReq, ct);
+                fallbackRes.EnsureSuccessStatusCode();
+                return ApiResult<bool>.Ok(true);
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<bool>.Fail($"Failed to load data from 'api/v1/admin/policy/versions/draft' and fallback 'api/admin/policy/versions/draft'. {ex.Message}");
+            }
         }
     }
 
     public async Task<ApiResult<JsonDocument>> GetPolicyImpactPreviewAsync(string versionId, CancellationToken ct = default)
     {
+        var escaped = Uri.EscapeDataString(versionId);
         try
         {
-            var doc = await httpClient.GetFromJsonAsync<JsonDocument>($"api/admin/policy/versions/{Uri.EscapeDataString(versionId)}/impact", ct);
+            var doc = await httpClient.GetFromJsonAsync<JsonDocument>($"api/v1/admin/policy/versions/{escaped}/impact", ct);
             return ApiResult<JsonDocument>.Ok(doc ?? JsonDocument.Parse("{}"));
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<JsonDocument>.Fail($"Failed to load data from 'api/admin/policy/versions/{versionId}/impact'. {ex.Message}");
+            try
+            {
+                var fallback = await httpClient.GetFromJsonAsync<JsonDocument>($"api/admin/policy/versions/{escaped}/impact", ct);
+                return ApiResult<JsonDocument>.Ok(fallback ?? JsonDocument.Parse("{}"));
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<JsonDocument>.Fail($"Failed to load data from 'api/v1/admin/policy/versions/{versionId}/impact' and fallback 'api/admin/policy/versions/{versionId}/impact'. {ex.Message}");
+            }
         }
     }
 
     public async Task<ApiResult<bool>> ActivatePolicyVersionAsync(string versionId, string actor, string reason, string? approvedBy, CancellationToken ct = default)
     {
         var payload = JsonSerializer.Serialize(new { actor, reason, approvedBy });
-        using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+        var escaped = Uri.EscapeDataString(versionId);
+
         try
         {
-            using var res = await httpClient.PostAsync($"api/admin/policy/versions/{Uri.EscapeDataString(versionId)}/activate", req, ct);
+            using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var res = await httpClient.PostAsync($"api/v1/admin/policy/versions/{escaped}/activate", req, ct);
             res.EnsureSuccessStatusCode();
             return ApiResult<bool>.Ok(true);
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<bool>.Fail($"Failed to load data from 'api/admin/policy/versions/{versionId}/activate'. {ex.Message}");
+            try
+            {
+                using var fallbackReq = new StringContent(payload, Encoding.UTF8, "application/json");
+                using var fallbackRes = await httpClient.PostAsync($"api/admin/policy/versions/{escaped}/activate", fallbackReq, ct);
+                fallbackRes.EnsureSuccessStatusCode();
+                return ApiResult<bool>.Ok(true);
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<bool>.Fail($"Failed to load data from 'api/v1/admin/policy/versions/{versionId}/activate' and fallback 'api/admin/policy/versions/{versionId}/activate'. {ex.Message}");
+            }
         }
     }
 
     public async Task<ApiResult<bool>> RollbackPolicyVersionAsync(string actor, string reason, CancellationToken ct = default)
     {
         var payload = JsonSerializer.Serialize(new { actor, reason });
-        using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+
         try
         {
-            using var res = await httpClient.PostAsync("api/admin/policy/versions/rollback", req, ct);
+            using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var res = await httpClient.PostAsync("api/v1/admin/policy/versions/rollback", req, ct);
             res.EnsureSuccessStatusCode();
             return ApiResult<bool>.Ok(true);
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<bool>.Fail($"Failed to load data from 'api/admin/policy/versions/rollback'. {ex.Message}");
+            try
+            {
+                using var fallbackReq = new StringContent(payload, Encoding.UTF8, "application/json");
+                using var fallbackRes = await httpClient.PostAsync("api/admin/policy/versions/rollback", fallbackReq, ct);
+                fallbackRes.EnsureSuccessStatusCode();
+                return ApiResult<bool>.Ok(true);
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<bool>.Fail($"Failed to load data from 'api/v1/admin/policy/versions/rollback' and fallback 'api/admin/policy/versions/rollback'. {ex.Message}");
+            }
+        }
+    }
+
+    public async Task<ApiResult<JsonDocument>> EvaluateRiskAsync(object input, CancellationToken ct = default)
+    {
+        var payload = JsonSerializer.Serialize(input);
+
+        try
+        {
+            using var req = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var res = await httpClient.PostAsync("api/v1/admin/security/risk/evaluate", req, ct);
+            res.EnsureSuccessStatusCode();
+            return ApiResult<JsonDocument>.Ok(JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct)));
+        }
+        catch
+        {
+            try
+            {
+                using var fallbackReq = new StringContent(payload, Encoding.UTF8, "application/json");
+                using var fallbackRes = await httpClient.PostAsync("api/admin/security/risk/evaluate", fallbackReq, ct);
+                fallbackRes.EnsureSuccessStatusCode();
+                return ApiResult<JsonDocument>.Ok(JsonDocument.Parse(await fallbackRes.Content.ReadAsStringAsync(ct)));
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<JsonDocument>.Fail($"Failed to load data from 'api/v1/admin/security/risk/evaluate' and fallback 'api/admin/security/risk/evaluate'. {ex.Message}");
+            }
         }
     }
 
     public async Task<ApiResult<JsonDocument>> GetTokenEventsAsync(int take = 50, CancellationToken ct = default)
     {
+        var q = $"?take={Math.Clamp(take, 1, 200)}&eventType=jarvis.token";
         try
         {
-            var doc = await GetJsonDocumentWithRetryAsync($"api/admin/audit?take={Math.Clamp(take, 1, 200)}&eventType=jarvis.token", ct);
+            var doc = await GetJsonDocumentWithRetryAsync($"api/v1/admin/audit{q}", ct);
             return ApiResult<JsonDocument>.Ok(doc ?? JsonDocument.Parse("[]"));
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<JsonDocument>.Fail($"Failed to load data from 'api/admin/audit?eventType=jarvis.token'. {ex.Message}");
+            try
+            {
+                var fallback = await GetJsonDocumentWithRetryAsync($"api/admin/audit{q}", ct);
+                return ApiResult<JsonDocument>.Ok(fallback ?? JsonDocument.Parse("[]"));
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<JsonDocument>.Fail($"Failed to load data from 'api/v1/admin/audit?eventType=jarvis.token' and fallback 'api/admin/audit?eventType=jarvis.token'. {ex.Message}");
+            }
         }
     }
 
@@ -368,44 +583,68 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
             });
         }
 
+        var payload = JsonSerializer.Serialize(new { prompt });
+
         try
         {
-            var payload = JsonSerializer.Serialize(new { prompt });
             using var req = new StringContent(payload, Encoding.UTF8, "application/json");
-            using var res = await httpClient.PostAsync("api/admin/policy/ai-draft", req, ct);
+            using var res = await httpClient.PostAsync("api/v1/admin/policy/ai-draft", req, ct);
             res.EnsureSuccessStatusCode();
             var json = await res.Content.ReadAsStringAsync(ct);
             var rule = JsonSerializer.Deserialize<PolicyRule>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             return rule is null ? ApiResult<PolicyRule>.Fail("Empty AI draft response.") : ApiResult<PolicyRule>.Ok(rule);
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<PolicyRule>.Fail($"Failed to load data from 'api/admin/policy/ai-draft'. {ex.Message}");
+            try
+            {
+                using var fallbackReq = new StringContent(payload, Encoding.UTF8, "application/json");
+                using var fallbackRes = await httpClient.PostAsync("api/admin/policy/ai-draft", fallbackReq, ct);
+                fallbackRes.EnsureSuccessStatusCode();
+                var fallbackJson = await fallbackRes.Content.ReadAsStringAsync(ct);
+                var fallbackRule = JsonSerializer.Deserialize<PolicyRule>(fallbackJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                return fallbackRule is null ? ApiResult<PolicyRule>.Fail("Empty AI draft response.") : ApiResult<PolicyRule>.Ok(fallbackRule);
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<PolicyRule>.Fail($"Failed to load data from 'api/v1/admin/policy/ai-draft' and fallback 'api/admin/policy/ai-draft'. {ex.Message}");
+            }
         }
     }
 
     public async Task<ApiResult<bool>> UpsertPolicyRuleAsync(PolicyRule rule, CancellationToken ct = default)
     {
+        var payload = JsonSerializer.Serialize(new
+        {
+            ruleId = rule.RuleId,
+            name = rule.Name,
+            category = rule.Category,
+            condition = rule.Condition,
+            action = rule.Action,
+            severity = rule.Severity,
+            enabled = rule.Enabled
+        });
+
         try
         {
-            var payload = JsonSerializer.Serialize(new
-            {
-                ruleId = rule.RuleId,
-                name = rule.Name,
-                category = rule.Category,
-                condition = rule.Condition,
-                action = rule.Action,
-                severity = rule.Severity,
-                enabled = rule.Enabled
-            });
             using var req = new StringContent(payload, Encoding.UTF8, "application/json");
-            using var res = await httpClient.PostAsync("api/admin/policy", req, ct);
+            using var res = await httpClient.PostAsync("api/v1/admin/policy", req, ct);
             res.EnsureSuccessStatusCode();
             return ApiResult<bool>.Ok(true);
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<bool>.Fail($"Failed to load data from 'api/admin/policy'. {ex.Message}");
+            try
+            {
+                using var fallbackReq = new StringContent(payload, Encoding.UTF8, "application/json");
+                using var fallbackRes = await httpClient.PostAsync("api/admin/policy", fallbackReq, ct);
+                fallbackRes.EnsureSuccessStatusCode();
+                return ApiResult<bool>.Ok(true);
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<bool>.Fail($"Failed to load data from 'api/v1/admin/policy' and fallback 'api/admin/policy'. {ex.Message}");
+            }
         }
     }
 
@@ -433,7 +672,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         try
         {
             using var req = new StringContent(jsonInput, Encoding.UTF8, "application/json");
-            using var response = await httpClient.PostAsync("api/admin/policy/simulate", req, ct);
+            using var response = await httpClient.PostAsync("api/v1/admin/policy/simulate", req, ct);
             response.EnsureSuccessStatusCode();
 
             using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -452,9 +691,34 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
             return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Ok((decision, triggered, actions, trace));
         }
-        catch (Exception ex)
+        catch
         {
-            return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/admin/policy/simulate'. {ex.Message}");
+            try
+            {
+                using var fallbackReq = new StringContent(jsonInput, Encoding.UTF8, "application/json");
+                using var fallbackResponse = await httpClient.PostAsync("api/admin/policy/simulate", fallbackReq, ct);
+                fallbackResponse.EnsureSuccessStatusCode();
+
+                using var fallbackDoc = JsonDocument.Parse(await fallbackResponse.Content.ReadAsStringAsync(ct));
+                var root = fallbackDoc.RootElement;
+
+                var decision = root.TryGetProperty("decision", out var dEl) ? dEl.GetString() ?? "ALLOW" : "ALLOW";
+                var triggered = root.TryGetProperty("triggeredRules", out var tEl) && tEl.ValueKind == JsonValueKind.Array
+                    ? tEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                    : new List<string>();
+                var actions = root.TryGetProperty("actions", out var aEl) && aEl.ValueKind == JsonValueKind.Array
+                    ? aEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                    : new List<string>();
+                var trace = root.TryGetProperty("trace", out var trEl) && trEl.ValueKind == JsonValueKind.Array
+                    ? trEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                    : new List<string>();
+
+                return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Ok((decision, triggered, actions, trace));
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<(string Decision, List<string> TriggeredRules, List<string> Actions, List<string> Trace)>.Fail($"Failed to load data from 'api/v1/admin/policy/simulate' and fallback 'api/admin/policy/simulate'. {ex.Message}");
+            }
         }
     }
 
@@ -522,51 +786,68 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
         try
         {
-            using var doc = await httpClient.GetFromJsonAsync<JsonDocument>("api/v1/admin/audit?take=250", ct);
-            var root = doc?.RootElement;
-            if (root is null || root.Value.ValueKind != JsonValueKind.Array)
+            async Task<List<AuditLogEntry>?> loadAndMap(string path)
             {
-                return ApiResult<List<AuditLogEntry>>.Ok(MockLogs());
-            }
-
-            var mapped = new List<AuditLogEntry>();
-            foreach (var e in root.Value.EnumerateArray())
-            {
-                var created = e.TryGetProperty("createdAtUtc", out var createdEl) && createdEl.ValueKind == JsonValueKind.String
-                    && DateTime.TryParse(createdEl.GetString(), out var dt)
-                    ? dt
-                    : DateTime.UtcNow;
-
-                var subject = e.TryGetProperty("subject", out var subjectEl) ? subjectEl.GetString() ?? "unknown" : "unknown";
-                var eventType = e.TryGetProperty("eventType", out var eventEl) ? eventEl.GetString() ?? "unknown" : "unknown";
-                var category = e.TryGetProperty("category", out var catEl) ? catEl.GetString() ?? "general" : "general";
-                var outcome = e.TryGetProperty("outcome", out var outEl) ? outEl.GetString() ?? "unknown" : "unknown";
-                var reason = e.TryGetProperty("reasonCode", out var reasonEl) ? reasonEl.GetString() ?? string.Empty : string.Empty;
-                var detail = e.TryGetProperty("detail", out var detailEl) ? detailEl.GetString() ?? string.Empty : string.Empty;
-
-                var severity = outcome.Equals("success", StringComparison.OrdinalIgnoreCase)
-                    ? "Info"
-                    : outcome.Equals("review", StringComparison.OrdinalIgnoreCase)
-                        ? "Warning"
-                        : "Critical";
-
-                mapped.Add(new AuditLogEntry
+                using var doc = await httpClient.GetFromJsonAsync<JsonDocument>(path, ct);
+                var root = doc?.RootElement;
+                if (root is null || root.Value.ValueKind != JsonValueKind.Array)
                 {
-                    Timestamp = created,
-                    Actor = subject,
-                    EventType = eventType,
-                    Category = category,
-                    Severity = severity,
-                    Result = outcome,
-                    Detail = string.IsNullOrWhiteSpace(reason) ? detail : $"{detail} ({reason})"
-                });
+                    return null;
+                }
+
+                var mapped = new List<AuditLogEntry>();
+                foreach (var e in root.Value.EnumerateArray())
+                {
+                    var created = e.TryGetProperty("createdAtUtc", out var createdEl) && createdEl.ValueKind == JsonValueKind.String
+                        && DateTime.TryParse(createdEl.GetString(), out var dt)
+                        ? dt
+                        : DateTime.UtcNow;
+
+                    var subject = e.TryGetProperty("subject", out var subjectEl) ? subjectEl.GetString() ?? "unknown" : "unknown";
+                    var eventType = e.TryGetProperty("eventType", out var eventEl) ? eventEl.GetString() ?? "unknown" : "unknown";
+                    var category = e.TryGetProperty("category", out var catEl) ? catEl.GetString() ?? "general" : "general";
+                    var outcome = e.TryGetProperty("outcome", out var outEl) ? outEl.GetString() ?? "unknown" : "unknown";
+                    var reason = e.TryGetProperty("reasonCode", out var reasonEl) ? reasonEl.GetString() ?? string.Empty : string.Empty;
+                    var detail = e.TryGetProperty("detail", out var detailEl) ? detailEl.GetString() ?? string.Empty : string.Empty;
+
+                    var severity = outcome.Equals("success", StringComparison.OrdinalIgnoreCase)
+                        ? "Info"
+                        : outcome.Equals("review", StringComparison.OrdinalIgnoreCase)
+                            ? "Warning"
+                            : "Critical";
+
+                    mapped.Add(new AuditLogEntry
+                    {
+                        Timestamp = created,
+                        Actor = subject,
+                        EventType = eventType,
+                        Category = category,
+                        Severity = severity,
+                        Result = outcome,
+                        Detail = string.IsNullOrWhiteSpace(reason) ? detail : $"{detail} ({reason})"
+                    });
+                }
+
+                return mapped;
             }
 
-            return ApiResult<List<AuditLogEntry>>.Ok(mapped);
+            var v1 = await loadAndMap("api/v1/admin/audit?take=250");
+            if (v1 is { Count: > 0 })
+            {
+                return ApiResult<List<AuditLogEntry>>.Ok(v1);
+            }
+
+            var legacy = await loadAndMap("api/admin/audit?take=250");
+            if (legacy is { Count: > 0 })
+            {
+                return ApiResult<List<AuditLogEntry>>.Ok(legacy);
+            }
+
+            return ApiResult<List<AuditLogEntry>>.Ok(MockLogs());
         }
         catch (Exception ex)
         {
-            return ApiResult<List<AuditLogEntry>>.Fail($"Failed to load audit logs. {ex.Message}");
+            return ApiResult<List<AuditLogEntry>>.Fail($"Failed to load data from 'api/v1/admin/audit' and fallback 'api/admin/audit'. {ex.Message}");
         }
     }
 

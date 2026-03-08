@@ -1,0 +1,263 @@
+{
+  "TotalScenarios": 5,
+  "Passed": 5,
+  "Failed": 0,
+  "Uncovered": 0,
+  "Invalid": 0,
+  "SuggestedPoliciesGenerated": 0,
+  "Scenarios": [
+    {
+      "ScenarioId": "protocol-timestamp-skew-block",
+      "Passed": true,
+      "IsCovered": true,
+      "IsValid": true,
+      "FinalAction": "Block",
+      "FinalSeverity": "High",
+      "MatchedRules": [
+        "Protocol:TimestampPolicy"
+      ],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Protocol:TimestampPolicy",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "High",
+          "Reason": "Timestamp outside allowed skew."
+        }
+      ],
+      "SideEffects": [
+        "Executed against HIP.Protocol target"
+      ],
+      "ExecutionMode": 1,
+      "Suggestion": null
+    },
+    {
+      "ScenarioId": "protocol-envelope-verify-allow",
+      "Passed": true,
+      "IsCovered": true,
+      "IsValid": true,
+      "FinalAction": "Allow",
+      "FinalSeverity": "Info",
+      "MatchedRules": [
+        "Protocol:SignEnvelope",
+        "Protocol:EnvelopeVerify",
+        "Protocol:ReceiptIssue",
+        "Protocol:ReceiptVerify",
+        "Protocol:ChallengeCreate",
+        "Protocol:ChallengeVerify"
+      ],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Protocol:SignEnvelope",
+          "Matched": true,
+          "Action": "Allow",
+          "Severity": "Info",
+          "Reason": "Envelope signed"
+        },
+        {
+          "RuleName": "Protocol:EnvelopeVerify",
+          "Matched": true,
+          "Action": "Allow",
+          "Severity": "Info",
+          "Reason": "Envelope verify"
+        },
+        {
+          "RuleName": "Protocol:ReceiptIssue",
+          "Matched": true,
+          "Action": "Allow",
+          "Severity": "Info",
+          "Reason": "Receipt issued"
+        },
+        {
+          "RuleName": "Protocol:ReceiptVerify",
+          "Matched": true,
+          "Action": "Allow",
+          "Severity": "Info",
+          "Reason": "Receipt verify"
+        },
+        {
+          "RuleName": "Protocol:ChallengeCreate",
+          "Matched": true,
+          "Action": "Allow",
+          "Severity": "Info",
+          "Reason": "Challenge created"
+        },
+        {
+          "RuleName": "Protocol:ChallengeVerify",
+          "Matched": true,
+          "Action": "Allow",
+          "Severity": "Info",
+          "Reason": "Challenge round-trip"
+        }
+      ],
+      "SideEffects": [
+        "Executed against HIP.Protocol target"
+      ],
+      "ExecutionMode": 1,
+      "Suggestion": null
+    },
+    {
+      "ScenarioId": "protocol-key-replaced-block",
+      "Passed": true,
+      "IsCovered": true,
+      "IsValid": true,
+      "FinalAction": "Block",
+      "FinalSeverity": "Critical",
+      "MatchedRules": [
+        "Protocol:EnvelopeVerify",
+        "Protocol:KeyReplaced"
+      ],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Protocol:EnvelopeVerify",
+          "Matched": true,
+          "Action": "Allow",
+          "Severity": "Info",
+          "Reason": "Envelope verify"
+        },
+        {
+          "RuleName": "Protocol:KeyReplaced",
+          "Matched": true,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Replacement path simulated"
+        }
+      ],
+      "SideEffects": [
+        "Executed against HIP.Protocol target"
+      ],
+      "ExecutionMode": 1,
+      "Suggestion": null
+    },
+    {
+      "ScenarioId": "protocol-key-revoked-block",
+      "Passed": true,
+      "IsCovered": true,
+      "IsValid": true,
+      "FinalAction": "Block",
+      "FinalSeverity": "Critical",
+      "MatchedRules": [
+        "Protocol:EnvelopeVerify",
+        "Protocol:KeyRevoked"
+      ],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Protocol:EnvelopeVerify",
+          "Matched": true,
+          "Action": "Allow",
+          "Severity": "Info",
+          "Reason": "Envelope verify"
+        },
+        {
+          "RuleName": "Protocol:KeyRevoked",
+          "Matched": true,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Revocation path simulated"
+        }
+      ],
+      "SideEffects": [
+        "Executed against HIP.Protocol target"
+      ],
+      "ExecutionMode": 1,
+      "Suggestion": null
+    },
+    {
+      "ScenarioId": "protocol-replay-attempt-block",
+      "Passed": true,
+      "IsCovered": true,
+      "IsValid": true,
+      "FinalAction": "Block",
+      "FinalSeverity": "Critical",
+      "MatchedRules": [
+        "Protocol:EnvelopeVerify",
+        "Protocol:ReplayGuard"
+      ],
+      "ValidationIssues": [],
+      "RuleTrace": [
+        {
+          "RuleName": "Protocol:EnvelopeVerify",
+          "Matched": true,
+          "Action": "Allow",
+          "Severity": "Info",
+          "Reason": "Envelope verify"
+        },
+        {
+          "RuleName": "Protocol:ReplayGuard",
+          "Matched": false,
+          "Action": "Block",
+          "Severity": "Critical",
+          "Reason": "Nonce already used."
+        }
+      ],
+      "SideEffects": [
+        "Executed against HIP.Protocol target"
+      ],
+      "ExecutionMode": 1,
+      "Suggestion": null
+    }
+  ],
+  "Coverage": {
+    "EventCoverage": [],
+    "RuleCoverage": [
+      {
+        "RuleName": "Protocol:EnvelopeVerify",
+        "MatchedCount": 4,
+        "EvaluatedCount": 4
+      },
+      {
+        "RuleName": "Protocol:SignEnvelope",
+        "MatchedCount": 1,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Protocol:ReceiptIssue",
+        "MatchedCount": 1,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Protocol:ReceiptVerify",
+        "MatchedCount": 1,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Protocol:ChallengeCreate",
+        "MatchedCount": 1,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Protocol:ChallengeVerify",
+        "MatchedCount": 1,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Protocol:KeyReplaced",
+        "MatchedCount": 1,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Protocol:KeyRevoked",
+        "MatchedCount": 1,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Protocol:TimestampPolicy",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      },
+      {
+        "RuleName": "Protocol:ReplayGuard",
+        "MatchedCount": 0,
+        "EvaluatedCount": 1
+      }
+    ],
+    "FieldCoverage": [],
+    "UncoveredPatterns": [],
+    "InvalidPatterns": [],
+    "SuggestedPoliciesCount": 0
+  }
+}

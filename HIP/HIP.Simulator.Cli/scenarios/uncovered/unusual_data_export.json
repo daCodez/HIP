@@ -1,0 +1,26 @@
+{
+  "id": "unusual_data_export",
+  "name": "Unusual Data Export",
+  "description": "Uncovered gap scenario",
+  "category": "uncovered",
+  "tags": [
+    "gap",
+    "uncovered"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "unusual_data_export",
+      "actorId": "user-2",
+      "targetId": "target-2",
+      "payload": {
+        "indicator": "unusual_data_export"
+      }
+    }
+  ],
+  "expectedRules": [],
+  "expectedAction": "LogOnly",
+  "expectedSeverity": "Info",
+  "shouldBeCovered": false,
+  "shouldBeValid": true
+}

@@ -1,0 +1,28 @@
+{
+  "id": "phishing-domain-block",
+  "name": "Phishing Domain Block",
+  "description": "Seed scenario",
+  "category": "messaging",
+  "tags": [
+    "messaging",
+    "seed"
+  ],
+  "steps": [
+    {
+      "offsetSeconds": 0,
+      "eventType": "message.send",
+      "actorId": "user-1",
+      "targetId": "target-1",
+      "payload": {
+        "domainFlagged": true
+      }
+    }
+  ],
+  "expectedRules": [
+    "Phishing domain block"
+  ],
+  "expectedAction": "Block",
+  "expectedSeverity": "Critical",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

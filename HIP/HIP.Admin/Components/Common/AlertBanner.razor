@@ -1,0 +1,50 @@
+<section class="hip-alert-banner @KindClass"
+         role="@Role"
+         aria-live="@AriaLive"
+         aria-atomic="true">
+    <div class="hip-alert-body">
+        <span class="hip-alert-icon" aria-hidden="true">@Icon</span>
+        <div>
+            @if (!string.IsNullOrWhiteSpace(Title))
+            {
+                <h2 class="hip-alert-title">@Title</h2>
+            }
+            <p class="hip-alert-message">@Message</p>
+        </div>
+    </div>
+    @if (Actions is not null)
+    {
+        <div class="hip-alert-actions" aria-label="Alert actions">
+            @Actions
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public AlertBannerKind Kind { get; set; } = AlertBannerKind.Info;
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string Message { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? Actions { get; set; }
+
+    private bool IsUrgent => Kind is AlertBannerKind.Error or AlertBannerKind.Critical;
+    private string Role => IsUrgent ? "alert" : "status";
+    private string AriaLive => IsUrgent ? "assertive" : "polite";
+
+    private string KindClass => Kind switch
+    {
+        AlertBannerKind.Success => "kind-success",
+        AlertBannerKind.Warning => "kind-warning",
+        AlertBannerKind.Error => "kind-error",
+        AlertBannerKind.Critical => "kind-critical",
+        _ => "kind-info"
+    };
+
+    private string Icon => Kind switch
+    {
+        AlertBannerKind.Success => "✓",
+        AlertBannerKind.Warning => "⚠",
+        AlertBannerKind.Error => "✕",
+        AlertBannerKind.Critical => "⛔",
+        _ => "ℹ"
+    };
+}

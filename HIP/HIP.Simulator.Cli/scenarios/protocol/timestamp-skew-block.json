@@ -1,0 +1,16 @@
+{
+  "id": "protocol-timestamp-skew-block",
+  "name": "Protocol timestamp skew block",
+  "description": "Expired timestamp should be blocked by protocol timestamp policy.",
+  "category": "protocol",
+  "executionMode": "protocol",
+  "tags": ["protocol", "timestamp"],
+  "protocolSteps": [
+    { "stepType": "TimestampSkew", "expectSuccess": false }
+  ],
+  "expectedRules": ["Protocol:TimestampPolicy"],
+  "expectedAction": "Block",
+  "expectedSeverity": "High",
+  "shouldBeCovered": true,
+  "shouldBeValid": true
+}

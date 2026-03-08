@@ -1,5 +1,7 @@
 using HIP.Admin.Models;
+using HIP.Admin.Navigation;
 using HIP.Admin.Services;
+using HIP.Simulator.Core.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -74,10 +76,14 @@ public class Startup
             });
         }
 
+        services.AddHipSimulatorCore();
+
         services.AddScoped<ThemeService>();
         services.AddScoped<AdminContextService>();
+        services.AddScoped<BreadcrumbService>();
         services.AddScoped<ActionLogService>();
         services.AddScoped<ToastService>();
+        services.AddSingleton<SimulatorAdminService>();
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
