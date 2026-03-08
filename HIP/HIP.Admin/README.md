@@ -31,6 +31,9 @@ Direct app URL in local dev (from launch profile):
 - `Pages`
   - Dashboard, Security Status, Users & Devices, Reputation, Security Policies, Authorization Policies, Audit Logs
 - Simulator page (`/simulator`) with quick run mode and campaign mode (profile + duration + wave interval)
+  - Campaign profiles now use plain-language labels + helper subtitles (Balanced, High-pressure, Low-noise, Insider risk)
+  - Run/coverage summaries use aligned label/value rows for clearer readability
+  - Suggested policy section now falls back to draft-safe recommendations generated from uncovered taxonomy threats when scenario-level suggestions are empty
 - Threat-coverage-first reporting via `HIP.Simulator.Cli/scenarios/threat-catalog.json` (covered/partial/uncovered + critical uncovered)
   - Optional read-only pages: Tokens & Sessions, System Health, Admin Settings
 - `Services`

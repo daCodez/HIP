@@ -42,12 +42,13 @@
     <div class="row g-2">
         <div class="col-md-3">
             <label for="sim-campaign-profile">Campaign profile</label>
-            <select id="sim-campaign-profile" class="form-select" @bind="CampaignProfile">
-                <option value="default">default</option>
-                <option value="aggressive">aggressive</option>
-                <option value="stealth">stealth</option>
-                <option value="insider">insider</option>
+            <select id="sim-campaign-profile" class="form-select" @bind="CampaignProfile" aria-describedby="sim-campaign-profile-help">
+                <option value="default">Balanced checks (recommended)</option>
+                <option value="aggressive">High-pressure coverage</option>
+                <option value="stealth">Low-noise checks</option>
+                <option value="insider">Insider risk focus</option>
             </select>
+            <div id="sim-campaign-profile-help" class="form-text">@GetCampaignProfileSubtitle(CampaignProfile)</div>
         </div>
         <div class="col-md-3">
             <label for="sim-duration-seconds">Duration (sec)</label>
@@ -66,10 +67,10 @@
 @if (!string.IsNullOrWhiteSpace(RunId))
 {
     <div class="card p-3 mb-3">
-        <div><b>Run:</b> @RunId</div>
-        <div><b>Status:</b> @Status</div>
-        <div><b>Stage:</b> @Stage</div>
-        <div><b>Progress:</b> @Processed / @Total</div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Run</span><span class="fw-semibold">@RunId</span></div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Status</span><span class="fw-semibold">@Status</span></div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Stage</span><span class="fw-semibold">@Stage</span></div>
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">Progress</span><span class="fw-semibold">@Processed / @Total</span></div>
         @if (Status is "running" or "cancelling")
         {
             <button class="btn btn-sm btn-warning mt-2" @onclick="CancelAsync">Cancel</button>
@@ -83,13 +84,11 @@
     {
         <div class="card p-3 mb-3">
             <h5>Threat Coverage (Taxonomy-first)</h5>
-            <ul>
-                <li>Total threats: @ThreatCoverage.TotalThreats</li>
-                <li>Covered threats: @ThreatCoverage.CoveredThreats</li>
-                <li>Partial threats: @ThreatCoverage.PartialThreats</li>
-                <li>Uncovered threats: @ThreatCoverage.UncoveredThreats</li>
-                <li>Critical uncovered: @ThreatCoverage.CriticalUncovered</li>
-            </ul>
+            <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Total threats</span><span class="fw-semibold">@ThreatCoverage.TotalThreats</span></div>
+            <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Covered threats</span><span class="fw-semibold">@ThreatCoverage.CoveredThreats</span></div>
+            <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Partial threats</span><span class="fw-semibold">@ThreatCoverage.PartialThreats</span></div>
+            <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Uncovered threats</span><span class="fw-semibold">@ThreatCoverage.UncoveredThreats</span></div>
+            <div class="d-flex justify-content-between py-1"><span class="text-muted">Critical uncovered</span><span class="fw-semibold">@ThreatCoverage.CriticalUncovered</span></div>
 
             @if (ThreatCoverage.UncoveredItems.Count > 0)
             {
@@ -106,40 +105,43 @@
 
     <div class="card p-3 mb-3">
         <h5>Run Summary</h5>
-        <ul>
-            <li>Total scenarios: @Result.TotalScenarios</li>
-            <li>Passed: @Result.Passed</li>
-            <li>Failed: @Result.Failed</li>
-            <li>Uncovered scenarios: @Result.Uncovered</li>
-            <li>Invalid scenarios: @Result.Invalid</li>
-            <li>Suggestions: @Result.SuggestedPoliciesGenerated</li>
-        </ul>
+        <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Total scenarios</span><span class="fw-semibold">@Result.TotalScenarios</span></div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Passed</span><span class="fw-semibold">@Result.Passed</span></div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Failed</span><span class="fw-semibold">@Result.Failed</span></div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Uncovered scenarios</span><span class="fw-semibold">@Result.Uncovered</span></div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Invalid scenarios</span><span class="fw-semibold">@Result.Invalid</span></div>
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">Suggestions</span><span class="fw-semibold">@Result.SuggestedPoliciesGenerated</span></div>
     </div>
 
     <div class="card p-3">
         <h5>Suggested Security Policies</h5>
         @{
-            var suggestions = Result.Scenarios
-                .Where(x => x.Suggestion is not null)
-                .Select(x => new { x.ScenarioId, Suggestion = x.Suggestion! })
-                .ToList();
+            var displayedSuggestions = GetDisplayedSuggestions();
+            var showingThreatFallback = Result.Scenarios.All(x => x.Suggestion is null) && displayedSuggestions.Count > 0;
         }
 
-        @if (suggestions.Count == 0)
+        @if (displayedSuggestions.Count == 0)
         {
             <div class="text-muted">No policy suggestions generated in this run.</div>
         }
         else
         {
-            @foreach (var item in suggestions)
+            if (showingThreatFallback)
             {
-                var key = item.ScenarioId;
+                <div class="alert alert-secondary py-2 mb-3">
+                    No scenario-level suggestions were generated. Showing draft-safe recommendations from uncovered taxonomy threats.
+                </div>
+            }
+
+            @foreach (var item in displayedSuggestions)
+            {
+                var key = item.Key;
                 var isApplying = Applying.Contains(key);
                 var isAdded = Added.Contains(key);
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <div><strong>Scenario:</strong> @item.ScenarioId</div>
-                        <button class="btn btn-sm @(isAdded ? "btn-success" : "btn-outline-primary")" disabled="@(isApplying || isAdded)" @onclick="() => AddSuggestionAsync(item.ScenarioId, item.Suggestion)">
+                        <div><strong>@item.Label:</strong> @item.DisplayId</div>
+                        <button class="btn btn-sm @(isAdded ? "btn-success" : "btn-outline-primary")" disabled="@(isApplying || isAdded)" @onclick="() => AddSuggestionAsync(key, item.Suggestion)">
                             @(isApplying ? "Adding..." : isAdded ? "Added" : "Add Policy")
                         </button>
                     </div>
@@ -247,14 +249,14 @@
         }
     }
 
-    private async Task AddSuggestionAsync(string scenarioId, HIP.Simulator.Core.Models.PolicySuggestion suggestion)
+    private async Task AddSuggestionAsync(string suggestionKey, HIP.Simulator.Core.Models.PolicySuggestion suggestion)
     {
-        if (Applying.Contains(scenarioId) || Added.Contains(scenarioId))
+        if (Applying.Contains(suggestionKey) || Added.Contains(suggestionKey))
         {
             return;
         }
 
-        Applying.Add(scenarioId);
+        Applying.Add(suggestionKey);
         Error = null;
 
         try
@@ -274,8 +276,8 @@
             var save = await Api.UpsertPolicyRuleAsync(rule);
             if (save.Success)
             {
-                Added.Add(scenarioId);
-                Toast.Show("Simulator", $"Policy suggestion added for '{scenarioId}'.", "success");
+                Added.Add(suggestionKey);
+                Toast.Show("Simulator", $"Policy suggestion added for '{suggestionKey}'.", "success");
             }
             else
             {
@@ -290,9 +292,71 @@
         }
         finally
         {
-            Applying.Remove(scenarioId);
+            Applying.Remove(suggestionKey);
         }
     }
+
+    private IReadOnlyList<SuggestionViewModel> GetDisplayedSuggestions()
+    {
+        if (Result is null)
+        {
+            return [];
+        }
+
+        var scenarioSuggestions = Result.Scenarios
+            .Where(x => x.Suggestion is not null)
+            .Select(x => new SuggestionViewModel($"scenario:{x.ScenarioId}", "Scenario", x.ScenarioId, x.Suggestion!))
+            .ToList();
+
+        if (scenarioSuggestions.Count > 0)
+        {
+            return scenarioSuggestions;
+        }
+
+        if (ThreatCoverage?.UncoveredItems is null || ThreatCoverage.UncoveredItems.Count == 0)
+        {
+            return [];
+        }
+
+        return ThreatCoverage.UncoveredItems
+            .Select(t => new SuggestionViewModel($"threat:{t.ThreatId}", "Threat", t.ThreatId, BuildFallbackSuggestionFromThreat(t)))
+            .ToList();
+    }
+
+    private static HIP.Simulator.Core.Models.PolicySuggestion BuildFallbackSuggestionFromThreat(HIP.Simulator.Core.Models.ThreatCatalogItem threat)
+    {
+        var normalizedThreatId = threat.ThreatId.Trim().ToUpperInvariant();
+        var normalizedFamily = string.IsNullOrWhiteSpace(threat.Family) ? "risk" : threat.Family.Trim().ToLowerInvariant();
+        var severity = threat.Severity.Trim().ToLowerInvariant() switch
+        {
+            "critical" => "High",
+            "high" => "High",
+            "medium" => "Medium",
+            "low" => "Low",
+            _ => "Medium"
+        };
+
+        return new HIP.Simulator.Core.Models.PolicySuggestion(
+            RuleName: $"Sim.Threat.{normalizedThreatId}.Draft",
+            Category: "uncovered",
+            ConditionExpression: $"threatTaxonomyId == '{normalizedThreatId}'",
+            RecommendedAction: severity == "High" ? "Challenge" : "Alert",
+            RecommendedSeverity: severity,
+            Reason: $"Uncovered taxonomy threat: {threat.Title}",
+            NeededSignals: ["threatTaxonomyId", "eventType", "actorId"],
+            PositiveTestCase: $"{normalizedThreatId} event marked as {normalizedFamily}",
+            NegativeTestCase: $"Event not mapped to {normalizedThreatId}",
+            Notes: "Draft-safe fallback suggestion generated from uncovered taxonomy threat. Review and tune before enabling.");
+    }
+
+    private static string GetCampaignProfileSubtitle(string profile)
+        => profile.Trim().ToLowerInvariant() switch
+        {
+            "aggressive" => "Covers the widest set of suites, including noisy/high-pressure checks.",
+            "stealth" => "Runs a quieter mix focused on low-noise detection gaps.",
+            "insider" => "Focuses on session/reputation insider-risk behavior and invalid flows.",
+            _ => "Balanced baseline across core suites for day-to-day health checks."
+        };
 
     private static string NormalizeCategory(string? category)
     {
@@ -324,4 +388,6 @@
 
         return Task.CompletedTask;
     }
+
+    private sealed record SuggestionViewModel(string Key, string Label, string DisplayId, HIP.Simulator.Core.Models.PolicySuggestion Suggestion);
 }
