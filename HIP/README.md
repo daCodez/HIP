@@ -96,3 +96,4 @@ HIP includes a simple built-in widget plugin (`core.widget.richard`) that render
 ## 📘 Also Read
 - `README.humans.md` for plain-English operator guidance
 - `scripts/preflight.sh` for deployment preflight checks
+- `HIP.Security.README.md` for HIP security simulation scaffold structure and commands
