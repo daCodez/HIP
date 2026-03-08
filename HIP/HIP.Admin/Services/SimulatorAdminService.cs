@@ -181,39 +181,79 @@ public sealed class SimulatorAdminService(ISimulationRunner runner, IScenarioLoa
         var catalog = LoadThreatCatalog();
         if (catalog.Count == 0)
         {
-            return new ThreatCoverageSummary(0, 0, 0, 0, 0, [], []);
+            return new ThreatCoverageSummary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []);
         }
 
         var covered = new List<ThreatCatalogItem>();
         var partial = new List<ThreatCatalogItem>();
-        var uncovered = new List<ThreatCatalogItem>();
+        var uncovered = new List<ThreatCoverageListItem>();
+
+        var runScenarioIds = result.Scenarios
+            .Select(s => s.ScenarioId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var inScopeThreats = 0;
+        var coveredInScope = 0;
+        var partialInScope = 0;
+        var uncoveredInScope = 0;
 
         foreach (var item in catalog)
         {
-            var threatScenarios = result.Scenarios.Where(s => item.ScenarioIds.Contains(s.ScenarioId, StringComparer.OrdinalIgnoreCase)).ToList();
-            if (threatScenarios.Count == 0)
+            var inScopeScenarioIds = item.ScenarioIds
+                .Where(runScenarioIds.Contains)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var isInScope = inScopeScenarioIds.Count > 0;
+            if (!isInScope)
             {
-                uncovered.Add(item);
+                uncovered.Add(new ThreatCoverageListItem(item, IsInScope: false));
                 continue;
             }
 
-            var coveredCount = threatScenarios.Count(s => s.IsCovered && s.IsValid);
+            inScopeThreats++;
+
+            var coveredCount = inScopeScenarioIds.Count(scenarioId =>
+                result.Scenarios.Any(s =>
+                    scenarioId.Equals(s.ScenarioId, StringComparison.OrdinalIgnoreCase)
+                    && s.IsCovered
+                    && s.IsValid));
+
             if (coveredCount == 0)
             {
-                uncovered.Add(item);
+                uncoveredInScope++;
+                uncovered.Add(new ThreatCoverageListItem(item, IsInScope: true));
             }
-            else if (coveredCount < item.ScenarioIds.Count)
+            else if (coveredCount < inScopeScenarioIds.Count)
             {
+                partialInScope++;
                 partial.Add(item);
             }
             else
             {
+                coveredInScope++;
                 covered.Add(item);
             }
         }
 
-        var criticalUncovered = uncovered.Count(x => x.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase));
-        return new ThreatCoverageSummary(catalog.Count, covered.Count, partial.Count, uncovered.Count, criticalUncovered, uncovered, partial);
+        var criticalUncovered = uncovered
+            .Count(x => x.IsInScope && x.Threat.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase));
+
+        return new ThreatCoverageSummary(
+            TotalThreats: catalog.Count,
+            CoveredThreats: covered.Count,
+            PartialThreats: partial.Count,
+            UncoveredThreats: uncovered.Count,
+            CriticalUncovered: criticalUncovered,
+            InScopeThreats: inScopeThreats,
+            OutOfScopeThreats: catalog.Count - inScopeThreats,
+            CoveredInScopeThreats: coveredInScope,
+            PartialInScopeThreats: partialInScope,
+            UncoveredInScopeThreats: uncoveredInScope,
+            UncoveredItems: uncovered,
+            PartialItems: partial);
     }
 
     private List<ThreatCatalogItem> LoadThreatCatalog()

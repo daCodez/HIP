@@ -25,6 +25,7 @@ public class Startup
 
         services.AddRazorPages();
         services.AddServerSideBlazor();
+        services.AddControllers();
 
         services.AddHttpContextAccessor();
         services.AddHttpClient<HipAdminApiClient>(client =>
@@ -84,6 +85,8 @@ public class Startup
         services.AddScoped<ActionLogService>();
         services.AddScoped<ToastService>();
         services.AddSingleton<SimulatorAdminService>();
+        services.AddScoped<SimulatorAutoHardeningService>();
+        services.AddSingleton<ISimulatorAutoHardeningIdempotencyStore, InMemorySimulatorAutoHardeningIdempotencyStore>();
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -117,6 +120,7 @@ public class Startup
 
         app.UseEndpoints(endpoints =>
         {
+            endpoints.MapControllers();
             endpoints.MapBlazorHub();
             endpoints.MapFallbackToPage("/_Host");
         });

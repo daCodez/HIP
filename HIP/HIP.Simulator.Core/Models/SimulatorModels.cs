@@ -160,13 +160,22 @@ public sealed record ThreatCatalogItem(
     string? MitreTechnique = null,
     string? Notes = null);
 
+public sealed record ThreatCoverageListItem(
+    ThreatCatalogItem Threat,
+    bool IsInScope);
+
 public sealed record ThreatCoverageSummary(
     int TotalThreats,
     int CoveredThreats,
     int PartialThreats,
     int UncoveredThreats,
     int CriticalUncovered,
-    IReadOnlyList<ThreatCatalogItem> UncoveredItems,
+    int InScopeThreats,
+    int OutOfScopeThreats,
+    int CoveredInScopeThreats,
+    int PartialInScopeThreats,
+    int UncoveredInScopeThreats,
+    IReadOnlyList<ThreatCoverageListItem> UncoveredItems,
     IReadOnlyList<ThreatCatalogItem> PartialItems);
 
 public sealed record PolicyEvaluationResult(

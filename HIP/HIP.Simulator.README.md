@@ -114,6 +114,14 @@ Web endpoints:
 - `GET /bff/simulator/runs/{runId}/report/json`
 - `GET /bff/simulator/runs/{runId}/report/html`
 
+## Threat coverage reporting notes
+
+Threat coverage data now distinguishes:
+- full taxonomy totals (entire catalog), and
+- run-scope totals (only threats with scenarios executed in the current run).
+
+For run-scope clarity, coverage tracks in-scope/out-of-scope threat counts plus covered/partial/uncovered in-scope counts. Consumers such as HIP.Admin can label uncovered threats as `in scope` or `out of scope` and prioritize in-scope recommendation fallback.
+
 ## Security controls in this MVP
 
 - Admin gate check in Web endpoint layer (`IsSimulatorAdmin`), preferring authenticated admin role, with current local-loopback fallback for existing HIP.Web deployment mode.

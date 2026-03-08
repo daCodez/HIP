@@ -30,11 +30,26 @@ Direct app URL in local dev (from launch profile):
   - `BreadcrumbService`: route/path-based breadcrumb builder for header/context wiring
 - `Pages`
   - Dashboard, Security Status, Users & Devices, Reputation, Security Policies, Authorization Policies, Audit Logs
-- Simulator page (`/simulator`) with quick run mode and campaign mode (profile + duration + wave interval)
+- Simulator page (`/simulator`) with quick run mode and campaign mode (profile + duration + wave interval), including a live run progress bar (% + processed/total)
   - Campaign profiles now use plain-language labels + helper subtitles (Balanced, High-pressure, Low-noise, Insider risk)
   - Run/coverage summaries use aligned label/value rows for clearer readability
   - Suggested policy section now falls back to draft-safe recommendations generated from uncovered taxonomy threats when scenario-level suggestions are empty
-- Threat-coverage-first reporting via `HIP.Simulator.Cli/scenarios/threat-catalog.json` (covered/partial/uncovered + critical uncovered)
+  - Added **Auto-Fix All (Draft)** flow for run-based bulk policy creation with explicit summary (attempted/created/skipped/failed) plus top failure reasons in UI when failures occur
+  - Added **Generate Scenarios (Draft)** and **Add Telemetry (Draft)** actions wired to simulator automation backend (no placeholder-only behavior)
+  - Safe default is enforced: simulator-created rules are stored as draft/disabled (`Enabled=false`) and require manual review before activation
+- New simulator backend endpoints (HIP.Admin host):
+  - `GET /api/admin/simulator/{runId}/recommendations`
+  - `POST /api/admin/simulator/{runId}/auto-fix-all`
+  - `POST /api/admin/simulator/{runId}/generate-scenarios`
+  - `POST /api/admin/simulator/{runId}/add-telemetry`
+  - `POST /api/admin/simulator/{runId}/auto-harden-system` (alias of auto-fix-all)
+  - In-memory idempotency guard keyed by run + idempotency key (durable storage intentionally deferred)
+- Threat coverage now shows two plain-language views from `HIP.Simulator.Cli/scenarios/threat-catalog.json`:
+  - **Run-scope coverage** (in-scope, out-of-scope, covered/partial/uncovered in-scope)
+  - **Full taxonomy coverage** (covered/partial/uncovered across the full catalog)
+  - Uncovered threat lists are explicitly labeled `in scope` vs `out of scope` for the current run
+  - Draft-safe fallback recommendations prioritize uncovered **in-scope** threats before out-of-scope items
+  - Attack graph/timeline section is rendered in summary-first grouped form (by final action) to reduce visual noise
   - Optional read-only pages: Tokens & Sessions, System Health, Admin Settings
 - `Services`
   - `ThemeService`: localStorage persistence + CSS variable application
@@ -66,9 +81,29 @@ Dark-mode table contrast was tightened for Incident Queue/DataTable surfaces (ro
 Widget headers were also shifted to a lighter token-based background in both light and dark themes to reduce heavy visual weight while keeping readable contrast.
 Breadcrumb presentation was polished with token-driven styling (clearer link/current-page hierarchy, softer separators, and subtle current-crumb emphasis) while preserving semantic nav/ordered-list accessibility.
 
-## Dashboard (MVP shell)
+## Dashboard (Security Overview)
 
-The `/` Dashboard page now uses reusable primitives (`PageHeader`, `FilterBar`, `MetricCard`, `Tabs`, `DataTable<TItem>`, `StateView`) and explicit loading/empty/error/success states.
+The `/` page is restored as **Security Overview** using reusable primitives (`PageHeader`, `FilterBar`, `MetricCard`, `DataTable<TItem>`, `StateView`) with explicit loading/empty/error/success states.
+
+Restored behavior and labels:
+- Page title + header: **Security Overview**
+- Top plain-language KPI cards:
+  - Security Health
+  - Blocked Logins
+  - Suspicious Messages
+  - Expired Tokens
+  - Active Users
+- Plain-language status banner with secure/warning states
+- Section cards:
+  - Security Activity trend
+  - Device Trust
+  - Reputation Overview
+  - Overall Risk Level
+  - Protection Checks
+  - Simulator quick access
+- Security Activity table with story-friendly column labels and semantic badges for severity/outcome
+- Time column shows relative timestamps with absolute secondary timestamp for operator context
+- Theme-safe readability preserved through shared table + badge semantic tokens
 
 ## Alerts & Incidents (MVP shell)
 
