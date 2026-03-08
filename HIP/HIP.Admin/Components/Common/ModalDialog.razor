@@ -1,0 +1,150 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (IsOpen)
+{
+    <div class="hip-modal-backdrop" @ref="_backdropRef" @onclick="CloseFromBackdrop">
+        <section class="hip-modal"
+                 role="dialog"
+                 tabindex="-1"
+                 aria-modal="true"
+                 aria-labelledby="@TitleId"
+                 aria-describedby="@BodyId"
+                 @ref="_dialogRef"
+                 @onkeydown="HandleKeyDown"
+                 @onclick:stopPropagation>
+            <header class="hip-modal-header">
+                <h2 id="@TitleId">@Title</h2>
+                <button type="button" class="btn-close" aria-label="Close dialog" @onclick="Close"></button>
+            </header>
+
+            <div class="hip-modal-body" id="@BodyId">
+                @if (Body is not null)
+                {
+                    @Body
+                }
+                else if (!string.IsNullOrWhiteSpace(Message))
+                {
+                    <p>@Message</p>
+                }
+            </div>
+
+            <footer class="hip-modal-footer">
+                @if (Footer is not null)
+                {
+                    @Footer
+                }
+                else
+                {
+                    <button type="button" class="btn btn-outline-secondary" @onclick="Close">@CancelText</button>
+                    <button type="button" class="btn btn-danger" @onclick="Confirm">@ConfirmText</button>
+                }
+            </footer>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string Title { get; set; } = "Confirm action";
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string ConfirmText { get; set; } = "Confirm";
+    [Parameter] public string CancelText { get; set; } = "Cancel";
+    [Parameter] public bool CloseOnBackdropClick { get; set; } = true;
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? Body { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    private readonly string TitleId = $"hip-modal-title-{Guid.NewGuid():N}";
+    private readonly string BodyId = $"hip-modal-body-{Guid.NewGuid():N}";
+    private ElementReference _dialogRef;
+    private ElementReference _backdropRef;
+    private bool _wasOpen;
+    private string? _returnFocusId;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsOpen && !_wasOpen)
+        {
+            _returnFocusId = await InvokeAsyncSafely<string?>("hipTheme.captureFocus");
+            await InvokeVoidSafelyAsync("hipTheme.setModalBackgroundInert", _backdropRef, true);
+            await InvokeVoidSafelyAsync("hipTheme.focusFirstInElement", _dialogRef);
+            await InvokeVoidSafelyAsync("hipTheme.enableFocusTrap", _dialogRef);
+        }
+        else if (!IsOpen && _wasOpen)
+        {
+            await DisableModalAccessibilityGuardsAsync();
+
+            if (!string.IsNullOrWhiteSpace(_returnFocusId))
+            {
+                await InvokeVoidSafelyAsync("hipTheme.focusById", _returnFocusId);
+                _returnFocusId = null;
+            }
+        }
+
+        _wasOpen = IsOpen;
+    }
+
+    private async Task DisableModalAccessibilityGuardsAsync()
+    {
+        await InvokeVoidSafelyAsync("hipTheme.disableFocusTrap", _dialogRef);
+        await InvokeVoidSafelyAsync("hipTheme.setModalBackgroundInert", _backdropRef, false);
+    }
+
+    private async Task InvokeVoidSafelyAsync(string identifier, params object?[]? args)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync(identifier, args ?? Array.Empty<object?>());
+        }
+        catch (JSDisconnectedException)
+        {
+            // Ignore disconnects during teardown/navigation.
+        }
+        catch (InvalidOperationException)
+        {
+            // Ignore when JS interop is unavailable during render transitions.
+        }
+        catch (JSException)
+        {
+            // Ignore missing/failed interop calls so modal teardown remains safe.
+        }
+    }
+
+    private async Task<T?> InvokeAsyncSafely<T>(string identifier, params object?[]? args)
+    {
+        try
+        {
+            return await JS.InvokeAsync<T?>(identifier, args ?? Array.Empty<object?>());
+        }
+        catch (JSDisconnectedException)
+        {
+            // Ignore disconnects during teardown/navigation.
+        }
+        catch (InvalidOperationException)
+        {
+            // Ignore when JS interop is unavailable during render transitions.
+        }
+        catch (JSException)
+        {
+            // Ignore missing/failed interop calls so modal lifecycle stays resilient.
+        }
+
+        return default;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisableModalAccessibilityGuardsAsync();
+    }
+
+    private Task HandleKeyDown(KeyboardEventArgs args)
+        => args.Key == "Escape" ? Close() : Task.CompletedTask;
+
+    private Task Confirm() => OnConfirm.InvokeAsync();
+    private Task Close() => OnClose.InvokeAsync();
+
+    private Task CloseFromBackdrop()
+        => CloseOnBackdropClick ? Close() : Task.CompletedTask;
+}
