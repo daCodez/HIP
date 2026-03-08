@@ -964,7 +964,7 @@ select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px
 .hip-modal-footer { border-top: 1px solid var(--border-subtle); justify-content: end; gap: var(--space-2); }
 .hip-modal-body { padding: var(--space-3); }
 
-.hip-overview-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--space-3); }
+.hip-overview-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
 .hip-overview-summary { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-surface-1); padding: var(--space-3); }
 .hip-sort-button { color: inherit; text-decoration: none; font-weight: inherit; }
 .hip-data-table-row { cursor: pointer; }

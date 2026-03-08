@@ -40,7 +40,7 @@
                         Value="@metric.Value"
                         TrendLabel="@metric.Delta"
                         TrendDirection="@metric.Trend"
-                        Status="@WorkflowStatus.InProgress"
+                        Status="@GetKpiStatus(metric.Title)"
                         AssistiveText="Current day snapshot" />
         }
     </div>
@@ -97,6 +97,29 @@
             <div class="widget-content quick-actions">
                 <a class="btn btn-outline-secondary" href="/admin/simulator">Open Simulator</a>
                 <a class="btn btn-outline-secondary" href="/admin/simulator">Run Campaign</a>
+            </div>
+        </section>
+
+        <section class="widget widget-table table-widget-frame">
+            <div class="widget-header"><h3>Recent Security Activity</h3></div>
+            <div class="widget-content small">
+                @if (_incidents.Count == 0)
+                {
+                    <div class="text-muted">No recent security activity yet.</div>
+                }
+                else
+                {
+                    @foreach (var item in _incidents.Take(3))
+                    {
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <div>
+                                <div class="fw-semibold">@item.EventType</div>
+                                <div class="text-muted">@item.Actor</div>
+                            </div>
+                            <div class="text-muted">@FormatRelativeTime(item.Timestamp)</div>
+                        </div>
+                    }
+                }
             </div>
         </section>
     </section>
@@ -345,6 +368,17 @@
         var utc = timestamp.Kind == DateTimeKind.Utc ? timestamp : timestamp.ToUniversalTime();
         return utc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz");
     }
+
+    private WorkflowStatus GetKpiStatus(string title)
+        => title switch
+        {
+            "Security Health" => SecurityHealthScore >= 85 ? WorkflowStatus.Resolved : WorkflowStatus.InProgress,
+            "Blocked Logins" => _blockedLogins == 0 ? WorkflowStatus.Resolved : WorkflowStatus.InProgress,
+            "Suspicious Messages" => _suspiciousMessages == 0 ? WorkflowStatus.Resolved : WorkflowStatus.New,
+            "Expired Tokens" => _expiredTokens == 0 ? WorkflowStatus.Resolved : WorkflowStatus.InProgress,
+            "Active Users" => WorkflowStatus.New,
+            _ => WorkflowStatus.InProgress
+        };
 
     private static WorkflowStatus MapResultToWorkflow(string? result)
         => result?.ToLowerInvariant() switch
