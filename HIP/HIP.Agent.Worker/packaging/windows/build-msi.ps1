@@ -114,13 +114,13 @@ function Build-WxsSource {
     $sourceEscaped = XmlEscape($file.FullName)
 
     $component = if ($Schema -eq "v4") {
-      "<Component Id=\"$componentId\" Guid=\"*\"><File Id=\"$fileId\" Source=\"$sourceEscaped\" KeyPath=\"yes\" /></Component>"
+      "<Component Id=`"$componentId`" Guid=`"*`"><File Id=`"$fileId`" Source=`"$sourceEscaped`" KeyPath=`"yes`" /></Component>"
     } else {
-      "<Component Id=\"$componentId\" Guid=\"*\" Win64=\"yes\"><File Id=\"$fileId\" Source=\"$sourceEscaped\" KeyPath=\"yes\" /></Component>"
+      "<Component Id=`"$componentId`" Guid=`"*`" Win64=`"yes`"><File Id=`"$fileId`" Source=`"$sourceEscaped`" KeyPath=`"yes`" /></Component>"
     }
 
     $componentsByDir[$relativeDir].Add($component)
-    $componentRefs.Add("<ComponentRef Id=\"$componentId\" />")
+    $componentRefs.Add("<ComponentRef Id=`"$componentId`" />")
   }
 
   function Render-Directory {
@@ -135,7 +135,7 @@ function Build-WxsSource {
     if ($PathKey -ne "") {
       $dirId = $dirIdMap[$PathKey]
       $name = XmlEscape($dirNameMap[$PathKey])
-      $out.Add("$pad<Directory Id=\"$dirId\" Name=\"$name\">")
+      $out.Add("$pad<Directory Id=`"$dirId`" Name=`"$name`">")
       $pad = " " * ($Indent + 2)
     }
 
