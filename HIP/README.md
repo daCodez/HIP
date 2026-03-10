@@ -97,3 +97,98 @@ HIP includes a simple built-in widget plugin (`core.widget.richard`) that render
 - `README.humans.md` for plain-English operator guidance
 - `scripts/preflight.sh` for deployment preflight checks
 - `HIP.Security.README.md` for HIP security simulation scaffold structure and commands
+
+## Simulator Phase 1: Live API Mode (new)
+
+HIP Simulator now supports a third execution mode:
+- `application`
+- `protocol`
+- `live-api`
+
+### Live API mode intent
+Use Live API mode to compare simulator-expected outcomes against behavior from a running HIP API system.
+
+### CLI usage
+```bash
+# Run specific scenario in live API mode
+cd /home/jarvis_bot/.openclaw/workspace/HIP
+
+dotnet run --project HIP.Simulator.Cli/HIP.Simulator.Cli.csproj -- run \
+  --mode live-api \
+  --scenario live-login-impossible-travel \
+  --live-base-url http://127.0.0.1:5101
+```
+
+Optional:
+- `--live-dry-run` to skip outbound live call and still produce comparison structure.
+
+### Scenario contract additions
+Scenarios can now include optional live validation fields:
+- `expectedHttpStatus`
+- `expectedAuditEvent`
+- `expectedReputationImpact`
+
+A sample live scenario was added at:
+- `HIP.Simulator.Cli/scenarios/authentication/live-login-impossible-travel.json`
+
+## Scenario Generator v1 (template-driven)
+
+New CLI command:
+
+```bash
+dotnet run --project HIP.Simulator.Cli/HIP.Simulator.Cli.csproj -- generate-scenarios \
+  --templates HIP.Simulator.Cli/threat-templates \
+  --campaign auth-attacks \
+  --output HIP.Simulator.Cli/scenarios/generated \
+  --max 5000 \
+  --seed 42
+```
+
+Notes:
+- Uses template parameter combinations + seeded shuffle.
+- Supports campaign scoping (`--campaign <id>` or `all`).
+- Output scenarios are simulator-compatible JSON and can be validated with `validate-scenarios`.
+
+Included v1 core templates (10):
+- auth brute force
+- credential stuffing
+- session hijack
+- token replay
+- messaging spam burst
+- phishing link
+- device spoofing
+- bot automation login
+- API flood
+- multi-stage takeover chain
+
+### Scenario Generator v1.1 (weighted profiles + taxonomy map)
+
+New generator option:
+- `--traffic-profile <balanced|normal-heavy|suspicious-heavy|attack-heavy>`
+
+This sets weighted scenario classes and expected outcomes:
+- `normal` -> expected `Allow` / `Info`
+- `suspicious` -> expected `Challenge` / `Medium`
+- `attack` -> template-defined expected action/severity
+
+Taxonomy mapping file added:
+- `HIP.Simulator.Cli/threat-templates/taxonomy-map.json`
+
+Use this map to roll up coverage and drift by framework tags (MITRE/OWASP/NIST).
+
+### Framework coverage rollups in reports
+
+Simulation reports now include framework-level coverage in `Coverage.FrameworkCoverage` when a taxonomy map is available.
+
+Auto-discovery checks:
+- `<input>/../../threat-templates/taxonomy-map.json`
+- `<input>/../threat-templates/taxonomy-map.json`
+- `<input>/taxonomy-map.json`
+
+Each rollup row includes:
+- `Framework` (MITRE/OWASP/NIST)
+- `Control`
+- `Total`
+- `Covered`
+- `Uncovered`
+- `Invalid`

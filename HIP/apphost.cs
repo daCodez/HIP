@@ -28,6 +28,7 @@ builder.AddProject("hip-web", "/home/jarvis_bot/.openclaw/workspace/HIP/HIP.Web/
     });
 
 builder.AddProject("hip-admin", "/home/jarvis_bot/.openclaw/workspace/HIP/HIP.Admin/HIP.Admin.csproj")
+    .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
     .WithHttpEndpoint(name: "admin-http", port: 45728, isProxied: false)
     .WithReference(api)
     .WaitFor(api)

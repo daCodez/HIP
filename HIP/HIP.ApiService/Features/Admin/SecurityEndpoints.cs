@@ -1,6 +1,9 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using HIP.ApiService.Application.Abstractions;
+using HIP.Audit.Abstractions;
+using HIP.Audit.Models;
 
 namespace HIP.ApiService.Features.Admin;
 
@@ -194,6 +197,336 @@ public static class SecurityEndpoints
             });
         }
 
+        async Task<IResult> liveReplayHandler(HttpContext httpContext, JsonElement payload, IAuditTrail auditTrail, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken)
+        {
+            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            if (gate is not null) return gate;
+
+            if (payload.ValueKind != JsonValueKind.Object)
+            {
+                return Results.BadRequest(new { code = "simulator.liveReplay.invalidPayload", reason = "payload must be JSON object" });
+            }
+
+            var actorId = payload.TryGetProperty("actorId", out var actorEl) ? actorEl.GetString() ?? "sim.unknown" : "sim.unknown";
+            var eventType = payload.TryGetProperty("eventType", out var eventEl) ? eventEl.GetString() ?? "SIMULATOR_EVENT" : "SIMULATOR_EVENT";
+            var expectedAction = payload.TryGetProperty("expectedAction", out var expectedEl) ? expectedEl.GetString() ?? "Allow" : "Allow";
+
+            var events = payload.TryGetProperty("events", out var eventsEl) && eventsEl.ValueKind == JsonValueKind.Array
+                ? eventsEl.EnumerateArray().ToArray()
+                : Array.Empty<JsonElement>();
+
+            var first = events.FirstOrDefault();
+            var livePayload = first.ValueKind == JsonValueKind.Object && first.TryGetProperty("payload", out var pEl) && pEl.ValueKind == JsonValueKind.Object
+                ? pEl
+                : payload;
+
+            var replayDetected = livePayload.TryGetProperty("replayDetected", out var replayEl) && replayEl.ValueKind == JsonValueKind.True;
+            var impossibleTravel = livePayload.TryGetProperty("impossibleTravel", out var travelEl) && travelEl.ValueKind == JsonValueKind.True;
+            var mfaMissing = livePayload.TryGetProperty("mfa", out var mfaEl) && mfaEl.ValueKind == JsonValueKind.False;
+            var ipRisk = livePayload.TryGetProperty("ipRisk", out var ipEl) ? ipEl.GetString() ?? "low" : "low";
+            var reputation = livePayload.TryGetProperty("reputation", out var repEl) && repEl.ValueKind == JsonValueKind.Number && repEl.TryGetInt32(out var repVal)
+                ? repVal
+                : await reputationService.GetScoreAsync(actorId, cancellationToken);
+
+            var finalAction = "Allow";
+            var severity = "Info";
+            var httpStatus = StatusCodes.Status200OK;
+            var auditEvent = eventType;
+            var reputationImpact = "none";
+
+            if (replayDetected)
+            {
+                finalAction = "Block";
+                severity = "Critical";
+                httpStatus = StatusCodes.Status403Forbidden;
+                auditEvent = "TOKEN_REPLAY_BLOCKED";
+                reputationImpact = "decrease";
+            }
+            else if (impossibleTravel || ipRisk.Equals("high", StringComparison.OrdinalIgnoreCase))
+            {
+                finalAction = "Block";
+                severity = "Critical";
+                httpStatus = StatusCodes.Status403Forbidden;
+                auditEvent = "LOGIN_IMPOSSIBLE_TRAVEL";
+                reputationImpact = "decrease";
+            }
+            else if (mfaMissing || ipRisk.Equals("medium", StringComparison.OrdinalIgnoreCase) || reputation < 40)
+            {
+                finalAction = "Challenge";
+                severity = "High";
+                httpStatus = StatusCodes.Status401Unauthorized;
+                auditEvent = "MFA_CHALLENGE";
+                reputationImpact = "watch";
+            }
+
+            if (reputationImpact == "decrease")
+            {
+                await reputationService.RecordSecurityEventAsync(actorId, auditEvent, cancellationToken);
+            }
+
+            var correlationId = Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString("n");
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                EventType: auditEvent,
+                Subject: actorId,
+                Source: "simulator.live",
+                Detail: $"live-replay expected={expectedAction} actual={finalAction}",
+                Category: "security",
+                Outcome: finalAction,
+                ReasonCode: finalAction.Equals(expectedAction, StringComparison.OrdinalIgnoreCase) ? "liveReplay.match" : "liveReplay.mismatch",
+                Route: httpContext.Request.Path,
+                CorrelationId: correlationId),
+                cancellationToken);
+
+            return Results.Ok(new
+            {
+                finalAction,
+                severity,
+                httpStatus,
+                auditEvent,
+                reputationImpact,
+                correlationId
+            });
+        }
+
+        async Task<IResult> usersDevicesHandler(HttpContext httpContext, DeviceRegistrationStore store, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken)
+        {
+            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            if (gate is not null) return gate;
+
+            var rows = store.GetAll()
+                .Select(x => new
+                {
+                    user = x.User,
+                    email = x.Email,
+                    device = x.Device,
+                    deviceStatus = x.DeviceStatus,
+                    lastSeen = x.LastSeenUtc
+                })
+                .ToArray();
+
+            return Results.Ok(rows);
+        }
+
+        async Task<IResult> usersDevicesHistoryHandler(HttpContext httpContext, string email, string device, DeviceRegistrationStore store, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken)
+        {
+            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            if (gate is not null) return gate;
+
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(device))
+            {
+                return Results.BadRequest(new { code = "device.history.validation", reason = "email and device are required" });
+            }
+
+            var rows = store.GetHistory(email, device)
+                .Select(x => new
+                {
+                    email = x.Email,
+                    device = x.Device,
+                    action = x.Action,
+                    status = x.Status,
+                    note = x.Note,
+                    actor = x.Actor,
+                    timestamp = x.TimestampUtc
+                })
+                .ToArray();
+
+            return Results.Ok(rows);
+        }
+
+        async Task<IResult> registerDeviceHandler(HttpContext httpContext, JsonElement payload, DeviceRegistrationStore store, IAuditTrail auditTrail, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken)
+        {
+            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            if (gate is not null) return gate;
+
+            if (payload.ValueKind != JsonValueKind.Object)
+            {
+                return Results.BadRequest(new { code = "device.register.invalidPayload", reason = "payload must be JSON object" });
+            }
+
+            var user = payload.TryGetProperty("user", out var userEl) ? (userEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var email = payload.TryGetProperty("email", out var emailEl) ? (emailEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var device = payload.TryGetProperty("device", out var deviceEl) ? (deviceEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var actor = payload.TryGetProperty("actor", out var actorEl) ? (actorEl.GetString() ?? string.Empty).Trim() : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(device))
+            {
+                return Results.BadRequest(new { code = "device.register.validation", reason = "user, email, and device are required" });
+            }
+
+            if (string.IsNullOrWhiteSpace(actor))
+            {
+                actor = "admin";
+            }
+
+            var entry = store.Register(new DeviceRegistrationEntry(
+                User: user,
+                Email: email,
+                Device: device,
+                DeviceStatus: "Pending",
+                LastSeenUtc: DateTime.UtcNow), actor);
+
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                EventType: "device.registration.created",
+                Subject: email,
+                Source: "admin",
+                Detail: $"Device '{device}' registered for user '{user}'",
+                Category: "device",
+                Outcome: "pending",
+                ReasonCode: "device.registration.pending",
+                Route: httpContext.Request.Path,
+                CorrelationId: Activity.Current?.TraceId.ToString()),
+                cancellationToken);
+
+            return Results.Ok(new
+            {
+                user = entry.User,
+                email = entry.Email,
+                device = entry.Device,
+                deviceStatus = entry.DeviceStatus,
+                lastSeen = entry.LastSeenUtc
+            });
+        }
+
+        async Task<IResult> deviceActionHandler(HttpContext httpContext, JsonElement payload, DeviceRegistrationStore store, IAuditTrail auditTrail, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken)
+        {
+            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            if (gate is not null) return gate;
+
+            if (payload.ValueKind != JsonValueKind.Object)
+            {
+                return Results.BadRequest(new { code = "device.action.invalidPayload", reason = "payload must be JSON object" });
+            }
+
+            var email = payload.TryGetProperty("email", out var emailEl) ? (emailEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var device = payload.TryGetProperty("device", out var deviceEl) ? (deviceEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var action = payload.TryGetProperty("action", out var actionEl) ? (actionEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var note = payload.TryGetProperty("note", out var noteEl) ? (noteEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var actor = payload.TryGetProperty("actor", out var actorEl) ? (actorEl.GetString() ?? string.Empty).Trim() : string.Empty;
+
+            var status = action.ToLowerInvariant() switch
+            {
+                "approve" => "Trusted",
+                "challenge" => "Pending",
+                "block" => "Blocked",
+                _ => string.Empty
+            };
+
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(device) || string.IsNullOrWhiteSpace(status) || string.IsNullOrWhiteSpace(note))
+            {
+                return Results.BadRequest(new { code = "device.action.validation", reason = "email, device, note, and valid action (approve|challenge|block) are required" });
+            }
+
+            if (string.IsNullOrWhiteSpace(actor))
+            {
+                actor = "admin";
+            }
+
+            var updated = store.UpdateStatus(email, device, status, action, note, actor);
+            if (updated is null)
+            {
+                return Results.NotFound(new { code = "device.action.notFound", reason = "device registration not found" });
+            }
+
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                EventType: "device.registration.status_updated",
+                Subject: email,
+                Source: "admin",
+                Detail: $"Device '{device}' set to '{status}'. Note: {note}",
+                Category: "device",
+                Outcome: status.ToLowerInvariant(),
+                ReasonCode: $"device.registration.{status.ToLowerInvariant()}",
+                Route: httpContext.Request.Path,
+                CorrelationId: Activity.Current?.TraceId.ToString()),
+                cancellationToken);
+
+            return Results.Ok(new
+            {
+                user = updated.User,
+                email = updated.Email,
+                device = updated.Device,
+                deviceStatus = updated.DeviceStatus,
+                lastSeen = updated.LastSeenUtc
+            });
+        }
+
+        endpoints.MapGet("/api/admin/users-devices", usersDevicesHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("GetUsersDevices")
+            .WithSummary("Get users and device registrations")
+            .WithTags("Admin", "Device")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapGet("/api/v1/admin/users-devices", usersDevicesHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("GetUsersDevicesV1")
+            .WithSummary("Get users and device registrations")
+            .WithTags("Admin", "Device", "v1")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapGet("/api/admin/users-devices/history", usersDevicesHistoryHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("GetUsersDevicesHistory")
+            .WithSummary("Get action history for a registered device")
+            .WithTags("Admin", "Device")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapGet("/api/v1/admin/users-devices/history", usersDevicesHistoryHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("GetUsersDevicesHistoryV1")
+            .WithSummary("Get action history for a registered device")
+            .WithTags("Admin", "Device", "v1")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/admin/users-devices/register", registerDeviceHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("RegisterUserDevice")
+            .WithSummary("Register a new device")
+            .WithTags("Admin", "Device")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/v1/admin/users-devices/register", registerDeviceHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("RegisterUserDeviceV1")
+            .WithSummary("Register a new device")
+            .WithTags("Admin", "Device", "v1")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/admin/users-devices/action", deviceActionHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("DeviceRegistrationAction")
+            .WithSummary("Approve/challenge/block a registered device")
+            .WithTags("Admin", "Device")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/v1/admin/users-devices/action", deviceActionHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("DeviceRegistrationActionV1")
+            .WithSummary("Approve/challenge/block a registered device")
+            .WithTags("Admin", "Device", "v1")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
         endpoints.MapGet("/api/admin/security-status", securityStatusHandler)
             .RequireRateLimiting("read-api")
             .WithName("GetSecurityStatus")
@@ -327,6 +660,26 @@ public static class SecurityEndpoints
             .WithDescription("Versioned alias of composite security risk endpoint.")
             .WithTags("Admin", "Security", "v1")
             .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/admin/simulator/live-replay", liveReplayHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("RunLiveReplay")
+            .WithSummary("Run simulator scenario against live API behavior")
+            .WithDescription("Evaluates a replay payload through live enforcement logic, writes audit evidence, and returns action/severity/http/audit/reputation outputs for simulator comparison.")
+            .WithTags("Admin", "Security", "Simulator")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/v1/admin/simulator/live-replay", liveReplayHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("RunLiveReplayV1")
+            .WithSummary("Run simulator scenario against live API behavior")
+            .WithDescription("Versioned alias of live replay endpoint.")
+            .WithTags("Admin", "Security", "Simulator", "v1")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status429TooManyRequests);
 
         return endpoints;

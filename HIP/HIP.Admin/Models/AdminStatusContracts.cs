@@ -5,16 +5,20 @@ public enum SeverityLevel
     Critical,
     High,
     Medium,
-    Low
+    Low,
+    Info
 }
 
 public enum WorkflowStatus
 {
     New,
     Acknowledged,
+    Investigating,
     Escalated,
     InProgress,
+    Mitigated,
     Resolved,
+    FalsePositive,
     Closed,
     Failed,
     Queued

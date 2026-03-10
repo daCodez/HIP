@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">HIP Admin Logo (New)</title>
+  <desc id="desc">Modern shield-and-grid HIP.Admin security SaaS logo with dual-tone accent.</desc>
+
+  <defs>
+    <linearGradient id="hipGrad" x1="24" y1="24" x2="232" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer shield -->
+  <path d="M128 20l82 32v66c0 56-35 94-82 118-47-24-82-62-82-118V52z"
+        fill="#0B1220"/>
+
+  <!-- Inner stroke ring -->
+  <path d="M128 35l67 26v57c0 47-28 79-67 100-39-21-67-53-67-100V61z"
+        fill="none" stroke="url(#hipGrad)" stroke-width="10" stroke-linejoin="round"/>
+
+  <!-- Grid/data motif -->
+  <g fill="none" stroke="#E5E7EB" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="86" y="95" width="84" height="66" rx="10"/>
+    <path d="M114 95v66M142 95v66M86 117h84M86 139h84" opacity="0.9"/>
+  </g>
+
+  <!-- HIP notch / accent -->
+  <path d="M73 172l31-12c7-3 15 3 14 11l-2 26z" fill="url(#hipGrad)"/>
+</svg>

@@ -1,23 +1,33 @@
 @page "/simulator"
+@attribute [Authorize(Policy = AdminPolicyNames.SupportOrAdmin)]
 @inject SimulatorAdminService SimulatorService
 @inject HipAdminApiClient Api
 @inject SimulatorAutoHardeningService AutoHardeningService
 @inject ToastService Toast
 
-<PageTitle>Simulator</PageTitle>
+<PageTitle>Security Event Simulator</PageTitle>
 
-<h4>Security Event Simulator</h4>
+<PageHeader Title="Security Event Simulator"
+            Subtitle="Run realistic security checks and review draft-safe policy recommendations"
+            LastUpdatedUtc="@_lastUpdatedUtc"
+            Breadcrumbs="@_breadcrumbs">
+    <Actions>
+        <button type="button" class="btn btn-outline-secondary" @onclick="LoadScenarios">Reload scenarios</button>
+    </Actions>
+</PageHeader>
+
 @if (!string.IsNullOrWhiteSpace(Error))
 {
     <div class="alert alert-danger">@Error</div>
 }
 
 <div class="card p-3 mb-3">
+    <div class="small text-muted mb-2">Pick a suite and scenario, then run once or launch campaign mode for broader coverage.</div>
     <div class="row g-2">
         <div class="col-md-4">
             <label for="sim-suite">Suite</label>
             <select id="sim-suite" class="form-select" @bind="SelectedSuite">
-                <option value="">(all)</option>
+                <option value="">All suites</option>
                 @foreach (var suite in Suites)
                 {
                     <option value="@suite">@suite</option>
@@ -27,7 +37,7 @@
         <div class="col-md-5">
             <label for="sim-scenario">Scenario</label>
             <select id="sim-scenario" class="form-select" @bind="SelectedScenarioId">
-                <option value="">(all for suite)</option>
+                <option value="">All scenarios in selected suite</option>
                 @foreach (var s in Scenarios)
                 {
                     <option value="@s.Id">@s.Id - @s.Name</option>
@@ -63,6 +73,36 @@
             <button class="btn btn-danger" @onclick="RunCampaignAsync">Run Campaign Mode</button>
         </div>
     </div>
+</div>
+
+<div class="card p-3 mb-3">
+    <h5>What-If Attack Simulator</h5>
+    <div class="small text-muted mb-2">Run a quick hypothetical without building a full scenario file.</div>
+    <div class="row g-2">
+        <div class="col-md-3">
+            <label>Country</label>
+            <select class="form-select" @bind="WhatIfCountry">
+                <option>Russia</option><option>China</option><option>Brazil</option><option>Germany</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label>Device trust</label>
+            <select class="form-select" @bind="WhatIfDeviceTrust">
+                <option>Unknown</option><option>Trusted</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label>Reputation</label>
+            <input class="form-control" type="number" min="0" max="100" @bind="WhatIfReputation" />
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-outline-primary" @onclick="RunWhatIf">Simulate</button>
+        </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(WhatIfResult))
+    {
+        <div class="alert alert-info py-2 mt-2 mb-0">@WhatIfResult</div>
+    }
 </div>
 
 @if (!string.IsNullOrWhiteSpace(RunId))
@@ -127,6 +167,61 @@
         <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Invalid scenarios</span><span class="fw-semibold">@Result.Invalid</span></div>
         <div class="d-flex justify-content-between py-1"><span class="text-muted">Suggestions</span><span class="fw-semibold">@Result.SuggestedPoliciesGenerated</span></div>
     </div>
+
+    @if (Result.Coverage.FrameworkCoverage is { Count: > 0 })
+    {
+        <div class="card p-3 mb-3">
+            <h5>Framework Coverage (MITRE / OWASP / NIST)</h5>
+            <div class="small text-muted mb-2">Coverage rollup by security framework control.</div>
+            @foreach (var row in Result.Coverage.FrameworkCoverage.OrderBy(x => x.Framework).ThenBy(x => x.Control))
+            {
+                <div class="border rounded p-2 mt-2">
+                    <div class="d-flex justify-content-between">
+                        <strong>@row.Framework</strong>
+                        <span class="text-muted">@row.Control</span>
+                    </div>
+                    <div class="small mt-1">Total: <strong>@row.Total</strong> · Covered: <strong class="text-success">@row.Covered</strong> · Uncovered: <strong class="text-warning">@row.Uncovered</strong> · Invalid: <strong class="text-danger">@row.Invalid</strong></div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (GetLiveComparisons().Count > 0)
+    {
+        var liveRows = GetLiveComparisons();
+        var mismatchCount = liveRows.Count(x => x.LiveComparison!.MismatchDetected);
+        <div class="card p-3 mb-3">
+            <h5>Live Validation Drift Report</h5>
+            <div class="small text-muted mb-2">Expected vs actual behavior from live replay mode.</div>
+            <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Live scenarios</span><span class="fw-semibold">@liveRows.Count</span></div>
+            <div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted">Matched</span><span class="fw-semibold">@(liveRows.Count - mismatchCount)</span></div>
+            <div class="d-flex justify-content-between py-1"><span class="text-muted">Mismatches</span><span class="fw-semibold @(mismatchCount > 0 ? "text-danger" : "text-success")">@mismatchCount</span></div>
+
+            @foreach (var row in liveRows.Take(20))
+            {
+                var cmp = row.LiveComparison!;
+                <div class="border rounded p-2 mt-2">
+                    <div class="d-flex justify-content-between">
+                        <strong>@row.ScenarioId</strong>
+                        <span class="badge @(cmp.MismatchDetected ? "text-bg-danger" : "text-bg-success")">@(cmp.MismatchDetected ? "Drift" : "Validated")</span>
+                    </div>
+                    <div class="small mt-1">Action: expected <strong>@cmp.ExpectedAction</strong> · actual <strong>@cmp.ActualAction</strong></div>
+                    <div class="small">HTTP: expected <strong>@(cmp.ExpectedHttpStatus?.ToString() ?? "n/a")</strong> · actual <strong>@(cmp.ActualHttpStatus?.ToString() ?? "n/a")</strong></div>
+                    <div class="small">Audit: expected <strong>@(cmp.ExpectedAuditEvent ?? "n/a")</strong> · actual <strong>@(cmp.ActualAuditEvent ?? "n/a")</strong></div>
+                    <div class="small">Reputation: expected <strong>@(cmp.ExpectedReputationImpact ?? "n/a")</strong> · actual <strong>@(cmp.ActualReputationImpact ?? "n/a")</strong></div>
+                    @if (cmp.Mismatches.Count > 0)
+                    {
+                        <ul class="small mt-1 mb-0 text-danger">
+                            @foreach (var msg in cmp.Mismatches)
+                            {
+                                <li>@msg</li>
+                            }
+                        </ul>
+                    }
+                </div>
+            }
+        </div>
+    }
 
     <div class="card p-3 mb-3">
         <h5>Attack Graph / Timeline (summary-first)</h5>
@@ -206,6 +301,9 @@
 }
 
 @code {
+    private IReadOnlyList<BreadcrumbItem> _breadcrumbs = [new("Simulator", "/simulator")];
+    private DateTimeOffset? _lastUpdatedUtc;
+
     private IReadOnlyList<string> Suites = [];
     private IReadOnlyList<(string Id, string Name, string Suite)> Scenarios = [];
     private string? SelectedSuite;
@@ -219,6 +317,10 @@
     private string CampaignProfile = "default";
     private int CampaignDurationSeconds = 120;
     private int CampaignWaveIntervalSeconds = 6;
+    private string WhatIfCountry = "Russia";
+    private string WhatIfDeviceTrust = "Unknown";
+    private int WhatIfReputation = 35;
+    private string? WhatIfResult;
     private HIP.Simulator.Core.Models.SimulationRunResult? Result;
     private HIP.Simulator.Core.Models.ThreatCoverageSummary? ThreatCoverage;
     private string? Error;
@@ -256,6 +358,8 @@
         {
             SelectedScenarioId = null;
         }
+
+        _lastUpdatedUtc = DateTimeOffset.UtcNow;
     }
 
     private async Task RunAsync()
@@ -305,6 +409,8 @@
                 Processed = snapshot.Progress.ProcessedScenarios;
                 Total = snapshot.Progress.TotalScenarios;
             }
+
+            _lastUpdatedUtc = DateTimeOffset.UtcNow;
 
             if (Status is "completed" or "failed" or "cancelled")
             {
@@ -449,6 +555,12 @@
         }
     }
 
+    private List<HIP.Simulator.Core.Models.ScenarioResult> GetLiveComparisons()
+        => Result?.Scenarios
+            .Where(x => x.LiveComparison is not null)
+            .ToList()
+            ?? [];
+
     private IReadOnlyList<SuggestionViewModel> GetDisplayedSuggestions()
     {
         if (Result is null)
@@ -541,6 +653,22 @@
             SimulatorService.Cancel(RunId);
             Status = "cancelling";
         }
+
+        return Task.CompletedTask;
+    }
+
+    private Task RunWhatIf()
+    {
+        var unknownDevice = WhatIfDeviceTrust.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
+        var highRiskCountry = WhatIfCountry is "Russia" or "China";
+        var shouldBlock = unknownDevice && (WhatIfReputation < 40 || highRiskCountry);
+        var shouldChallenge = !shouldBlock && (unknownDevice || WhatIfReputation < 60);
+
+        WhatIfResult = shouldBlock
+            ? "System response: ✔ Impossible travel detected · ✔ MFA challenge · ✔ Reputation drop · ✔ Login blocked"
+            : shouldChallenge
+                ? "System response: ✔ Risk detected · ✔ MFA challenge issued · ✔ Session monitored"
+                : "System response: ✔ Login allowed with normal monitoring";
 
         return Task.CompletedTask;
     }

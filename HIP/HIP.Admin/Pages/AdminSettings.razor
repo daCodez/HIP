@@ -1,3 +1,51 @@
 @page "/admin-settings"
+@attribute [Authorize(Policy = AdminPolicyNames.AdminOnly)]
 
-<div class="card"><div class="card-body"><h5>Admin Settings</h5><p class="text-muted">Read-only settings placeholder.</p></div></div>
+<PageTitle>Admin Settings</PageTitle>
+
+<PageHeader Title="Admin Settings"
+            Subtitle="Consent, monitoring, and advanced security feature controls"
+            Breadcrumbs="_breadcrumbs" />
+
+<div class="row g-3">
+    <div class="col-xl-6">
+        <section class="card">
+            <div class="card-body">
+                <h5>External Account Monitoring (Scaffold)</h5>
+                <p class="text-muted small">Users must explicitly grant consent before HIP monitors external services.</p>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" @bind="EnableExternalMonitoring" />
+                    <label class="form-check-label">Enable external monitoring framework</label>
+                </div>
+                <div class="small">Connected providers (planned): Gmail, Slack, Cloud Storage, Social accounts</div>
+                <div class="small mt-2">Consent model: <strong>Per-user opt-in required</strong></div>
+                <div class="small">Data use: <strong>Login anomalies, suspicious activity, reputation signals</strong></div>
+            </div>
+        </section>
+    </div>
+
+    <div class="col-xl-6">
+        <section class="card">
+            <div class="card-body">
+                <h5>Behavior Fingerprinting (Scaffold)</h5>
+                <p class="text-muted small">Feature-flagged foundation for advanced fraud detection signals.</p>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" @bind="EnableBehaviorFingerprinting" />
+                    <label class="form-check-label">Enable behavior fingerprinting pipeline</label>
+                </div>
+                <ul class="small mb-0">
+                    <li>Typing rhythm signal (planned)</li>
+                    <li>Navigation pattern signal (planned)</li>
+                    <li>Session timing signal (planned)</li>
+                    <li>Device interaction style signal (planned)</li>
+                </ul>
+            </div>
+        </section>
+    </div>
+</div>
+
+@code {
+    private readonly IReadOnlyList<BreadcrumbItem> _breadcrumbs = [new("Dashboard", "/"), new("Admin Settings", "/admin-settings")];
+    private bool EnableExternalMonitoring;
+    private bool EnableBehaviorFingerprinting;
+}

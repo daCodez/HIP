@@ -1,25 +1,93 @@
 @page "/login"
+@page "/admin/login"
+@layout AuthLayout
+@attribute [AllowAnonymous]
+@inject IConfiguration Config
+@inject NavigationManager Nav
 
 <PageTitle>Login</PageTitle>
 
 <section class="widget" style="max-width:420px;margin:2rem auto;">
     <div class="widget-header"><h3><i class="fa fa-lock"></i> HIP Admin Login</h3></div>
     <div class="widget-content">
-        <div class="mb-2">
-            <label class="form-label small" for="login-email">Email</label>
-            <input id="login-email" class="form-control" type="email" autocomplete="username" placeholder="you@hip.local" />
-        </div>
-        <div class="mb-2">
-            <label class="form-label small" for="login-password">Password</label>
-            <input id="login-password" class="form-control" type="password" autocomplete="current-password" placeholder="••••••••" />
-        </div>
-        <div class="d-flex justify-content-between align-items-center">
-            <div class="form-check m-0">
-                <input id="remember-me" class="form-check-input" type="checkbox" />
-                <label class="form-check-label small" for="remember-me">Remember me</label>
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger" role="alert">@ResolveError(_error)</div>
+        }
+
+        @if (_localEnabled)
+        {
+            <form method="post" action="/admin/auth/local-login">
+                <input type="hidden" name="returnUrl" value="@_returnUrl" />
+
+                <div class="mb-2">
+                    <label class="form-label small" for="login-username">Username</label>
+                    <input id="login-username" class="form-control" type="text" name="username" autocomplete="username" value="admin" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small" for="login-password">Password</label>
+                    <input id="login-password" class="form-control" type="password" name="password" autocomplete="current-password" placeholder="Enter password" />
+                </div>
+                <button class="btn btn-primary btn-sm" type="submit">Sign in (Local)</button>
+            </form>
+        }
+
+        @if (_oidcEnabled)
+        {
+            <hr />
+            <p class="small text-muted">Sign in with your configured identity provider.</p>
+            <button class="btn btn-outline-primary btn-sm" type="button" @onclick="StartOidcSignIn">Sign in with OIDC</button>
+        }
+
+        @if (!_oidcEnabled && !_localEnabled)
+        {
+            <div class="alert alert-warning" role="alert">
+                Authentication is disabled. Enable either <code>HipAdmin:Auth:EnableLocalAuth</code> or <code>HipAdmin:Auth:EnableOidc</code>.
             </div>
-            <button class="btn btn-primary btn-sm" type="button">Sign in</button>
-        </div>
-        <div class="small text-muted mt-2">Scaffold only: authentication is not enforced yet.</div>
+        }
     </div>
 </section>
+
+@code {
+    private bool _oidcEnabled;
+    private bool _localEnabled;
+    private string _returnUrl = "/admin";
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _oidcEnabled = Config.GetValue<bool>("HipAdmin:Auth:EnableOidc");
+        _localEnabled = Config.GetValue<bool>("HipAdmin:Auth:EnableLocalAuth");
+
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("returnUrl", out var returnUrlLower) && !string.IsNullOrWhiteSpace(returnUrlLower.ToString()))
+        {
+            _returnUrl = returnUrlLower.ToString();
+        }
+        else if (query.TryGetValue("ReturnUrl", out var returnUrlUpper) && !string.IsNullOrWhiteSpace(returnUrlUpper.ToString()))
+        {
+            _returnUrl = returnUrlUpper.ToString();
+        }
+
+        if (query.TryGetValue("error", out var error) && !string.IsNullOrWhiteSpace(error.ToString()))
+        {
+            _error = error.ToString();
+        }
+    }
+
+    private void StartOidcSignIn()
+    {
+        var target = $"auth/login?returnUrl={Uri.EscapeDataString(_returnUrl)}";
+        Nav.NavigateTo(target, forceLoad: true);
+    }
+
+    private static string ResolveError(string code) => code switch
+    {
+        "invalid_credentials" => "Invalid username or password.",
+        "local_auth_disabled" => "Local authentication is disabled.",
+        "local_admin_not_configured" => "Local admin password is not configured.",
+        _ => "Authentication failed."
+    };
+}

@@ -22,6 +22,12 @@ public static class AdminUiSemantics
             return SeverityLevel.Medium;
         }
 
+        if (string.Equals(severity, "info", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(result, "success", StringComparison.OrdinalIgnoreCase))
+        {
+            return SeverityLevel.Info;
+        }
+
         return string.Equals(result, "Denied", StringComparison.OrdinalIgnoreCase)
             ? SeverityLevel.High
             : SeverityLevel.Low;
@@ -38,12 +44,18 @@ public static class AdminUiSemantics
            || string.Equals(filter, ToFilterValue(status), StringComparison.OrdinalIgnoreCase);
 
     public static string ToFilterValue(WorkflowStatus status)
-        => status == WorkflowStatus.InProgress
-            ? "inprogress"
-            : status.ToString().ToLowerInvariant();
+        => status switch
+        {
+            WorkflowStatus.InProgress => "inprogress",
+            WorkflowStatus.FalsePositive => "falsepositive",
+            _ => status.ToString().ToLowerInvariant()
+        };
 
     public static string ToDisplayStatus(WorkflowStatus status)
-        => status == WorkflowStatus.InProgress
-            ? "In Progress"
-            : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(status.ToString().ToLowerInvariant());
+        => status switch
+        {
+            WorkflowStatus.InProgress => "In Progress",
+            WorkflowStatus.FalsePositive => "False Positive",
+            _ => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(status.ToString().ToLowerInvariant())
+        };
 }

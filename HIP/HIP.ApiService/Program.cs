@@ -23,8 +23,13 @@ using HIP.ApiService.Swagger;
 using HIP.ServiceDefaults;
 using MediatR;
 using HIP.ApiService;
+using HIP.ApiService.Options;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.IdentityModel.Tokens;
 using System.Net;
 using System.Threading.RateLimiting;
 
@@ -57,6 +62,10 @@ var cryptoOptions = builder.Configuration
 var policyOptions = builder.Configuration
     .GetSection(PolicyPackOptions.SectionName)
     .Get<PolicyPackOptions>() ?? new PolicyPackOptions();
+
+var adminApiAuthOptions = builder.Configuration
+    .GetSection(AdminApiAuthOptions.SectionName)
+    .Get<AdminApiAuthOptions>() ?? new AdminApiAuthOptions();
 
 if (string.Equals(cryptoOptions.Provider, "ECDsa", StringComparison.OrdinalIgnoreCase))
 {
@@ -95,6 +104,40 @@ if (policyOptions.LowRiskRequiredScore > policyOptions.MediumRiskRequiredScore |
 
 builder.Services.AddLogging(); // performance awareness: central logging pipeline
 builder.Services.AddHttpContextAccessor();
+builder.Services.Configure<AdminApiAuthOptions>(builder.Configuration.GetSection(AdminApiAuthOptions.SectionName));
+
+if (adminApiAuthOptions.EnableOidcJwt)
+{
+    builder.Services
+        .AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        })
+        .AddJwtBearer(options =>
+        {
+            options.Authority = adminApiAuthOptions.Authority;
+            options.Audience = adminApiAuthOptions.Audience;
+            options.RequireHttpsMetadata = true;
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = !string.IsNullOrWhiteSpace(adminApiAuthOptions.Audience),
+                ValidateLifetime = true,
+                NameClaimType = "sub",
+                RoleClaimType = "app:role"
+            };
+        });
+
+    builder.Services.AddTransient<IClaimsTransformation, AdminApiClaimsTransformation>();
+
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy("AdminOnly", policy => policy.RequireClaim("app:role", "Admin"));
+        options.AddPolicy("SupportOrAdmin", policy => policy.RequireClaim("app:role", "Admin", "Support"));
+    });
+}
+
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
@@ -108,6 +151,7 @@ builder.Services.AddDbContext<HipDbContext>(options =>
 builder.Services.AddScoped<IIdentityService, DatabaseIdentityService>();
 builder.Services.AddScoped<IReputationService, DatabaseReputationService>();
 builder.Services.AddSingleton<PolicyRuleStore>();
+builder.Services.AddSingleton<DeviceRegistrationStore>();
 builder.Services.AddSingleton<PolicyVersionStore>();
 builder.Services.AddSingleton<AuthzPolicyStore>();
 builder.Services.AddSingleton<ISecurityEventCounter, InMemorySecurityEventCounter>();
@@ -399,6 +443,12 @@ app.Use(async (httpContext, next) =>
 });
 
 app.UseRateLimiter(); // security awareness: basic abuse throttling on public reads
+
+if (adminApiAuthOptions.EnableOidcJwt)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
 
 if (app.Environment.IsDevelopment())
 {

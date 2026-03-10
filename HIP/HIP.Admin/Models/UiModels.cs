@@ -31,6 +31,17 @@ public sealed class UserDeviceRecord
     public required DateTime LastSeen { get; init; }
 }
 
+public sealed class DeviceActionHistoryItem
+{
+    public required string Email { get; init; }
+    public required string Device { get; init; }
+    public required string Action { get; init; }
+    public required string Status { get; init; }
+    public required string Note { get; init; }
+    public required string Actor { get; init; }
+    public required DateTime Timestamp { get; init; }
+}
+
 public sealed class PolicyRule
 {
     public required string RuleId { get; init; }

@@ -1,36 +1,223 @@
 @page "/users-devices"
+@attribute [Authorize(Policy = AdminPolicyNames.SupportOrAdmin)]
 @inject HipAdminApiClient Api
+@inject AdminContextService AdminContext
 
 <PageTitle>Users & Devices</PageTitle>
 
-@if (_selected is not null)
+<PageHeader Title="Users & Devices"
+            Subtitle="Track trusted devices and quickly identify risky endpoints"
+            Breadcrumbs="_breadcrumbs">
+</PageHeader>
+
+@if (!string.IsNullOrWhiteSpace(_feedback))
 {
-    <div class="card mb-3">
-        <div class="card-body">
-            <h6>Row Details</h6>
-            <div><b>User:</b> @_selected.User</div>
-            <div><b>Email:</b> @_selected.Email</div>
-            <div><b>Device:</b> @_selected.Device</div>
-            <div><b>Status:</b> @_selected.DeviceStatus</div>
-        </div>
-    </div>
+    <AlertBanner Kind="@_feedbackKind" Title="Device registration" Message="@_feedback" />
 }
 
-<DataTable TItem="UserDeviceRecord" Title="Users &amp; Devices" Items="_records" OnRowClick="SelectRow" />
+<div class="row g-3">
+    <div class="col-xl-8">
+        <DataTable TItem="UserDeviceRecord" Title="Users &amp; Devices" Items="_records" OnRowClick="SelectRow" />
+    </div>
+    <div class="col-xl-4">
+        <div class="card mb-3">
+            <div class="card-body small">
+                <h6>Register Device</h6>
+                <label class="form-label">User</label>
+                <input class="form-control form-control-sm mb-2" @bind="_newUser" placeholder="Eric Example" />
+                <label class="form-label">Email</label>
+                <input class="form-control form-control-sm mb-2" @bind="_newEmail" placeholder="eric@example.com" />
+                <label class="form-label">Device</label>
+                <input class="form-control form-control-sm mb-2" @bind="_newDevice" placeholder="iPhone 15" />
+                <button class="btn btn-sm btn-primary" @onclick="RegisterDeviceAsync" disabled="@_registering">@(_registering ? "Registering..." : "Register Device")</button>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body small">
+                <h6>Device Trust Panel</h6>
+                <div class="d-flex justify-content-between border-bottom py-1"><span>Trusted devices</span><strong>@TrustedCount</strong></div>
+                <div class="d-flex justify-content-between border-bottom py-1"><span>Review required</span><strong>@ReviewCount</strong></div>
+                <div class="d-flex justify-content-between py-1"><span>Blocked / unknown</span><strong>@BlockedCount</strong></div>
+            </div>
+        </div>
+
+        @if (_selected is not null)
+        {
+            <div class="card mb-3">
+                <div class="card-body small">
+                    <h6>Device Details</h6>
+                    <div><b>User:</b> @_selected.User</div>
+                    <div><b>Email:</b> @_selected.Email</div>
+                    <div><b>Device:</b> @_selected.Device</div>
+                    <div><b>Status:</b> @_selected.DeviceStatus</div>
+                    <div class="mt-2"><b>Last used:</b> 2 hours ago</div>
+                    <div><b>Location:</b> Toronto</div>
+                    <label class="form-label mt-2">Analyst note</label>
+                    <textarea class="form-control form-control-sm" rows="3" @bind="_actionNote" placeholder="Reason for approve/challenge/block (required)"></textarea>
+                    <div class="d-flex gap-2 mt-3">
+                        <button class="btn btn-sm btn-success" @onclick="ApproveSelectedAsync" disabled="@_acting">Approve</button>
+                        <button class="btn btn-sm btn-warning" @onclick="ChallengeSelectedAsync" disabled="@_acting">Challenge</button>
+                        <button class="btn btn-sm btn-danger" @onclick="BlockSelectedAsync" disabled="@_acting">Block</button>
+                    </div>
+
+                    <div class="mt-3">
+                        <h6>Action Timeline</h6>
+                        <input class="form-control form-control-sm mb-2" @bind="_historyFilter" placeholder="Filter by action, actor, status, or note" />
+                        @if (FilteredHistory.Count == 0)
+                        {
+                            <div class="text-muted small">No action history for this device yet.</div>
+                        }
+                        else
+                        {
+                            <ul class="small mb-0 ps-3">
+                                @foreach (var h in FilteredHistory.Take(12))
+                                {
+                                    <li><b>@h.Timestamp.ToLocalTime():g</b> · @h.Action → @h.Status · <span class="text-muted">by @h.Actor</span><br /><span class="text-muted">@h.Note</span></li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
 
 @code {
+    private readonly IReadOnlyList<BreadcrumbItem> _breadcrumbs = [new("Dashboard", "/"), new("Users & Devices", "/users-devices")];
     private List<UserDeviceRecord> _records = [];
     private UserDeviceRecord? _selected;
+    private string _newUser = string.Empty;
+    private string _newEmail = string.Empty;
+    private string _newDevice = string.Empty;
+    private List<DeviceActionHistoryItem> _history = [];
+    private bool _registering;
+    private bool _acting;
+    private string _actionNote = string.Empty;
+    private string _historyFilter = string.Empty;
+    private string? _feedback;
+    private AlertBannerKind _feedbackKind = AlertBannerKind.Info;
+
+    private int TrustedCount => _records.Count(x => x.DeviceStatus.Contains("trust", StringComparison.OrdinalIgnoreCase));
+    private int ReviewCount => _records.Count(x => x.DeviceStatus.Contains("review", StringComparison.OrdinalIgnoreCase) || x.DeviceStatus.Contains("new", StringComparison.OrdinalIgnoreCase));
+    private int BlockedCount => _records.Count - TrustedCount - ReviewCount;
+
+    private List<DeviceActionHistoryItem> FilteredHistory
+        => string.IsNullOrWhiteSpace(_historyFilter)
+            ? _history
+            : _history.Where(x =>
+                x.Action.Contains(_historyFilter, StringComparison.OrdinalIgnoreCase)
+                || x.Actor.Contains(_historyFilter, StringComparison.OrdinalIgnoreCase)
+                || x.Status.Contains(_historyFilter, StringComparison.OrdinalIgnoreCase)
+                || x.Note.Contains(_historyFilter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
     protected override async Task OnInitializedAsync()
     {
-        var result = await Api.GetUsersDevicesAsync();
-        _records = result.Data ?? [];
+        await ReloadAsync();
     }
 
-    private Task SelectRow(UserDeviceRecord row)
+    private async Task ReloadAsync()
+    {
+        var result = await Api.GetUsersDevicesAsync();
+        _records = result.Data ?? [];
+        _selected = _records.FirstOrDefault();
+        await ReloadHistoryAsync();
+    }
+
+    private async Task SelectRow(UserDeviceRecord row)
     {
         _selected = row;
-        return Task.CompletedTask;
+        _actionNote = string.Empty;
+        _historyFilter = string.Empty;
+        await ReloadHistoryAsync();
+    }
+
+    private async Task ReloadHistoryAsync()
+    {
+        if (_selected is null)
+        {
+            _history = [];
+            return;
+        }
+
+        var historyResult = await Api.GetDeviceHistoryAsync(_selected.Email, _selected.Device);
+        _history = historyResult.Data ?? [];
+    }
+
+    private async Task RegisterDeviceAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newUser) || string.IsNullOrWhiteSpace(_newEmail) || string.IsNullOrWhiteSpace(_newDevice))
+        {
+            _feedbackKind = AlertBannerKind.Warning;
+            _feedback = "User, email, and device are required.";
+            return;
+        }
+
+        _registering = true;
+        try
+        {
+            var result = await Api.RegisterDeviceAsync(_newUser.Trim(), _newEmail.Trim(), _newDevice.Trim(), AdminContext.CurrentRole.ToString());
+            if (!result.Success)
+            {
+                _feedbackKind = AlertBannerKind.Error;
+                _feedback = result.Error ?? "Registration failed.";
+                return;
+            }
+
+            _feedbackKind = AlertBannerKind.Success;
+            _feedback = $"Registered {_newDevice.Trim()} for {_newEmail.Trim()} (Pending).";
+            _newUser = string.Empty;
+            _newEmail = string.Empty;
+            _newDevice = string.Empty;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _registering = false;
+        }
+    }
+
+    private Task ApproveSelectedAsync() => ApplySelectedActionAsync("approve", AlertBannerKind.Success, "Device approved and marked Trusted.");
+    private Task ChallengeSelectedAsync() => ApplySelectedActionAsync("challenge", AlertBannerKind.Warning, "Device challenged and set to Pending review.");
+    private Task BlockSelectedAsync() => ApplySelectedActionAsync("block", AlertBannerKind.Error, "Device blocked.");
+
+    private async Task ApplySelectedActionAsync(string action, AlertBannerKind kind, string successMessage)
+    {
+        if (_selected is null)
+        {
+            _feedbackKind = AlertBannerKind.Warning;
+            _feedback = "Select a device first.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_actionNote))
+        {
+            _feedbackKind = AlertBannerKind.Warning;
+            _feedback = "Please add an analyst note before applying an action.";
+            return;
+        }
+
+        _acting = true;
+        try
+        {
+            var result = await Api.ApplyDeviceActionAsync(_selected.Email, _selected.Device, action, _actionNote.Trim(), AdminContext.CurrentRole.ToString());
+            if (!result.Success)
+            {
+                _feedbackKind = AlertBannerKind.Error;
+                _feedback = result.Error ?? "Device action failed.";
+                return;
+            }
+
+            _feedbackKind = kind;
+            _feedback = successMessage;
+            _actionNote = string.Empty;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _acting = false;
+        }
     }
 }

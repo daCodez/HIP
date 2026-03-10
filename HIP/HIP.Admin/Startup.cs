@@ -2,9 +2,12 @@ using HIP.Admin.Models;
 using HIP.Admin.Navigation;
 using HIP.Admin.Services;
 using HIP.Simulator.Core.Extensions;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Hosting;
 
 namespace HIP.Admin;
 
@@ -27,6 +30,18 @@ public class Startup
         services.AddServerSideBlazor();
         services.AddControllers();
 
+        var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? Environments.Production;
+        var isDevelopment = string.Equals(environmentName, Environments.Development, StringComparison.OrdinalIgnoreCase);
+
+        if (!isDevelopment && authOptions.EnableLocalAuth)
+        {
+            if (string.IsNullOrWhiteSpace(authOptions.LocalAdmin.Password) ||
+                string.Equals(authOptions.LocalAdmin.Password, "change-me-now", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("HipAdmin local auth is enabled with an unsafe default/empty password outside Development. Disable local auth or set a strong password.");
+            }
+        }
+
         services.AddHttpContextAccessor();
         services.AddHttpClient<HipAdminApiClient>(client =>
         {
@@ -40,16 +55,44 @@ public class Startup
             client.BaseAddress = new Uri(baseUrl);
         });
 
-        if (authOptions.EnableOidc)
+        if (authOptions.EnableOidc || authOptions.EnableLocalAuth)
         {
-            services
+            var authBuilder = services
                 .AddAuthentication(options =>
                 {
                     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-                    options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+                    options.DefaultChallengeScheme = authOptions.EnableOidc
+                        ? OpenIdConnectDefaults.AuthenticationScheme
+                        : CookieAuthenticationDefaults.AuthenticationScheme;
                 })
-                .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)
-                .AddOpenIdConnect(OpenIdConnectDefaults.AuthenticationScheme, options =>
+                .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+                {
+                    options.Cookie.HttpOnly = true;
+                    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                    options.Cookie.SameSite = SameSiteMode.Lax;
+                    options.SlidingExpiration = true;
+                    options.LoginPath = "/login";
+                    options.AccessDeniedPath = "/login";
+                    options.Events = new CookieAuthenticationEvents
+                    {
+                        OnRedirectToLogin = context =>
+                        {
+                            var returnUrl = context.Request.PathBase + context.Request.Path + context.Request.QueryString;
+                            context.Response.Redirect($"/admin/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}");
+                            return Task.CompletedTask;
+                        },
+                        OnRedirectToAccessDenied = context =>
+                        {
+                            var returnUrl = context.Request.PathBase + context.Request.Path + context.Request.QueryString;
+                            context.Response.Redirect($"/admin/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}");
+                            return Task.CompletedTask;
+                        }
+                    };
+                });
+
+            if (authOptions.EnableOidc)
+            {
+                authBuilder.AddOpenIdConnect(OpenIdConnectDefaults.AuthenticationScheme, options =>
                 {
                     options.Authority = authOptions.Authority;
                     options.ClientId = authOptions.ClientId;
@@ -59,7 +102,8 @@ public class Startup
                     options.GetClaimsFromUserInfoEndpoint = true;
                     options.CallbackPath = authOptions.CallbackPath;
                     options.SignedOutCallbackPath = authOptions.SignedOutCallbackPath;
-                    options.TokenValidationParameters.RoleClaimType = authOptions.RoleClaimType;
+                    options.TokenValidationParameters.NameClaimType = "name";
+                    options.TokenValidationParameters.RoleClaimType = "app:role";
 
                     options.Scope.Clear();
                     foreach (var scope in authOptions.Scopes.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -68,11 +112,22 @@ public class Startup
                     }
                 });
 
+                services.AddTransient<IClaimsTransformation, AdminClaimsTransformation>();
+            }
+
             services.AddAuthorization(options =>
             {
+                options.AddPolicy(AdminPolicyNames.AdminOnly, policy =>
+                    policy.RequireClaim("app:role", "Admin"));
+
+                options.AddPolicy(AdminPolicyNames.SupportOrAdmin, policy =>
+                    policy.RequireClaim("app:role", "Admin", "Support"));
+
                 if (authOptions.EnforceLogin)
                 {
-                    options.FallbackPolicy = options.DefaultPolicy;
+                    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                        .RequireAuthenticatedUser()
+                        .Build();
                 }
             });
         }
@@ -112,7 +167,7 @@ public class Startup
         app.UseStaticFiles();
         app.UseRouting();
 
-        if (authOptions.EnableOidc)
+        if (authOptions.EnableOidc || authOptions.EnableLocalAuth)
         {
             app.UseAuthentication();
             app.UseAuthorization();

@@ -917,8 +917,10 @@ select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px
 .hip-status-badge.sev-high { color: var(--sev-high-fg); background: var(--sev-high-bg-soft); }
 .hip-status-badge.sev-medium { color: var(--sev-medium-fg); background: var(--sev-medium-bg-soft); }
 .hip-status-badge.sev-low { color: var(--sev-low-fg); background: var(--sev-low-bg-soft); }
+.hip-status-badge.sev-info { color: var(--state-neutral-fg); background: var(--state-neutral-bg-soft); }
 .hip-status-badge.state-success { color: var(--state-success-fg); background: var(--state-success-bg-soft); }
 .hip-status-badge.state-info { color: var(--state-info-fg); background: var(--state-info-bg-soft); }
+.hip-status-badge.state-warning { color: var(--state-warning-fg); background: var(--state-warning-bg-soft); }
 .hip-status-badge.state-error,.hip-status-badge.kind-error { color: var(--sev-critical-fg); background: var(--sev-critical-bg-soft); }
 .hip-status-badge.state-neutral { color: var(--state-neutral-fg); background: var(--state-neutral-bg-soft); }
 .hip-alert-banner { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); margin-bottom: var(--space-3); }
@@ -944,6 +946,7 @@ select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px
 .hip-metric-card { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-3); background: var(--bg-surface-1); }
 .hip-metric-card-header { display: flex; justify-content: space-between; gap: var(--space-2); align-items: start; }
 .hip-metric-title { margin: 0; font-size: var(--font-14); color: var(--text-secondary); }
+.hip-metric-info { font-size: var(--font-12); color: var(--text-muted); margin-left: .25rem; cursor: help; }
 .hip-metric-value { margin: var(--space-2) 0; font-size: var(--font-24); color: var(--text-primary); }
 .hip-metric-trend { margin: 0; font-weight: 600; }
 .hip-metric-trend.up { color: var(--state-success-fg); }
@@ -980,6 +983,11 @@ body.hip-dark .hip-data-table-row-selected {
 .hip-alerts-detail { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-surface-1); padding: var(--space-3); min-height: 18rem; }
 .hip-alerts-header-counts { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
 .hip-alerts-count-chip { font-size: var(--font-12); font-weight: 600; border: 1px solid var(--border-subtle); border-radius: 999px; padding: .1rem .45rem; background: var(--bg-surface-1); }
+.hip-alerts-quick-filters { display: flex; flex-wrap: wrap; gap: .5rem; }
+.hip-alert-timeline { display: grid; gap: .45rem; }
+.hip-alert-timeline-item { display: grid; grid-template-columns: 14px 1fr; gap: .5rem; align-items: start; font-size: var(--font-13); }
+.hip-alert-timeline-item .dot { width: 10px; height: 10px; margin-top: .3rem; border-radius: 999px; background: var(--focus-ring); display: inline-block; }
+
 @media (max-width: 1100px) {
   .hip-alerts-split-layout { grid-template-columns: 1fr; }
 }

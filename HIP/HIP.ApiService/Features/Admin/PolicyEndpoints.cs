@@ -180,7 +180,7 @@ public static class PolicyEndpoints
             IReputationService reputationService,
             CancellationToken cancellationToken)
         {
-            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            var gate = await AdminAccessPolicy.AuthorizeWriteAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
             if (gate is not null)
             {
                 return gate;
@@ -309,7 +309,7 @@ public static class PolicyEndpoints
             IReputationService reputationService,
             CancellationToken cancellationToken)
         {
-            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            var gate = await AdminAccessPolicy.AuthorizeWriteAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
             if (gate is not null) return gate;
 
             var actor = input.TryGetProperty("actor", out var aEl) ? aEl.GetString() ?? "admin" : "admin";
@@ -411,7 +411,7 @@ public static class PolicyEndpoints
             IReputationService reputationService,
             CancellationToken cancellationToken)
         {
-            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            var gate = await AdminAccessPolicy.AuthorizeWriteAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
             if (gate is not null) return gate;
 
             var actor = input.TryGetProperty("actor", out var aEl) ? aEl.GetString() ?? "admin" : "admin";
@@ -449,7 +449,7 @@ public static class PolicyEndpoints
             IReputationService reputationService,
             CancellationToken cancellationToken)
         {
-            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            var gate = await AdminAccessPolicy.AuthorizeWriteAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
             if (gate is not null) return gate;
 
             var actor = input.TryGetProperty("actor", out var aEl) ? aEl.GetString() ?? "admin" : "admin";

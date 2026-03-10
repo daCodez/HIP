@@ -1,0 +1,18 @@
+<svg width="420" height="128" viewBox="0 0 420 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HIP finalist B lockup">
+  <defs>
+    <style>
+      .stroke { stroke: #0B1220; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+      .word { font: 700 64px Inter, Segoe UI, Arial, sans-serif; letter-spacing: 1px; fill: #0B1220; }
+      .tag { font: 500 16px Inter, Segoe UI, Arial, sans-serif; fill: #334155; }
+    </style>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="#ECFEFF" class="stroke"/>
+  <rect x="28" y="28" width="72" height="72" rx="18" fill="#CCFBF1" class="stroke"/>
+  <path d="M42 64H86" class="stroke"/>
+  <path d="M48 50H80" class="stroke"/>
+  <path d="M48 78H72" class="stroke"/>
+  <circle cx="102" cy="102" r="14" fill="#14B8A6" class="stroke"/>
+  <path d="M95 102L100 107L110 95" class="stroke"/>
+  <text x="148" y="75" class="word">HIP</text>
+  <text x="150" y="100" class="tag">Security Intelligence Platform</text>
+</svg>

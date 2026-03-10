@@ -62,7 +62,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
             return ApiResult<AdminShellConfig>.Ok(new AdminShellConfig
             {
                 UserRoles = [context.CurrentRole],
-                EnabledModules = ["simulator"],
+                EnabledModules = ["devices", "simulator", "protocol-health", "settings"],
                 ServerTimestampUtc = DateTimeOffset.UtcNow,
                 CorrelationId = "fallback"
             });
@@ -154,6 +154,64 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
 
     public Task<ApiResult<List<UserDeviceRecord>>> GetUsersDevicesAsync(CancellationToken ct = default)
         => ExecuteWithMockFallback(() => httpClient.GetFromJsonAsync<List<UserDeviceRecord>>("api/v1/admin/users-devices", ct)!, MockUsers(), "api/v1/admin/users-devices");
+
+    public async Task<ApiResult<UserDeviceRecord>> RegisterDeviceAsync(string user, string email, string device, string actor, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = JsonSerializer.Serialize(new { user, email, device, actor });
+            using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var response = await httpClient.PostAsync("api/v1/admin/users-devices/register", content, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                return ApiResult<UserDeviceRecord>.Fail($"Device registration failed ({(int)response.StatusCode}).");
+            }
+
+            var item = await response.Content.ReadFromJsonAsync<UserDeviceRecord>(cancellationToken: ct);
+            if (item is null)
+            {
+                return ApiResult<UserDeviceRecord>.Fail("Device registration returned empty response.");
+            }
+
+            return ApiResult<UserDeviceRecord>.Ok(item);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<UserDeviceRecord>.Fail($"Device registration failed. {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResult<List<DeviceActionHistoryItem>>> GetDeviceHistoryAsync(string email, string device, CancellationToken ct = default)
+        => await ExecuteWithMockFallback(
+            () => httpClient.GetFromJsonAsync<List<DeviceActionHistoryItem>>($"api/v1/admin/users-devices/history?email={Uri.EscapeDataString(email)}&device={Uri.EscapeDataString(device)}", ct)!,
+            [],
+            "api/v1/admin/users-devices/history");
+
+    public async Task<ApiResult<UserDeviceRecord>> ApplyDeviceActionAsync(string email, string device, string action, string note, string actor, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = JsonSerializer.Serialize(new { email, device, action, note, actor });
+            using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var response = await httpClient.PostAsync("api/v1/admin/users-devices/action", content, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                return ApiResult<UserDeviceRecord>.Fail($"Device action failed ({(int)response.StatusCode}).");
+            }
+
+            var item = await response.Content.ReadFromJsonAsync<UserDeviceRecord>(cancellationToken: ct);
+            if (item is null)
+            {
+                return ApiResult<UserDeviceRecord>.Fail("Device action returned empty response.");
+            }
+
+            return ApiResult<UserDeviceRecord>.Ok(item);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<UserDeviceRecord>.Fail($"Device action failed. {ex.Message}");
+        }
+    }
 
     public async Task<ApiResult<List<PolicyRule>>> GetPolicyRulesAsync(CancellationToken ct = default)
     {
@@ -788,20 +846,33 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
         {
             async Task<List<AuditLogEntry>?> loadAndMap(string path)
             {
-                using var doc = await httpClient.GetFromJsonAsync<JsonDocument>(path, ct);
-                var root = doc?.RootElement;
-                if (root is null || root.Value.ValueKind != JsonValueKind.Array)
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(8));
+
+                using var response = await httpClient.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.ValueKind != JsonValueKind.Array)
                 {
                     return null;
                 }
 
                 var mapped = new List<AuditLogEntry>();
-                foreach (var e in root.Value.EnumerateArray())
+                foreach (var e in root.EnumerateArray())
                 {
-                    var created = e.TryGetProperty("createdAtUtc", out var createdEl) && createdEl.ValueKind == JsonValueKind.String
-                        && DateTime.TryParse(createdEl.GetString(), out var dt)
-                        ? dt
-                        : DateTime.UtcNow;
+                    var created = DateTime.UtcNow;
+                    if (e.TryGetProperty("createdAtUtc", out var createdEl)
+                        && createdEl.ValueKind == JsonValueKind.String
+                        && DateTime.TryParse(createdEl.GetString(), out var parsedCreated))
+                    {
+                        created = parsedCreated;
+                    }
 
                     var subject = e.TryGetProperty("subject", out var subjectEl) ? subjectEl.GetString() ?? "unknown" : "unknown";
                     var eventType = e.TryGetProperty("eventType", out var eventEl) ? eventEl.GetString() ?? "unknown" : "unknown";

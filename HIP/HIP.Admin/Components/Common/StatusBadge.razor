@@ -18,10 +18,12 @@
         SeverityLevel.High => "sev-high",
         SeverityLevel.Medium => "sev-medium",
         SeverityLevel.Low => "sev-low",
+        SeverityLevel.Info => "sev-info",
         _ => Status switch
         {
             WorkflowStatus.Failed => "state-error",
-            WorkflowStatus.Resolved or WorkflowStatus.Closed => "state-success",
+            WorkflowStatus.Escalated => "state-warning",
+            WorkflowStatus.Mitigated or WorkflowStatus.Resolved or WorkflowStatus.Closed => "state-success",
             WorkflowStatus.Queued => "state-neutral",
             _ => "state-info"
         }
@@ -33,13 +35,17 @@
         SeverityLevel.High => "▲",
         SeverityLevel.Medium => "●",
         SeverityLevel.Low => "■",
+        SeverityLevel.Info => "○",
         _ => Status switch
         {
             WorkflowStatus.New => "✦",
             WorkflowStatus.Acknowledged => "◔",
+            WorkflowStatus.Investigating => "⌕",
             WorkflowStatus.Escalated => "⇪",
             WorkflowStatus.InProgress => "◷",
+            WorkflowStatus.Mitigated => "🛡",
             WorkflowStatus.Resolved => "✓",
+            WorkflowStatus.FalsePositive => "⊘",
             WorkflowStatus.Closed => "☑",
             WorkflowStatus.Failed => "✕",
             WorkflowStatus.Queued => "⋯",

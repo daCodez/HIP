@@ -1,0 +1,65 @@
+<svg width="980" height="620" viewBox="0 0 980 620" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HIP finalist A preview board">
+  <defs>
+    <style>
+      .stroke { stroke:#0B1220; stroke-width:4; stroke-linecap:round; stroke-linejoin:round; }
+      .title { font:700 22px Inter, Segoe UI, Arial, sans-serif; fill:#0B1220; }
+      .label { font:600 14px Inter, Segoe UI, Arial, sans-serif; fill:#334155; }
+      .word { font:700 42px Inter, Segoe UI, Arial, sans-serif; fill:#0B1220; }
+      .wordDark { font:700 42px Inter, Segoe UI, Arial, sans-serif; fill:#E2E8F0; }
+    </style>
+    <g id="iconA32">
+      <rect x="0" y="0" width="32" height="32" rx="8" fill="#ECFEFF" class="stroke"/>
+      <path d="M8 16H24" class="stroke"/>
+      <path d="M10 16V11" class="stroke"/>
+      <path d="M15 16V9" class="stroke"/>
+      <path d="M20 16V13" class="stroke"/>
+      <circle cx="26" cy="6" r="4" fill="#14B8A6" class="stroke"/>
+      <path d="M24 6H28" class="stroke"/>
+    </g>
+  </defs>
+
+  <rect x="0" y="0" width="980" height="620" fill="#F8FAFC"/>
+  <text x="32" y="44" class="title">Finalist A — Signal Shield</text>
+
+  <text x="32" y="84" class="label">Sidebar / Lockup Context (Light)</text>
+  <rect x="32" y="96" width="440" height="170" rx="14" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="56" y="130" width="56" height="56" rx="14" fill="#ECFEFF" class="stroke"/>
+  <path d="M70 158H98" class="stroke"/>
+  <path d="M74 158V150" class="stroke"/>
+  <path d="M82 158V146" class="stroke"/>
+  <path d="M90 158V153" class="stroke"/>
+  <circle cx="106" cy="138" r="7" fill="#14B8A6" class="stroke"/>
+  <path d="M102 138H110" class="stroke"/>
+  <text x="128" y="168" class="word" font-size="36">HIP</text>
+
+  <text x="508" y="84" class="label">Sidebar / Lockup Context (Dark)</text>
+  <rect x="508" y="96" width="440" height="170" rx="14" fill="#0F172A"/>
+  <rect x="532" y="130" width="56" height="56" rx="14" fill="#CCFBF1" class="stroke"/>
+  <path d="M546 158H574" class="stroke"/>
+  <path d="M550 158V150" class="stroke"/>
+  <path d="M558 158V146" class="stroke"/>
+  <path d="M566 158V153" class="stroke"/>
+  <circle cx="582" cy="138" r="7" fill="#14B8A6" class="stroke"/>
+  <path d="M578 138H586" class="stroke"/>
+  <text x="604" y="168" class="wordDark" font-size="36">HIP</text>
+
+  <text x="32" y="316" class="label">Favicon Context (16 / 24 / 32)</text>
+  <rect x="32" y="328" width="916" height="240" rx="14" fill="#FFFFFF" stroke="#CBD5E1"/>
+
+  <rect x="90" y="400" width="16" height="16" rx="4" fill="#ECFEFF" stroke="#0B1220" stroke-width="2"/>
+  <path d="M94 408H102" stroke="#0B1220" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="103" cy="403" r="2" fill="#14B8A6" stroke="#0B1220" stroke-width="2"/>
+  <text x="82" y="438" class="label">16px</text>
+
+  <g transform="translate(220 392) scale(0.75)"><use href="#iconA32"/></g>
+  <text x="226" y="438" class="label">24px</text>
+
+  <g transform="translate(360 384)"><use href="#iconA32"/></g>
+  <text x="368" y="438" class="label">32px</text>
+
+  <rect x="520" y="360" width="380" height="170" rx="10" fill="#0F172A"/>
+  <g transform="translate(560 390)"><use href="#iconA32"/></g>
+  <g transform="translate(620 390) scale(0.75)"><use href="#iconA32"/></g>
+  <g transform="translate(670 396) scale(0.5)"><use href="#iconA32"/></g>
+  <text x="560" y="476" class="label" fill="#94A3B8">Dark UI favicon pass</text>
+</svg>

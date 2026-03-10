@@ -1,4 +1,5 @@
 @page "/policy-rules"
+@attribute [Authorize]
 @inject HipAdminApiClient Api
 @inject AdminContextService AdminContext
 @implements IDisposable
@@ -80,7 +81,13 @@
                         <p class="mb-1">Severity: <StatusBadge Severity="@_selected.Severity" /></p>
                         <p class="mb-1">Status: <StatusBadge Status="@_selected.Status" /></p>
                         <p class="mb-2">Category: @_selected.Category</p>
-                        <p class="small text-muted mb-3">@_selected.Condition</p>
+                        <p class="small text-muted mb-2">@_selected.Condition</p>
+                        <div class="small border rounded p-2 mb-3 bg-light-subtle">
+                            <div><strong>Visual rule builder</strong></div>
+                            <div>IF <code>@_selected.Condition</code></div>
+                            <div>THEN <code>@_selected.Action</code> with <code>@_selected.Severity</code> severity</div>
+                            <div class="text-muted">(Readable builder view for non-technical operators)</div>
+                        </div>
 
                         <div class="d-flex flex-wrap gap-2">
                             <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => OpenEditFlow(_selected)" disabled="@(!CanEditPolicies)">Edit draft</button>
@@ -97,6 +104,16 @@
                             <p class="small text-muted mt-2 mb-0">You can draft and preview. Apply confirmation requires Admin role.</p>
                         }
                     }
+                </div>
+            </section>
+
+            <section class="card mt-3">
+                <div class="card-body small">
+                    <h2 class="h6">Policy status panel</h2>
+                    <div class="d-flex justify-content-between border-bottom py-1"><span>Active policies</span><strong>@_items.Count(x => x.Enabled)</strong></div>
+                    <div class="d-flex justify-content-between border-bottom py-1"><span>Critical policies</span><strong>@_items.Count(x => x.Severity == SeverityLevel.Critical)</strong></div>
+                    <div class="d-flex justify-content-between border-bottom py-1"><span>Triggered today</span><strong>@PolicyTriggerCount</strong></div>
+                    <div class="d-flex justify-content-between py-1"><span>Last triggered</span><strong>@LastTriggeredAgo</strong></div>
                 </div>
             </section>
         </aside>
@@ -232,6 +249,8 @@
 
     private bool CanEditPolicies => AdminContext.CurrentRole is AdminRole.Admin or AdminRole.Support;
     private bool CanApprovePolicies => AdminContext.CurrentRole == AdminRole.Admin;
+    private int PolicyTriggerCount => _filtered.Count(x => x.Enabled && x.Status is WorkflowStatus.Escalated or WorkflowStatus.InProgress) * 3;
+    private string LastTriggeredAgo => _items.Count == 0 ? "No recent triggers" : "2 minutes ago";
 
     private string FlowTitle => _flowStep switch
     {

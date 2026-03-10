@@ -1,4 +1,5 @@
 @page "/reputation"
+@attribute [Authorize]
 @inject ActionLogService ActionLog
 @inject HipAdminApiClient Api
 @inject AdminContextService AdminContext
@@ -12,7 +13,7 @@
 
 <section class="widget mb-3">
     <div class="widget-header">
-        <h3><i class="fa fa-user-secret"></i> Identity Reputation (Top Risk)</h3>
+        <h3>Identity Reputation (Top Risk)</h3>
         @if (AdminContext.MockModeEnabled)
         {
             <span class="widget-label">Demo Data</span>
@@ -66,7 +67,48 @@
 </section>
 
 <section class="widget mb-3">
-    <div class="widget-header"><h3>Reputation Timeline</h3></div>
+    <div class="widget-header"><h3>Trust Decision Explainer</h3></div>
+    <div class="widget-content small">
+        <div><strong>Decision:</strong> @(Score >= 80 ? "Allow" : Score >= 60 ? "Challenge" : "Restrict")</div>
+        <div class="mt-2"><strong>Trust signals</strong></div>
+        <ul class="mb-2">
+            <li>✔ Known account history</li>
+            <li>✔ Device trust score stable</li>
+            <li>✔ Positive interaction trend</li>
+        </ul>
+        <div><strong>Risk signals</strong></div>
+        <ul class="mb-2">
+            <li>⚠ Auth failures: @AuthFailures</li>
+            <li>⚠ Policy violations: @PolicyViolations</li>
+        </ul>
+        <div><strong>Final trust math</strong></div>
+        <div>Base 50 + trust @Math.Max(10, SuccessfulInteractions/2) - risk @Math.Max(2, PolicyViolations + AuthFailures) = <strong>@Score</strong></div>
+    </div>
+</section>
+
+<section class="widget mb-3">
+    <div class="widget-header"><h3>Trust Score Bands</h3></div>
+    <div class="widget-content small">
+        <div class="d-flex justify-content-between border-bottom py-1"><span>80-100</span><span class="text-success fw-semibold">Trusted</span></div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span>60-79</span><span class="text-warning fw-semibold">Watch</span></div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span>30-59</span><span class="text-warning-emphasis fw-semibold">Risk</span></div>
+        <div class="d-flex justify-content-between py-1"><span>0-29</span><span class="text-danger fw-semibold">Dangerous</span></div>
+    </div>
+</section>
+
+<section class="widget mb-3">
+    <div class="widget-header"><h3>Behavior Fingerprinting Signals (Scaffold)</h3></div>
+    <div class="widget-content small">
+        <div class="trust-row"><span>Typing rhythm</span><div class="trust-bar"><span style="width:72%"></span></div></div>
+        <div class="trust-row"><span>Navigation pattern</span><div class="trust-bar"><span style="width:79%"></span></div></div>
+        <div class="trust-row"><span>Session timing</span><div class="trust-bar"><span style="width:76%"></span></div></div>
+        <div class="trust-row"><span>Interaction style</span><div class="trust-bar"><span style="width:74%"></span></div></div>
+        <div class="text-muted mt-2">Planned for advanced anomaly detection; currently informational only.</div>
+    </div>
+</section>
+
+<section class="widget mb-3">
+    <div class="widget-header"><h3>Security Story Timeline</h3></div>
     <div class="widget-content">
         <div class="timeline-graph mb-3" aria-label="Reputation trend">
             <div class="timeline-line"></div>
@@ -86,7 +128,7 @@
 
 <section class="widget">
     <div class="widget-header">
-        <h3>Details</h3>
+        <h3>Investigation Details</h3>
         <span class="widget-label">Deep Dive</span>
     </div>
     <div class="widget-content">

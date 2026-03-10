@@ -4,6 +4,7 @@
 @inject ThemeService Theme
 @inject HipAdminApiClient ApiClient
 @inject HIP.Admin.Navigation.BreadcrumbService Breadcrumbs
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JS
 
 <a class="hip-skip-link" href="#admin-main">Skip to main content</a>
@@ -43,20 +44,32 @@
 
     private AdminShellConfig? _config;
     private bool _sidebarCollapsed;
+    private HashSet<AdminRole> _principalRoles = [];
 
     private string CurrentPath => "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].Trim('/');
     private IReadOnlyList<HIP.Admin.Navigation.BreadcrumbItem> CurrentBreadcrumbs => Breadcrumbs.Build(CurrentPath);
 
     private IReadOnlyList<HIP.Admin.Navigation.AdminRouteEntry> VisibleRoutes => HIP.Admin.Navigation.AdminRoutes.All
-        .Where(route => route.RequiredRoles is null || route.RequiredRoles.Contains(AdminContext.CurrentRole))
-        .Where(route => string.IsNullOrWhiteSpace(route.FeatureFlag) || _config is null || _config.EnabledModules.Contains(route.FeatureFlag, StringComparer.OrdinalIgnoreCase))
+        .Where(route => route.RequiredRoles is null || route.RequiredRoles.Count == 0 || route.RequiredRoles.Any(_principalRoles.Contains))
+        .Where(route => string.IsNullOrWhiteSpace(route.FeatureFlag) || IsFeatureEnabled(route.FeatureFlag))
         .ToList();
+
+    private bool IsFeatureEnabled(string featureFlag)
+        => _config is null
+           || _config.EnabledModules.Count == 0
+           || _config.EnabledModules.Contains(featureFlag, StringComparer.OrdinalIgnoreCase);
 
     protected override void OnInitialized()
     {
         Nav.LocationChanged += HandleLocationChanged;
         AdminContext.Changed += HandleContextChanged;
         Theme.Changed += HandleThemeChanged;
+        AuthenticationStateProvider.AuthenticationStateChanged += HandleAuthStateChanged;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshPrincipalRolesAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -94,6 +107,34 @@
     private void HandleContextChanged() => InvokeAsync(StateHasChanged);
     private void HandleThemeChanged() => InvokeAsync(StateHasChanged);
 
+    private async void HandleAuthStateChanged(Task<AuthenticationState> task)
+    {
+        await RefreshPrincipalRolesAsync(task);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshPrincipalRolesAsync(Task<AuthenticationState>? task = null)
+    {
+        var state = task is null ? await AuthenticationStateProvider.GetAuthenticationStateAsync() : await task;
+        var roles = state.User.Claims
+            .Where(c => c.Type == "app:role")
+            .Select(c => c.Value)
+            .Select(TryParseRole)
+            .Where(r => r.HasValue)
+            .Select(r => r!.Value)
+            .ToHashSet();
+
+        if (roles.Count == 0)
+        {
+            roles.Add(AdminContext.CurrentRole);
+        }
+
+        _principalRoles = roles;
+    }
+
+    private static AdminRole? TryParseRole(string value)
+        => Enum.TryParse<AdminRole>(value, ignoreCase: true, out var parsed) ? parsed : null;
+
     private async void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
     {
         await InvokeAsync(StateHasChanged);
@@ -105,5 +146,6 @@
         Nav.LocationChanged -= HandleLocationChanged;
         AdminContext.Changed -= HandleContextChanged;
         Theme.Changed -= HandleThemeChanged;
+        AuthenticationStateProvider.AuthenticationStateChanged -= HandleAuthStateChanged;
     }
 }

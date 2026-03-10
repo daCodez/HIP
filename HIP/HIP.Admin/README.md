@@ -119,9 +119,10 @@ Legacy security dashboard details are retained below and can be reintroduced ins
 - Reputation page follows summary-first layout with deep-dive tabs (Summary, Activity, History, Risk, Network)
 - Policy & Rules page includes a visual policy builder and AI-draft assist bones (draft generation + save path)
 - Added Authorization Policies page and sandbox (separate from Security Policies)
-- Added login page scaffold (`/login`) without enforcement yet
-- Added pluggable OIDC config scaffold under `HipAdmin:Auth` (provider-agnostic, enforcement optional)
-- Removed manual topbar role-switch dropdown; role context is intended to come from authentication/authorization flow
+- Added provider-agnostic OIDC sign-in flow (`/login` → `/auth/login`) with optional enforcement.
+- Added pluggable OIDC config under `HipAdmin:Auth` (Authentik first, swappable provider model).
+- Added claim normalization (`role`/`roles`/`groups` → `app:role`) and policy-based authorization.
+- Removed manual topbar role-switch dropdown; role context now comes from authentication/authorization claims.
 - Tokens & Sessions page now supports live token issue/validate/refresh/revoke operations and event feed from admin audit trail
 - Policy API now exposes schema/bootstrap assets for locked contracts (legacy + v1 aliases): `/api/admin/policy/schema`, `/api/admin/policy/starter`, `/api/admin/policy/context-sample`, `/api/v1/admin/policy/schema`, `/api/v1/admin/policy/starter`, `/api/v1/admin/policy/context-sample`
 - Security event taxonomy + validation contracts exposed for timeline tooling (legacy + v1 aliases): `/api/admin/security/events/types`, `/api/admin/security/events/schema`, `/api/admin/security/events/validate`, `/api/admin/security/risk/evaluate`, `/api/v1/admin/security/events/types`, `/api/v1/admin/security/events/schema`, `/api/v1/admin/security/events/validate`, `/api/v1/admin/security/risk/evaluate`
@@ -175,6 +176,39 @@ This pass focused on high-impact keyboard/form/navigation issues in user-facing 
 Validation in this pass:
 - `dotnet build HIP.Admin/HIP.Admin.csproj` ✅
 
+## Authentication + authorization (OIDC)
+
+`HipAdmin:Auth` supports local auth + provider-agnostic OIDC integration (Authentik-compatible by default):
+
+- `EnableLocalAuth` (bool): enables local cookie sign-in via `/auth/local-login` (Development default: true, base/prod default: false).
+- `LocalAdmin` (`Username`/`Password`/`Roles`): break-glass default account config.
+- `EnableOidc` (bool): enables OIDC handler and `/auth/login` challenge flow.
+- `EnforceLogin` (bool): applies authenticated fallback policy across the app.
+- `Provider` (string): display/provider label only (e.g., `Authentik`, `Keycloak`).
+- `Authority`, `ClientId`, `ClientSecret`, `CallbackPath`, `SignedOutCallbackPath`, `Scopes`.
+- `RoleClaimSources` (string[]): provider claim names to normalize into `app:role`.
+
+Built-in authorization policies:
+- `AdminOnly` → requires `app:role=Admin`
+- `SupportOrAdmin` → requires `app:role in {Admin, Support}`
+
+API alignment:
+- `HIP.ApiService` now supports matching OIDC JWT validation via `HIP:AdminAuth` (EnableOidcJwt/Authority/Audience/RoleClaimSources).
+- Keep role mapping provider-agnostic by emitting/normalizing into `app:role` on both UI and API paths.
+
+Current protected pages:
+- `/admin-settings` (`AdminOnly`)
+- `/users-devices`, `/simulator` (`SupportOrAdmin`)
+
+Default local admin (dev bootstrap):
+- Username: `admin`
+- Password: set via local config/env (not committed)
+- Production safety guard: startup fails outside Development if local auth is enabled with empty/default password.
+
+Auth observability:
+- Login/logout events are logged from `AuthController` (`auth.local.login.*`, `auth.oidc.*`, `auth.logout.*`) for audit trail ingestion.
+- `/admin/login` uses a standalone auth layout (no admin topbar/sidebar/navigation chrome).
+
 ## Mock mode + API integration
 - `HipAdminApiClient` endpoints to wire:
   - `api/v1/admin/dashboard/metrics`
@@ -191,6 +225,147 @@ Validation in this pass:
 ## Notes for phase 2
 
 - Replace placeholder charts with real components.
-- Add real auth integration and role claims mapping.
+- Expand policy catalog as endpoints harden (current built-ins: `AdminOnly`, `SupportOrAdmin`).
 - Connect policy sandbox and audit export to backend endpoints.
 - Add server-side paging/filtering for large tables.
+
+## Alerts page SOC upgrade (current)
+
+`/alerts` now presents a SOC-oriented layout with:
+- Threat overview widgets (alerts/hour, severity counts, active incidents, blocked attempts, user trust)
+- Active incident correlation (`INC-*`) and queue-level deduplication (e.g., `reputation.read (3)`)
+- Color-coded severity (Critical/High/Medium/Low/Info), risk score column (0-100), and source tagging
+- Event icons + humanized titles while preserving raw event names in the detail panel
+- Investigation pane sections: actor, risk factors, trigger reasons, related alerts, suggested actions, and vertical timeline
+- Quick actions for triage + response (`Block IP`, `Lock Account`, `Require MFA`, etc.)
+- Live mode toggle for periodic queue refresh and keyboard shortcuts (`J/K`, `Enter`, `A`, `R`, `E`)
+
+Notes:
+- Some action flows are UI-first placeholders until backend enforcement APIs are fully wired.
+- Existing status workflows remain compatible; additional SOC states (`Investigating`, `Mitigated`, `False Positive`) are supported in UI semantics.
+
+### Security Overview language pass
+
+Batch-1 dashboard updates for non-technical readability:
+- Relative time format standardized to plain language (`2 minutes ago`, `3 hours ago`)
+- KPI cards aligned to product terms: `Active Policies`, `Threats Blocked`, `Active Alerts`, `Reputation Signals`
+- KPI cards now include inline tooltip help (`ⓘ`) with plain-English meanings
+- Event names in the activity table are humanized for common technical events
+
+### Batch-2: Audit Logs + Incident detail readability
+
+- Audit table updated to plain-language event wording with iconized event labels.
+- Relative time in audit rows now uses natural language (`minutes ago`, `hours ago`).
+- Incident detail panel expanded with user/target/correlation/system action/policy fields.
+- Added "Why this happened" explanation bullets and vertical timeline narrative per selected event.
+- Correlation IDs now use incident-style `INC-####` formatting for faster analyst scanning.
+
+### Simulator live validation UI
+
+Simulator page now includes a **Live Validation Drift Report** section when scenarios include live comparisons.
+It summarizes:
+- matched vs mismatched live scenarios
+- expected vs actual action
+- expected vs actual HTTP status
+- expected vs actual audit event
+- expected vs actual reputation impact
+- mismatch reasons per scenario
+
+### Wave A dashboard shell upgrades
+
+Security Overview now includes:
+- Global security status banner (Secure / Warning / Critical) with live counters
+- Threat/coverage snapshot details (active protections, threats blocked, critical threats, last event)
+- Incident Alerts panel for urgent denied/suspicious events
+- Real-Time Event Feed with plain-language event labels and relative timestamps
+
+### Wave B investigation + trust clarity
+
+Implemented:
+- Audit Logs incident detail now includes a Trust Decision Explainer block
+  - trust signals
+  - risk signals
+  - decision math (base + trust - risk)
+- Audit Logs timeline renamed to Security Story Timeline with investigation-oriented steps
+- Reputation page now includes:
+  - Trust Decision Explainer panel
+  - Trust Score Bands (Trusted/Watch/Risk/Dangerous)
+  - Security Story Timeline framing
+
+### Wave C visual security intelligence
+
+Security Overview now includes:
+- Attack Visualization panel (country attempt distribution)
+- Risk Heatmap panel (Messaging/Login/API/Device risk levels)
+- User Trust Radar panel (login/device/messaging/history factor bars)
+- Security Trends naming alignment for trend chart block
+
+### Wave D control surfaces
+
+Implemented:
+- Users & Devices page upgraded with a Device Trust Panel and richer selected-device details.
+- Policy Management page now includes a Policy Status Panel (active/critical/triggered/last-triggered).
+- Policy detail now renders a readable IF/THEN visual builder view of each rule.
+
+### Wave E advanced scaffolding
+
+Implemented:
+- Simulator page now has a What-If Attack Simulator panel with instant hypothetical response output.
+- Admin Settings now includes scaffolding toggles for:
+  - External Account Monitoring framework (consent-first)
+  - Behavior Fingerprinting pipeline
+- Reputation page now includes a Behavior Fingerprinting Signals scaffold panel.
+
+### UI consistency cleanup pass
+
+- Standardized panel naming for dashboard sections:
+  - `Device Trust Panel`
+  - `Simulator Quick Actions`
+- Removed legacy icon-style heading from Reputation to align with text-first SOC styling.
+- Renamed Reputation details section to `Investigation Details` for consistency with incident/audit language.
+
+### Simulator framework coverage card
+
+Simulator run results now render a **Framework Coverage** card when `Result.Coverage.FrameworkCoverage` is present.
+The card displays control-level rollups for MITRE, OWASP, and NIST with totals and covered/uncovered/invalid counts.
+
+### Device registration phase 1
+
+Users & Devices now supports phase-1 registration flow:
+- New registration form (user/email/device) on `/users-devices`
+- Calls `api/v1/admin/users-devices/register`
+- Refreshes grid after successful registration
+- New registrations enter `Pending` trust state by default
+
+### Device registration phase 2
+
+Added trust-state action flow for registered devices:
+- New API endpoint: `POST /api/v1/admin/users-devices/action`
+  - Actions: `approve` -> Trusted, `challenge` -> Pending, `block` -> Blocked
+- Users & Devices detail panel now includes action buttons (Approve / Challenge / Block)
+- UI calls action endpoint and refreshes the grid with feedback banner
+- Device status transitions are audit-logged (`device.registration.status_updated`)
+
+### Device registration phase 3
+
+Added required analyst rationale for device trust-state actions:
+- Device action endpoint now accepts required `note`
+- Approve/Challenge/Block actions are rejected without note
+- Users & Devices detail panel includes "Analyst note" textarea
+- Status-change audit entries now include the analyst note in `Detail`
+
+### Device registration phase 4
+
+Added per-device action history timeline:
+- New API endpoint: `GET /api/v1/admin/users-devices/history?email=...&device=...`
+- Store now tracks action history entries (register/approve/challenge/block + note + timestamp)
+- Users & Devices detail panel now shows Action Timeline for selected device
+- Timeline updates after status actions and registration events
+
+### Device registration phase 5
+
+Added actor attribution and timeline filtering:
+- Device registration/action payloads now include `actor` (derived from current admin role in UI)
+- Device action history entries now store actor name/role
+- Action Timeline shows "by <actor>" for each event
+- Added timeline filter box (action/actor/status/note text search)

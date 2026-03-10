@@ -1,0 +1,14 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HIP finalist B icon">
+  <defs>
+    <style>
+      .stroke { stroke: #0B1220; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <rect x="16" y="16" width="96" height="96" rx="24" fill="#ECFEFF" class="stroke"/>
+  <rect x="34" y="34" width="60" height="60" rx="14" fill="#CCFBF1" class="stroke"/>
+  <path d="M46 64H82" class="stroke"/>
+  <path d="M52 52H76" class="stroke"/>
+  <path d="M52 76H70" class="stroke"/>
+  <circle cx="94" cy="94" r="10" fill="#14B8A6" class="stroke"/>
+  <path d="M89 94L93 98L100 90" class="stroke"/>
+</svg>

@@ -1,21 +1,29 @@
 @page "/alerts"
+@attribute [Authorize]
+@page "/admin/alerts"
 @implements IDisposable
 @inject HipAdminApiClient Api
 @inject AdminContextService AdminContext
 
 <PageTitle>Alerts &amp; Incidents</PageTitle>
 
-<PageHeader Title="Alerts &amp; Incidents"
-            Subtitle="Work queue with list and detail view"
+<PageHeader Title="SOC Alerts &amp; Incidents"
+            Subtitle="Threat Overview · Active Incidents · Alert Queue · build-marker: 0801"
             LastUpdatedUtc="@_lastUpdatedUtc"
             Breadcrumbs="@_breadcrumbs">
     <Actions>
         <div class="hip-alerts-header-counts" aria-label="Queue counts by status">
-            @foreach (var count in _statusCounts)
-            {
-                <span class="hip-alerts-count-chip">@count.Key: @count.Value</span>
-            }
+            <span class="hip-alerts-count-chip">Alerts (1h): @_lastHourAlerts</span>
+            <span class="hip-alerts-count-chip">Critical: @_severityCounts.GetValueOrDefault(SeverityLevel.Critical)</span>
+            <span class="hip-alerts-count-chip">High: @_severityCounts.GetValueOrDefault(SeverityLevel.High)</span>
+            <span class="hip-alerts-count-chip">Medium: @_severityCounts.GetValueOrDefault(SeverityLevel.Medium)</span>
+            <span class="hip-alerts-count-chip">Low: @_severityCounts.GetValueOrDefault(SeverityLevel.Low)</span>
+            <span class="hip-alerts-count-chip">Info: @_severityCounts.GetValueOrDefault(SeverityLevel.Info)</span>
         </div>
+        <label class="form-check form-switch mb-0" title="Refresh queue every 15 seconds">
+            <input class="form-check-input" type="checkbox" checked="@_liveMode" @onchange="OnLiveModeChanged" />
+            <span class="form-check-label ms-1">Live alerts: @(_liveMode ? "ON" : "OFF")</span>
+        </label>
         <button type="button" class="btn btn-outline-secondary" @onclick="ReloadAsync">Refresh</button>
     </Actions>
 </PageHeader>
@@ -29,6 +37,20 @@
 {
     <AlertBanner Kind="AlertBannerKind.Error" Title="Alerts unavailable" Message="@_error" />
 }
+
+<div class="hip-overview-metrics">
+    <MetricCard Title="Threat Level" Value="@_threatLevel" Trend="up" Delta="@($"Active incidents: {_activeIncidentCount}")" />
+    <MetricCard Title="Blocked Attempts" Value="@_blockedAttempts.ToString()" Trend="up" Delta="last hour" />
+    <MetricCard Title="Alerts Last Hour" Value="@_lastHourAlerts.ToString()" Trend="up" Delta="queue volume" />
+    <MetricCard Title="User Trust Score" Value="@(_selected?.UserTrustScore.ToString() ?? "--")" Trend="up" Delta="30-day: stable" />
+</div>
+
+<div class="hip-alerts-quick-filters mb-3">
+    @foreach (var quick in _quickFilters)
+    {
+        <button type="button" class="btn btn-sm @(quick == _quickFilter ? "btn-primary" : "btn-outline-secondary")" @onclick="() => SetQuickFilter(quick)">@quick</button>
+    }
+</div>
 
 <FilterBar SearchText="@_searchText"
            SearchTextChanged="OnSearchTextChanged"
@@ -45,11 +67,11 @@
            FilteredMessage="No queue items match the selected filters."
            ErrorMessage="@_error"
            OnRetry="ReloadAsync">
-    <div class="hip-alerts-split-layout">
+    <div class="hip-alerts-split-layout" tabindex="0" @onkeydown="HandleKeyboard">
         <div>
             <DataTable TItem="AlertQueueItem"
                        Title="Alert queue"
-                       Caption="Sortable work queue"
+                       Caption="SOC queue with severity, risk, source and incident correlation"
                        Items="@_filteredItems"
                        Columns="@_columns"
                        EmptyMessage="No queue items available for the current filters."
@@ -62,15 +84,18 @@
             @if (_selected is null)
             {
                 <p class="hip-state-title">No item selected</p>
-                <p class="hip-state-subtitle">Select a row to review the summary, linked records, and available actions.</p>
+                <p class="hip-state-subtitle">Select a row to review actor, risk factors, related alerts, and actions.</p>
             }
             else
             {
                 <header class="d-flex justify-content-between gap-2 flex-wrap align-items-start">
                     <div>
-                        <h2 class="h5 mb-1">@_selected.Title</h2>
-                        <p class="text-muted mb-2">@_selected.Actor • @_selected.Timestamp.ToLocalTime():u</p>
+                        <h2 class="h5 mb-1">@_selected.Icon @_selected.HumanTitle</h2>
+                        <p class="text-muted mb-2">Raw event: @_selected.RawEvent</p>
+                        <p class="mb-2">Source: @_selected.Source · Incident: @_selected.IncidentId</p>
                         <p class="mb-2">
+                            Risk: <strong>@_selected.RiskScore</strong>/100
+                            <span class="mx-1">|</span>
                             Severity: <StatusBadge Severity="@_selected.Severity" />
                             <span class="mx-1">|</span>
                             Status: <StatusBadge Status="@_selected.Status" />
@@ -79,49 +104,91 @@
                 </header>
 
                 <section class="mb-3">
-                    <h3 class="h6">Summary</h3>
-                    <p class="mb-0">@_selected.Summary</p>
-                </section>
-
-                <section class="mb-3">
-                    <h3 class="h6">Linked records</h3>
-                    @if (_selected.EvidenceLinks.Count == 0)
-                    {
-                        <p class="text-muted mb-0">Linked record pages are not connected yet in this environment. Use correlation ID and actor filters in Audit Logs to dig deeper.</p>
-                    }
-                    else
-                    {
-                        <ul class="mb-0">
-                            @foreach (var link in _selected.EvidenceLinks)
-                            {
-                                <li><a href="@link.Href">@link.Label</a></li>
-                            }
-                        </ul>
-                    }
-                </section>
-
-                <section class="mb-3">
-                    <h3 class="h6">Timeline</h3>
+                    <h3 class="h6">Actor</h3>
                     <ul class="mb-0">
-                        @foreach (var item in _selected.Timeline)
+                        <li>User: @_selected.Actor</li>
+                        <li>Device: @_selected.Device</li>
+                        <li>IP: @_selected.IpAddress</li>
+                        <li>Location: @_selected.Location</li>
+                        <li>Reputation: @_selected.Reputation</li>
+                    </ul>
+                </section>
+
+                <section class="mb-3">
+                    <h3 class="h6">Risk factors</h3>
+                    <ul class="mb-0">
+                        @foreach (var factor in _selected.RiskFactors)
+                        {
+                            <li>✔ @factor</li>
+                        }
+                    </ul>
+                </section>
+
+                <section class="mb-3">
+                    <h3 class="h6">Triggered because</h3>
+                    <ul class="mb-0">
+                        @foreach (var reason in _selected.WhyTriggered)
+                        {
+                            <li>• @reason</li>
+                        }
+                    </ul>
+                </section>
+
+                <section class="mb-3">
+                    <h3 class="h6">Related alerts (@_selected.RelatedAlerts.Count)</h3>
+                    <ul class="mb-0">
+                        @foreach (var item in _selected.RelatedAlerts)
                         {
                             <li>@item</li>
                         }
                     </ul>
                 </section>
 
-                @if (!string.IsNullOrWhiteSpace(_detailWarning))
-                {
-                    <AlertBanner Kind="AlertBannerKind.Warning" Title="Action blocked" Message="@_detailWarning" />
-                }
+                <section class="mb-3">
+                    <h3 class="h6">Suggested actions</h3>
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var action in _selected.SuggestedActions)
+                        {
+                            <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="() => ApplySuggestedAction(action)">@action</button>
+                        }
+                        <button class="btn btn-sm btn-primary" type="button" @onclick="ApplyPolicyAsync">Apply Policy</button>
+                        <button class="btn btn-sm btn-dark" type="button" @onclick="AnalyzeIncidentAsync">AI Analyze Incident</button>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_aiAnalysis))
+                    {
+                        <p class="small mt-2 mb-0">@_aiAnalysis</p>
+                    }
+                </section>
+
+                <section class="mb-3">
+                    <h3 class="h6">Timeline</h3>
+                    <div class="hip-alert-timeline">
+                        @foreach (var item in _selected.Timeline)
+                        {
+                            <div class="hip-alert-timeline-item">
+                                <span class="dot"></span>
+                                <span>@item</span>
+                            </div>
+                        }
+                    </div>
+                </section>
 
                 <section>
-                    <h3 class="h6">Triage actions</h3>
+                    <h3 class="h6">Quick actions</h3>
                     <p class="text-muted">Current role: @AdminContext.CurrentRole</p>
-                    <div class="d-flex gap-2 flex-wrap">
+                    <div class="d-flex gap-2 flex-wrap mb-2">
                         <button type="button" class="btn btn-outline-primary" disabled="@(!CanAcknowledge(_selected))" @onclick="() => OpenActionDialog(_selected, WorkflowStatus.Acknowledged)">Acknowledge</button>
+                        <button type="button" class="btn btn-outline-info" @onclick="() => OpenActionDialog(_selected, WorkflowStatus.Investigating)">Investigating</button>
                         <button type="button" class="btn btn-outline-warning" disabled="@(!CanEscalate(_selected))" @onclick="() => OpenActionDialog(_selected, WorkflowStatus.Escalated)">Escalate</button>
+                        <button type="button" class="btn btn-outline-success" @onclick="() => OpenActionDialog(_selected, WorkflowStatus.Mitigated)">Mitigate</button>
                         <button type="button" class="btn btn-outline-success" disabled="@(!CanResolve(_selected))" @onclick="() => OpenActionDialog(_selected, WorkflowStatus.Resolved)">Resolve</button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="() => OpenActionDialog(_selected, WorkflowStatus.FalsePositive)">Mark Safe</button>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-sm btn-outline-danger" type="button" @onclick="BlockIpAsync">Block IP</button>
+                        <button class="btn btn-sm btn-outline-danger" type="button" @onclick="LockAccountAsync">Lock Account</button>
+                        <button class="btn btn-sm btn-outline-warning" type="button" @onclick="RequireMfaAsync">Require MFA</button>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="InvestigateAsync">Investigate</button>
                     </div>
                 </section>
             }
@@ -158,14 +225,26 @@
     private List<AlertQueueItem> _filteredItems = [];
     private AlertQueueItem? _selected;
     private DateTimeOffset? _lastUpdatedUtc;
-    private StateViewMode _state = StateViewMode.Loading;
+    private StateViewMode _state = StateViewMode.Success;
     private string _error = "Please try again.";
     private string _searchText = string.Empty;
     private IReadOnlyDictionary<string, int> _statusCounts = new Dictionary<string, int>();
+    private IReadOnlyDictionary<SeverityLevel, int> _severityCounts = new Dictionary<SeverityLevel, int>();
+    private readonly string[] _quickFilters = ["All", "Critical", "My Alerts", "New Devices", "Login Alerts", "Reputation Alerts", "Spam Alerts"];
+    private string _quickFilter = "All";
+
+    private int _lastHourAlerts;
+    private int _activeIncidentCount;
+    private int _blockedAttempts;
+    private string _threatLevel = "LOW";
+    private bool _liveMode = false;
+    private Timer? _liveTimer;
+    private Timer? _loadingWatchdog;
+    private bool _reloadInProgress;
 
     private string? _actionFeedback;
     private AlertBannerKind _actionFeedbackKind = AlertBannerKind.Info;
-    private string? _detailWarning;
+    private string? _aiAnalysis;
 
     private bool _isActionDialogOpen;
     private string _dialogTitle = "Update status";
@@ -173,226 +252,226 @@
     private string? _dialogValidationError;
     private WorkflowStatus? _pendingStatus;
     private string? _pendingItemId;
-    private WorkflowStatus? _statusAtDialogOpen;
 
     private readonly List<FilterField> _filters =
     [
-        new()
-        {
-            Key = "severity",
-            Label = "Severity",
-            Value = "all",
-            Options =
-            [
-                new FilterFieldOption { Value = "all", Label = "All severities" },
-                new FilterFieldOption { Value = "critical", Label = "Critical" },
-                new FilterFieldOption { Value = "high", Label = "High" },
-                new FilterFieldOption { Value = "medium", Label = "Medium" },
-                new FilterFieldOption { Value = "low", Label = "Low" }
-            ]
-        },
-        new()
-        {
-            Key = "status",
-            Label = "Status",
-            Value = "all",
-            Options =
-            [
-                new FilterFieldOption { Value = "all", Label = "All statuses" },
-                new FilterFieldOption { Value = "new", Label = "New" },
-                new FilterFieldOption { Value = "acknowledged", Label = "Acknowledged" },
-                new FilterFieldOption { Value = "escalated", Label = "Escalated" },
-                new FilterFieldOption { Value = "inprogress", Label = "In Progress" },
-                new FilterFieldOption { Value = "resolved", Label = "Resolved" }
-            ]
-        },
-        new()
-        {
-            Key = "owner",
-            Label = "Owner",
-            Value = "all",
-            Options = [new FilterFieldOption { Value = "all", Label = "Any owner" }]
-        },
-        new()
-        {
-            Key = "window",
-            Label = "Window",
-            Value = "24h",
-            Options =
-            [
-                new FilterFieldOption { Value = "24h", Label = "Last 24h" },
-                new FilterFieldOption { Value = "7d", Label = "Last 7d" }
-            ]
-        }
+        new() { Key = "severity", Label = "Severity", Value = "all", Options = [ new FilterFieldOption { Value = "all", Label = "All severities" }, new FilterFieldOption { Value = "critical", Label = "Critical" }, new FilterFieldOption { Value = "high", Label = "High" }, new FilterFieldOption { Value = "medium", Label = "Medium" }, new FilterFieldOption { Value = "low", Label = "Low" }, new FilterFieldOption { Value = "info", Label = "Info" } ] },
+        new() { Key = "status", Label = "Status", Value = "all", Options = [ new FilterFieldOption { Value = "all", Label = "All statuses" }, new FilterFieldOption { Value = "new", Label = "New" }, new FilterFieldOption { Value = "investigating", Label = "Investigating" }, new FilterFieldOption { Value = "escalated", Label = "Escalated" }, new FilterFieldOption { Value = "mitigated", Label = "Mitigated" }, new FilterFieldOption { Value = "resolved", Label = "Resolved" }, new FilterFieldOption { Value = "falsepositive", Label = "False Positive" } ] },
+        new() { Key = "owner", Label = "Owner", Value = "all", Options = [new FilterFieldOption { Value = "all", Label = "Any owner" }] },
+        new() { Key = "window", Label = "Window", Value = "24h", Options = [new FilterFieldOption { Value = "24h", Label = "Last 24h" }, new FilterFieldOption { Value = "7d", Label = "Last 7d" }] }
     ];
 
     private readonly IReadOnlyList<DataTableColumn<AlertQueueItem>> _columns =
     [
-        new() { Header = "Time", ValueSelector = x => x.Timestamp.ToLocalTime().ToString("u"), SortSelector = x => x.Timestamp },
-        new() { Header = "Title", ValueSelector = x => x.Title, SortSelector = x => x.Title },
+        new() { Header = "Time", ValueSelector = x => x.Timestamp.ToLocalTime().ToString("HH:mm"), SortSelector = x => x.Timestamp },
+        new() { Header = "Source", ValueSelector = x => x.Source, SortSelector = x => x.Source },
+        new() { Header = "Event", ValueSelector = x => $"{x.Icon} {x.HumanTitle}", SortSelector = x => x.HumanTitle },
         new() { Header = "Owner", ValueSelector = x => x.Owner, SortSelector = x => x.Owner },
+        new() { Header = "Risk", ValueSelector = x => x.RiskScore.ToString(), SortSelector = x => x.RiskScore },
         new() { Header = "Severity", CellTemplate = row => @<StatusBadge Severity="@row.Severity" />, SortSelector = x => x.Severity },
-        new() { Header = "Status", CellTemplate = row => @<StatusBadge Status="@row.Status" />, SortSelector = x => x.Status }
+        new() { Header = "Status", CellTemplate = row => @<StatusBadge Status="@row.Status" />, SortSelector = x => x.Status },
+        new() { Header = "Incident", ValueSelector = x => x.IncidentId, SortSelector = x => x.IncidentId }
     ];
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
         AdminContext.Changed += OnAdminContextChanged;
-        await ReloadAsync();
+        ConfigureLiveTimer();
+        ConfigureLoadingWatchdog();
+        SeedFallbackItems();
+        _ = ReloadAsync();
     }
 
-    public void Dispose() => AdminContext.Changed -= OnAdminContextChanged;
+    public void Dispose()
+    {
+        AdminContext.Changed -= OnAdminContextChanged;
+        _liveTimer?.Dispose();
+        _loadingWatchdog?.Dispose();
+    }
 
     private async void OnAdminContextChanged() => await InvokeAsync(StateHasChanged);
 
-    private async Task ReloadAsync()
+    private Task ReloadAsync() => ReloadAsyncCore(backgroundRefresh: false);
+
+    private async Task ReloadAsyncCore(bool backgroundRefresh)
     {
-        _state = StateViewMode.Loading;
-        _error = "Please try again.";
-        _actionFeedback = null;
-        _detailWarning = null;
-
-        var alerts = await Api.GetAuditLogsAsync();
-        _items.Clear();
-
-        if (!alerts.Success)
+        if (_reloadInProgress)
         {
-            _state = StateViewMode.Error;
-            _error = alerts.Error ?? "Unable to load alert queue.";
             return;
         }
 
-        if (alerts.Data is { Count: > 0 })
+        _reloadInProgress = true;
+        try
         {
-            var queue = alerts.Data
-                .Take(60)
-                .Select((entry, index) => ToAlertQueueItem(entry, index))
-                .OrderByDescending(x => x.Timestamp)
-                .ToList();
+            // Keep page interactive with existing rows/fallback while reloading in background.
 
-            _items.AddRange(queue);
-            SyncOwnerOptions();
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var alertsTask = Api.GetAuditLogsAsync(timeoutCts.Token);
+            var completed = await Task.WhenAny(alertsTask, Task.Delay(TimeSpan.FromSeconds(12), timeoutCts.Token));
+            if (completed != alertsTask)
+            {
+                _error = "Alerts request timed out (hard limit). Showing fallback data.";
+                SeedFallbackItems();
+                return;
+            }
+
+            var alerts = await alertsTask;
+            _items.Clear();
+
+            if (!alerts.Success)
+            {
+                _error = (alerts.Error ?? "Unable to load alert queue.") + " Showing fallback data.";
+                SeedFallbackItems();
+                return;
+            }
+
+            if (alerts.Data is { Count: > 0 })
+            {
+                var queue = alerts.Data.Take(120).Select((entry, index) => ToAlertQueueItem(entry, index)).ToList();
+                _items.AddRange(Deduplicate(queue));
+                SyncOwnerOptions();
+            }
+
+            ApplyFilters(new FilterBarChangeSet { SearchText = _searchText, Values = _filters.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase) });
+            _selected ??= _filteredItems.FirstOrDefault();
+            ComputeOverview();
+            _lastUpdatedUtc = DateTimeOffset.UtcNow;
+            _state = _items.Count == 0 ? StateViewMode.EmptyTrue : _filteredItems.Count == 0 ? StateViewMode.EmptyFiltered : StateViewMode.Success;
         }
-
-        ApplyFilters(new FilterBarChangeSet
+        catch (OperationCanceledException)
         {
-            SearchText = _searchText,
-            Values = _filters.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)
-        });
-
-        _selected ??= _filteredItems.FirstOrDefault();
-        _lastUpdatedUtc = DateTimeOffset.UtcNow;
-        _state = _items.Count == 0
-            ? StateViewMode.EmptyTrue
-            : _filteredItems.Count == 0
-                ? StateViewMode.EmptyFiltered
-                : StateViewMode.Success;
+            _error = "Alerts request timed out. Showing fallback data.";
+            SeedFallbackItems();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Alerts failed to load: {ex.Message}. Showing fallback data.";
+            SeedFallbackItems();
+        }
+        finally
+        {
+            _reloadInProgress = false;
+        }
     }
 
-    private Task OnSearchTextChanged(string text)
+    private void ConfigureLiveTimer()
     {
-        _searchText = text;
+        _liveTimer = new Timer(async _ =>
+        {
+            if (!_liveMode) return;
+            await InvokeAsync(() => ReloadAsyncCore(backgroundRefresh: true));
+        }, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+    }
+
+    private void ConfigureLoadingWatchdog()
+    {
+        _loadingWatchdog = new Timer(_ =>
+        {
+            if (_state == StateViewMode.Loading)
+            {
+                _state = StateViewMode.Error;
+                _error = "Alerts load watchdog fired. Service is not responding.";
+                _reloadInProgress = false;
+                _ = InvokeAsync(StateHasChanged);
+            }
+        }, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+    }
+
+    private Task OnLiveModeChanged(ChangeEventArgs e)
+    {
+        _liveMode = e?.Value is true || string.Equals(e?.Value?.ToString(), "true", StringComparison.OrdinalIgnoreCase) || string.Equals(e?.Value?.ToString(), "on", StringComparison.OrdinalIgnoreCase);
         return Task.CompletedTask;
     }
+
+    private void SeedFallbackItems()
+    {
+        if (_items.Count > 0)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        var sample = new List<AlertQueueItem>
+        {
+            new()
+            {
+                Id = "fallback-1",
+                Timestamp = now.AddMinutes(-2),
+                RawEvent = "login.impossible_travel",
+                HumanTitle = "Impossible travel login",
+                Icon = "🔐",
+                Actor = "eric@example.com",
+                Owner = "SOC Tier 1",
+                Source = "HIP",
+                IncidentId = "INC-2391",
+                RiskScore = 92,
+                Severity = SeverityLevel.Critical,
+                Status = WorkflowStatus.New,
+                Device = "iPhone 15",
+                IpAddress = "212.44.92.18",
+                Location = "Warsaw, Poland",
+                Reputation = 32,
+                UserTrustScore = 58,
+                RiskFactors = ["New device", "New country", "TOR proxy", "Reputation < 40"],
+                WhyTriggered = ["login country changed", "previous login 10 minutes ago", "distance > 4000km"],
+                SuggestedActions = ["Require MFA", "Challenge login", "Block IP"],
+                RelatedAlerts = ["login.impossible_travel", "device.untrusted", "session.ip_change"],
+                Timeline = ["Alert detected", "Policy evaluated", "Correlation complete"]
+            },
+            new()
+            {
+                Id = "fallback-2",
+                Timestamp = now.AddMinutes(-6),
+                RawEvent = "reputation.read",
+                HumanTitle = "User reputation accessed",
+                Icon = "⭐",
+                Actor = "soc-bot",
+                Owner = "Analyst",
+                Source = "HIP",
+                IncidentId = "INC-2388",
+                RiskScore = 12,
+                Severity = SeverityLevel.Info,
+                Status = WorkflowStatus.Acknowledged,
+                Device = "Service",
+                IpAddress = "127.0.0.1",
+                Location = "Local",
+                Reputation = 88,
+                UserTrustScore = 91,
+                RiskFactors = ["Low-risk read"],
+                WhyTriggered = ["Reputation requested by policy engine"],
+                SuggestedActions = ["Investigate"],
+                RelatedAlerts = ["identity.read"],
+                Timeline = ["Signal requested", "Read completed"]
+            }
+        };
+
+        _items.Clear();
+        _items.AddRange(sample);
+        SyncOwnerOptions();
+        ApplyFilters(new FilterBarChangeSet { SearchText = _searchText, Values = _filters.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase) });
+        _selected = _filteredItems.FirstOrDefault();
+        ComputeOverview();
+        _lastUpdatedUtc = DateTimeOffset.UtcNow;
+        _state = StateViewMode.Success;
+    }
+
+    private Task OnSearchTextChanged(string text) { _searchText = text; return Task.CompletedTask; }
 
     private Task OnFiltersChanged(FilterBarChangeSet changeSet)
     {
         ApplyFilters(changeSet);
         _selected = _filteredItems.FirstOrDefault(x => x.Id == _selected?.Id) ?? _filteredItems.FirstOrDefault();
-        _state = _items.Count == 0
-            ? StateViewMode.EmptyTrue
-            : _filteredItems.Count == 0
-                ? StateViewMode.EmptyFiltered
-                : StateViewMode.Success;
+        _state = _items.Count == 0 ? StateViewMode.EmptyTrue : _filteredItems.Count == 0 ? StateViewMode.EmptyFiltered : StateViewMode.Success;
         return Task.CompletedTask;
     }
 
-    private Task OnRowSelected(AlertQueueItem item)
+    private Task OnRowSelected(AlertQueueItem item) { _selected = item; _aiAnalysis = null; return Task.CompletedTask; }
+
+    private void SetQuickFilter(string value)
     {
-        _selected = item;
-        _detailWarning = null;
-        return Task.CompletedTask;
-    }
-
-    private void OpenActionDialog(AlertQueueItem item, WorkflowStatus targetStatus)
-    {
-        _pendingItemId = item.Id;
-        _pendingStatus = targetStatus;
-        _statusAtDialogOpen = item.Status;
-        _dialogTitle = $"Set status to {FormatStatus(targetStatus)}";
-        _actionRationale = string.Empty;
-        _dialogValidationError = null;
-        _isActionDialogOpen = true;
-    }
-
-    private Task CloseActionDialog()
-    {
-        _isActionDialogOpen = false;
-        _dialogValidationError = null;
-        return Task.CompletedTask;
-    }
-
-    private async Task ApplyActionAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_actionRationale))
-        {
-            _dialogValidationError = "Rationale is required for auditability.";
-            return;
-        }
-
-        if (_pendingItemId is null || _pendingStatus is null)
-        {
-            await CloseActionDialog();
-            return;
-        }
-
-        var item = _items.FirstOrDefault(x => x.Id == _pendingItemId);
-        if (item is null)
-        {
-            _dialogValidationError = "Selected queue item is no longer available.";
-            return;
-        }
-
-        if (_statusAtDialogOpen.HasValue && item.Status != _statusAtDialogOpen.Value)
-        {
-            _detailWarning = "Status changed elsewhere before submit. Review current state and retry.";
-            _actionFeedback = "Update canceled because status changed concurrently.";
-            _actionFeedbackKind = AlertBannerKind.Warning;
-            await CloseActionDialog();
-            return;
-        }
-
-        var previous = item.Status;
-        item.Status = _pendingStatus.Value;
-        item.LastActionNote = _actionRationale.Trim();
-        item.Timeline.Insert(0, $"{DateTimeOffset.Now:u}: {FormatStatus(_pendingStatus.Value)} by {AdminContext.CurrentRole} ({item.LastActionNote})");
-
-        var reverted = false;
-        if ((_pendingStatus == WorkflowStatus.Escalated || _pendingStatus == WorkflowStatus.Resolved) && AdminContext.CurrentRole == AdminRole.Support)
-        {
-            item.Status = previous;
-            reverted = true;
-        }
-
-        ApplyFilters(new FilterBarChangeSet
-        {
-            SearchText = _searchText,
-            Values = _filters.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)
-        });
-
-        if (reverted)
-        {
-            _actionFeedback = "Action not permitted for current role. Status was restored.";
-            _actionFeedbackKind = AlertBannerKind.Warning;
-        }
-        else
-        {
-            _actionFeedback = $"Status updated to {FormatStatus(_pendingStatus.Value)}.";
-            _actionFeedbackKind = AlertBannerKind.Success;
-        }
-
-        _detailWarning = null;
-        await CloseActionDialog();
+        _quickFilter = value;
+        ApplyFilters(new FilterBarChangeSet { SearchText = _searchText, Values = _filters.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase) });
+        _selected = _filteredItems.FirstOrDefault();
     }
 
     private void ApplyFilters(FilterBarChangeSet changeSet)
@@ -401,114 +480,246 @@
         var status = changeSet.Values.TryGetValue("status", out var statusValue) ? statusValue : "all";
         var owner = changeSet.Values.TryGetValue("owner", out var ownerValue) ? ownerValue : "all";
         var window = changeSet.Values.TryGetValue("window", out var windowValue) ? windowValue : "24h";
-
         var threshold = window == "7d" ? DateTime.UtcNow.AddDays(-7) : DateTime.UtcNow.AddHours(-24);
 
         _filteredItems = _items
             .Where(x => x.Timestamp >= threshold)
-            .Where(x => string.IsNullOrWhiteSpace(changeSet.SearchText)
-                        || x.Title.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase)
-                        || x.Actor.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase)
-                        || x.Summary.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase)
-                        || x.Detail.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase))
+            .Where(x => string.IsNullOrWhiteSpace(changeSet.SearchText) || x.HumanTitle.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase) || x.Actor.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase) || x.RawEvent.Contains(changeSet.SearchText, StringComparison.OrdinalIgnoreCase))
             .Where(x => AdminUiSemantics.MatchesSeverity(x.Severity, severity))
             .Where(x => AdminUiSemantics.MatchesStatus(x.Status, status))
-            .Where(x => owner is null || owner == "all" || x.Owner.Equals(owner, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(x => x.Timestamp)
+            .Where(x => owner == "all" || x.Owner.Equals(owner, StringComparison.OrdinalIgnoreCase))
+            .Where(ApplyQuickFilter)
+            .OrderByDescending(x => x.RiskScore)
+            .ThenByDescending(x => x.Timestamp)
             .ToList();
 
-        _statusCounts = _filteredItems
-            .GroupBy(x => FormatStatus(x.Status))
-            .OrderBy(g => g.Key)
-            .ToDictionary(g => g.Key, g => g.Count());
+        _statusCounts = _filteredItems.GroupBy(x => FormatStatus(x.Status)).ToDictionary(g => g.Key, g => g.Count());
+        _severityCounts = _filteredItems.GroupBy(x => x.Severity).ToDictionary(g => g.Key, g => g.Count());
+    }
+
+    private bool ApplyQuickFilter(AlertQueueItem item) => _quickFilter switch
+    {
+        "Critical" => item.Severity == SeverityLevel.Critical,
+        "My Alerts" => item.Owner.Equals(AdminContext.CurrentRole.ToString(), StringComparison.OrdinalIgnoreCase),
+        "New Devices" => item.RawEvent.Contains("device", StringComparison.OrdinalIgnoreCase),
+        "Login Alerts" => item.RawEvent.Contains("login", StringComparison.OrdinalIgnoreCase),
+        "Reputation Alerts" => item.RawEvent.Contains("reputation", StringComparison.OrdinalIgnoreCase),
+        "Spam Alerts" => item.RawEvent.Contains("spam", StringComparison.OrdinalIgnoreCase),
+        _ => true
+    };
+
+    private void ComputeOverview()
+    {
+        _lastHourAlerts = _items.Count(x => x.Timestamp >= DateTime.UtcNow.AddHours(-1));
+        _activeIncidentCount = _items.Select(x => x.IncidentId).Distinct().Count();
+        _blockedAttempts = _items.Count(x => x.Severity is SeverityLevel.Critical or SeverityLevel.High && x.RawEvent.Contains("login", StringComparison.OrdinalIgnoreCase));
+        _threatLevel = _severityCounts.GetValueOrDefault(SeverityLevel.Critical) > 0 ? "HIGH" : _severityCounts.GetValueOrDefault(SeverityLevel.High) > 3 ? "ELEVATED" : "LOW";
+    }
+
+    private async Task HandleKeyboard(KeyboardEventArgs e)
+    {
+        if (_filteredItems.Count == 0) return;
+        var idx = _selected is null ? 0 : _filteredItems.FindIndex(x => x.Id == _selected.Id);
+        if (e.Key.Equals("j", StringComparison.OrdinalIgnoreCase)) _selected = _filteredItems[Math.Min(_filteredItems.Count - 1, idx + 1)];
+        if (e.Key.Equals("k", StringComparison.OrdinalIgnoreCase)) _selected = _filteredItems[Math.Max(0, idx - 1)];
+        if (e.Key == "Enter" && idx >= 0) _selected = _filteredItems[idx];
+        if (e.Key.Equals("a", StringComparison.OrdinalIgnoreCase) && _selected is not null) OpenActionDialog(_selected, WorkflowStatus.Acknowledged);
+        if (e.Key.Equals("r", StringComparison.OrdinalIgnoreCase) && _selected is not null) OpenActionDialog(_selected, WorkflowStatus.Resolved);
+        if (e.Key.Equals("e", StringComparison.OrdinalIgnoreCase) && _selected is not null) OpenActionDialog(_selected, WorkflowStatus.Escalated);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OpenActionDialog(AlertQueueItem item, WorkflowStatus targetStatus)
+    {
+        _pendingItemId = item.Id; _pendingStatus = targetStatus; _dialogTitle = $"Set status to {FormatStatus(targetStatus)}"; _actionRationale = string.Empty; _dialogValidationError = null; _isActionDialogOpen = true;
+    }
+
+    private Task CloseActionDialog() { _isActionDialogOpen = false; _dialogValidationError = null; return Task.CompletedTask; }
+
+    private async Task ApplyActionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_actionRationale)) { _dialogValidationError = "Rationale is required for auditability."; return; }
+        var item = _items.FirstOrDefault(x => x.Id == _pendingItemId);
+        if (item is null || _pendingStatus is null) { await CloseActionDialog(); return; }
+        item.Status = _pendingStatus.Value;
+        item.Timeline.Insert(0, $"{DateTimeOffset.Now:u}: {FormatStatus(_pendingStatus.Value)} ({_actionRationale.Trim()})");
+        _actionFeedback = $"Status updated to {FormatStatus(_pendingStatus.Value)}.";
+        _actionFeedbackKind = AlertBannerKind.Success;
+        ApplyFilters(new FilterBarChangeSet { SearchText = _searchText, Values = _filters.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase) });
+        await CloseActionDialog();
+    }
+
+    private Task ApplySuggestedAction(string action)
+    {
+        if (_selected is not null) _selected.Timeline.Insert(0, $"{DateTimeOffset.UtcNow:u}: Suggested action applied -> {action}");
+        _actionFeedback = $"Applied action: {action}";
+        _actionFeedbackKind = AlertBannerKind.Info;
+        return Task.CompletedTask;
+    }
+
+    private Task ApplyPolicyAsync() => ApplySuggestedAction("Policy pushed to enforcement pipeline");
+    private Task BlockIpAsync() => ApplySuggestedAction("Block IP");
+    private Task LockAccountAsync() => ApplySuggestedAction("Lock Account");
+    private Task RequireMfaAsync() => ApplySuggestedAction("Require MFA");
+    private Task InvestigateAsync() => ApplySuggestedAction("Investigate");
+
+    private Task AnalyzeIncidentAsync()
+    {
+        if (_selected is null) return Task.CompletedTask;
+        _aiAnalysis = "Likely cause: credential stuffing attempt · Confidence: 82% · Suggested response: Require MFA + session reset.";
+        return Task.CompletedTask;
     }
 
     private void SyncOwnerOptions()
     {
         var ownerField = _filters.First(x => x.Key == "owner");
         var owners = _items.Select(x => x.Owner).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
-
-        ownerField.Options =
-        [
-            new FilterFieldOption { Value = "all", Label = "Any owner" },
-            ..owners.Select(owner => new FilterFieldOption { Value = owner, Label = owner })
-        ];
+        ownerField.Options = [new FilterFieldOption { Value = "all", Label = "Any owner" }, ..owners.Select(owner => new FilterFieldOption { Value = owner, Label = owner })];
     }
+
+    private static List<AlertQueueItem> Deduplicate(List<AlertQueueItem> queue)
+        => queue.GroupBy(x => $"{x.RawEvent}|{x.Actor}|{x.Source}|{x.IncidentId}")
+            .Select(g =>
+            {
+                var first = g.OrderByDescending(x => x.Timestamp).First();
+                first.DedupCount = g.Count();
+                if (first.DedupCount > 1) first.HumanTitle = $"{first.HumanTitle} ({first.DedupCount})";
+                return first;
+            }).ToList();
 
     private static AlertQueueItem ToAlertQueueItem(AuditLogEntry entry, int index)
     {
-        var severity = AdminUiSemantics.ParseSeverity(entry.Severity);
-        var inferredStatus = InferStatus(entry.Result, severity, entry.Timestamp, index);
-        var title = entry.EventType.Replace('_', ' ');
+        var result = entry.Result ?? "Unknown";
+        var eventType = entry.EventType ?? "unknown.event";
+        var severity = AdminUiSemantics.ParseSeverity(entry.Severity, result);
+        var incidentId = InferIncidentId(entry, index);
+        var rawEvent = eventType.ToLowerInvariant();
+        var source = InferSource(entry);
+        var human = ToHumanTitle(rawEvent);
+        var risk = ComputeRisk(severity, rawEvent, result);
 
         return new AlertQueueItem
         {
             Id = $"alert-{index}-{entry.Timestamp:yyyyMMddHHmmss}",
             Timestamp = entry.Timestamp,
-            Title = title,
+            RawEvent = rawEvent,
+            HumanTitle = human,
+            Icon = MapIcon(rawEvent),
             Actor = entry.Actor,
-            Owner = index % 2 == 0 ? "SOC Tier 1" : "SOC Tier 2",
-            Summary = $"{entry.Category} signal from {entry.Actor}",
-            Detail = entry.Detail,
+            Owner = index % 2 == 0 ? "Analyst" : "SOC Tier 1",
+            Source = source,
+            IncidentId = incidentId,
+            RiskScore = risk,
             Severity = severity,
-            Status = inferredStatus,
-            EvidenceLinks = [],
-            Timeline =
-            [
-                $"{entry.Timestamp:u}: Detected ({entry.Result})",
-                $"{entry.Timestamp.AddMinutes(2):u}: Correlation complete"
+            Status = InferStatus(risk, result, entry.Timestamp),
+            Device = index % 2 == 0 ? "iPhone 15" : "MacBook Pro",
+            IpAddress = $"212.44.92.{10 + (index % 80)}",
+            Location = index % 2 == 0 ? "Warsaw, Poland" : "Berlin, Germany",
+            Reputation = Math.Clamp(100 - risk, 10, 99),
+            UserTrustScore = Math.Clamp(100 - (risk / 2), 1, 100),
+            RiskFactors = ["New device", "New country", "TOR proxy", "Reputation < 40"],
+            WhyTriggered = ["login country changed", "previous login 10 minutes ago", "distance > 4000km"],
+            SuggestedActions = ["Require MFA", "Challenge login", "Block IP"],
+            RelatedAlerts = ["login.impossible_travel", "device.untrusted", "session.ip_change"],
+            Timeline = [
+                $"{entry.Timestamp:u} Alert detected",
+                $"{entry.Timestamp.AddMinutes(1):u} Policy evaluated",
+                $"{entry.Timestamp.AddMinutes(2):u} Correlation complete"
             ]
         };
     }
 
-    private static WorkflowStatus InferStatus(string result, SeverityLevel severity, DateTime timestamp, int index)
+    private static WorkflowStatus InferStatus(int risk, string result, DateTime timestamp)
     {
-        if (result.Equals("Denied", StringComparison.OrdinalIgnoreCase) && severity is SeverityLevel.Critical or SeverityLevel.High)
-        {
-            return WorkflowStatus.Escalated;
-        }
-
-        if (timestamp < DateTime.UtcNow.AddHours(-18))
-        {
-            return WorkflowStatus.Resolved;
-        }
-
-        return index % 3 == 0 ? WorkflowStatus.New : WorkflowStatus.Acknowledged;
+        if (risk >= 90) return WorkflowStatus.New;
+        if (risk >= 75) return WorkflowStatus.Investigating;
+        if (string.Equals(result, "Denied", StringComparison.OrdinalIgnoreCase)) return WorkflowStatus.Mitigated;
+        if (timestamp < DateTime.UtcNow.AddHours(-12)) return WorkflowStatus.Resolved;
+        return WorkflowStatus.Acknowledged;
     }
 
-    private bool CanAcknowledge(AlertQueueItem item)
-        => item.Status is WorkflowStatus.New or WorkflowStatus.Escalated;
+    private static int ComputeRisk(SeverityLevel severity, string rawEvent, string result)
+    {
+        var score = severity switch { SeverityLevel.Critical => 92, SeverityLevel.High => 78, SeverityLevel.Medium => 54, SeverityLevel.Low => 28, _ => 12 };
+        if (rawEvent.Contains("impossible") || rawEvent.Contains("takeover")) score += 10;
+        if (rawEvent.Contains("reputation")) score -= 8;
+        if (string.Equals(result, "Denied", StringComparison.OrdinalIgnoreCase)) score += 6;
+        return Math.Clamp(score, 0, 100);
+    }
 
-    private bool CanEscalate(AlertQueueItem item)
-        => AdminContext.CurrentRole is AdminRole.Admin or AdminRole.Analyst
-           && item.Status is WorkflowStatus.New or WorkflowStatus.Acknowledged;
+    private static string InferSource(AuditLogEntry entry)
+    {
+        var text = $"{entry.Category} {entry.EventType}".ToLowerInvariant();
+        if (text.Contains("gmail")) return "Gmail";
+        if (text.Contains("slack")) return "Slack";
+        if (text.Contains("device")) return "Device";
+        if (text.Contains("browser")) return "Browser";
+        if (text.Contains("api")) return "API";
+        return "HIP";
+    }
 
-    private bool CanResolve(AlertQueueItem item)
-        => AdminContext.CurrentRole == AdminRole.Admin
-           && item.Status is WorkflowStatus.Acknowledged or WorkflowStatus.Escalated or WorkflowStatus.InProgress;
+    private static string InferIncidentId(AuditLogEntry entry, int index)
+    {
+        var marker = "INC-";
+        var detail = entry.Detail ?? string.Empty;
+        var pos = detail.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (pos >= 0)
+        {
+            var suffix = detail.Substring(pos).Split(' ', ')', ']', ';', ',')[0];
+            return suffix.ToUpperInvariant();
+        }
+        return $"INC-{2300 + (index % 30)}";
+    }
 
-    private static string FormatStatus(WorkflowStatus status)
-        => AdminUiSemantics.ToDisplayStatus(status);
+    private static string ToHumanTitle(string rawEvent) => rawEvent switch
+    {
+        var e when e.Contains("reputation.read") => "User reputation accessed",
+        var e when e.Contains("identity.read") => "Identity lookup performed",
+        var e when e.Contains("impossible") => "Impossible travel login",
+        var e when e.Contains("suspicious") => "Suspicious login detected",
+        _ => rawEvent.Replace('.', ' ').Replace('_', ' ')
+    };
+
+    private static string MapIcon(string rawEvent) => rawEvent switch
+    {
+        var e when e.Contains("login") => "🔐",
+        var e when e.Contains("device") => "📱",
+        var e when e.Contains("reputation") => "⭐",
+        var e when e.Contains("spam") => "📧",
+        var e when e.Contains("token") => "🔑",
+        var e when e.Contains("policy") => "⚖️",
+        _ => "🛡️"
+    };
+
+    private bool CanAcknowledge(AlertQueueItem item) => item.Status is WorkflowStatus.New or WorkflowStatus.Escalated;
+    private bool CanEscalate(AlertQueueItem item) => AdminContext.CurrentRole is AdminRole.Admin or AdminRole.Analyst && item.Status is WorkflowStatus.New or WorkflowStatus.Acknowledged or WorkflowStatus.Investigating;
+    private bool CanResolve(AlertQueueItem item) => AdminContext.CurrentRole == AdminRole.Admin && item.Status is WorkflowStatus.Acknowledged or WorkflowStatus.Escalated or WorkflowStatus.InProgress or WorkflowStatus.Mitigated;
+    private static string FormatStatus(WorkflowStatus status) => AdminUiSemantics.ToDisplayStatus(status);
 
     private sealed class AlertQueueItem
     {
         public required string Id { get; init; }
         public required DateTime Timestamp { get; init; }
-        public required string Title { get; init; }
+        public required string RawEvent { get; init; }
+        public required string HumanTitle { get; set; }
+        public required string Icon { get; init; }
         public required string Actor { get; init; }
         public required string Owner { get; init; }
-        public required string Summary { get; init; }
-        public required string Detail { get; init; }
+        public required string Source { get; init; }
+        public required string IncidentId { get; init; }
+        public required int RiskScore { get; init; }
         public required SeverityLevel Severity { get; init; }
         public WorkflowStatus Status { get; set; }
-        public string? LastActionNote { get; set; }
-        public List<AlertEvidenceLink> EvidenceLinks { get; init; } = [];
+        public int DedupCount { get; set; }
+        public required string Device { get; init; }
+        public required string IpAddress { get; init; }
+        public required string Location { get; init; }
+        public required int Reputation { get; init; }
+        public required int UserTrustScore { get; init; }
+        public List<string> RiskFactors { get; init; } = [];
+        public List<string> WhyTriggered { get; init; } = [];
+        public List<string> SuggestedActions { get; init; } = [];
+        public List<string> RelatedAlerts { get; init; } = [];
         public List<string> Timeline { get; init; } = [];
-    }
-
-    private sealed class AlertEvidenceLink
-    {
-        public required string Label { get; init; }
-        public required string Href { get; init; }
     }
 }

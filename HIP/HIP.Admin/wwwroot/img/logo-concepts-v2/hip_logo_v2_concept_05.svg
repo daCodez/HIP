@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">HIP Logo Concept 05 - Icon Only Verified Identity</title>
+  <desc id="desc">Icon-only badge with person silhouette and verification check for trusted identity.</desc>
+  <rect width="128" height="128" rx="24" fill="#F8FAFC"/>
+  <path d="M64 14 L102 34 V62 C102 86 85 106 64 114 C43 106 26 86 26 62 V34 Z" fill="#0F172A"/>
+  <circle cx="54" cy="55" r="10" fill="#FFFFFF"/>
+  <path d="M38 76 c3 -10 10 -15 16 -15 c6 0 13 5 16 15" fill="#FFFFFF"/>
+  <circle cx="84" cy="82" r="14" fill="#22C55E"/>
+  <path d="M77 82 l5 5 l10 -11" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

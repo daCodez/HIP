@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Data Table Icon</title>
+  <desc id="desc">Compact security-themed data table icon with shield corner and grid layout.</desc>
+
+  <defs>
+    <linearGradient id="tableGrad" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8" y="12" width="48" height="40" rx="8" fill="#0B1220"/>
+  <rect x="11" y="15" width="42" height="34" rx="6" fill="none" stroke="url(#tableGrad)" stroke-width="2.5"/>
+
+  <g stroke="#E5E7EB" stroke-width="2.5" stroke-linecap="round">
+    <path d="M25 15v34M39 15v34M11 26h42M11 37h42"/>
+  </g>
+
+  <path d="M6 51l9-4c2-1 4 1 4 3l-1 8z" fill="url(#tableGrad)"/>
+</svg>

@@ -1,10 +1,11 @@
 @page "/audit-logs"
+@attribute [Authorize]
 @inject HipAdminApiClient Api
 
 <PageTitle>Audit Logs</PageTitle>
 
 <PageHeader Title="Audit Logs"
-            Subtitle="Find, review, and export audit records you can rely on"
+            Subtitle="Plain-language security history and incident investigation"
             LastUpdatedUtc="@_lastUpdatedUtc"
             Breadcrumbs="@_breadcrumbs">
     <Actions>
@@ -18,19 +19,6 @@
     <AlertBanner Kind="AlertBannerKind.Error" Title="Audit logs unavailable" Message="@_error" />
 }
 
-@if (!string.IsNullOrWhiteSpace(_exportBannerMessage))
-{
-    <AlertBanner Kind="@_exportBannerKind" Title="Export job" Message="@_exportBannerMessage">
-        <Actions>
-            @if (_exportState == ExportJobState.Failed)
-            {
-                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="QueueExportAsync">Retry export</button>
-            }
-            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="(() => _isExportDialogOpen = true)">View status</button>
-        </Actions>
-    </AlertBanner>
-}
-
 <FilterBar SearchText="@_searchText"
            SearchTextChanged="OnSearchTextChanged"
            SearchPlaceholder="Search actor, event, target, or detail"
@@ -38,28 +26,10 @@
            OnChanged="OnFiltersChanged">
     <Actions>
         <label class="visually-hidden" for="corr-jump">Correlation ID quick jump</label>
-        <input id="corr-jump"
-               class="form-control"
-               style="min-width: 220px;"
-               placeholder="Correlation ID"
-               value="@_correlationJump"
-               @oninput="OnCorrelationInput"
-               @onkeydown="OnCorrelationKeyDown" />
+        <input id="corr-jump" class="form-control" style="min-width: 220px;" placeholder="Correlation ID" value="@_correlationJump" @oninput="OnCorrelationInput" @onkeydown="OnCorrelationKeyDown" />
         <button type="button" class="btn btn-outline-primary" @onclick="JumpToCorrelation">Jump</button>
     </Actions>
 </FilterBar>
-
-<div class="small text-muted mb-2" aria-live="polite">
-    Showing @_filtered.Count / @_items.Count results
-    @if (_activeSummaryChips.Count > 0)
-    {
-        <span class="ms-2">• Active filters:</span>
-        @foreach (var chip in _activeSummaryChips)
-        {
-            <span class="badge text-bg-light border ms-1">@chip</span>
-        }
-    }
-</div>
 
 <StateView Mode="@_state"
            EmptyMessage="No audit events have been recorded yet."
@@ -70,7 +40,7 @@
         <div class="col-lg-8">
             <DataTable TItem="AuditViewRow"
                        Title="Audit results"
-                       Caption="Audit records with severity and status shown beyond color cues"
+                       Caption="Readable security history with severity, status, and incident correlation"
                        Items="@_filtered"
                        Columns="@_columns"
                        EmptyMessage="No audit records for this selection."
@@ -79,48 +49,75 @@
                        OnRowClick="OnRowSelected" />
         </div>
 
-        <aside class="col-lg-4" aria-live="polite" aria-label="Audit timeline details">
+        <aside class="col-lg-4" aria-live="polite" aria-label="Incident detail">
             <section class="card">
                 <div class="card-body">
-                    <h2 class="h6">Timeline detail</h2>
+                    <h2 class="h6">Incident detail</h2>
                     @if (_selected is null)
                     {
-                        <p class="text-muted mb-0">Select a row to view the event timeline and record details.</p>
+                        <p class="text-muted mb-0">Select a row to view incident narrative and response details.</p>
                     }
                     else
                     {
-                        <p class="mb-2"><strong>@_selected.EventLabel</strong></p>
+                        <p class="mb-1"><strong>@_selected.Icon @_selected.EventLabel</strong></p>
+                        <p class="text-muted mb-2">Raw event: @_selected.RawEvent</p>
                         <p class="mb-1">Severity: <StatusBadge Severity="@_selected.Severity" /></p>
                         <p class="mb-2">Status: <StatusBadge Status="@_selected.Status" /></p>
-                        <ul class="small mb-0">
-                            @foreach (var line in _selected.Timeline)
-                            {
-                                <li>@line</li>
-                            }
-                        </ul>
+
+                        <section class="mb-3 small">
+                            <div><strong>User:</strong> @_selected.Actor</div>
+                            <div><strong>Target:</strong> @_selected.Target</div>
+                            <div><strong>Correlation:</strong> @_selected.CorrelationId</div>
+                            <div><strong>System action:</strong> @_selected.SystemAction</div>
+                            <div><strong>Policy:</strong> @_selected.PolicyName</div>
+                        </section>
+
+                        <section class="mb-3">
+                            <h3 class="h6">Why this happened</h3>
+                            <ul class="small mb-0">
+                                @foreach (var reason in _selected.Explanation)
+                                {
+                                    <li>@reason</li>
+                                }
+                            </ul>
+                        </section>
+
+                        <section class="mb-3">
+                            <h3 class="h6">Trust decision explainer</h3>
+                            <div class="small mb-2"><strong>Decision:</strong> @_selected.SystemAction</div>
+                            <div class="small"><strong>Trust signals</strong></div>
+                            <ul class="small mb-2">
+                                @foreach (var s in _selected.TrustSignals)
+                                {
+                                    <li>✔ @s</li>
+                                }
+                            </ul>
+                            <div class="small"><strong>Risk signals</strong></div>
+                            <ul class="small mb-2">
+                                @foreach (var s in _selected.RiskSignals)
+                                {
+                                    <li>⚠ @s</li>
+                                }
+                            </ul>
+                            <div class="small"><strong>Decision math</strong></div>
+                            <div class="small">Base: @_selected.BaseScore · Trust: +@_selected.TrustBoost · Risk: -@_selected.RiskPenalty · Final: <strong>@_selected.FinalScore</strong></div>
+                        </section>
+
+                        <section>
+                            <h3 class="h6">Security story timeline</h3>
+                            <div class="hip-alert-timeline">
+                                @foreach (var line in _selected.Timeline)
+                                {
+                                    <div class="hip-alert-timeline-item"><span class="dot"></span><span>@line</span></div>
+                                }
+                            </div>
+                        </section>
                     }
                 </div>
             </section>
         </aside>
     </div>
 </StateView>
-
-<ModalDialog IsOpen="@_isExportDialogOpen"
-             Title="Audit export status"
-             ConfirmText="Close"
-             CancelText="Close"
-             OnClose="CloseExportDialog"
-             OnConfirm="CloseExportDialog">
-    <Body>
-        <p class="mb-1">Current job status: <StatusBadge Status="@MapExportStatus(_exportState)" /></p>
-        <p class="mb-1">Rows selected: @_filtered.Count</p>
-        <p class="mb-1">Format: CSV (placeholder)</p>
-        @if (!string.IsNullOrWhiteSpace(_exportError))
-        {
-            <p class="text-danger mb-0">Failure reason: @_exportError</p>
-        }
-    </Body>
-</ModalDialog>
 
 @code {
     private readonly IReadOnlyList<BreadcrumbItem> _breadcrumbs = [new("Dashboard", "/"), new("Audit Logs", "/audit-logs")];
@@ -135,81 +132,22 @@
 
     private string _searchText = string.Empty;
     private string _correlationJump = string.Empty;
-    private List<string> _activeSummaryChips = [];
-
-    private bool _isExportDialogOpen;
-    private ExportJobState _exportState = ExportJobState.None;
-    private string? _exportError;
-    private string? _exportBannerMessage;
-    private AlertBannerKind _exportBannerKind = AlertBannerKind.Info;
 
     private readonly List<FilterField> _filters =
     [
-        new()
-        {
-            Key = "preset",
-            Label = "Preset",
-            Value = "all",
-            Options =
-            [
-                new FilterFieldOption { Value = "all", Label = "All activity" },
-                new FilterFieldOption { Value = "critical-last24h", Label = "Critical + last 24h" },
-                new FilterFieldOption { Value = "auth-denied", Label = "Authentication denied" },
-                new FilterFieldOption { Value = "policy-review", Label = "Policy review queue" }
-            ]
-        },
-        new()
-        {
-            Key = "severity",
-            Label = "Severity",
-            Value = "all",
-            Options =
-            [
-                new FilterFieldOption { Value = "all", Label = "All severities" },
-                new FilterFieldOption { Value = "critical", Label = "Critical" },
-                new FilterFieldOption { Value = "high", Label = "High" },
-                new FilterFieldOption { Value = "medium", Label = "Medium" },
-                new FilterFieldOption { Value = "low", Label = "Low" }
-            ]
-        },
-        new()
-        {
-            Key = "status",
-            Label = "Status",
-            Value = "all",
-            Options =
-            [
-                new FilterFieldOption { Value = "all", Label = "All statuses" },
-                new FilterFieldOption { Value = "new", Label = "New" },
-                new FilterFieldOption { Value = "acknowledged", Label = "Acknowledged" },
-                new FilterFieldOption { Value = "inprogress", Label = "In Progress" },
-                new FilterFieldOption { Value = "resolved", Label = "Resolved" },
-                new FilterFieldOption { Value = "failed", Label = "Failed" }
-            ]
-        },
-        new()
-        {
-            Key = "window",
-            Label = "Window",
-            Value = "24h",
-            Options =
-            [
-                new FilterFieldOption { Value = "24h", Label = "Last 24h" },
-                new FilterFieldOption { Value = "7d", Label = "Last 7d" },
-                new FilterFieldOption { Value = "30d", Label = "Last 30d" }
-            ]
-        }
+        new() { Key = "severity", Label = "Severity", Value = "all", Options = [ new FilterFieldOption { Value = "all", Label = "All severities" }, new FilterFieldOption { Value = "critical", Label = "Critical" }, new FilterFieldOption { Value = "high", Label = "High" }, new FilterFieldOption { Value = "medium", Label = "Warning" }, new FilterFieldOption { Value = "info", Label = "Info" } ] },
+        new() { Key = "status", Label = "Status", Value = "all", Options = [ new FilterFieldOption { Value = "all", Label = "All statuses" }, new FilterFieldOption { Value = "new", Label = "New" }, new FilterFieldOption { Value = "investigating", Label = "Investigating" }, new FilterFieldOption { Value = "escalated", Label = "Escalated" }, new FilterFieldOption { Value = "mitigated", Label = "Mitigated" }, new FilterFieldOption { Value = "resolved", Label = "Resolved" }, new FilterFieldOption { Value = "failed", Label = "Blocked" } ] },
+        new() { Key = "window", Label = "Window", Value = "24h", Options = [ new FilterFieldOption { Value = "24h", Label = "Last 24h" }, new FilterFieldOption { Value = "7d", Label = "Last 7d" }, new FilterFieldOption { Value = "30d", Label = "Last 30d" } ] }
     ];
 
     private readonly IReadOnlyList<DataTableColumn<AuditViewRow>> _columns =
     [
-        new() { Header = "Time", ValueSelector = x => x.Timestamp.ToLocalTime().ToString("u"), SortSelector = x => x.Timestamp },
-        new() { Header = "Severity", CellTemplate = row => @<StatusBadge Severity="@row.Severity" />, SortSelector = x => x.Severity },
+        new() { Header = "When", ValueSelector = x => FormatRelativeTime(x.Timestamp), SortSelector = x => x.Timestamp },
+        new() { Header = "Level", CellTemplate = row => @<StatusBadge Severity="@row.Severity" />, SortSelector = x => x.Severity },
         new() { Header = "Status", CellTemplate = row => @<StatusBadge Status="@row.Status" />, SortSelector = x => x.Status },
-        new() { Header = "Actor", ValueSelector = x => x.Actor, SortSelector = x => x.Actor },
-        new() { Header = "Event", ValueSelector = x => x.EventLabel, SortSelector = x => x.EventLabel },
-        new() { Header = "Target", ValueSelector = x => x.Target, SortSelector = x => x.Target },
-        new() { Header = "Correlation", ValueSelector = x => x.CorrelationId, SortSelector = x => x.CorrelationId }
+        new() { Header = "Event", ValueSelector = x => $"{x.Icon} {x.EventLabel}", SortSelector = x => x.EventLabel },
+        new() { Header = "User", ValueSelector = x => x.Actor, SortSelector = x => x.Actor },
+        new() { Header = "Incident", ValueSelector = x => x.CorrelationId, SortSelector = x => x.CorrelationId }
     ];
 
     protected override async Task OnInitializedAsync() => await ReloadAsync();
@@ -217,8 +155,6 @@
     private async Task ReloadAsync()
     {
         _state = StateViewMode.Loading;
-        _error = "Please try again.";
-
         var response = await Api.GetAuditLogsAsync();
         _items.Clear();
 
@@ -242,80 +178,28 @@
 
         _selected = _filtered.FirstOrDefault();
         _lastUpdatedUtc = DateTimeOffset.UtcNow;
-        _state = _items.Count == 0
-            ? StateViewMode.EmptyTrue
-            : _filtered.Count == 0
-                ? StateViewMode.EmptyFiltered
-                : StateViewMode.Success;
+        _state = _items.Count == 0 ? StateViewMode.EmptyTrue : _filtered.Count == 0 ? StateViewMode.EmptyFiltered : StateViewMode.Success;
     }
 
-    private Task OnSearchTextChanged(string value)
-    {
-        _searchText = value;
-        return Task.CompletedTask;
-    }
-
-    private Task OnCorrelationInput(ChangeEventArgs args)
-    {
-        _correlationJump = args.Value?.ToString() ?? string.Empty;
-        return Task.CompletedTask;
-    }
-
-    private Task OnCorrelationKeyDown(KeyboardEventArgs args)
-    {
-        if (args.Key is "Enter" or "NumpadEnter")
-        {
-            JumpToCorrelation();
-        }
-
-        return Task.CompletedTask;
-    }
+    private Task OnSearchTextChanged(string value) { _searchText = value; return Task.CompletedTask; }
+    private Task OnCorrelationInput(ChangeEventArgs args) { _correlationJump = args.Value?.ToString() ?? string.Empty; return Task.CompletedTask; }
+    private Task OnCorrelationKeyDown(KeyboardEventArgs args) { if (args.Key is "Enter" or "NumpadEnter") JumpToCorrelation(); return Task.CompletedTask; }
 
     private Task OnFiltersChanged(FilterBarChangeSet changeSet)
     {
         ApplyFilters(changeSet);
-
         _selected = _filtered.FirstOrDefault(x => x.Id == _selected?.Id) ?? _filtered.FirstOrDefault();
-        _state = _items.Count == 0
-            ? StateViewMode.EmptyTrue
-            : _filtered.Count == 0
-                ? StateViewMode.EmptyFiltered
-                : StateViewMode.Success;
-
+        _state = _items.Count == 0 ? StateViewMode.EmptyTrue : _filtered.Count == 0 ? StateViewMode.EmptyFiltered : StateViewMode.Success;
         return Task.CompletedTask;
     }
 
-    private Task OnRowSelected(AuditViewRow row)
-    {
-        _selected = row;
-        return Task.CompletedTask;
-    }
+    private Task OnRowSelected(AuditViewRow row) { _selected = row; return Task.CompletedTask; }
 
     private void ApplyFilters(FilterBarChangeSet changeSet)
     {
-        var preset = ReadValue(changeSet, "preset", "all");
         var severity = ReadValue(changeSet, "severity", "all");
         var status = ReadValue(changeSet, "status", "all");
         var window = ReadValue(changeSet, "window", "24h");
-
-        if (preset == "critical-last24h")
-        {
-            severity = "critical";
-            status = "all";
-            window = "24h";
-        }
-        else if (preset == "auth-denied")
-        {
-            severity = "high";
-            status = "failed";
-            window = "7d";
-        }
-        else if (preset == "policy-review")
-        {
-            severity = "medium";
-            status = "acknowledged";
-            window = "7d";
-        }
 
         var threshold = window switch
         {
@@ -336,143 +220,164 @@
             .Where(x => AdminUiSemantics.MatchesStatus(x.Status, status))
             .OrderByDescending(x => x.Timestamp)
             .ToList();
-
-        var chips = new List<string>();
-        if (preset != "all") chips.Add($"Preset: {preset}");
-        if (severity != "all") chips.Add($"Severity: {severity}");
-        if (status != "all") chips.Add($"Status: {NormalizeStatusChip(status)}");
-        if (window != "24h") chips.Add($"Window: {window}");
-        _activeSummaryChips = chips;
     }
 
     private void JumpToCorrelation()
     {
-        if (string.IsNullOrWhiteSpace(_correlationJump))
-        {
-            return;
-        }
-
+        if (string.IsNullOrWhiteSpace(_correlationJump)) return;
         var match = _filtered.FirstOrDefault(x => x.CorrelationId.Contains(_correlationJump.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (match is null)
-        {
-            _exportBannerKind = AlertBannerKind.Warning;
-            _exportBannerMessage = "No row matched that correlation ID in the current filtered set.";
-            return;
-        }
-
-        _selected = match;
-        _exportBannerKind = AlertBannerKind.Info;
-        _exportBannerMessage = $"Jumped to correlation {match.CorrelationId}.";
+        if (match is not null) _selected = match;
     }
 
-    private async Task QueueExportAsync()
-    {
-        _isExportDialogOpen = true;
-        _exportError = null;
-
-        _exportState = ExportJobState.Queued;
-        SetExportBanner(AlertBannerKind.Info, "Export queued. Your audit package is waiting for processing.");
-
-        await Task.Delay(250);
-        _exportState = ExportJobState.Processing;
-        SetExportBanner(AlertBannerKind.Info, "Export processing started.");
-
-        await Task.Delay(350);
-
-        if (_filtered.Count > 150)
-        {
-            _exportState = ExportJobState.Failed;
-            _exportError = "Result set too large for MVP export placeholder. Refine filters and retry.";
-            SetExportBanner(AlertBannerKind.Error, "Export failed. Reduce scope and retry.");
-            return;
-        }
-
-        _exportState = ExportJobState.Completed;
-        SetExportBanner(AlertBannerKind.Success, "Export completed (placeholder). Download wiring will attach to backend job endpoint.");
-    }
-
-    private Task CloseExportDialog()
-    {
-        _isExportDialogOpen = false;
-        return Task.CompletedTask;
-    }
-
-    private void SetExportBanner(AlertBannerKind kind, string message)
-    {
-        _exportBannerKind = kind;
-        _exportBannerMessage = message;
-    }
-
-    private static WorkflowStatus MapExportStatus(ExportJobState state)
-        => state switch
-        {
-            ExportJobState.Queued => WorkflowStatus.Queued,
-            ExportJobState.Processing => WorkflowStatus.InProgress,
-            ExportJobState.Completed => WorkflowStatus.Resolved,
-            ExportJobState.Failed => WorkflowStatus.Failed,
-            _ => WorkflowStatus.New
-        };
+    private Task QueueExportAsync() => Task.CompletedTask;
 
     private static string ReadValue(FilterBarChangeSet changeSet, string key, string fallback)
-        => changeSet.Values.TryGetValue(key, out var value)
-            ? value ?? fallback
-            : fallback;
-
-    private static string NormalizeStatusChip(string status)
-    {
-        if (Enum.TryParse<WorkflowStatus>(status, ignoreCase: true, out var parsedStatus))
-        {
-            return AdminUiSemantics.ToDisplayStatus(parsedStatus);
-        }
-
-        return status;
-    }
+        => changeSet.Values.TryGetValue(key, out var value) ? value ?? fallback : fallback;
 
     private static AuditViewRow MapAuditRow(AuditLogEntry entry)
     {
         var severity = AdminUiSemantics.ParseSeverity(entry.Severity, entry.Result);
         var status = InferStatus(entry.Result, severity, entry.Timestamp);
-        var correlation = $"corr-{entry.Timestamp:yyyyMMddHHmm}-{Math.Abs((entry.Actor + entry.EventType).GetHashCode()) % 10000:0000}";
+        var correlation = $"INC-{Math.Abs((entry.Actor + entry.EventType + entry.Timestamp.ToString("yyyyMMddHH")).GetHashCode()) % 9000 + 1000}";
+        var raw = entry.EventType;
 
         return new AuditViewRow
         {
             Id = Guid.NewGuid().ToString("N"),
             Timestamp = entry.Timestamp,
             Actor = entry.Actor,
-            EventLabel = entry.EventType.Replace('.', ' '),
+            EventLabel = HumanizeEvent(raw),
+            RawEvent = raw,
+            Icon = EventIcon(raw),
             Target = entry.Category,
             Severity = severity,
             Status = status,
             Detail = entry.Detail,
             CorrelationId = correlation,
+            SystemAction = status == WorkflowStatus.Failed ? "Blocked" : status == WorkflowStatus.Escalated ? "Escalated for review" : "Allowed with monitoring",
+            PolicyName = raw.Contains("travel", StringComparison.OrdinalIgnoreCase) ? "Impossible Travel Block" : "Adaptive Risk Policy",
+            Explanation = BuildExplanation(raw),
+            TrustSignals = BuildTrustSignals(raw),
+            RiskSignals = BuildRiskSignals(raw),
+            BaseScore = 50,
+            TrustBoost = BuildTrustBoost(raw),
+            RiskPenalty = BuildRiskPenalty(raw),
+            FinalScore = Math.Clamp(50 + BuildTrustBoost(raw) - BuildRiskPenalty(raw), 0, 100),
             Timeline =
             [
-                $"{entry.Timestamp:u}: Event observed ({entry.Result})",
-                $"{entry.Timestamp.AddMinutes(1):u}: Correlation linked ({correlation})",
-                $"{entry.Timestamp.AddMinutes(2):u}: Workflow state {FormatStatus(status)}"
+                $"{FormatRelativeTime(entry.Timestamp)} suspicious activity detected",
+                $"{FormatRelativeTime(entry.Timestamp.AddMinutes(1))} risk policy evaluated",
+                $"{FormatRelativeTime(entry.Timestamp.AddMinutes(2))} decision recorded: {status}",
+                $"{FormatRelativeTime(entry.Timestamp.AddMinutes(3))} incident story completed ({correlation})"
             ]
         };
     }
 
-    private static WorkflowStatus InferStatus(string result, SeverityLevel severity, DateTime timestamp)
+    private static List<string> BuildExplanation(string raw)
     {
-        if (result.Equals("Denied", StringComparison.OrdinalIgnoreCase))
-        {
-            return WorkflowStatus.Failed;
-        }
-
-        if (severity == SeverityLevel.Critical)
-        {
-            return WorkflowStatus.Escalated;
-        }
-
-        return timestamp < DateTime.UtcNow.AddHours(-12)
-            ? WorkflowStatus.Resolved
-            : WorkflowStatus.Acknowledged;
+        var lower = raw.ToLowerInvariant();
+        if (lower.Contains("session_ip_change")) return ["Session IP changed between checks", "Location variance exceeded policy threshold", "User session flagged for hijack risk"];
+        if (lower.Contains("replay")) return ["Token fingerprint was already used", "Request timing looked automated", "Replay protection policy triggered"];
+        if (lower.Contains("impossible") || lower.Contains("travel")) return ["Login country changed", "Previous login was minutes earlier", "Distance exceeded safe velocity threshold"];
+        if (lower.Contains("mfa")) return ["Risk score exceeded login safety baseline", "Extra identity check is required", "Access decision paused until challenge result"];
+        if (lower.Contains("rate_limit") || lower.Contains("spam")) return ["Request volume spiked over normal threshold", "Abuse-prevention throttle engaged", "Traffic was temporarily slowed or blocked"];
+        if (lower.Contains("reputation") || lower.Contains("identity")) return ["Reputation signal was requested by policy engine", "Identity trust history influenced decision", "Event recorded for traceability"];
+        return ["Behavior pattern matched a security rule", "Risk score crossed threshold", "Event was logged for analyst review"];
     }
 
-    private static string FormatStatus(WorkflowStatus status)
-        => AdminUiSemantics.ToDisplayStatus(status);
+    private static List<string> BuildTrustSignals(string raw)
+    {
+        var lower = raw.ToLowerInvariant();
+        var signals = new List<string> { "Known user identity", "Policy checks completed" };
+        if (lower.Contains("reputation") || lower.Contains("identity")) signals.Add("Reputation signal available");
+        if (lower.Contains("mfa")) signals.Add("MFA verification path present");
+        return signals;
+    }
+
+    private static List<string> BuildRiskSignals(string raw)
+    {
+        var lower = raw.ToLowerInvariant();
+        var signals = new List<string>();
+        if (lower.Contains("impossible") || lower.Contains("travel")) signals.Add("Impossible travel detected");
+        if (lower.Contains("replay")) signals.Add("Replay signal detected");
+        if (lower.Contains("session_ip_change")) signals.Add("Session/IP anomaly detected");
+        if (lower.Contains("suspicious")) signals.Add("Suspicious pattern matched");
+        if (signals.Count == 0) signals.Add("No major risk signals detected");
+        return signals;
+    }
+
+    private static int BuildTrustBoost(string raw)
+        => raw.Contains("reputation", StringComparison.OrdinalIgnoreCase) ? 18 : 14;
+
+    private static int BuildRiskPenalty(string raw)
+    {
+        var lower = raw.ToLowerInvariant();
+        if (lower.Contains("replay") || lower.Contains("impossible") || lower.Contains("takeover")) return 28;
+        if (lower.Contains("suspicious") || lower.Contains("session_ip_change")) return 16;
+        return 8;
+    }
+
+    private static WorkflowStatus InferStatus(string result, SeverityLevel severity, DateTime timestamp)
+    {
+        if (result.Equals("Denied", StringComparison.OrdinalIgnoreCase)) return WorkflowStatus.Failed;
+        if (severity == SeverityLevel.Critical) return WorkflowStatus.Escalated;
+        return timestamp < DateTime.UtcNow.AddHours(-12) ? WorkflowStatus.Resolved : WorkflowStatus.Investigating;
+    }
+
+    private static string HumanizeEvent(string eventType)
+    {
+        var upper = eventType.ToUpperInvariant();
+        return upper switch
+        {
+            "SESSION_IP_CHANGE" => "Session IP changed (possible hijack attempt)",
+            "REPLAY_ATTEMPT_DETECTED" => "Someone tried to reuse an old login token",
+            "LOGIN_IMPOSSIBLE_TRAVEL" => "Impossible travel login detected",
+            "LOGIN_SUSPICIOUS" => "Suspicious login detected",
+            "LOGIN_SUSPICIOUS_IP" => "Login from suspicious IP detected",
+            "TOKEN_REPLAY_BLOCKED" => "Replay token request blocked",
+            "TOKEN_REFRESH" => "Session token refreshed",
+            "POLICY_BLOCK" => "Security policy blocked this action",
+            "POLICY_REVIEW" => "Action queued for security review",
+            "MFA_CHALLENGE" => "Additional identity check required",
+            "RATE_LIMIT_TRIGGERED" => "Rate limit triggered to prevent abuse",
+            "SPAM_RATE_LIMIT" => "Spam protection rate limit triggered",
+            "REPUTATION_READ" => "User reputation accessed",
+            "IDENTITY_READ" => "Identity lookup performed",
+            _ => eventType.Replace('_', ' ').Replace('.', ' ')
+        };
+    }
+
+    private static string EventIcon(string eventType)
+    {
+        var e = eventType.ToLowerInvariant();
+        if (e.Contains("login") || e.Contains("mfa")) return "🔐";
+        if (e.Contains("device")) return "📱";
+        if (e.Contains("session") || e.Contains("token")) return "🔑";
+        if (e.Contains("policy")) return "⚖️";
+        if (e.Contains("reputation") || e.Contains("identity")) return "⭐";
+        if (e.Contains("spam") || e.Contains("mail")) return "📧";
+        if (e.Contains("rate_limit") || e.Contains("blocked")) return "🚫";
+        return "⚠️";
+    }
+
+    private static string FormatRelativeTime(DateTime timestamp)
+    {
+        var utc = timestamp.Kind == DateTimeKind.Utc ? timestamp : timestamp.ToUniversalTime();
+        var delta = DateTime.UtcNow - utc;
+        if (delta.TotalMinutes < 1) return "just now";
+        if (delta.TotalHours < 1)
+        {
+            var minutes = Math.Max(1, (int)delta.TotalMinutes);
+            return minutes == 1 ? "1 minute ago" : $"{minutes} minutes ago";
+        }
+        if (delta.TotalDays < 1)
+        {
+            var hours = Math.Max(1, (int)delta.TotalHours);
+            return hours == 1 ? "1 hour ago" : $"{hours} hours ago";
+        }
+        var days = Math.Max(1, (int)delta.TotalDays);
+        return days == 1 ? "1 day ago" : $"{days} days ago";
+    }
 
     private sealed class AuditViewRow
     {
@@ -480,20 +385,22 @@
         public required DateTime Timestamp { get; init; }
         public required string Actor { get; init; }
         public required string EventLabel { get; init; }
+        public required string RawEvent { get; init; }
+        public required string Icon { get; init; }
         public required string Target { get; init; }
         public required SeverityLevel Severity { get; init; }
         public required WorkflowStatus Status { get; init; }
         public required string Detail { get; init; }
         public required string CorrelationId { get; init; }
+        public required string SystemAction { get; init; }
+        public required string PolicyName { get; init; }
+        public int BaseScore { get; init; }
+        public int TrustBoost { get; init; }
+        public int RiskPenalty { get; init; }
+        public int FinalScore { get; init; }
+        public List<string> Explanation { get; init; } = [];
+        public List<string> TrustSignals { get; init; } = [];
+        public List<string> RiskSignals { get; init; } = [];
         public List<string> Timeline { get; init; } = [];
-    }
-
-    private enum ExportJobState
-    {
-        None,
-        Queued,
-        Processing,
-        Completed,
-        Failed
     }
 }

@@ -1,0 +1,10 @@
+@inject NavigationManager Nav
+
+@code {
+    protected override void OnInitialized()
+    {
+        var relative = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        var target = $"/admin/login?returnUrl={Uri.EscapeDataString(string.IsNullOrWhiteSpace(relative) ? "/" : relative)}";
+        Nav.NavigateTo(target, forceLoad: true);
+    }
+}

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="200" viewBox="0 0 720 200" role="img" aria-labelledby="title desc">
+  <title id="title">HIP Logo Concept 02 - Hex Shield Lockup</title>
+  <desc id="desc">Hexagonal security badge with check and explicit HIP wordmark.</desc>
+  <rect width="720" height="200" fill="#FFFFFF"/>
+  <g transform="translate(36,24)">
+    <path d="M64 6 L112 34 V90 L64 118 L16 90 V34 Z" fill="#0B1220"/>
+    <path d="M64 18 L101 39 V85 L64 106 L27 85 V39 Z" fill="#2563EB"/>
+    <path d="M46 62 l12 12 l24 -26" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g transform="translate(190,64)">
+    <text x="0" y="46" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="76" font-weight="800" letter-spacing="1" fill="#0F172A">HIP</text>
+    <text x="4" y="78" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="500" fill="#334155">Verified Access Security</text>
+  </g>
+</svg>
