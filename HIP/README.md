@@ -98,7 +98,7 @@ HIP includes a simple built-in widget plugin (`core.widget.richard`) that render
 - `scripts/preflight.sh` for deployment preflight checks
 - `HIP.Security.README.md` for HIP security simulation scaffold structure and commands
 - `HIP.ApiService/README.md` for agent enrollment + heartbeat API contracts
-- `HIP.Agent.Worker/README.md` for enroll/store/run flow and Linux DEB scaffold usage
+- `HIP.Agent.Worker/README.md` for enroll/store/run flow and Windows MSI + Linux DEB packaging usage
 
 ## Simulator Phase 1: Live API Mode (new)
 

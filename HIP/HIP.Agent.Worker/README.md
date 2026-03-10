@@ -12,7 +12,7 @@ Cross-platform .NET worker scaffold for HIP agent installation/runtime.
   - `/api/agent/heartbeat`
   - Uses `Authorization: Bearer <bootstrapToken>` from stored credential when available.
 - Packaging scripts for:
-  - Windows MSI (placeholder)
+  - Windows MSI (WiX v3/v4 pipeline with prereq checks)
   - macOS PKG (placeholder)
   - Linux DEB scaffold artifact (implemented in Phase 2)
 
@@ -68,6 +68,26 @@ dotnet run --project HIP.Agent.Worker/HIP.Agent.Worker.csproj -- enroll --token 
 ```bash
 dotnet run --project HIP.Agent.Worker/HIP.Agent.Worker.csproj
 ```
+
+## Windows MSI build
+
+From repository root:
+
+```powershell
+pwsh ./HIP.Agent.Worker/packaging/windows/build-msi.ps1 -Configuration Release -Version 0.1.0 -Runtime win-x64
+```
+
+Prerequisites:
+- .NET SDK available on PATH (`dotnet`)
+- WiX Toolset available on PATH:
+  - v4 (`wix` command), or
+  - v3 (`candle` + `light` commands)
+
+Output artifact:
+- `out/windows/hip-agent-worker_0.1.0_win-x64.msi`
+
+If WiX is not installed, the script stops with install guidance and leaves published binaries in:
+- `out/windows/publish`
 
 ## Linux DEB scaffold output
 
