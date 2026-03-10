@@ -69,6 +69,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.RateLimitGuard", "HIP.R
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.RateLimitGuard.Tests", "HIP.RateLimitGuard.Tests\HIP.RateLimitGuard.Tests.csproj", "{74C9FA61-8624-4AB7-8EBA-529DBB566D43}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIP.Agent.Worker", "HIP.Agent.Worker\HIP.Agent.Worker.csproj", "{3DA88F90-7CC1-4584-BC48-1BE971467DAF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -475,6 +477,18 @@ Global
 		{74C9FA61-8624-4AB7-8EBA-529DBB566D43}.Release|x64.Build.0 = Release|Any CPU
 		{74C9FA61-8624-4AB7-8EBA-529DBB566D43}.Release|x86.ActiveCfg = Release|Any CPU
 		{74C9FA61-8624-4AB7-8EBA-529DBB566D43}.Release|x86.Build.0 = Release|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Debug|x64.Build.0 = Debug|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Debug|x86.Build.0 = Debug|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Release|x64.ActiveCfg = Release|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Release|x64.Build.0 = Release|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Release|x86.ActiveCfg = Release|Any CPU
+		{3DA88F90-7CC1-4584-BC48-1BE971467DAF}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

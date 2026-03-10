@@ -48,6 +48,17 @@ dotnet build HIP.Agent.Worker/HIP.Agent.Worker.csproj
 
 ## Enroll
 
+1) Issue single-use token (admin API):
+
+```bash
+curl -X POST http://127.0.0.1:44985/api/admin/agent/enrollment-tokens \
+  -H "Content-Type: application/json" \
+  -H "x-hip-identity: hip-system" \
+  -d '{"issuedBy":"admin","ttlMinutes":30}'
+```
+
+2) Enroll agent using issued token:
+
 ```bash
 dotnet run --project HIP.Agent.Worker/HIP.Agent.Worker.csproj -- enroll --token YOUR_TOKEN_HERE
 ```

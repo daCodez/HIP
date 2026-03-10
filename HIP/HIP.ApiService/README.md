@@ -2,6 +2,37 @@
 
 This phase adds agent enrollment + heartbeat contracts for `HIP.Agent.Worker`.
 
+## Enrollment token issuance endpoint (admin)
+
+`POST /api/admin/agent/enrollment-tokens` (alias: `/api/v1/admin/agent/enrollment-tokens`)
+
+Request (optional):
+
+```json
+{
+  "issuedBy": "admin",
+  "ttlMinutes": 30
+}
+```
+
+Response:
+
+```json
+{
+  "enrollmentToken": "enr_...",
+  "issuedBy": "admin",
+  "issuedAtUtc": "2026-03-10T22:00:00Z",
+  "expiresAtUtc": "2026-03-10T22:30:00Z"
+}
+```
+
+- Tokens are **single-use**.
+- Tokens expire after TTL.
+- Enrollment rejects with reason codes:
+  - `agent.enrollment.invalid`
+  - `agent.enrollment.expired`
+  - `agent.enrollment.already_used`
+
 ## Enrollment endpoint
 
 `POST /api/agent/enroll` (alias: `/api/v1/agent/enroll`)

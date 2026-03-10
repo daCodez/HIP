@@ -440,6 +440,45 @@ public static class SecurityEndpoints
             });
         }
 
+        async Task<IResult> issueEnrollmentTokenHandler(HttpContext httpContext, JsonElement payload, AgentEnrollmentStore store, IAuditTrail auditTrail, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken)
+        {
+            var gate = await AdminAccessPolicy.AuthorizeWriteAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            if (gate is not null) return gate;
+
+            var issuedBy = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("issuedBy", out var issuedByEl)
+                ? (issuedByEl.GetString() ?? string.Empty).Trim()
+                : "admin";
+
+            var ttlMinutes = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("ttlMinutes", out var ttlEl) && ttlEl.TryGetInt32(out var parsedTtl)
+                ? parsedTtl
+                : 30;
+
+            ttlMinutes = Math.Clamp(ttlMinutes, 1, 1440);
+            var token = store.IssueEnrollmentToken(issuedBy, TimeSpan.FromMinutes(ttlMinutes));
+
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                EventType: "agent.enrollment.token_issued",
+                Subject: issuedBy,
+                Source: "admin",
+                Detail: $"Enrollment token issued with ttl={ttlMinutes}m",
+                Category: "device",
+                Outcome: "ok",
+                ReasonCode: "agent.enrollment.token_issued",
+                Route: httpContext.Request.Path,
+                CorrelationId: Activity.Current?.TraceId.ToString()),
+                cancellationToken);
+
+            return Results.Ok(new
+            {
+                enrollmentToken = token.Token,
+                issuedBy = token.IssuedBy,
+                issuedAtUtc = token.IssuedAtUtc,
+                expiresAtUtc = token.ExpiresAtUtc
+            });
+        }
+
         async Task<IResult> agentEnrollHandler(HttpContext httpContext, JsonElement payload, AgentEnrollmentStore store, IAuditTrail auditTrail, CancellationToken cancellationToken)
         {
             if (payload.ValueKind != JsonValueKind.Object)
@@ -463,7 +502,17 @@ public static class SecurityEndpoints
 
             if (string.IsNullOrWhiteSpace(enrollmentToken))
             {
-                enrollmentToken = "placeholder";
+                return Results.BadRequest(new { code = "agent.enrollment.validation", reason = "enrollmentToken is required" });
+            }
+
+            if (!store.TryConsumeEnrollmentToken(enrollmentToken, deviceId, out var consumeResult))
+            {
+                return consumeResult switch
+                {
+                    EnrollmentTokenConsumeResult.Expired => Results.BadRequest(new { code = "agent.enrollment.expired", reason = "enrollment token expired" }),
+                    EnrollmentTokenConsumeResult.AlreadyUsed => Results.BadRequest(new { code = "agent.enrollment.already_used", reason = "enrollment token already used" }),
+                    _ => Results.BadRequest(new { code = "agent.enrollment.invalid", reason = "enrollment token invalid" })
+                };
             }
 
             var enrollment = store.Register(deviceId, deviceName, enrollmentToken);
@@ -611,6 +660,28 @@ public static class SecurityEndpoints
                 lastSeen = updated.LastSeenUtc
             });
         }
+
+        endpoints.MapPost("/api/admin/agent/enrollment-tokens", issueEnrollmentTokenHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("IssueAgentEnrollmentToken")
+            .WithSummary("Issue single-use enrollment token for HIP agents")
+            .WithTags("Admin", "Agent")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/v1/admin/agent/enrollment-tokens", issueEnrollmentTokenHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("IssueAgentEnrollmentTokenV1")
+            .WithSummary("Issue single-use enrollment token for HIP agents")
+            .WithTags("Admin", "Agent", "v1")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status429TooManyRequests);
 
         endpoints.MapPost("/api/agent/enroll", agentEnrollHandler)
             .RequireRateLimiting("read-api")

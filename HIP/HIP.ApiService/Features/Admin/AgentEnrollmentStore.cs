@@ -6,6 +6,7 @@ internal sealed class AgentEnrollmentStore
 {
     private readonly object _gate = new();
     private readonly List<AgentEnrollmentRecord> _records = [];
+    private readonly List<EnrollmentTokenRecord> _tokens = [];
     private readonly string _storePath;
     private readonly ILogger<AgentEnrollmentStore> _logger;
 
@@ -16,6 +17,57 @@ internal sealed class AgentEnrollmentStore
             ?? Path.Combine(env.ContentRootPath, "SecurityEvents", "agent-enrollments.store.json");
 
         TryLoadPersistedState();
+    }
+
+    public EnrollmentTokenRecord IssueEnrollmentToken(string issuedBy, TimeSpan ttl)
+    {
+        lock (_gate)
+        {
+            var now = DateTime.UtcNow;
+            var token = $"enr_{Convert.ToHexString(Guid.NewGuid().ToByteArray())}";
+            var record = new EnrollmentTokenRecord(
+                Token: token,
+                IssuedBy: string.IsNullOrWhiteSpace(issuedBy) ? "admin" : issuedBy,
+                IssuedAtUtc: now,
+                ExpiresAtUtc: now.Add(ttl),
+                UsedAtUtc: null,
+                UsedByDeviceId: null);
+
+            _tokens.Add(record);
+            SavePersistedStateUnsafe();
+            return record;
+        }
+    }
+
+    public bool TryConsumeEnrollmentToken(string token, string deviceId, out EnrollmentTokenConsumeResult result)
+    {
+        lock (_gate)
+        {
+            var idx = _tokens.FindIndex(x => x.Token.Equals(token, StringComparison.Ordinal));
+            if (idx < 0)
+            {
+                result = EnrollmentTokenConsumeResult.Invalid;
+                return false;
+            }
+
+            var rec = _tokens[idx];
+            if (rec.UsedAtUtc is not null)
+            {
+                result = EnrollmentTokenConsumeResult.AlreadyUsed;
+                return false;
+            }
+
+            if (DateTime.UtcNow > rec.ExpiresAtUtc)
+            {
+                result = EnrollmentTokenConsumeResult.Expired;
+                return false;
+            }
+
+            _tokens[idx] = rec with { UsedAtUtc = DateTime.UtcNow, UsedByDeviceId = deviceId };
+            SavePersistedStateUnsafe();
+            result = EnrollmentTokenConsumeResult.Consumed;
+            return true;
+        }
     }
 
     public AgentEnrollmentRecord Register(string deviceId, string deviceName, string enrollmentToken)
@@ -87,7 +139,9 @@ internal sealed class AgentEnrollmentStore
 
             _records.Clear();
             _records.AddRange(state.Enrollments ?? []);
-            _logger.LogInformation("Loaded persisted agent enrollments from {Path}: records={Count}", _storePath, _records.Count);
+            _tokens.Clear();
+            _tokens.AddRange(state.EnrollmentTokens ?? []);
+            _logger.LogInformation("Loaded persisted agent enrollments from {Path}: records={Count}, tokens={TokenCount}", _storePath, _records.Count, _tokens.Count);
             return true;
         }
         catch (Exception ex)
@@ -109,7 +163,8 @@ internal sealed class AgentEnrollmentStore
 
             var state = new AgentEnrollmentStoreState
             {
-                Enrollments = _records.Select(x => x with { }).ToList()
+                Enrollments = _records.Select(x => x with { }).ToList(),
+                EnrollmentTokens = _tokens.Select(x => x with { }).ToList()
             };
 
             var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
@@ -121,6 +176,22 @@ internal sealed class AgentEnrollmentStore
         }
     }
 }
+
+internal enum EnrollmentTokenConsumeResult
+{
+    Consumed,
+    Invalid,
+    Expired,
+    AlreadyUsed
+}
+
+internal sealed record EnrollmentTokenRecord(
+    string Token,
+    string IssuedBy,
+    DateTime IssuedAtUtc,
+    DateTime ExpiresAtUtc,
+    DateTime? UsedAtUtc,
+    string? UsedByDeviceId);
 
 internal sealed record AgentEnrollmentRecord(
     string DeviceId,
@@ -134,4 +205,5 @@ internal sealed record AgentEnrollmentRecord(
 internal sealed class AgentEnrollmentStoreState
 {
     public List<AgentEnrollmentRecord> Enrollments { get; set; } = [];
+    public List<EnrollmentTokenRecord> EnrollmentTokens { get; set; } = [];
 }
