@@ -1,0 +1,9 @@
+{
+  "Agent": {
+    "BaseUrl": "https://hip-api.example.com",
+    "DeviceId": "device-001",
+    "DeviceName": "FrontDesk-Laptop",
+    "EnrollmentToken": "paste-token-here",
+    "CredentialStorePath": "./agent-credentials.enc"
+  }
+}

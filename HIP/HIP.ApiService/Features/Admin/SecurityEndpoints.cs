@@ -391,6 +391,163 @@ public static class SecurityEndpoints
             });
         }
 
+        async Task<IResult> heartbeatDeviceHandler(HttpContext httpContext, JsonElement payload, DeviceRegistrationStore store, IAuditTrail auditTrail, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken)
+        {
+            var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
+            if (gate is not null) return gate;
+
+            if (payload.ValueKind != JsonValueKind.Object)
+            {
+                return Results.BadRequest(new { code = "device.heartbeat.invalidPayload", reason = "payload must be JSON object" });
+            }
+
+            var user = payload.TryGetProperty("user", out var userEl) ? (userEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var email = payload.TryGetProperty("email", out var emailEl) ? (emailEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var device = payload.TryGetProperty("device", out var deviceEl) ? (deviceEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var actor = payload.TryGetProperty("actor", out var actorEl) ? (actorEl.GetString() ?? string.Empty).Trim() : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(device))
+            {
+                return Results.BadRequest(new { code = "device.heartbeat.validation", reason = "email and device are required" });
+            }
+
+            if (string.IsNullOrWhiteSpace(user)) user = email;
+            if (string.IsNullOrWhiteSpace(actor)) actor = "agent";
+
+            var updated = store.Heartbeat(user, email, device, actor);
+
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                EventType: "device.heartbeat.received",
+                Subject: email,
+                Source: "agent",
+                Detail: $"Heartbeat received from device '{device}'",
+                Category: "device",
+                Outcome: "ok",
+                ReasonCode: "device.heartbeat",
+                Route: httpContext.Request.Path,
+                CorrelationId: Activity.Current?.TraceId.ToString()),
+                cancellationToken);
+
+            return Results.Ok(new
+            {
+                user = updated.User,
+                email = updated.Email,
+                device = updated.Device,
+                deviceStatus = updated.DeviceStatus,
+                lastSeen = updated.LastSeenUtc
+            });
+        }
+
+        async Task<IResult> agentEnrollHandler(HttpContext httpContext, JsonElement payload, AgentEnrollmentStore store, IAuditTrail auditTrail, CancellationToken cancellationToken)
+        {
+            if (payload.ValueKind != JsonValueKind.Object)
+            {
+                return Results.BadRequest(new { code = "agent.enrollment.invalidPayload", reason = "payload must be JSON object" });
+            }
+
+            var deviceId = payload.TryGetProperty("deviceId", out var deviceIdEl) ? (deviceIdEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var deviceName = payload.TryGetProperty("deviceName", out var deviceNameEl) ? (deviceNameEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            var enrollmentToken = payload.TryGetProperty("enrollmentToken", out var tokenEl) ? (tokenEl.GetString() ?? string.Empty).Trim() : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(deviceId))
+            {
+                return Results.BadRequest(new { code = "agent.enrollment.validation", reason = "deviceId is required" });
+            }
+
+            if (string.IsNullOrWhiteSpace(deviceName))
+            {
+                deviceName = deviceId;
+            }
+
+            if (string.IsNullOrWhiteSpace(enrollmentToken))
+            {
+                enrollmentToken = "placeholder";
+            }
+
+            var enrollment = store.Register(deviceId, deviceName, enrollmentToken);
+
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                EventType: "agent.enrollment.registered",
+                Subject: enrollment.AssignedIdentity,
+                Source: "agent",
+                Detail: $"Enrollment issued for device '{deviceId}'",
+                Category: "device",
+                Outcome: "ok",
+                ReasonCode: "agent.enrollment",
+                Route: httpContext.Request.Path,
+                CorrelationId: Activity.Current?.TraceId.ToString()),
+                cancellationToken);
+
+            return Results.Ok(new
+            {
+                deviceId = enrollment.DeviceId,
+                assignedIdentity = enrollment.AssignedIdentity,
+                bootstrapToken = enrollment.BootstrapToken,
+                issuedAtUtc = enrollment.IssuedAtUtc
+            });
+        }
+
+        async Task<IResult> agentHeartbeatHandler(HttpContext httpContext, JsonElement payload, AgentEnrollmentStore store, IAuditTrail auditTrail, CancellationToken cancellationToken)
+        {
+            if (payload.ValueKind != JsonValueKind.Object)
+            {
+                return Results.BadRequest(new { code = "agent.heartbeat.invalidPayload", reason = "payload must be JSON object" });
+            }
+
+            var deviceId = payload.TryGetProperty("deviceId", out var deviceIdEl) ? (deviceIdEl.GetString() ?? string.Empty).Trim() : string.Empty;
+            if (string.IsNullOrWhiteSpace(deviceId))
+            {
+                return Results.BadRequest(new { code = "agent.heartbeat.validation", reason = "deviceId is required" });
+            }
+
+            var authHeader = httpContext.Request.Headers.Authorization.ToString();
+            var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                ? authHeader["Bearer ".Length..].Trim()
+                : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(token) || !store.TryFindByBootstrapToken(token, out var enrollment))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!string.Equals(enrollment!.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.BadRequest(new { code = "agent.heartbeat.deviceMismatch", reason = "deviceId does not match enrollment" });
+            }
+
+            var updated = store.Heartbeat(deviceId);
+            if (updated is null)
+            {
+                return Results.NotFound(new { code = "agent.heartbeat.notFound", reason = "device enrollment not found" });
+            }
+
+            await auditTrail.AppendAsync(new AuditEvent(
+                Id: Guid.NewGuid().ToString("n"),
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                EventType: "agent.heartbeat.received",
+                Subject: updated.AssignedIdentity,
+                Source: "agent",
+                Detail: $"Heartbeat received from device '{deviceId}'",
+                Category: "device",
+                Outcome: "ok",
+                ReasonCode: "agent.heartbeat",
+                Route: httpContext.Request.Path,
+                CorrelationId: Activity.Current?.TraceId.ToString()),
+                cancellationToken);
+
+            return Results.Ok(new
+            {
+                deviceId = updated.DeviceId,
+                assignedIdentity = updated.AssignedIdentity,
+                lastSeenUtc = updated.LastSeenUtc,
+                status = "online"
+            });
+        }
+
         async Task<IResult> deviceActionHandler(HttpContext httpContext, JsonElement payload, DeviceRegistrationStore store, IAuditTrail auditTrail, IHipEnvelopeVerifier envelopeVerifier, IIdentityService identityService, IReputationService reputationService, CancellationToken cancellationToken)
         {
             var gate = await AdminAccessPolicy.AuthorizeReadAsync(httpContext, envelopeVerifier, identityService, reputationService, cancellationToken);
@@ -455,6 +612,44 @@ public static class SecurityEndpoints
             });
         }
 
+        endpoints.MapPost("/api/agent/enroll", agentEnrollHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("EnrollAgentDevice")
+            .WithSummary("Register an agent device and issue bootstrap credentials")
+            .WithTags("Agent")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/v1/agent/enroll", agentEnrollHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("EnrollAgentDeviceV1")
+            .WithSummary("Register an agent device and issue bootstrap credentials")
+            .WithTags("Agent", "v1")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/agent/heartbeat", agentHeartbeatHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("HeartbeatAgentDevice")
+            .WithSummary("Record agent heartbeat using bootstrap bearer token")
+            .WithTags("Agent")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/v1/agent/heartbeat", agentHeartbeatHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("HeartbeatAgentDeviceV1")
+            .WithSummary("Record agent heartbeat using bootstrap bearer token")
+            .WithTags("Agent", "v1")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
         endpoints.MapGet("/api/admin/users-devices", usersDevicesHandler)
             .RequireRateLimiting("read-api")
             .WithName("GetUsersDevices")
@@ -502,6 +697,24 @@ public static class SecurityEndpoints
             .RequireRateLimiting("read-api")
             .WithName("RegisterUserDeviceV1")
             .WithSummary("Register a new device")
+            .WithTags("Admin", "Device", "v1")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/admin/users-devices/heartbeat", heartbeatDeviceHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("HeartbeatUserDevice")
+            .WithSummary("Record device heartbeat")
+            .WithTags("Admin", "Device")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests);
+
+        endpoints.MapPost("/api/v1/admin/users-devices/heartbeat", heartbeatDeviceHandler)
+            .RequireRateLimiting("read-api")
+            .WithName("HeartbeatUserDeviceV1")
+            .WithSummary("Record device heartbeat")
             .WithTags("Admin", "Device", "v1")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
