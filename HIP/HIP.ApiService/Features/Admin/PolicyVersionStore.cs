@@ -1,14 +1,27 @@
+using System.Text.Json;
+
 namespace HIP.ApiService.Features.Admin;
 
 internal sealed class PolicyVersionStore
 {
     private readonly object _gate = new();
     private readonly List<PolicyVersionSnapshot> _versions = [];
-    private string _activeVersionId;
+    private readonly string _storePath;
+    private readonly ILogger<PolicyVersionStore> _logger;
+    private string _activeVersionId = string.Empty;
     private string? _previousActiveVersionId;
 
-    public PolicyVersionStore(PolicyRuleStore rules)
+    public PolicyVersionStore(PolicyRuleStore rules, IConfiguration configuration, IWebHostEnvironment env, ILogger<PolicyVersionStore> logger)
     {
+        _logger = logger;
+        _storePath = configuration["HIP:Policy:VersionStorePath"]
+            ?? Path.Combine(env.ContentRootPath, "Policy", "policy-versions.store.json");
+
+        if (TryLoadPersistedState())
+        {
+            return;
+        }
+
         var seedId = "POLVER-001";
         var seed = new PolicyVersionSnapshot(
             seedId,
@@ -22,6 +35,7 @@ internal sealed class PolicyVersionStore
 
         _versions.Add(seed);
         _activeVersionId = seedId;
+        SavePersistedStateUnsafe();
     }
 
     public IReadOnlyList<PolicyVersionSnapshot> List() { lock (_gate) return _versions.Select(v => v.Clone()).OrderByDescending(v => v.CreatedUtc).ToList(); }
@@ -48,6 +62,7 @@ internal sealed class PolicyVersionStore
             var id = $"POLVER-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
             var draft = new PolicyVersionSnapshot(id, $"Draft {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}", "Draft", DateTimeOffset.UtcNow, actor, reason, null, active.Rules.Select(x => x with { }).ToList());
             _versions.Add(draft);
+            SavePersistedStateUnsafe();
             return draft.Clone();
         }
     }
@@ -61,6 +76,7 @@ internal sealed class PolicyVersionStore
             var ix = inList.Rules.FindIndex(r => string.Equals(r.RuleId, rule.RuleId, StringComparison.OrdinalIgnoreCase));
             if (ix >= 0) inList.Rules[ix] = rule;
             else inList.Rules.Add(rule);
+            SavePersistedStateUnsafe();
             return (inList.Clone(), inList.VersionId);
         }
     }
@@ -82,6 +98,7 @@ internal sealed class PolicyVersionStore
             target.Reason = reason;
             target.ApprovedBy = approvedBy;
 
+            SavePersistedStateUnsafe();
             return target.Clone();
         }
     }
@@ -142,6 +159,62 @@ internal sealed class PolicyVersionStore
             return new { baseline = baseline.VersionId, target = target.VersionId, added, removed, changed };
         }
     }
+
+    private bool TryLoadPersistedState()
+    {
+        try
+        {
+            if (!File.Exists(_storePath))
+            {
+                return false;
+            }
+
+            var json = File.ReadAllText(_storePath);
+            var state = JsonSerializer.Deserialize<PolicyVersionStoreState>(json);
+            if (state is null || state.Versions.Count == 0 || string.IsNullOrWhiteSpace(state.ActiveVersionId))
+            {
+                return false;
+            }
+
+            _versions.Clear();
+            _versions.AddRange(state.Versions.Select(v => v.Clone()));
+            _activeVersionId = state.ActiveVersionId;
+            _previousActiveVersionId = state.PreviousActiveVersionId;
+            _logger.LogInformation("Loaded persisted policy version store from {Path} with {Count} versions", _storePath, _versions.Count);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load persisted policy version store from {Path}. Falling back to seed.", _storePath);
+            return false;
+        }
+    }
+
+    private void SavePersistedStateUnsafe()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(_storePath);
+            if (!string.IsNullOrWhiteSpace(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            var state = new PolicyVersionStoreState
+            {
+                ActiveVersionId = _activeVersionId,
+                PreviousActiveVersionId = _previousActiveVersionId,
+                Versions = _versions.Select(v => v.Clone()).ToList()
+            };
+
+            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_storePath, json);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist policy version store to {Path}", _storePath);
+        }
+    }
 }
 
 internal sealed class PolicyVersionSnapshot
@@ -169,4 +242,11 @@ internal sealed class PolicyVersionSnapshot
     }
 
     public PolicyVersionSnapshot Clone() => new(VersionId, Name, Status, CreatedUtc, Actor, Reason, ApprovedBy, Rules.Select(x => x with { }).ToList()) { ActivatedUtc = ActivatedUtc };
+}
+
+internal sealed class PolicyVersionStoreState
+{
+    public string ActiveVersionId { get; set; } = string.Empty;
+    public string? PreviousActiveVersionId { get; set; }
+    public List<PolicyVersionSnapshot> Versions { get; set; } = [];
 }
