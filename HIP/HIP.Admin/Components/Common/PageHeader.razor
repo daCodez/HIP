@@ -30,7 +30,7 @@
 
     @if (LastUpdatedUtc.HasValue)
     {
-        <p class="hip-page-timestamp">Last updated @LastUpdatedUtc.Value.ToLocalTime():u</p>
+        <p class="hip-page-timestamp">Last updated @LastUpdatedUtc.Value.ToLocalTime().ToString("u")</p>
     }
 </header>
 

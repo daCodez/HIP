@@ -61,6 +61,34 @@ internal sealed class DeviceRegistrationStore
         }
     }
 
+    public DeviceRegistrationEntry Heartbeat(string user, string email, string device, string actor)
+    {
+        lock (_gate)
+        {
+            var ix = _devices.FindIndex(x =>
+                x.Email.Equals(email, StringComparison.OrdinalIgnoreCase)
+                && x.Device.Equals(device, StringComparison.OrdinalIgnoreCase));
+
+            DeviceRegistrationEntry updated;
+            if (ix < 0)
+            {
+                updated = new DeviceRegistrationEntry(user, email, device, "Pending", DateTime.UtcNow);
+                _devices.Add(updated);
+                _history.Add(new DeviceActionHistoryEntry(email, device, "heartbeat-register", "Pending", "Auto-registered from agent heartbeat", actor, DateTime.UtcNow));
+            }
+            else
+            {
+                var current = _devices[ix];
+                updated = current with { LastSeenUtc = DateTime.UtcNow, User = string.IsNullOrWhiteSpace(user) ? current.User : user };
+                _devices[ix] = updated;
+                _history.Add(new DeviceActionHistoryEntry(email, device, "heartbeat", updated.DeviceStatus, "Agent heartbeat received", actor, DateTime.UtcNow));
+            }
+
+            SavePersistedStateUnsafe();
+            return updated;
+        }
+    }
+
     public DeviceRegistrationEntry? UpdateStatus(string email, string device, string status, string action, string note, string actor)
     {
         lock (_gate)

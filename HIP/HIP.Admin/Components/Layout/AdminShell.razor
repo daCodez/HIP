@@ -27,7 +27,7 @@
         <AdminContextBar>
             @if (_config?.ServerTimestampUtc is not null)
             {
-                <span>Config refresh: @_config.ServerTimestampUtc.Value.ToLocalTime():u</span>
+                <span>Config refresh: @_config.ServerTimestampUtc.Value.ToLocalTime().ToString("u")</span>
             }
         </AdminContextBar>
 

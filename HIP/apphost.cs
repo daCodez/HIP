@@ -7,6 +7,10 @@ var apiReplicas = int.TryParse(apiReplicasRaw, out var parsedReplicas) && parsed
     ? parsedReplicas
     : 1;
 
+var gmailClientId = Environment.GetEnvironmentVariable("GOOGLE_OAUTH_CLIENT_ID");
+var gmailClientSecret = Environment.GetEnvironmentVariable("GOOGLE_OAUTH_CLIENT_SECRET");
+var gmailRedirectUri = Environment.GetEnvironmentVariable("GOOGLE_OAUTH_REDIRECT_URI");
+
 var api = builder.AddProject("hip-api", "/home/jarvis_bot/.openclaw/workspace/HIP/HIP.ApiService/HIP.ApiService.csproj")
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
     .WithHttpEndpoint(name: "http", port: 44985, isProxied: false)
@@ -16,6 +20,21 @@ var api = builder.AddProject("hip-api", "/home/jarvis_bot/.openclaw/workspace/HI
         url.Url = "https://srv1377835-1.tailb59890.ts.net:8443/swagger";
         url.DisplayText = "HIP.API";
     });
+
+if (!string.IsNullOrWhiteSpace(gmailClientId))
+{
+    api = api.WithEnvironment("GOOGLE_OAUTH_CLIENT_ID", gmailClientId);
+}
+
+if (!string.IsNullOrWhiteSpace(gmailClientSecret))
+{
+    api = api.WithEnvironment("GOOGLE_OAUTH_CLIENT_SECRET", gmailClientSecret);
+}
+
+if (!string.IsNullOrWhiteSpace(gmailRedirectUri))
+{
+    api = api.WithEnvironment("GOOGLE_OAUTH_REDIRECT_URI", gmailRedirectUri);
+}
 
 builder.AddProject("hip-web", "/home/jarvis_bot/.openclaw/workspace/HIP/HIP.Web/HIP.Web.csproj")
     .WithHttpEndpoint(name: "http", port: 45727, isProxied: false)

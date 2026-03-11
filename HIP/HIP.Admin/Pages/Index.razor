@@ -1,14 +1,22 @@
 @page "/"
 @attribute [Authorize]
 @inject HipAdminApiClient Api
+@implements IDisposable
 
 <PageTitle>Security Overview</PageTitle>
 
 <PageHeader Title="Security Overview"
-            Subtitle="Protection Summary · plain-language snapshot of system safety"
+            Subtitle="Protection Summary · live API-backed snapshot"
             LastUpdatedUtc="@_lastUpdatedUtc"
             Breadcrumbs="@_breadcrumbs">
     <Actions>
+        <div class="d-flex align-items-center gap-2 me-2 small">
+            <span class="badge @(IsLive ? "text-bg-success" : "text-bg-secondary")">@(IsLive ? "Live" : "Idle")</span>
+            <div class="form-check form-switch m-0">
+                <input id="overview-auto-refresh" class="form-check-input" type="checkbox" @bind="_autoRefresh" />
+                <label class="form-check-label" for="overview-auto-refresh">Auto</label>
+            </div>
+        </div>
         <button type="button" class="btn btn-outline-secondary" @onclick="ReloadAsync">Refresh</button>
     </Actions>
 </PageHeader>
@@ -25,12 +33,13 @@
             <div>
                 <h2 class="h5 mb-1">@GlobalStatusIcon @GlobalStatusLabel</h2>
                 <p class="mb-0 text-muted">@_statusBannerMessage</p>
+                <div class="small text-muted mt-1">source: /api/admin/security-status + /api/v1/admin/audit</div>
             </div>
             <div class="small">
-                <div><strong>Active protections:</strong> @Math.Max(1, ParseInt(_topKpis.FirstOrDefault(x => x.Title == "Active Policies")?.Value)) policies</div>
-                <div><strong>Threats blocked:</strong> @_blockedLogins today</div>
-                <div><strong>Critical threats:</strong> @CriticalThreatCount</div>
-                <div><strong>Last event:</strong> @LastEventAgo</div>
+                <div><strong>Active protections:</strong> @(_activePoliciesAvailable ? _activePolicies : "No live data yet")</div>
+                <div><strong>Threats blocked:</strong> @(_statusAvailable ? _blockedAttempts : "No live data yet")</div>
+                <div><strong>Critical threats:</strong> @(_incidentsAvailable ? CriticalThreatCount : "No live data yet")</div>
+                <div><strong>Last event:</strong> @(_incidentsAvailable ? LastEventAgo : "No live data yet")</div>
             </div>
         </div>
     </section>
@@ -64,72 +73,83 @@
         <section class="widget widget-table table-widget-frame">
             <div class="widget-header"><h3>Security Trends</h3></div>
             <div class="widget-content">
-                <div class="activity-line"><span>Allowed logins</span><div class="activity-bar"><span style="width:@AllowedLoginsBar"></span></div></div>
-                <div class="activity-line"><span>Blocked logins</span><div class="activity-bar"><span style="width:@BlockedLoginsBar"></span></div></div>
-                <div class="activity-line"><span>Suspicious messages</span><div class="activity-bar"><span style="width:@SuspiciousMessagesBar"></span></div></div>
-                <div class="activity-line"><span>Expired tokens</span><div class="activity-bar"><span style="width:@ExpiredTokensBar"></span></div></div>
+                @if (!_statusAvailable)
+                {
+                    <div class="text-muted">No live data yet</div>
+                }
+                else
+                {
+                    <div class="activity-line"><span>Blocked attempts</span><div class="activity-bar"><span style="width:@BlockedAttemptsBar"></span></div></div>
+                    <div class="activity-line"><span>Replay detections</span><div class="activity-bar"><span style="width:@ReplayBar"></span></div></div>
+                    <div class="activity-line"><span>Expired messages</span><div class="activity-bar"><span style="width:@ExpiredBar"></span></div></div>
+                }
+                <div class="text-muted small mt-2">source: /api/admin/security-status</div>
             </div>
         </section>
 
         <section class="widget widget-table table-widget-frame">
             <div class="widget-header"><h3>Attack Visualization</h3></div>
             <div class="widget-content small">
-                @foreach (var country in AttackMap)
-                {
-                    <div class="d-flex justify-content-between border-bottom py-1"><span>@country.Country</span><span class="fw-semibold">@country.Attempts</span></div>
-                }
-                <div class="text-muted mt-2">Top origin signals for blocked/challenged traffic.</div>
+                <div class="text-muted">Unavailable (no backend endpoint mapped for geo/origin attack map).</div>
+                <div class="text-muted small mt-2">source: unavailable</div>
             </div>
         </section>
 
         <section class="widget widget-table table-widget-frame">
             <div class="widget-header"><h3>Risk Heatmap</h3></div>
             <div class="widget-content small">
-                @foreach (var zone in RiskHeatmap)
-                {
-                    <div class="d-flex justify-content-between border-bottom py-1">
-                        <span>@zone.Source</span>
-                        <span class="fw-semibold @zone.LevelClass">@zone.Level</span>
-                    </div>
-                }
+                <div class="text-muted">Unavailable (no backend endpoint mapped for risk heatmap).</div>
+                <div class="text-muted small mt-2">source: unavailable</div>
             </div>
         </section>
 
         <section class="widget widget-table table-widget-frame">
             <div class="widget-header"><h3>Device Trust Panel</h3></div>
             <div class="widget-content small">
-                <div>Trusted devices seen: <strong>@_activeUsers</strong></div>
-                <div>Devices flagged for review: <strong>@Math.Max(0, _blockedLogins - 1)</strong></div>
-                <div class="text-muted mt-2">Review unusual sign-ins from Users &amp; Devices.</div>
+                @if (!_usersDevicesAvailable)
+                {
+                    <div class="text-muted">No live data yet</div>
+                }
+                else
+                {
+                    <div>Trusted/compliant devices: <strong>@_trustedDevices</strong></div>
+                    <div>Devices flagged for review: <strong>@_flaggedDevices</strong></div>
+                    <div>Total tracked devices: <strong>@_totalDevices</strong></div>
+                }
+                <div class="text-muted small mt-2">source: /api/v1/admin/users-devices</div>
             </div>
         </section>
 
         <section class="widget widget-table table-widget-frame">
             <div class="widget-header"><h3>User Trust Radar</h3></div>
             <div class="widget-content small">
-                @foreach (var item in TrustRadar)
-                {
-                    <div class="trust-row"><span>@item.Signal</span><div class="trust-bar"><span style="width:@item.Score%"></span></div></div>
-                }
-                <div class="text-muted mt-2">Overall trust score: <strong>@SecurityHealthScore</strong></div>
+                <div class="text-muted">Unavailable (no backend endpoint mapped for trust radar scoring).</div>
+                <div class="text-muted small mt-2">source: unavailable</div>
             </div>
         </section>
 
         <section class="widget widget-table table-widget-frame">
             <div class="widget-header"><h3>Overall Risk Level</h3></div>
             <div class="widget-content">
-                <div class="score-value">@SecurityHealthScore / 100</div>
-                <div class="score-status @ScoreClass">@ScoreLabel</div>
-                <div class="text-muted small mt-2">Calculated from blocked logins, suspicious messages, expired tokens, and activity volume.</div>
+                <div class="text-muted">Unavailable (risk score endpoint not available).</div>
+                <div class="text-muted small mt-2">source: unavailable</div>
             </div>
         </section>
 
         <section class="widget widget-table table-widget-frame">
             <div class="widget-header"><h3>Protection Checks</h3></div>
             <div class="widget-content small">
-                <div>Replay protection: <StatusBadge Severity="@(_suspiciousMessages > 0 ? SeverityLevel.Medium : SeverityLevel.Low)" /></div>
-                <div>Token expiry enforcement: <StatusBadge Severity="@(_expiredTokens > 0 ? SeverityLevel.Medium : SeverityLevel.Low)" /></div>
-                <div>Policy blocking: <StatusBadge Severity="@(_blockedLogins > 0 ? SeverityLevel.High : SeverityLevel.Low)" /></div>
+                @if (!_statusAvailable)
+                {
+                    <div class="text-muted">No live data yet</div>
+                }
+                else
+                {
+                    <div>Replay protection: <StatusBadge Severity="@(_replayDetections > 0 ? SeverityLevel.Medium : SeverityLevel.Low)" /> (@_replayDetections)</div>
+                    <div>Token expiry enforcement: <StatusBadge Severity="@(_expiredMessages > 0 ? SeverityLevel.Medium : SeverityLevel.Low)" /> (@_expiredMessages)</div>
+                    <div>Policy blocking: <StatusBadge Severity="@(_blockedAttempts > 0 ? SeverityLevel.High : SeverityLevel.Low)" /> (@_blockedAttempts)</div>
+                }
+                <div class="text-muted small mt-2">source: /api/admin/security-status</div>
             </div>
         </section>
 
@@ -144,34 +164,39 @@
         <section class="widget widget-table table-widget-frame">
             <div class="widget-header"><h3>Incident Alerts</h3></div>
             <div class="widget-content small">
-                @{
-                    var alerts = _incidents.Where(x => x.Result.Equals("Denied", StringComparison.OrdinalIgnoreCase)
-                                                     || x.Severity.Equals("critical", StringComparison.OrdinalIgnoreCase)
-                                                     || x.EventType.Contains("suspicious", StringComparison.OrdinalIgnoreCase))
-                                           .Take(4)
-                                           .ToList();
-                }
-                @if (alerts.Count == 0)
+                @if (!_incidentsAvailable)
                 {
-                    <div class="text-muted">No urgent incidents right now.</div>
+                    <div class="text-muted">No live data yet</div>
                 }
                 else
                 {
-                    @foreach (var item in alerts)
+                    @if (ActiveAlerts.Count == 0)
                     {
-                        <div class="py-1 border-bottom">
-                            <div class="fw-semibold">⚠ @HumanizeEvent(item.EventType)</div>
-                            <div class="text-muted">@item.Actor · @FormatRelativeTime(item.Timestamp)</div>
-                        </div>
+                        <div class="text-muted">No urgent incidents right now.</div>
+                    }
+                    else
+                    {
+                        @foreach (var item in ActiveAlerts)
+                        {
+                            <div class="py-1 border-bottom">
+                                <div class="fw-semibold">⚠ @HumanizeEvent(item.EventType)</div>
+                                <div class="text-muted">@item.Actor · @FormatRelativeTime(item.Timestamp)</div>
+                            </div>
+                        }
                     }
                 }
+                <div class="text-muted small mt-2">source: /api/v1/admin/audit (fallback /api/admin/audit)</div>
             </div>
         </section>
 
         <section class="widget widget-table table-widget-frame">
             <div class="widget-header"><h3>Real-Time Event Feed</h3></div>
             <div class="widget-content small">
-                @if (_incidents.Count == 0)
+                @if (!_incidentsAvailable)
+                {
+                    <div class="text-muted">No live data yet</div>
+                }
+                else if (_incidents.Count == 0)
                 {
                     <div class="text-muted">No recent security activity yet.</div>
                 }
@@ -188,6 +213,7 @@
                         </div>
                     }
                 }
+                <div class="text-muted small mt-2">source: /api/v1/admin/audit (fallback /api/admin/audit)</div>
             </div>
         </section>
     </section>
@@ -212,12 +238,23 @@
     private string _error = "Please try again.";
     private string _searchText = string.Empty;
 
-    private string _statusBannerMessage = "No urgent signals detected. Keep monitoring normal operations.";
+    private string _statusBannerMessage = "No live data yet.";
 
-    private int _blockedLogins;
-    private int _suspiciousMessages;
-    private int _expiredTokens;
-    private int _activeUsers;
+    private int _blockedAttempts;
+    private int _replayDetections;
+    private int _expiredMessages;
+    private int _activePolicies;
+    private bool _statusAvailable;
+    private bool _incidentsAvailable;
+    private bool _usersDevicesAvailable;
+    private bool _activePoliciesAvailable;
+    private int _totalDevices;
+    private int _trustedDevices;
+    private int _flaggedDevices;
+
+    private bool _autoRefresh = true;
+    private PeriodicTimer? _timer;
+    private bool IsLive => _autoRefresh && _lastUpdatedUtc is not null && DateTimeOffset.UtcNow - _lastUpdatedUtc.Value < TimeSpan.FromSeconds(40);
 
     private readonly List<FilterField> _filters =
     [
@@ -259,50 +296,53 @@
         new() { Header = "Story note", ValueSelector = x => x.Detail, SortSelector = x => x.Detail }
     ];
 
-    private int SecurityHealthScore => Math.Clamp(100 - (_blockedLogins * 4) - (_suspiciousMessages * 5) - (_expiredTokens * 3), 0, 100);
+    private IReadOnlyList<AuditLogEntry> ActiveAlerts => _incidents
+        .Where(x => x.Result.Equals("Denied", StringComparison.OrdinalIgnoreCase)
+                 || x.Result.Equals("Review", StringComparison.OrdinalIgnoreCase)
+                 || x.Severity.Equals("critical", StringComparison.OrdinalIgnoreCase))
+        .Take(4)
+        .ToList();
 
-    private string ScoreLabel => SecurityHealthScore >= 85 ? "Secure" : "Warning";
-
-    private string ScoreClass => SecurityHealthScore >= 85 ? "score-secure" : "score-attention";
-
-    private string AllowedLoginsBar => "88%";
-    private string BlockedLoginsBar => BarFromCount(_blockedLogins, 8, 70);
-    private string SuspiciousMessagesBar => BarFromCount(_suspiciousMessages, 8, 70);
-    private string ExpiredTokensBar => BarFromCount(_expiredTokens, 8, 70);
-
-    private IReadOnlyList<(string Country, int Attempts)> AttackMap =>
-    [
-        ("Russia", Math.Max(1, _blockedLogins + 4)),
-        ("China", Math.Max(1, _suspiciousMessages + 2)),
-        ("Brazil", Math.Max(1, _expiredTokens + 1)),
-        ("Germany", Math.Max(1, _blockedLogins / 2 + 1))
-    ];
-
-    private IReadOnlyList<(string Source, string Level, string LevelClass)> RiskHeatmap =>
-    [
-        ("Messaging", _suspiciousMessages > 3 ? "High" : "Medium", _suspiciousMessages > 3 ? "text-danger" : "text-warning"),
-        ("Login", _blockedLogins > 2 ? "High" : "Medium", _blockedLogins > 2 ? "text-danger" : "text-warning"),
-        ("API traffic", _expiredTokens > 2 ? "Medium" : "Low", _expiredTokens > 2 ? "text-warning" : "text-success"),
-        ("Device trust", _blockedLogins > 4 ? "Medium" : "Low", _blockedLogins > 4 ? "text-warning" : "text-success")
-    ];
-
-    private IReadOnlyList<(string Signal, int Score)> TrustRadar =>
-    [
-        ("Login behavior", Math.Clamp(95 - (_blockedLogins * 6), 20, 96)),
-        ("Device trust", Math.Clamp(90 - (_expiredTokens * 5), 20, 95)),
-        ("Messaging behavior", Math.Clamp(88 - (_suspiciousMessages * 7), 15, 92)),
-        ("History", Math.Clamp(85 + (_activeUsers / 4), 30, 98))
-    ];
+    private int ActiveAlertCount => ActiveAlerts.Count;
 
     private int CriticalThreatCount => _incidents.Count(x => x.Severity.Equals("critical", StringComparison.OrdinalIgnoreCase)
                                                          || x.EventType.Contains("takeover", StringComparison.OrdinalIgnoreCase)
                                                          || x.EventType.Contains("impossible_travel", StringComparison.OrdinalIgnoreCase));
     private string LastEventAgo => _incidents.Count == 0 ? "No events yet" : FormatRelativeTime(_incidents.Max(x => x.Timestamp));
-    private string GlobalStatusIcon => SecurityHealthScore >= 85 ? "🟢" : SecurityHealthScore >= 60 ? "🟡" : "🔴";
-    private string GlobalStatusLabel => SecurityHealthScore >= 85 ? "System Secure" : SecurityHealthScore >= 60 ? "Security Warning" : "Security Incident Detected";
-    private string GlobalStatusClass => SecurityHealthScore >= 85 ? "border-success" : SecurityHealthScore >= 60 ? "border-warning" : "border-danger";
 
-    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    private string GlobalStatusIcon => !_statusAvailable ? "⚪" : (_blockedAttempts + _replayDetections + _expiredMessages) == 0 ? "🟢" : "🟡";
+    private string GlobalStatusLabel => !_statusAvailable ? "Status Unavailable" : (_blockedAttempts + _replayDetections + _expiredMessages) == 0 ? "System Secure" : "Security Alerts Active";
+    private string GlobalStatusClass => !_statusAvailable ? "border-secondary" : (_blockedAttempts + _replayDetections + _expiredMessages) == 0 ? "border-success" : "border-warning";
+
+    private string BlockedAttemptsBar => BarFromLiveCounts(_blockedAttempts, _replayDetections, _expiredMessages);
+    private string ReplayBar => BarFromLiveCounts(_replayDetections, _blockedAttempts, _expiredMessages);
+    private string ExpiredBar => BarFromLiveCounts(_expiredMessages, _blockedAttempts, _replayDetections);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+        _timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
+        _ = RunAutoRefreshAsync();
+    }
+
+    private async Task RunAutoRefreshAsync()
+    {
+        if (_timer is null)
+        {
+            return;
+        }
+
+        while (await _timer.WaitForNextTickAsync())
+        {
+            if (!_autoRefresh)
+            {
+                continue;
+            }
+
+            await ReloadAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
 
     private async Task ReloadAsync()
     {
@@ -311,37 +351,61 @@
 
         var metricsTask = Api.GetDashboardMetricsAsync();
         var incidentsTask = Api.GetAuditLogsAsync();
+        var policyRulesTask = Api.GetPolicyRulesAsync();
+        var usersDevicesTask = Api.GetUsersDevicesAsync();
 
-        await Task.WhenAll(metricsTask, incidentsTask);
+        await Task.WhenAll(metricsTask, incidentsTask, policyRulesTask, usersDevicesTask);
 
         var metrics = metricsTask.Result;
         var incidents = incidentsTask.Result;
+        var policyRules = policyRulesTask.Result;
+        var usersDevices = usersDevicesTask.Result;
 
         _topKpis.Clear();
         _incidents.Clear();
 
-        if (metrics.Success && metrics.Data is { Count: > 0 })
+        _statusAvailable = metrics.Success && metrics.Data is { Count: > 0 };
+        _incidentsAvailable = incidents.Success;
+        _activePoliciesAvailable = policyRules.Success && policyRules.Data is not null;
+        _usersDevicesAvailable = usersDevices.Success && usersDevices.Data is not null;
+
+        _activePolicies = _activePoliciesAvailable && policyRules.Data is { Count: > 0 }
+            ? policyRules.Data.Count(x => x.Enabled)
+            : 0;
+
+        if (_statusAvailable)
         {
-            HydrateKpis(metrics.Data);
+            HydrateStatusMetrics(metrics.Data!);
+        }
+        else
+        {
+            _blockedAttempts = 0;
+            _replayDetections = 0;
+            _expiredMessages = 0;
         }
 
-        if (incidents.Success && incidents.Data is { Count: > 0 })
+        if (_incidentsAvailable && incidents.Data is { Count: > 0 })
         {
             _incidents.AddRange(incidents.Data.Take(25));
         }
 
-        if (!metrics.Success && !incidents.Success)
+        if (_usersDevicesAvailable && usersDevices.Data is { Count: > 0 })
         {
-            _state = StateViewMode.Error;
-            _error = string.Join(" ", new[] { metrics.Error, incidents.Error }.Where(x => !string.IsNullOrWhiteSpace(x)));
-            return;
+            _totalDevices = usersDevices.Data.Count;
+            _trustedDevices = usersDevices.Data.Count(x => x.DeviceStatus.Equals("Compliant", StringComparison.OrdinalIgnoreCase)
+                                                       || x.DeviceStatus.Equals("Trusted", StringComparison.OrdinalIgnoreCase));
+            _flaggedDevices = usersDevices.Data.Count(x => x.DeviceStatus.Equals("Pending", StringComparison.OrdinalIgnoreCase)
+                                                       || x.DeviceStatus.Equals("Blocked", StringComparison.OrdinalIgnoreCase)
+                                                       || x.DeviceStatus.Equals("Review", StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            _totalDevices = 0;
+            _trustedDevices = 0;
+            _flaggedDevices = 0;
         }
 
-        if (_activeUsers == 0)
-        {
-            _activeUsers = Math.Max(1, _incidents.Select(x => x.Actor).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        }
-
+        BuildKpis();
         BuildStatusBanner();
 
         ApplyFilters(new FilterBarChangeSet
@@ -351,6 +415,14 @@
         });
 
         _lastUpdatedUtc = DateTimeOffset.UtcNow;
+
+        if (!_statusAvailable && !_incidentsAvailable && !_activePoliciesAvailable && !_usersDevicesAvailable)
+        {
+            _state = StateViewMode.Error;
+            _error = string.Join(" ", new[] { metrics.Error, incidents.Error, policyRules.Error, usersDevices.Error }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            return;
+        }
+
         _state = _incidents.Count == 0
             ? StateViewMode.EmptyTrue
             : _filteredIncidents.Count == 0
@@ -358,46 +430,44 @@
                 : StateViewMode.Success;
     }
 
-    private void HydrateKpis(IReadOnlyCollection<DashboardMetric> metrics)
+    private void HydrateStatusMetrics(IReadOnlyCollection<DashboardMetric> metrics)
     {
-        var scoreMetric = metrics.FirstOrDefault(x => x.Title.Contains("Score", StringComparison.OrdinalIgnoreCase));
         var blockedMetric = metrics.FirstOrDefault(x => x.Title.Contains("Blocked", StringComparison.OrdinalIgnoreCase));
-        var suspiciousMetric = metrics.FirstOrDefault(x => x.Title.Contains("Replay", StringComparison.OrdinalIgnoreCase));
+        var replayMetric = metrics.FirstOrDefault(x => x.Title.Contains("Replay", StringComparison.OrdinalIgnoreCase));
         var expiredMetric = metrics.FirstOrDefault(x => x.Title.Contains("Expired", StringComparison.OrdinalIgnoreCase));
 
-        _blockedLogins = ParseInt(blockedMetric?.Value);
-        _suspiciousMessages = ParseInt(suspiciousMetric?.Value);
-        _expiredTokens = ParseInt(expiredMetric?.Value);
+        _blockedAttempts = ParseInt(blockedMetric?.Value);
+        _replayDetections = ParseInt(replayMetric?.Value);
+        _expiredMessages = ParseInt(expiredMetric?.Value);
+    }
 
-        var scoreValue = scoreMetric is null ? SecurityHealthScore.ToString() : scoreMetric.Value;
-        var scoreDelta = scoreMetric?.Delta ?? (SecurityHealthScore >= 85 ? "Stable" : "Needs attention");
-
-        _activeUsers = Math.Max(1, ParseInt(metrics.FirstOrDefault(x => x.Title.Contains("Active", StringComparison.OrdinalIgnoreCase))?.Value));
-
+    private void BuildKpis()
+    {
         _topKpis.AddRange(
         [
-            new DashboardMetric { Title = "Active Policies", Value = Math.Max(1, ParseInt(scoreValue) / 2).ToString(), Delta = "Security rules currently protecting users", Trend = "up" },
-            new DashboardMetric { Title = "Threats Blocked", Value = _blockedLogins.ToString(), Delta = _blockedLogins == 0 ? "No recent blocks" : "Attacks stopped", Trend = _blockedLogins == 0 ? "up" : "down" },
-            new DashboardMetric { Title = "Active Alerts", Value = (_blockedLogins + _suspiciousMessages).ToString(), Delta = "Current issues needing attention", Trend = (_blockedLogins + _suspiciousMessages) > 0 ? "down" : "up" },
-            new DashboardMetric { Title = "Reputation Signals", Value = _suspiciousMessages.ToString(), Delta = "Behavior tracking events", Trend = _suspiciousMessages == 0 ? "up" : "down" }
+            new DashboardMetric { Title = "Active Protections", Value = _activePoliciesAvailable ? _activePolicies.ToString() : "No live data yet", Delta = "/api/v1/admin/policy", Trend = _activePolicies > 0 ? "up" : "down" },
+            new DashboardMetric { Title = "Threats Blocked", Value = _statusAvailable ? _blockedAttempts.ToString() : "No live data yet", Delta = "/api/admin/security-status", Trend = _blockedAttempts == 0 ? "up" : "down" },
+            new DashboardMetric { Title = "Replay / Expired", Value = _statusAvailable ? $"{_replayDetections} / {_expiredMessages}" : "No live data yet", Delta = "/api/admin/security-status", Trend = (_replayDetections + _expiredMessages) == 0 ? "up" : "down" },
+            new DashboardMetric { Title = "Active Alerts", Value = _incidentsAvailable ? ActiveAlertCount.ToString() : "No live data yet", Delta = "/api/v1/admin/audit", Trend = ActiveAlertCount == 0 ? "up" : "down" }
         ]);
     }
 
     private void BuildStatusBanner()
     {
-        if (SecurityHealthScore >= 85)
+        if (!_statusAvailable)
         {
-            _statusBannerMessage = "All protections active. No urgent high-risk signals.";
+            _statusBannerMessage = "No live security status yet.";
             return;
         }
 
-        if (SecurityHealthScore >= 60)
+        var totalSignals = _blockedAttempts + _replayDetections + _expiredMessages;
+        if (totalSignals == 0)
         {
-            _statusBannerMessage = "Risk indicators are elevated. Review suspicious logins and token activity.";
+            _statusBannerMessage = "All reported protections are quiet right now.";
             return;
         }
 
-        _statusBannerMessage = "Critical threat indicators detected. Review incident alerts immediately.";
+        _statusBannerMessage = "Live security signals detected. Review active alerts and event feed.";
     }
 
     private Task OnSearchTextChanged(string text)
@@ -444,9 +514,10 @@
         return int.TryParse(digits, out var parsed) ? parsed : 0;
     }
 
-    private static string BarFromCount(int count, int min, int max)
+    private static string BarFromLiveCounts(int primary, params int[] other)
     {
-        var width = Math.Clamp(min + (count * 12), min, max);
+        var max = Math.Max(1, new[] { primary }.Concat(other).Max());
+        var width = Math.Clamp((int)Math.Round((primary / (double)max) * 100), 10, 100);
         return $"{width}%";
     }
 
@@ -485,20 +556,20 @@
     private WorkflowStatus GetKpiStatus(string title)
         => title switch
         {
-            "Active Policies" => WorkflowStatus.Resolved,
-            "Threats Blocked" => _blockedLogins == 0 ? WorkflowStatus.Resolved : WorkflowStatus.Mitigated,
-            "Active Alerts" => (_blockedLogins + _suspiciousMessages) == 0 ? WorkflowStatus.Resolved : WorkflowStatus.Investigating,
-            "Reputation Signals" => _suspiciousMessages == 0 ? WorkflowStatus.Resolved : WorkflowStatus.New,
+            "Active Protections" => _activePoliciesAvailable ? WorkflowStatus.Resolved : WorkflowStatus.New,
+            "Threats Blocked" => !_statusAvailable ? WorkflowStatus.New : (_blockedAttempts == 0 ? WorkflowStatus.Resolved : WorkflowStatus.Mitigated),
+            "Replay / Expired" => !_statusAvailable ? WorkflowStatus.New : ((_replayDetections + _expiredMessages) == 0 ? WorkflowStatus.Resolved : WorkflowStatus.Investigating),
+            "Active Alerts" => !_incidentsAvailable ? WorkflowStatus.New : (ActiveAlertCount == 0 ? WorkflowStatus.Resolved : WorkflowStatus.Investigating),
             _ => WorkflowStatus.InProgress
         };
 
     private static string GetKpiTooltip(string title)
         => title switch
         {
-            "Active Policies" => "Security rules currently protecting users.",
-            "Threats Blocked" => "Total attacks stopped by HIP protections.",
-            "Active Alerts" => "Open issues that still need analyst review.",
-            "Reputation Signals" => "Behavior events used to maintain trust scores.",
+            "Active Protections" => "Enabled policy protections from /api/v1/admin/policy.",
+            "Threats Blocked" => "Policy-blocked attempts from /api/admin/security-status.",
+            "Replay / Expired" => "Replay and expiry counters from /api/admin/security-status.",
+            "Active Alerts" => "Denied/review/critical entries from /api/v1/admin/audit.",
             _ => "Security snapshot metric."
         };
 
@@ -518,4 +589,6 @@
             "REPLAY_ATTEMPT_DETECTED" => "Someone tried to reuse an old login token",
             _ => eventType.Replace('_', ' ').Replace('.', ' ')
         };
+
+    public void Dispose() => _timer?.Dispose();
 }

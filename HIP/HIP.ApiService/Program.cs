@@ -10,6 +10,7 @@ using HIP.ApiService.Infrastructure.Audit;
 using HIP.ApiService.Infrastructure.Persistence;
 using HIP.ApiService.Infrastructure.Security;
 using HIP.ApiService.Infrastructure.Plugins;
+using HIP.ApiService.Infrastructure.Connectors;
 using HIP.Plugins.Abstractions.Contracts;
 using HIP.Plugins.Sample;
 using HIP.ApiService.Features.Status;
@@ -163,6 +164,11 @@ builder.Services.AddSingleton<IReplayAssessmentService, InMemoryReplayAssessment
 builder.Services.AddSingleton<IKeyRotationPolicy, InMemoryKeyRotationPolicy>();
 builder.Services.AddScoped<IJarvisTokenService, InMemoryJarvisTokenService>();
 builder.Services.AddScoped<IMessageSignatureService, EcdsaMessageSignatureService>();
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton(GmailConnectorOptions.FromEnvironment());
+builder.Services.AddSingleton<GmailTokenStore>();
+builder.Services.AddScoped<GmailConnectorService>();
+builder.Services.AddHostedService<GmailConnectorPoller>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler(_ => { });
@@ -515,6 +521,7 @@ if (exposeInternalApis)
     app.MapSecurityEndpoints();
     app.MapPolicyEndpoints();
     app.MapAuthzPolicyEndpoints();
+    app.MapGmailConnectorEndpoints();
 }
 
 var runtimePluginRegistry = app.Services.GetRequiredService<IHipPluginRegistry>();

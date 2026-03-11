@@ -70,13 +70,19 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
     }
 
     public async Task<ApiResult<List<DashboardMetric>>> GetDashboardMetricsAsync(CancellationToken ct = default)
-        => await ExecuteWithMockFallback(async () =>
+    {
+        if (context.MockModeEnabled)
+        {
+            return ApiResult<List<DashboardMetric>>.Fail("Live dashboard mode: security metrics are unavailable while mock mode is enabled.");
+        }
+
+        try
         {
             using var doc = await GetJsonDocumentWithRetryAsync("api/admin/security-status", ct);
             var root = doc?.RootElement;
             if (root is null || root.Value.ValueKind != JsonValueKind.Object)
             {
-                return [];
+                return ApiResult<List<DashboardMetric>>.Fail("Failed to load data from 'api/admin/security-status'. Empty response.");
             }
 
             static long ReadLong(JsonElement obj, string name)
@@ -85,17 +91,19 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
             var replay = ReadLong(root.Value, "replayDetected");
             var expired = ReadLong(root.Value, "messageExpired");
             var blocked = ReadLong(root.Value, "policyBlocked");
-            var totalRisk = replay + expired + blocked;
-            var score = (int)Math.Clamp(100 - (replay * 6) - (blocked * 4) - (expired * 2), 0, 100);
 
-            return
+            return ApiResult<List<DashboardMetric>>.Ok(
             [
-                new() { Title = "Security Score", Value = $"{score}", Delta = totalRisk == 0 ? "Stable" : $"-{totalRisk}", Trend = totalRisk == 0 ? "up" : "down" },
-                new() { Title = "Blocked Attempts", Value = blocked.ToString(), Delta = blocked == 0 ? "No change" : "+recent", Trend = blocked == 0 ? "up" : "down" },
-                new() { Title = "Replay Detections", Value = replay.ToString(), Delta = replay == 0 ? "None" : "+recent", Trend = replay == 0 ? "up" : "down" },
-                new() { Title = "Expired Messages", Value = expired.ToString(), Delta = expired == 0 ? "None" : "+recent", Trend = expired == 0 ? "up" : "down" }
-            ];
-        }, MockMetrics(), "api/admin/security-status");
+                new() { Title = "Blocked Attempts", Value = blocked.ToString(), Delta = "api/admin/security-status", Trend = blocked == 0 ? "up" : "down" },
+                new() { Title = "Replay Detections", Value = replay.ToString(), Delta = "api/admin/security-status", Trend = replay == 0 ? "up" : "down" },
+                new() { Title = "Expired Messages", Value = expired.ToString(), Delta = "api/admin/security-status", Trend = expired == 0 ? "up" : "down" }
+            ]);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<List<DashboardMetric>>.Fail($"Failed to load data from 'api/admin/security-status'. {ex.Message}");
+        }
+    }
 
     public async Task<ApiResult<List<ActivityItem>>> GetActivityAsync(CancellationToken ct = default)
         => await ExecuteWithMockFallback(async () =>
@@ -839,7 +847,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
     {
         if (context.MockModeEnabled)
         {
-            return ApiResult<List<AuditLogEntry>>.Ok(MockLogs());
+            return ApiResult<List<AuditLogEntry>>.Ok([]);
         }
 
         try
@@ -881,11 +889,16 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
                     var reason = e.TryGetProperty("reasonCode", out var reasonEl) ? reasonEl.GetString() ?? string.Empty : string.Empty;
                     var detail = e.TryGetProperty("detail", out var detailEl) ? detailEl.GetString() ?? string.Empty : string.Empty;
 
-                    var severity = outcome.Equals("success", StringComparison.OrdinalIgnoreCase)
-                        ? "Info"
-                        : outcome.Equals("review", StringComparison.OrdinalIgnoreCase)
-                            ? "Warning"
-                            : "Critical";
+                    var severity =
+                        outcome.Equals("success", StringComparison.OrdinalIgnoreCase)
+                        || outcome.Equals("ok", StringComparison.OrdinalIgnoreCase)
+                        || outcome.Equals("info", StringComparison.OrdinalIgnoreCase)
+                            ? "Info"
+                            : outcome.Equals("review", StringComparison.OrdinalIgnoreCase)
+                              || outcome.Equals("warn", StringComparison.OrdinalIgnoreCase)
+                              || outcome.Equals("pending", StringComparison.OrdinalIgnoreCase)
+                                ? "Warning"
+                                : "Critical";
 
                     mapped.Add(new AuditLogEntry
                     {
@@ -914,7 +927,7 @@ public sealed class HipAdminApiClient(HttpClient httpClient, AdminContextService
                 return ApiResult<List<AuditLogEntry>>.Ok(legacy);
             }
 
-            return ApiResult<List<AuditLogEntry>>.Ok(MockLogs());
+            return ApiResult<List<AuditLogEntry>>.Ok([]);
         }
         catch (Exception ex)
         {

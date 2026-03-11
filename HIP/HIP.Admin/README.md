@@ -85,25 +85,19 @@ Breadcrumb presentation was polished with token-driven styling (clearer link/cur
 
 The `/` page is restored as **Security Overview** using reusable primitives (`PageHeader`, `FilterBar`, `MetricCard`, `DataTable<TItem>`, `StateView`) with explicit loading/empty/error/success states.
 
-Restored behavior and labels:
+Current behavior and labels (live-data-only):
 - Page title + header: **Security Overview**
-- Top plain-language KPI cards:
-  - Security Health
-  - Blocked Logins
-  - Suspicious Messages
-  - Expired Tokens
-  - Active Users
-- Plain-language status banner with secure/warning states
-- Section cards:
-  - Security Activity trend
-  - Device Trust
-  - Reputation Overview
-  - Overall Risk Level
-  - Protection Checks
-  - Simulator quick access
-- Security Activity table with story-friendly column labels and semantic badges for severity/outcome
+- Top KPI cards are API-backed only:
+  - Active Protections (`/api/v1/admin/policy`)
+  - Threats Blocked (`/api/admin/security-status`)
+  - Replay / Expired (`/api/admin/security-status`)
+  - Active Alerts (`/api/v1/admin/audit`, fallback `/api/admin/audit`)
+- No synthetic/fabricated dashboard numbers or mock dashboard fallbacks
+- Cards without mapped backend endpoints are explicitly marked unavailable
+- Device Trust panel now uses `/api/v1/admin/users-devices`
+- Protection checks derive directly from replay/expired/blocked counters in `/api/admin/security-status`
+- Security Activity table uses live audit events with story-friendly labels and semantic badges
 - Time column shows relative timestamps with absolute secondary timestamp for operator context
-- Theme-safe readability preserved through shared table + badge semantic tokens
 
 ## Alerts & Incidents (MVP shell)
 
