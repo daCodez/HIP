@@ -1,8 +1,10 @@
+using HIP.Application;
 using HIP.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.Services.AddHipApplication();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
