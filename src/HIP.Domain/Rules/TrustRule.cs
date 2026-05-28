@@ -1,11 +1,17 @@
 namespace HIP.Domain.Rules;
 
 public sealed record TrustRule(
-    string Id,
+    string RuleId,
     string Name,
-    RuleStatus Status,
+    string Description,
+    bool Enabled,
+    RuleMode Mode,
     RuleSeverity Severity,
     IReadOnlyCollection<RuleCondition> Conditions,
-    RuleAction Action,
-    decimal? SimulationConfidence,
-    decimal? FalsePositiveRisk);
+    IReadOnlyCollection<RuleAction> Actions,
+    bool RequiresApproval,
+    bool SimulationRequired,
+    string CreatedBy,
+    string CreatedReason,
+    decimal ConfidenceScore,
+    int Version);

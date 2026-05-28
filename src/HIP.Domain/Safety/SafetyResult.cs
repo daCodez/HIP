@@ -1,11 +1,25 @@
-using HIP.Domain.Scoring;
+using HIP.Domain.Risk;
 
 namespace HIP.Domain.Safety;
 
 public sealed record SafetyResult(
-    Uri OriginalUri,
-    Uri? FinalDestination,
-    SafetyAction Action,
-    HipScoreResult ScoreResult,
+    string OriginalUrl,
+    string? FinalDestinationUrl,
+    RiskStatus RiskLevel,
     string Reason,
-    bool CanContinueAnyway);
+    int DomainScore,
+    int? SenderScore,
+    bool AllowContinue,
+    bool ShouldRouteToSafetyPage,
+    bool CanReportAsSafe,
+    bool CanReportAsDangerous);
+
+public sealed record PrivacySafeRiskReport(
+    string RiskyUrl,
+    string Domain,
+    string UrlHash,
+    string? SenderHash,
+    string Platform,
+    string RiskReason,
+    DateTimeOffset Timestamp,
+    string HipSignaturePlaceholder);

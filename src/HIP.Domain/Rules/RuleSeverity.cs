@@ -5,5 +5,8 @@ public enum RuleSeverity
     Low,
     Medium,
     High,
-    Critical
+    Critical,
+    Caution,
+    HighRisk,
+    Dangerous
 }

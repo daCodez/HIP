@@ -1,9 +1,7 @@
-using HIP.Domain.Scoring;
+using System.Text.Json;
 
 namespace HIP.Domain.Rules;
 
 public sealed record RuleAction(
     RuleActionType Type,
-    ScoreCategory? Category,
-    int? Points,
-    string Reason);
+    JsonElement Value);
