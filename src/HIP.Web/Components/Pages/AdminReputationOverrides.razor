@@ -1,0 +1,81 @@
+@page "/admin/reputation-overrides"
+@rendermode InteractiveServer
+@inject IReputationOverrideService ReputationOverrideService
+
+<PageTitle>HIP Reputation Overrides</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <p class="eyebrow">Dev-only MVP</p>
+        <h1>Reputation Overrides</h1>
+        <p>Request and approve manual reputation changes. Overrides do not apply until required approvals are met.</p>
+        <button type="button" @onclick="CreateSample">Create Sample Override</button>
+    </section>
+
+    <section class="rule-builder-panel">
+        <h2>Override Requests</h2>
+        <table class="admin-rule-table">
+            <thead>
+                <tr><th>Target</th><th>Current</th><th>Requested</th><th>Reason</th><th>Required</th><th>Status</th><th>Approvals</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var request in _requests)
+                {
+                    <tr>
+                        <td>@request.TargetType: @request.TargetId</td>
+                        <td>@request.CurrentScore</td>
+                        <td>@request.RequestedScore</td>
+                        <td>@request.Reason</td>
+                        <td>@request.RequiredApprovalCount</td>
+                        <td>@request.Status</td>
+                        <td>@request.Approvals.Count</td>
+                        <td>
+                            <button type="button" @onclick="() => Approve(request.OverrideRequestId)">Approve</button>
+                            <button type="button" @onclick="() => Reject(request.OverrideRequestId)">Reject</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+</main>
+
+@code {
+    private IReadOnlyCollection<ReputationOverrideRequest> _requests = [];
+    private int _approvalIndex;
+
+    protected override void OnInitialized() => Refresh();
+
+    private void Refresh() => _requests = ReputationOverrideService.List();
+
+    private void CreateSample()
+    {
+        ReputationOverrideService.Request(new ReputationOverrideRequest(
+            "",
+            TargetType.Domain,
+            "override-example.com",
+            28,
+            86,
+            "Manual trusted recovery request after public remediation.",
+            "admin-dev",
+            OverrideRequestStatus.Pending,
+            1,
+            [],
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow));
+        Refresh();
+    }
+
+    private void Approve(string id)
+    {
+        _approvalIndex++;
+        ReputationOverrideService.Approve(id, $"admin-dev-{_approvalIndex}", "Approved with audit trail.");
+        Refresh();
+    }
+
+    private void Reject(string id)
+    {
+        ReputationOverrideService.Reject(id, "admin-dev", "Rejected after review.");
+        Refresh();
+    }
+}

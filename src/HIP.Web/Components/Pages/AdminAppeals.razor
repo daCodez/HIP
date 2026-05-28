@@ -1,0 +1,84 @@
+@page "/admin/appeals"
+@rendermode InteractiveServer
+@inject IAppealService AppealService
+
+<PageTitle>HIP Appeals</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <p class="eyebrow">Dev-only MVP</p>
+        <h1>Appeals</h1>
+        <p>Review privacy-safe appeals for domains, senders, device keys, organizations, and content patterns.</p>
+        <button type="button" @onclick="CreateSample">Create Sample Appeal</button>
+    </section>
+
+    <section class="rule-builder-panel">
+        <h2>Appeal Requests</h2>
+        <table class="admin-rule-table">
+            <thead>
+                <tr><th>Target</th><th>Reason</th><th>Status</th><th>Submitted</th><th>Decision</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var appeal in _appeals)
+                {
+                    <tr>
+                        <td>@appeal.TargetType: @appeal.TargetId</td>
+                        <td>@appeal.Reason</td>
+                        <td>@appeal.Status</td>
+                        <td>@appeal.CreatedAtUtc.UtcDateTime.ToString("u")</td>
+                        <td>@appeal.Decision @appeal.DecisionReason</td>
+                        <td>
+                            <button type="button" @onclick="() => Approve(appeal.AppealId)">Approve</button>
+                            <button type="button" @onclick="() => Reject(appeal.AppealId)">Reject</button>
+                            <button type="button" @onclick="() => MoreInfo(appeal.AppealId)">More Info</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+</main>
+
+@code {
+    private IReadOnlyCollection<AppealRequest> _appeals = [];
+
+    protected override void OnInitialized() => Refresh();
+
+    private void Refresh() => _appeals = AppealService.List();
+
+    private void CreateSample()
+    {
+        AppealService.Submit(new AppealRequest(
+            "",
+            TargetType.Domain,
+            "appeal-example.com",
+            "sha256:submitter",
+            "The domain has remediated the reported redirect issue.",
+            AppealStatus.Submitted,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            null,
+            null,
+            null,
+            new Dictionary<string, string> { ["evidenceSummary"] = "public DNS and redirect fix notes" }));
+        Refresh();
+    }
+
+    private void Approve(string id)
+    {
+        AppealService.Approve(id, "admin-dev", "Appeal accepted based on privacy-safe evidence.");
+        Refresh();
+    }
+
+    private void Reject(string id)
+    {
+        AppealService.Reject(id, "admin-dev", "Risk evidence remains valid.");
+        Refresh();
+    }
+
+    private void MoreInfo(string id)
+    {
+        AppealService.RequestMoreInfo(id, "admin-dev", "Need more public remediation evidence.");
+        Refresh();
+    }
+}

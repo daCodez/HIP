@@ -1,0 +1,93 @@
+@page "/admin/review"
+@rendermode InteractiveServer
+@inject IReviewQueueService ReviewQueueService
+
+<PageTitle>HIP Review Queue</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <p class="eyebrow">Dev-only MVP</p>
+        <h1>Review Queue</h1>
+        <p>Review suspicious findings, generated rules, false positives, safety reports, and risky admin decisions. Production auth is required before deployment.</p>
+        <button type="button" @onclick="CreateSample">Create Sample Review</button>
+    </section>
+
+    <section class="rule-builder-panel">
+        <h2>Open Reviews</h2>
+        <table class="admin-rule-table">
+            <thead>
+                <tr><th>Type</th><th>Target</th><th>Risk</th><th>Priority</th><th>Status</th><th>Created</th><th>Recommended Action</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _items)
+                {
+                    <tr>
+                        <td>@item.ReviewType</td>
+                        <td>@item.TargetType: @item.TargetId</td>
+                        <td>@item.RiskLevel</td>
+                        <td>@item.Priority</td>
+                        <td>@item.Status</td>
+                        <td>@item.CreatedAtUtc.UtcDateTime.ToString("u")</td>
+                        <td>@item.RecommendedAction</td>
+                        <td>
+                            <button type="button" @onclick="() => Approve(item.ReviewItemId)">Approve</button>
+                            <button type="button" @onclick="() => Reject(item.ReviewItemId)">Reject</button>
+                            <button type="button" @onclick="() => MoreInfo(item.ReviewItemId)">More Info</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+</main>
+
+@code {
+    private IReadOnlyCollection<ReviewItem> _items = [];
+
+    protected override void OnInitialized() => Refresh();
+
+    private void Refresh() => _items = ReviewQueueService.List();
+
+    private void CreateSample()
+    {
+        ReviewQueueService.Create(new ReviewItem(
+            "",
+            ReviewType.SuspiciousFinding,
+            TargetType.Domain,
+            "suspicious-example.com",
+            "Review repeated suspicious domain findings",
+            "Multiple privacy-safe findings indicate shortened URL abuse.",
+            RiskStatus.HighRisk,
+            ReviewStatus.Open,
+            ReviewPriority.High,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            "admin-dev",
+            null,
+            "self-healing",
+            "URL hashes and domain risk reason only.",
+            new Dictionary<string, string> { ["urlHash"] = "sha256:sample", ["privateChatLog"] = "not-collected" },
+            "Keep generated rule in watch mode pending approval.",
+            null,
+            null));
+        Refresh();
+    }
+
+    private void Approve(string id)
+    {
+        ReviewQueueService.Approve(id, "admin-dev", "Reviewed evidence summary and approved recommended action.");
+        Refresh();
+    }
+
+    private void Reject(string id)
+    {
+        ReviewQueueService.Reject(id, "admin-dev", "Evidence is insufficient for this action.");
+        Refresh();
+    }
+
+    private void MoreInfo(string id)
+    {
+        ReviewQueueService.RequestMoreInfo(id, "admin-dev", "Need more privacy-safe evidence before decision.");
+        Refresh();
+    }
+}

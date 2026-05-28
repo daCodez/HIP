@@ -1,8 +1,10 @@
 using HIP.Application;
 using HIP.Application.PublicLookup;
+using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.SelfHealing;
 using HIP.Application.Simulation;
+using HIP.Domain.Review;
 using HIP.Domain.Rules;
 using HIP.Domain.SelfHealing;
 using HIP.Web.Components;
@@ -70,6 +72,20 @@ publicApi.MapGet("/badge/domain/{domain}", async (
     }
 });
 
+publicApi.MapPost("/appeals", (
+    AppealRequest appeal,
+    IAppealService appealService) =>
+{
+    try
+    {
+        return Results.Ok(appealService.Submit(appeal));
+    }
+    catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
 var adminApi = app.MapGroup("/api/admin/rules");
 
 adminApi.MapPost("/simulate", (
@@ -131,6 +147,68 @@ selfHealingApi.MapPost("/analyze-findings", (
     }
 });
 
+var reviewApi = app.MapGroup("/api/admin/review");
+
+reviewApi.MapGet("/", (IReviewQueueService reviewQueueService) => Results.Ok(reviewQueueService.List()));
+
+reviewApi.MapGet("/{id}", (string id, IReviewQueueService reviewQueueService) =>
+    reviewQueueService.Get(id) is { } item ? Results.Ok(item) : Results.NotFound());
+
+reviewApi.MapPost("/", (ReviewItem item, IReviewQueueService reviewQueueService) =>
+{
+    try
+    {
+        return Results.Ok(reviewQueueService.Create(item));
+    }
+    catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+reviewApi.MapPost("/{id}/approve", (string id, AdminDecisionRequest request, IReviewQueueService reviewQueueService) =>
+    Results.Ok(reviewQueueService.Approve(id, request.ActorId, request.Reason)));
+
+reviewApi.MapPost("/{id}/reject", (string id, AdminDecisionRequest request, IReviewQueueService reviewQueueService) =>
+    Results.Ok(reviewQueueService.Reject(id, request.ActorId, request.Reason)));
+
+reviewApi.MapPost("/{id}/needs-more-info", (string id, AdminDecisionRequest request, IReviewQueueService reviewQueueService) =>
+    Results.Ok(reviewQueueService.RequestMoreInfo(id, request.ActorId, request.Reason)));
+
+reviewApi.MapPost("/{id}/assign", (string id, AdminAssignRequest request, IReviewQueueService reviewQueueService) =>
+    Results.Ok(reviewQueueService.Assign(id, request.AssignedTo, request.ActorId)));
+
+var appealApi = app.MapGroup("/api/admin/appeals");
+
+appealApi.MapGet("/", (IAppealService appealService) => Results.Ok(appealService.List()));
+appealApi.MapPost("/{id}/approve", (string id, AdminDecisionRequest request, IAppealService appealService) =>
+    Results.Ok(appealService.Approve(id, request.ActorId, request.Reason)));
+appealApi.MapPost("/{id}/reject", (string id, AdminDecisionRequest request, IAppealService appealService) =>
+    Results.Ok(appealService.Reject(id, request.ActorId, request.Reason)));
+appealApi.MapPost("/{id}/needs-more-info", (string id, AdminDecisionRequest request, IAppealService appealService) =>
+    Results.Ok(appealService.RequestMoreInfo(id, request.ActorId, request.Reason)));
+
+var overrideApi = app.MapGroup("/api/admin/reputation-overrides");
+
+overrideApi.MapGet("/", (IReputationOverrideService reputationOverrideService) => Results.Ok(reputationOverrideService.List()));
+overrideApi.MapPost("/", (ReputationOverrideRequest request, IReputationOverrideService reputationOverrideService) =>
+{
+    try
+    {
+        return Results.Ok(reputationOverrideService.Request(request));
+    }
+    catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+overrideApi.MapPost("/{id}/approve", (string id, AdminDecisionRequest request, IReputationOverrideService reputationOverrideService) =>
+    Results.Ok(reputationOverrideService.Approve(id, request.ActorId, request.Reason)));
+overrideApi.MapPost("/{id}/reject", (string id, AdminDecisionRequest request, IReputationOverrideService reputationOverrideService) =>
+    Results.Ok(reputationOverrideService.Reject(id, request.ActorId, request.Reason)));
+
+app.MapGet("/api/admin/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()));
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -142,3 +220,7 @@ app.Run();
 public sealed record AdminRuleSimulationRequest(
     TrustRule Rule,
     IReadOnlyCollection<RuleSimulationTestCase>? TestCases);
+
+public sealed record AdminDecisionRequest(string ActorId, string Reason);
+
+public sealed record AdminAssignRequest(string ActorId, string AssignedTo);

@@ -1,0 +1,35 @@
+@page "/admin/audit-logs"
+@rendermode InteractiveServer
+@inject IAuditLogService AuditLogService
+
+<PageTitle>HIP Audit Logs</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <p class="eyebrow">Dev-only MVP</p>
+        <h1>Audit Logs</h1>
+        <p>Serious admin actions are audit logged with privacy-safe metadata.</p>
+    </section>
+
+    <section class="rule-builder-panel">
+        <h2>Recent Audit Entries</h2>
+        <table class="admin-rule-table">
+            <thead>
+                <tr><th>Date</th><th>Actor</th><th>Action</th><th>Target</th><th>Summary</th><th>Severity</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var entry in AuditLogService.List())
+                {
+                    <tr>
+                        <td>@entry.CreatedAtUtc.UtcDateTime.ToString("u")</td>
+                        <td>@entry.ActorId</td>
+                        <td>@entry.Action</td>
+                        <td>@entry.TargetType: @entry.TargetId</td>
+                        <td>@entry.Summary</td>
+                        <td>@entry.Severity</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+</main>
