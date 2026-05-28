@@ -1,0 +1,65 @@
+@page "/lookup/domain/{Domain}"
+@inject IPublicDomainLookupService LookupService
+
+<PageTitle>HIP Domain Lookup</PageTitle>
+
+<main class="hip-lookup-page">
+    @if (_lookup is null && _error is null)
+    {
+        <p>Loading HIP lookup...</p>
+    }
+    else if (_error is not null)
+    {
+        <section class="hip-lookup-panel">
+            <h1>Lookup unavailable</h1>
+            <p>@_error</p>
+        </section>
+    }
+    else if (_lookup is not null)
+    {
+        <section class="hip-lookup-panel">
+            <p class="eyebrow">Public HIP Lookup</p>
+            <h1>@_lookup.Domain</h1>
+            <div class="score">@_lookup.FinalHipScore/100</div>
+            <p>Status: <strong>@_lookup.Status</strong></p>
+            <p>Verified: <strong>@_lookup.VerificationStatus</strong></p>
+            <p>Signed identity: <strong>@_lookup.SignedIdentityStatus</strong></p>
+            <p>Last checked UTC: @_lookup.LastCheckedUtc.ToString("u")</p>
+
+            <h2>Reasons</h2>
+            <ul>
+                @foreach (var explanation in _lookup.Explanations.Take(5))
+                {
+                    <li>@explanation</li>
+                }
+            </ul>
+        </section>
+    }
+</main>
+
+@code {
+    [Parameter]
+    public string? Domain { get; set; }
+
+    private PublicDomainLookupResponse? _lookup;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Domain))
+        {
+            _error = "Domain is required.";
+            return;
+        }
+
+        try
+        {
+            _lookup = await LookupService.LookupDomainAsync(Domain, CancellationToken.None);
+            _error = null;
+        }
+        catch (ArgumentException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

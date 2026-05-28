@@ -42,9 +42,94 @@ h1:focus {
     color: white;
 }
 
-    .blazor-error-boundary::after {
-        content: "An error has occurred."
-    }
+.blazor-error-boundary::after {
+    content: "An error has occurred."
+}
+
+.hip-safety-page,
+.hip-lookup-page {
+    min-height: 100vh;
+    padding: 48px 20px;
+    background: #f8fafc;
+}
+
+.hip-safety-panel,
+.hip-lookup-panel {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 28px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+}
+
+.hip-safety-panel h1,
+.hip-lookup-panel h1 {
+    margin: 0 0 16px;
+    color: #111827;
+}
+
+.hip-safety-panel .eyebrow,
+.hip-lookup-panel .eyebrow {
+    margin: 0 0 8px;
+    color: #0f766e;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0;
+}
+
+.hip-safety-panel dl {
+    display: grid;
+    gap: 12px;
+    margin: 20px 0;
+}
+
+.hip-safety-panel dt {
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+.hip-safety-panel dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #111827;
+    font-weight: 650;
+}
+
+.hip-safety-panel .reason {
+    color: #334155;
+}
+
+.hip-safety-panel .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.hip-safety-panel button,
+.hip-safety-panel .continue {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 9px 13px;
+    color: #111827;
+    background: #fff;
+    text-decoration: none;
+}
+
+.hip-safety-panel .continue {
+    color: #fff;
+    border-color: #991b1b;
+    background: #991b1b;
+}
+
+.hip-lookup-panel .score {
+    margin: 16px 0;
+    color: #0f766e;
+    font-size: 3rem;
+    font-weight: 800;
+}
 
 .darker-border-checkbox.form-check-input {
     border-color: #929292;

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HIP</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup-shell">
+    <header class="popup-header">
+      <div class="brand-mark">HIP</div>
+      <div>
+        <h1>Website Trust</h1>
+        <p id="domain">Checking current tab...</p>
+      </div>
+    </header>
+
+    <section id="state" class="state loading">Loading HIP score</section>
+
+    <section id="scorePanel" class="score-panel" hidden>
+      <div class="score-row">
+        <span>HIP Website Score</span>
+        <strong id="score">--/100</strong>
+      </div>
+      <div class="status-row">
+        <span>Status</span>
+        <strong id="status">Unknown</strong>
+      </div>
+      <div class="status-row">
+        <span>Verified</span>
+        <strong id="verified">Unknown</strong>
+      </div>
+      <div class="status-row">
+        <span>Last checked</span>
+        <strong id="lastChecked">Unknown</strong>
+      </div>
+    </section>
+
+    <section id="reasonsPanel" class="reasons-panel" hidden>
+      <h2>Reason</h2>
+      <ul id="reasons"></ul>
+    </section>
+
+    <a id="lookupLink" class="lookup-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open public HIP lookup</a>
+  </main>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

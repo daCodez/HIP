@@ -1,0 +1,64 @@
+@page "/safety"
+@inject NavigationManager Navigation
+
+<PageTitle>HIP Safety Warning</PageTitle>
+
+<main class="hip-safety-page">
+    <section class="hip-safety-panel">
+        <p class="eyebrow">HIP Safety Page</p>
+        <h1>Review this link before continuing</h1>
+
+        <dl>
+            <div>
+                <dt>Original URL</dt>
+                <dd>@DisplayUrl</dd>
+            </div>
+            <div>
+                <dt>Risk</dt>
+                <dd>@DisplayRisk</dd>
+            </div>
+            <div>
+                <dt>Source</dt>
+                <dd>@DisplaySource</dd>
+            </div>
+        </dl>
+
+        <p class="reason">HIP routed this link through the safety page because it may be suspicious or dangerous.</p>
+
+        <div class="actions">
+            <button type="button" @onclick="GoBack">Go Back</button>
+            @if (CanContinue)
+            {
+                <a class="continue" href="@Url" rel="noreferrer">Continue Anyway</a>
+            }
+            <button type="button">Report Safe</button>
+            <button type="button">Report Dangerous</button>
+        </div>
+    </section>
+</main>
+
+@code {
+    [SupplyParameterFromQuery(Name = "url")]
+    private string? Url { get; set; }
+
+    [SupplyParameterFromQuery(Name = "source")]
+    private string? Source { get; set; }
+
+    [SupplyParameterFromQuery(Name = "risk")]
+    private string? Risk { get; set; }
+
+    private string DisplayUrl => string.IsNullOrWhiteSpace(Url) ? "No URL provided." : Url;
+
+    private string DisplaySource => string.IsNullOrWhiteSpace(Source) ? "Unknown" : Source;
+
+    private string DisplayRisk => string.IsNullOrWhiteSpace(Risk) ? "Unknown" : Risk;
+
+    private bool CanContinue =>
+        !string.Equals(Risk, nameof(RiskStatus.Dangerous), StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(Risk, nameof(RiskStatus.Critical), StringComparison.OrdinalIgnoreCase);
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("javascript:history.back()");
+    }
+}
