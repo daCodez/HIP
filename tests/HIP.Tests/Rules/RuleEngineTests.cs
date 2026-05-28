@@ -63,6 +63,7 @@ public sealed class RuleEngineTests
         true,
         "system",
         "Detected repeated shortened links to new domains.",
+        ApprovalStatus.Pending,
         0m,
         1);
 }

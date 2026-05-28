@@ -21,6 +21,9 @@ public static class DependencyInjection
         services.AddSingleton<IRuleMatchingEngine, RuleMatchingEngine>();
         services.AddSingleton<IRuleActionApplier, RuleActionApplier>();
         services.AddSingleton<IRuleSimulationService, RuleSimulationService>();
+        services.AddSingleton<IRuleJsonService, RuleJsonService>();
+        services.AddSingleton<IRuleRepository, InMemoryRuleRepository>();
+        services.AddSingleton<IAdminRuleService, AdminRuleService>();
         services.AddSingleton<IPublicDomainLookupService, PublicDomainLookupService>();
         services.AddSingleton<ITrustBadgeService, TrustBadgeService>();
         services.AddSingleton<ISafetyRoutingService, SafetyRoutingService>();

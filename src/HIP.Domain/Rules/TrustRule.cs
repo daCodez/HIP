@@ -13,5 +13,6 @@ public sealed record TrustRule(
     bool SimulationRequired,
     string CreatedBy,
     string CreatedReason,
+    ApprovalStatus ApprovalStatus,
     decimal ConfidenceScore,
     int Version);

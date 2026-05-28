@@ -289,6 +289,137 @@ h1:focus {
     }
 }
 
+.admin-rule-page {
+    min-height: 100vh;
+    padding: 32px 20px;
+    background: #f8fafc;
+}
+
+.admin-rule-header,
+.rule-builder-panel {
+    max-width: 1180px;
+    margin: 0 auto 18px;
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.rule-builder-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 18px;
+    max-width: 1180px;
+    margin: 0 auto 18px;
+}
+
+.rule-builder-grid .rule-builder-panel {
+    margin: 0;
+}
+
+.rule-builder-panel label {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 12px;
+    color: #334155;
+    font-weight: 650;
+}
+
+.rule-builder-panel input,
+.rule-builder-panel textarea,
+.rule-builder-panel select {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: #111827;
+    background: #fff;
+}
+
+.rule-builder-panel textarea {
+    min-height: 72px;
+}
+
+.form-row,
+.condition-row,
+.button-row {
+    display: flex;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 12px;
+}
+
+.condition-row select,
+.condition-row input {
+    min-width: 0;
+}
+
+.condition-row select:first-child,
+.condition-row input {
+    flex: 1;
+}
+
+.rule-builder-panel button {
+    border: 1px solid #0f766e;
+    border-radius: 6px;
+    padding: 8px 11px;
+    color: #0f766e;
+    background: #fff;
+}
+
+.json-preview,
+.json-editor {
+    min-height: 460px;
+    width: 100%;
+    overflow: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px;
+    color: #e2e8f0;
+    background: #0f172a;
+    font: 12px/1.5 Consolas, "Cascadia Mono", monospace;
+}
+
+.simulation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+}
+
+.simulation-grid span {
+    padding: 10px;
+    border-radius: 6px;
+    background: #f8fafc;
+}
+
+.admin-rule-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.admin-rule-table th,
+.admin-rule-table td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 8px;
+    text-align: left;
+}
+
+.admin-message {
+    color: #0f766e;
+    font-weight: 650;
+}
+
+@media (max-width: 900px) {
+    .rule-builder-grid,
+    .form-row,
+    .condition-row,
+    .button-row {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }

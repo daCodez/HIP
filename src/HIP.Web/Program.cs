@@ -1,5 +1,8 @@
 using HIP.Application;
 using HIP.Application.PublicLookup;
+using HIP.Application.Rules;
+using HIP.Application.Simulation;
+using HIP.Domain.Rules;
 using HIP.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -65,6 +68,23 @@ publicApi.MapGet("/badge/domain/{domain}", async (
     }
 });
 
+var adminApi = app.MapGroup("/api/admin/rules");
+
+adminApi.MapPost("/simulate", (
+    AdminRuleSimulationRequest request,
+    IAdminRuleService adminRuleService) =>
+{
+    try
+    {
+        var result = adminRuleService.Simulate(request.Rule, request.TestCases);
+        return Results.Ok(result);
+    }
+    catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -72,3 +92,7 @@ app.MapRazorComponents<App>()
 app.MapDefaultEndpoints();
 
 app.Run();
+
+public sealed record AdminRuleSimulationRequest(
+    TrustRule Rule,
+    IReadOnlyCollection<RuleSimulationTestCase>? TestCases);
