@@ -1,0 +1,132 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  width: 340px;
+  color: #111827;
+  background: #f8fafc;
+}
+
+.popup-shell {
+  padding: 16px;
+}
+
+.popup-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  color: #fff;
+  background: #0f766e;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+p {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.state,
+.score-panel,
+.reasons-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.state.loading {
+  color: #475569;
+}
+
+.state.unavailable {
+  color: #7f1d1d;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.score-panel {
+  display: grid;
+  gap: 9px;
+}
+
+.score-row,
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 13px;
+}
+
+.score-row strong {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.status-row strong {
+  text-align: right;
+}
+
+.status-row strong[data-status="Trusted"],
+.status-row strong[data-status="ProbablySafe"] {
+  color: #047857;
+}
+
+.status-row strong[data-status="Caution"] {
+  color: #a16207;
+}
+
+.status-row strong[data-status="HighRisk"],
+.status-row strong[data-status="Dangerous"],
+.status-row strong[data-status="Critical"] {
+  color: #b91c1c;
+}
+
+.reasons-panel {
+  margin-top: 12px;
+}
+
+ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+li {
+  margin: 6px 0;
+  font-size: 12px;
+  color: #334155;
+}
+
+.lookup-link {
+  display: block;
+  margin-top: 12px;
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+}
