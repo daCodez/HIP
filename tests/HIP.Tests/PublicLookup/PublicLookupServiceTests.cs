@@ -17,7 +17,23 @@ public sealed class PublicLookupServiceTests
         Assert.That(result.Status, Is.Not.EqualTo(RiskStatus.Unknown));
         Assert.That(result.SignedIdentityStatus, Is.EqualTo("PostQuantumSignaturePresent"));
         Assert.That(result.ScoreBreakdown.Select(item => item.Category), Does.Contain("Final"));
+        Assert.That(result.PublicBadgeEligible, Is.True);
+        Assert.That(result.PublicLookupUrl, Is.EqualTo("/lookup/domain/verified-example.com"));
         Assert.That(result.Explanations.All(explanation => !string.IsNullOrWhiteSpace(explanation)), Is.True);
+    }
+
+    [Test]
+    public async Task LookupDomainAsync_does_not_expose_private_fields()
+    {
+        var service = new PublicDomainLookupService();
+
+        var result = await service.LookupDomainAsync("example.com", CancellationToken.None);
+        var propertyNames = result.GetType().GetProperties().Select(property => property.Name).ToArray();
+
+        Assert.That(propertyNames, Does.Not.Contain("PrivateChatLogs"));
+        Assert.That(propertyNames, Does.Not.Contain("PrivateReports"));
+        Assert.That(propertyNames, Does.Not.Contain("UserIdentities"));
+        Assert.That(propertyNames, Does.Not.Contain("RawUserSubmittedEvidence"));
     }
 
     [Test]
@@ -39,6 +55,15 @@ public sealed class PublicLookupServiceTests
         Assert.That(result.Score, Is.InRange(0, 100));
         Assert.That(result.Status, Is.Not.EqualTo(RiskStatus.Unknown));
         Assert.That(result.BadgeText, Does.Contain(result.Score.ToString()));
-        Assert.That(result.PublicLookupUrl, Does.Contain("/api/public/lookup/domain/danger-example.com"));
+        Assert.That(result.PublicLookupUrl, Is.EqualTo("/lookup/domain/danger-example.com"));
+        Assert.That(result.ResponseSignature, Is.Null);
+    }
+
+    [Test]
+    public void TrustBadgeService_rejects_invalid_domain_input()
+    {
+        var service = new TrustBadgeService(new PublicDomainLookupService());
+
+        Assert.ThrowsAsync<ArgumentException>(() => service.GetDomainBadgeAsync("bad domain with spaces", CancellationToken.None));
     }
 }

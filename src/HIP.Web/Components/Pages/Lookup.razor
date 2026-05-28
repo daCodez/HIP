@@ -1,0 +1,54 @@
+@page "/lookup"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>Public HIP Lookup</PageTitle>
+
+<main class="hip-lookup-page">
+    <section class="hip-lookup-hero">
+        <p class="eyebrow">Human Identity Protocol</p>
+        <h1>Check a website's HIP trust score</h1>
+        <p>TCP connects devices. TLS encrypts the connection. HIP verifies trust, origin, reputation, and risk.</p>
+
+        <form class="lookup-form" @onsubmit="SubmitLookup">
+            <label for="domainInput">Domain</label>
+            <div>
+                <input id="domainInput" @bind="_domain" placeholder="zerotoherobudgeting.com" autocomplete="off" />
+                <button type="submit">Check Domain</button>
+            </div>
+            @if (_error is not null)
+            {
+                <p class="lookup-error">@_error</p>
+            }
+        </form>
+    </section>
+
+    <section class="hip-lookup-info">
+        <h2>What HIP Means</h2>
+        <p>HIP is a trust and origin verification layer above TCP and TLS. It helps answer who created something, where it came from, whether it changed, and how risky it is to interact with.</p>
+        <p>A verified identity does not automatically mean safe. It means HIP knows who signed or owns it. The trust score still matters.</p>
+    </section>
+</main>
+
+@code {
+    private string? _domain;
+    private string? _error;
+
+    private void SubmitLookup()
+    {
+        var domain = (_domain ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(domain))
+        {
+            _error = "Enter a domain to check.";
+            return;
+        }
+
+        if (domain.Contains('/') || domain.Contains(':'))
+        {
+            _error = "Enter only the domain, not a full URL.";
+            return;
+        }
+
+        Navigation.NavigateTo($"/lookup/domain/{Uri.EscapeDataString(domain)}");
+    }
+}

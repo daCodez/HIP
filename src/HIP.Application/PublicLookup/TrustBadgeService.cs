@@ -6,6 +6,7 @@ public sealed class TrustBadgeService(IPublicDomainLookupService lookupService) 
     {
         var lookup = await lookupService.LookupDomainAsync(domain, cancellationToken);
         var variant = lookup.Status.ToString().ToLowerInvariant();
+        var label = lookup.VerificationStatus == "Verified" ? "HIP Verified" : "HIP Warning";
 
         return new PublicBadgeResponse(
             lookup.Domain,
@@ -13,8 +14,9 @@ public sealed class TrustBadgeService(IPublicDomainLookupService lookupService) 
             lookup.Status,
             lookup.VerificationStatus == "Verified",
             lookup.LastCheckedUtc,
-            $"/api/public/lookup/domain/{lookup.Domain}",
-            $"HIP {lookup.Status} - Score: {lookup.FinalHipScore}/100",
-            variant);
+            lookup.PublicLookupUrl,
+            $"{label} - Score: {lookup.FinalHipScore}/100 - Status: {lookup.Status}",
+            variant,
+            null);
     }
 }

@@ -11,6 +11,8 @@ public sealed record PublicDomainLookupResponse(
     IReadOnlyCollection<string> Explanations,
     DateTimeOffset LastCheckedUtc,
     string SignedIdentityStatus,
+    bool PublicBadgeEligible,
+    string PublicLookupUrl,
     IReadOnlyCollection<ScoreBreakdownItem> ScoreBreakdown);
 
 public sealed record ScoreBreakdownItem(

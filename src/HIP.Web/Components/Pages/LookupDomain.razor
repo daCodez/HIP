@@ -13,26 +13,106 @@
         <section class="hip-lookup-panel">
             <h1>Lookup unavailable</h1>
             <p>@_error</p>
+            <a href="/lookup">Try another lookup</a>
         </section>
     }
     else if (_lookup is not null)
     {
         <section class="hip-lookup-panel">
             <p class="eyebrow">Public HIP Lookup</p>
-            <h1>@_lookup.Domain</h1>
-            <div class="score">@_lookup.FinalHipScore/100</div>
-            <p>Status: <strong>@_lookup.Status</strong></p>
-            <p>Verified: <strong>@_lookup.VerificationStatus</strong></p>
-            <p>Signed identity: <strong>@_lookup.SignedIdentityStatus</strong></p>
-            <p>Last checked UTC: @_lookup.LastCheckedUtc.ToString("u")</p>
+            <div class="lookup-heading">
+                <div>
+                    <h1>@_lookup.Domain</h1>
+                    <p>TCP connects devices. TLS encrypts the connection. HIP verifies trust, origin, reputation, and risk.</p>
+                </div>
+                <a href="/lookup">Check another domain</a>
+            </div>
 
-            <h2>Reasons</h2>
-            <ul>
-                @foreach (var explanation in _lookup.Explanations.Take(5))
-                {
-                    <li>@explanation</li>
-                }
-            </ul>
+            <div class="score-card status-@_lookup.Status.ToString().ToLowerInvariant()">
+                <span>HIP Score</span>
+                <strong>@_lookup.FinalHipScore/100</strong>
+                <p>Status: @_lookup.Status</p>
+                <p>Verified: @_lookup.VerificationStatus</p>
+                <p>Signed Identity: @_lookup.SignedIdentityStatus</p>
+                <p>Last checked UTC: @_lookup.LastCheckedUtc.ToString("u")</p>
+            </div>
+
+            <section class="lookup-section">
+                <h2>Important Context</h2>
+                <p>A verified identity does not automatically mean safe. It means HIP knows who signed or owns it. The trust score still matters.</p>
+            </section>
+
+            <section class="lookup-section">
+                <h2>Score Ranges</h2>
+                <ul class="range-list">
+                    <li>0-20 = Dangerous</li>
+                    <li>21-40 = High Risk</li>
+                    <li>41-60 = Unknown / Caution</li>
+                    <li>61-80 = Probably Safe</li>
+                    <li>81-100 = Trusted</li>
+                </ul>
+            </section>
+
+            @if (_lookup.KnownRisks.Count > 0)
+            {
+                <section class="lookup-section">
+                    <h2>Known Public Risks</h2>
+                    <ul>
+                        @foreach (var risk in _lookup.KnownRisks)
+                        {
+                            <li>@risk</li>
+                        }
+                    </ul>
+                </section>
+            }
+
+            <section class="lookup-section">
+                <h2>Explanation</h2>
+                <ul>
+                    @foreach (var explanation in _lookup.Explanations.Take(6))
+                    {
+                        <li>@explanation</li>
+                    }
+                </ul>
+            </section>
+
+            <section class="lookup-section">
+                <h2>Score Breakdown</h2>
+                <div class="breakdown-grid">
+                    @foreach (var score in _lookup.ScoreBreakdown.Where(score => score.Category != "Final"))
+                    {
+                        <article class="breakdown-card">
+                            <h3>@score.Category Score</h3>
+                            <strong>@score.Score/100</strong>
+                            <p>Status: @score.Status</p>
+                            <p>@score.Explanation</p>
+                            <ul>
+                                @foreach (var reason in score.Reasons)
+                                {
+                                    <li>@reason</li>
+                                }
+                            </ul>
+                        </article>
+                    }
+                </div>
+            </section>
+
+            @if (_lookup.PublicBadgeEligible)
+            {
+                <section class="lookup-section">
+                    <h2>Badge Preview</h2>
+                    <div class="hip-trust-badge-preview">
+                        <span>HIP Verified</span>
+                        <strong>Score: @_lookup.FinalHipScore/100</strong>
+                        <span>Status: @_lookup.Status</span>
+                    </div>
+                </section>
+            }
+
+            <section class="lookup-section">
+                <h2>Share</h2>
+                <p><a href="@_lookup.PublicLookupUrl">@_lookup.PublicLookupUrl</a></p>
+            </section>
         </section>
     }
 </main>

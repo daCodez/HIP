@@ -21,6 +21,8 @@ public sealed class PublicDomainLookupService : IPublicDomainLookupService
             result.ComponentScores.Select(score => score.Explanation).Append(result.FinalScore.Explanation).ToArray(),
             DateTimeOffset.UtcNow,
             normalized.Contains("verified", StringComparison.OrdinalIgnoreCase) ? "PostQuantumSignaturePresent" : "NoSignedIdentityFound",
+            normalized.Contains("verified", StringComparison.OrdinalIgnoreCase),
+            $"/lookup/domain/{normalized}",
             result.ComponentScores.Append(result.FinalScore)
                 .Select(score => new ScoreBreakdownItem(score.Category.ToString(), score.Score.Value, score.Status, score.Explanation, score.Reasons))
                 .ToArray());

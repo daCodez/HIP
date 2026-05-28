@@ -5,6 +5,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.Services.AddHipApplication();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("PublicHipReadOnly", policy =>
+        policy.AllowAnyOrigin()
+            .WithMethods("GET")
+            .AllowAnyHeader());
+});
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -15,6 +22,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseCors("PublicHipReadOnly");
 app.MapDefaultEndpoints();
 
 var publicApi = app.MapGroup("/api/public");

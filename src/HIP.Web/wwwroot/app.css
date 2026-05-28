@@ -131,6 +131,164 @@ h1:focus {
     font-weight: 800;
 }
 
+.hip-lookup-hero,
+.hip-lookup-info {
+    max-width: 900px;
+    margin: 0 auto 20px;
+    padding: 28px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.hip-lookup-hero h1 {
+    margin: 0 0 12px;
+}
+
+.lookup-form {
+    margin-top: 24px;
+}
+
+.lookup-form label {
+    display: block;
+    margin-bottom: 8px;
+    color: #334155;
+    font-weight: 700;
+}
+
+.lookup-form div {
+    display: flex;
+    gap: 10px;
+}
+
+.lookup-form input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+
+.lookup-form button {
+    border: 0;
+    border-radius: 6px;
+    padding: 10px 14px;
+    color: #fff;
+    background: #0f766e;
+}
+
+.lookup-error {
+    color: #b91c1c;
+}
+
+.lookup-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.score-card {
+    margin: 24px 0;
+    padding: 20px;
+    border: 1px solid #cbd5e1;
+    border-left: 6px solid #64748b;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.score-card span {
+    color: #64748b;
+    font-weight: 700;
+}
+
+.score-card strong {
+    display: block;
+    margin: 4px 0 12px;
+    color: #111827;
+    font-size: 3rem;
+    line-height: 1;
+}
+
+.status-trusted {
+    border-left-color: #047857;
+}
+
+.status-probablysafe {
+    border-left-color: #0f766e;
+}
+
+.status-caution {
+    border-left-color: #ca8a04;
+}
+
+.status-highrisk {
+    border-left-color: #ea580c;
+}
+
+.status-dangerous,
+.status-critical {
+    border-left-color: #b91c1c;
+}
+
+.lookup-section {
+    margin-top: 28px;
+}
+
+.range-list {
+    display: grid;
+    gap: 6px;
+    padding-left: 18px;
+}
+
+.breakdown-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+}
+
+.breakdown-card {
+    padding: 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.breakdown-card h3 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+}
+
+.breakdown-card strong {
+    font-size: 1.5rem;
+}
+
+.hip-trust-badge-preview {
+    display: inline-grid;
+    gap: 2px;
+    min-width: 170px;
+    padding: 12px;
+    border: 1px solid #bae6fd;
+    border-left: 5px solid #0284c7;
+    border-radius: 8px;
+    background: #f0f9ff;
+}
+
+.hip-trust-badge-preview span {
+    color: #0c4a6e;
+    font-weight: 700;
+}
+
+.hip-trust-badge-preview strong {
+    color: #111827;
+}
+
+@media (max-width: 640px) {
+    .lookup-form div,
+    .lookup-heading {
+        flex-direction: column;
+    }
+}
+
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }

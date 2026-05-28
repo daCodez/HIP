@@ -10,4 +10,5 @@ public sealed record PublicBadgeResponse(
     DateTimeOffset LastCheckedUtc,
     string PublicLookupUrl,
     string BadgeText,
-    string BadgeVariant);
+    string BadgeVariant,
+    string? ResponseSignature);
