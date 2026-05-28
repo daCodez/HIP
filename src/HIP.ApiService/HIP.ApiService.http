@@ -1,0 +1,6 @@
+@HIP.ApiService_HostAddress = http://localhost:5099
+
+GET {{HIP.ApiService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

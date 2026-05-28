@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HIP.ApiService/HIP.ApiService.csproj" />
+    <Project Path="src/HIP.AppHost/HIP.AppHost.csproj" />
+    <Project Path="src/HIP.Application/HIP.Application.csproj" />
+    <Project Path="src/HIP.Domain/HIP.Domain.csproj" />
+    <Project Path="src/HIP.Infrastructure/HIP.Infrastructure.csproj" />
+    <Project Path="src/HIP.ServiceDefaults/HIP.ServiceDefaults.csproj" />
+    <Project Path="src/HIP.Web/HIP.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HIP.Tests/HIP.Tests.csproj" />
+  </Folder>
+</Solution>
