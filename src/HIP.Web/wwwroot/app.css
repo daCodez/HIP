@@ -409,8 +409,36 @@ h1:focus {
     font-weight: 650;
 }
 
+.self-healing-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 18px;
+    max-width: 1180px;
+    margin: 0 auto 18px;
+}
+
+.self-healing-grid .rule-builder-panel {
+    margin: 0;
+}
+
+.self-healing-item,
+.self-healing-candidate {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.self-healing-candidate {
+    background: #fff;
+}
+
 @media (max-width: 900px) {
     .rule-builder-grid,
+    .self-healing-grid,
     .form-row,
     .condition-row,
     .button-row {

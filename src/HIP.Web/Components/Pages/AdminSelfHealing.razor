@@ -1,0 +1,151 @@
+@page "/admin/self-healing"
+@rendermode InteractiveServer
+@inject ISelfHealingAnalysisService SelfHealingAnalysisService
+
+<PageTitle>HIP Self-Healing</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <p class="eyebrow">Dev-only MVP</p>
+        <h1>Self-Healing Rule Detection</h1>
+        <p>Detect repeated suspicious patterns, generate suggested JSON rules, run simulation, and classify approval needs from privacy-safe findings.</p>
+    </section>
+
+    <section class="self-healing-grid">
+        <div class="rule-builder-panel">
+            <h2>Sample Findings Input</h2>
+            <textarea class="json-editor" @bind="_findingsJson"></textarea>
+            <div class="button-row">
+                <button type="button" @onclick="RunAnalysis">Run Detection</button>
+                <button type="button" @onclick="LoadSampleFindings">Load Sample</button>
+            </div>
+            @if (_error is not null)
+            {
+                <p class="lookup-error">@_error</p>
+            }
+        </div>
+
+        <div class="rule-builder-panel">
+            <h2>Detected Clusters</h2>
+            @if (_analysis is null || _analysis.Clusters.Count == 0)
+            {
+                <p>No clusters detected yet.</p>
+            }
+            else
+            {
+                @foreach (var cluster in _analysis.Clusters)
+                {
+                    <div class="self-healing-item">
+                        <strong>@cluster.PatternType</strong>
+                        <span>@cluster.Summary</span>
+                        <span>Findings: @cluster.FindingCount</span>
+                        <span>Risk: @cluster.AverageRiskLevel</span>
+                        <span>Confidence hint: @cluster.ConfidenceHint</span>
+                    </div>
+                }
+            }
+        </div>
+    </section>
+
+    <section class="rule-builder-panel">
+        <h2>Generated Rule Candidates</h2>
+        @if (_analysis is null || _analysis.GeneratedRuleCandidates.Count == 0)
+        {
+            <p>No candidates generated yet.</p>
+        }
+        else
+        {
+            @foreach (var candidate in _analysis.GeneratedRuleCandidates)
+            {
+                <div class="self-healing-candidate">
+                    <div>
+                        <strong>@candidate.ProposedRule.Name</strong>
+                        <span>@candidate.Status</span>
+                        <span>Recommended mode: @candidate.RecommendedMode</span>
+                        <span>Approval: @candidate.ApprovalStatus</span>
+                        <span>Confidence: @candidate.ConfidenceScore</span>
+                    </div>
+                    <div class="simulation-grid">
+                        <span>Simulation passed: <strong>@candidate.SimulationResult.Passed</strong></span>
+                        <span>Total: <strong>@candidate.SimulationResult.TotalTestCases</strong></span>
+                        <span>False positive risk: <strong>@candidate.SimulationResult.FalsePositiveRisk</strong></span>
+                        <span>False negative risk: <strong>@candidate.SimulationResult.FalseNegativeRisk</strong></span>
+                        <span>Rollback: <strong>@candidate.RollbackPlan.CanRollback</strong></span>
+                    </div>
+                    <pre class="json-preview">@JsonSerializer.Serialize(candidate.ProposedRule, JsonOptions)</pre>
+                </div>
+            }
+        }
+    </section>
+</main>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
+
+    private string _findingsJson = string.Empty;
+    private string? _error;
+    private SelfHealingAnalysisResult? _analysis;
+
+    protected override void OnInitialized() => LoadSampleFindings();
+
+    private void LoadSampleFindings()
+    {
+        _error = null;
+        _findingsJson = JsonSerializer.Serialize(SampleFindings(), JsonOptions);
+    }
+
+    private void RunAnalysis()
+    {
+        try
+        {
+            var findings = JsonSerializer.Deserialize<List<SuspiciousFinding>>(_findingsJson, JsonOptions);
+            if (findings is null)
+            {
+                _error = "Findings JSON did not contain a valid list.";
+                return;
+            }
+
+            _analysis = SelfHealingAnalysisService.Analyze(findings);
+            _error = null;
+        }
+        catch (JsonException ex)
+        {
+            _error = $"Invalid findings JSON: {ex.Message}";
+        }
+    }
+
+    private static IReadOnlyCollection<SuspiciousFinding> SampleFindings()
+    {
+        var now = DateTimeOffset.UtcNow;
+        return
+        [
+            NewFinding("f-001", FindingType.ShortenedUrlAbuse, "suspicious-example.com", RiskStatus.HighRisk, now.AddMinutes(-12)),
+            NewFinding("f-002", FindingType.ShortenedUrlAbuse, "suspicious-example.com", RiskStatus.HighRisk, now.AddMinutes(-8)),
+            NewFinding("f-003", FindingType.ShortenedUrlAbuse, "suspicious-example.com", RiskStatus.HighRisk, now.AddMinutes(-3)),
+            NewFinding("f-004", FindingType.Unknown, "watch-only.example", RiskStatus.Caution, now.AddMinutes(-4)),
+            NewFinding("f-005", FindingType.Unknown, "watch-only.example", RiskStatus.Caution, now.AddMinutes(-1))
+        ];
+    }
+
+    private static SuspiciousFinding NewFinding(string id, FindingType type, string domain, RiskStatus risk, DateTimeOffset detectedAtUtc) =>
+        new(
+            id,
+            type,
+            domain,
+            $"sha256:{id}",
+            "browser-extension",
+            risk,
+            "Repeated privacy-safe suspicious URL signal.",
+            detectedAtUtc,
+            FindingSourceType.BrowserExtension,
+            ReporterTrustLevel.High,
+            new Dictionary<string, string>
+            {
+                ["evidenceType"] = "anonymized-url-signal",
+                ["containsPrivateChatLog"] = "false"
+            });
+}

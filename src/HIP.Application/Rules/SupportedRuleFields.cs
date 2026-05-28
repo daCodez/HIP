@@ -5,6 +5,7 @@ public static class SupportedRuleFields
     public static readonly IReadOnlySet<string> Values = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "domain.ageDays",
+        "domain.name",
         "domain.reputationScore",
         "url.usesShortener",
         "url.isObfuscated",

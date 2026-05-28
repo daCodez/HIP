@@ -3,6 +3,7 @@ using HIP.Application.PublicLookup;
 using HIP.Application.Rules;
 using HIP.Application.Safety;
 using HIP.Application.Scoring;
+using HIP.Application.SelfHealing;
 using HIP.Application.Simulation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,10 @@ public static class DependencyInjection
         services.AddSingleton<IPublicDomainLookupService, PublicDomainLookupService>();
         services.AddSingleton<ITrustBadgeService, TrustBadgeService>();
         services.AddSingleton<ISafetyRoutingService, SafetyRoutingService>();
+        services.AddSingleton<IPatternDetectionService, PatternDetectionService>();
+        services.AddSingleton<IRuleRollbackService, RuleRollbackService>();
+        services.AddSingleton<IRuleCandidateGenerator, RuleCandidateGenerator>();
+        services.AddSingleton<ISelfHealingAnalysisService, SelfHealingAnalysisService>();
 
         return services;
     }

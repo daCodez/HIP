@@ -1,8 +1,10 @@
 using HIP.Application;
 using HIP.Application.PublicLookup;
 using HIP.Application.Rules;
+using HIP.Application.SelfHealing;
 using HIP.Application.Simulation;
 using HIP.Domain.Rules;
+using HIP.Domain.SelfHealing;
 using HIP.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -80,6 +82,50 @@ adminApi.MapPost("/simulate", (
         return Results.Ok(result);
     }
     catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+var selfHealingApi = app.MapGroup("/api/admin/self-healing");
+
+selfHealingApi.MapPost("/detect-patterns", (
+    IReadOnlyCollection<SuspiciousFinding> findings,
+    IPatternDetectionService patternDetectionService) =>
+{
+    try
+    {
+        return Results.Ok(patternDetectionService.DetectPatterns(findings));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+selfHealingApi.MapPost("/generate-rule", (
+    PatternCluster cluster,
+    IRuleCandidateGenerator ruleCandidateGenerator) =>
+{
+    try
+    {
+        return Results.Ok(ruleCandidateGenerator.Generate(cluster));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+selfHealingApi.MapPost("/analyze-findings", (
+    IReadOnlyCollection<SuspiciousFinding> findings,
+    ISelfHealingAnalysisService selfHealingAnalysisService) =>
+{
+    try
+    {
+        return Results.Ok(selfHealingAnalysisService.Analyze(findings));
+    }
+    catch (ArgumentException ex)
     {
         return Results.BadRequest(new { error = ex.Message });
     }
