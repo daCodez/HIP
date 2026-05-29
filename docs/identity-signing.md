@@ -106,7 +106,7 @@ Versioned routes:
 - `POST /api/v1/identity/sign`
 - `POST /api/v1/identity/verify`
 
-Temporary compatibility aliases also exist under `/api/identity/...`.
+Identity routes are versioned under `/api/v1/identity/...`.
 
 ## Trust Badge and Lookup
 
