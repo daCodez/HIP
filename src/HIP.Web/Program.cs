@@ -1,4 +1,5 @@
 using HIP.Application;
+using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
@@ -9,6 +10,7 @@ using HIP.Application.Simulation;
 using HIP.Domain.Review;
 using HIP.Domain.Reporting;
 using HIP.Domain.Reputation;
+using HIP.Domain.Identity;
 using HIP.Domain.Rules;
 using HIP.Domain.SelfHealing;
 using HIP.Web.Components;
@@ -58,6 +60,8 @@ MapReputationOverrideApis(app.MapGroup("/api/v1/admin/reputation-overrides"));
 MapReputationOverrideApis(app.MapGroup("/api/admin/reputation-overrides"));
 MapReputationApis(app.MapGroup("/api/v1/admin/reputation"));
 MapReputationApis(app.MapGroup("/api/admin/reputation"));
+MapIdentityApis(app.MapGroup("/api/v1/identity"));
+MapIdentityApis(app.MapGroup("/api/identity"));
 app.MapGet("/api/v1/admin/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()));
 app.MapGet("/api/admin/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()));
 
@@ -316,6 +320,84 @@ static void MapReputationApis(RouteGroupBuilder reputationApi)
     });
 }
 
+static void MapIdentityApis(RouteGroupBuilder identityApi)
+{
+    identityApi.MapPost("/register", async (
+        IdentityRegistrationRequest request,
+        IHipIdentityService identityService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await identityService.RegisterAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    identityApi.MapPost("/domain-verification/start", async (
+        DomainVerificationApiRequest request,
+        IDomainVerificationService domainVerificationService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await domainVerificationService.StartAsync(request.Domain, request.Method, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    identityApi.MapPost("/domain-verification/verify", async (
+        DomainVerificationApiRequest request,
+        IDomainVerificationService domainVerificationService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await domainVerificationService.VerifyAsync(request.Domain, request.Method, request.Token ?? string.Empty, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    identityApi.MapPost("/sign", async (
+        SignContentRequest request,
+        IHipIdentityService identityService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await identityService.SignAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    identityApi.MapPost("/verify", async (
+        VerifySignatureRequest request,
+        IHipIdentityService identityService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await identityService.VerifyAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+}
+
 public sealed record AdminRuleSimulationRequest(
     TrustRule Rule,
     IReadOnlyCollection<RuleSimulationTestCase>? TestCases);
@@ -323,3 +405,5 @@ public sealed record AdminRuleSimulationRequest(
 public sealed record AdminDecisionRequest(string ActorId, string Reason);
 
 public sealed record AdminAssignRequest(string ActorId, string AssignedTo);
+
+public sealed record DomainVerificationApiRequest(string Domain, VerificationMethod Method, string? Token);

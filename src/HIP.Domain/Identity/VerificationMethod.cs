@@ -4,6 +4,6 @@ public enum VerificationMethod
 {
     DnsTxt,
     WellKnownHipJson,
-    HtmlFileUpload,
+    HtmlFile,
     MetaTag
 }

@@ -1,11 +1,16 @@
 namespace HIP.Domain.Identity;
 
 public sealed record HipIdentity(
-    string Id,
-    IdentitySubjectType SubjectType,
+    string IdentityId,
+    IdentitySubjectType IdentityType,
     string DisplayName,
-    string PublicKeyId,
-    SignatureAlgorithmFamily AlgorithmFamily)
+    string PublicKey,
+    string KeyAlgorithm,
+    VerificationStatus VerificationStatus,
+    DateTimeOffset CreatedAtUtc,
+    string ReputationTargetId)
 {
-    public bool UsesQuantumResistantSigning => AlgorithmFamily == SignatureAlgorithmFamily.PostQuantum;
+    public bool UsesQuantumResistantSigning =>
+        KeyAlgorithm.Contains("PQ", StringComparison.OrdinalIgnoreCase) ||
+        KeyAlgorithm.Contains("Dilithium", StringComparison.OrdinalIgnoreCase);
 }

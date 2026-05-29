@@ -17,6 +17,8 @@ public sealed class TrustBadgeService(IPublicDomainLookupService lookupService) 
             lookup.PublicLookupUrl,
             $"{label} - Score: {lookup.FinalHipScore}/100 - Status: {lookup.Status}",
             variant,
+            lookup.IdentityVerificationStatus,
+            lookup.SignatureValid,
             null);
     }
 }

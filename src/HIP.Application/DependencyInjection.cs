@@ -1,4 +1,5 @@
 using FluentValidation;
+using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
@@ -44,6 +45,10 @@ public static class DependencyInjection
         services.AddSingleton<IReputationService, ReputationService>();
         services.AddSingleton<IRiskFindingReportRepository, InMemoryRiskFindingReportRepository>();
         services.AddSingleton<IRiskFindingIngestionService, RiskFindingIngestionService>();
+        services.AddSingleton<IHipCryptoProvider, DevelopmentHipCryptoProvider>();
+        services.AddSingleton<IHipIdentityRepository, InMemoryHipIdentityRepository>();
+        services.AddSingleton<IHipIdentityService, HipIdentityService>();
+        services.AddSingleton<IDomainVerificationService, InMemoryDomainVerificationService>();
 
         return services;
     }

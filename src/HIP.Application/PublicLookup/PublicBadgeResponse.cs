@@ -11,4 +11,6 @@ public sealed record PublicBadgeResponse(
     string PublicLookupUrl,
     string BadgeText,
     string BadgeVariant,
+    string IdentityVerificationStatus,
+    bool? SignatureValid,
     string? ResponseSignature);

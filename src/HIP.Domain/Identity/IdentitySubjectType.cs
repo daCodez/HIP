@@ -2,11 +2,12 @@ namespace HIP.Domain.Identity;
 
 public enum IdentitySubjectType
 {
-    Domain,
+    Person,
     Website,
-    Sender,
-    DeviceKey,
-    Organization,
+    Domain,
     App,
-    Content
+    Organization,
+    DeviceKey,
+    VirtualWorldAvatar,
+    ContentPublisher
 }
