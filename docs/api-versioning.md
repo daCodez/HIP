@@ -19,6 +19,8 @@ Public:
 - `POST /api/v1/public/appeals`
 - `POST /api/v1/public/feedback`
 - `POST /api/v1/public/risk-findings`
+- `POST /api/v1/public/sl-hud/activate`
+- `POST /api/v1/public/sl-hud/report-finding`
 
 Admin:
 

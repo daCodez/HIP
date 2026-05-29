@@ -6,6 +6,7 @@ using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.SelfHealing;
+using HIP.Application.SecondLife;
 using HIP.Application.Simulation;
 using HIP.Domain.Review;
 using HIP.Domain.Reporting;
@@ -48,6 +49,8 @@ app.UseAntiforgery();
 
 MapPublicApis(app.MapGroup("/api/v1/public"));
 MapPublicApis(app.MapGroup("/api/public"));
+MapSecondLifeHudApis(app.MapGroup("/api/v1/public/sl-hud"));
+MapSecondLifeHudApis(app.MapGroup("/api/public/sl-hud"));
 MapRulesApis(app.MapGroup("/api/v1/admin/rules"));
 MapRulesApis(app.MapGroup("/api/admin/rules"));
 MapSelfHealingApis(app.MapGroup("/api/v1/admin/self-healing"));
@@ -140,6 +143,26 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
         CancellationToken cancellationToken) =>
     {
         var response = await ingestionService.IngestAsync(report, cancellationToken);
+        return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
+    });
+}
+
+static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
+{
+    slHudApi.MapPost("/activate", (
+        SecondLifeHudActivationRequest request,
+        ISecondLifeHudService hudService) =>
+    {
+        var response = hudService.Activate(request);
+        return response.Activated ? Results.Ok(response) : Results.BadRequest(response);
+    });
+
+    slHudApi.MapPost("/report-finding", async (
+        SecondLifeHudFindingReport report,
+        ISecondLifeHudService hudService,
+        CancellationToken cancellationToken) =>
+    {
+        var response = await hudService.ReportFindingAsync(report, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
     });
 }

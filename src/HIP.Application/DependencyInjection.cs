@@ -7,6 +7,7 @@ using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.Safety;
 using HIP.Application.Scoring;
+using HIP.Application.SecondLife;
 using HIP.Application.SelfHealing;
 using HIP.Application.Simulation;
 using MediatR;
@@ -49,6 +50,7 @@ public static class DependencyInjection
         services.AddSingleton<IHipIdentityRepository, InMemoryHipIdentityRepository>();
         services.AddSingleton<IHipIdentityService, HipIdentityService>();
         services.AddSingleton<IDomainVerificationService, InMemoryDomainVerificationService>();
+        services.AddSingleton<ISecondLifeHudService, SecondLifeHudService>();
 
         return services;
     }

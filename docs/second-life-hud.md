@@ -1,0 +1,69 @@
+# HIP Second Life HUD Foundation
+
+HIP is the product. The Second Life HUD is a client/component that uses HIP APIs.
+
+The HUD MVP foundation supports:
+
+- setup code/license activation foundation
+- suspicious link detection
+- shortened link detection
+- broken-up and obfuscated link detection
+- private owner warnings
+- optional popup alerts
+- HUD status text
+- safety page routing guidance
+- privacy-safe reporting
+
+## API Endpoints
+
+- `POST /api/v1/public/sl-hud/activate`
+- `POST /api/v1/public/sl-hud/report-finding`
+
+Activation input:
+
+- setup code
+- HUD device ID
+- optional avatar hash
+
+Report input:
+
+- HUD device ID
+- optional avatar hash
+- domain
+- risky URL or URL hash
+- optional sender hash
+- risk level
+- reason
+- timestamp
+- HIP signature placeholder
+
+## Alert Levels
+
+- Low risk: HUD status only.
+- Medium risk: private owner chat warning.
+- High risk: private owner chat warning and optional popup.
+- Critical risk: strong popup and safety page routing guidance.
+
+## Modes
+
+- Quiet
+- Normal
+- Strict
+- Paranoid
+
+## Privacy
+
+The HUD must not collect or send full chat logs, full private IM logs, raw conversations, or real avatar names by default. It reports only privacy-safe risk signals.
+
+## LSL Limitations
+
+Second Life does not provide browser-like link control. The HUD cannot guarantee true blocking. It provides warnings and routes users toward the HIP safety page.
+
+## Known Limitations
+
+- Development setup code only.
+- In-memory backend activation only.
+- No production license persistence.
+- No full AI chat analysis.
+- No account login.
+- No marketplace billing.

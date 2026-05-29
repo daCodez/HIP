@@ -68,6 +68,11 @@ The Second Life HUD should report only:
 
 It must not send full private IM logs by default.
 
+The MVP SL HUD endpoints are:
+
+- `POST /api/v1/public/sl-hud/activate`
+- `POST /api/v1/public/sl-hud/report-finding`
+
 ## Review Queue Connection
 
 High-risk, Dangerous, and Critical reports create review items automatically. Lower-risk reports can be stored without forcing admin review.
