@@ -32,8 +32,39 @@
         <strong id="verified">Unknown</strong>
       </div>
       <div class="status-row">
+        <span>Identity</span>
+        <strong id="identityStatus">Unknown</strong>
+      </div>
+      <div class="status-row">
         <span>Last checked</span>
         <strong id="lastChecked">Unknown</strong>
+      </div>
+    </section>
+
+    <section id="scanPanel" class="score-panel" hidden>
+      <div class="status-row">
+        <span>API status</span>
+        <strong id="apiStatus">Checking</strong>
+      </div>
+      <div class="status-row">
+        <span>Links scanned</span>
+        <strong id="linksScanned">0</strong>
+      </div>
+      <div class="status-row">
+        <span>Risky links</span>
+        <strong id="riskyLinks">0</strong>
+      </div>
+      <div class="status-row">
+        <span>Unknown links</span>
+        <strong id="unknownLinks">0</strong>
+      </div>
+      <div class="status-row">
+        <span>Download candidates</span>
+        <strong id="downloadCandidates">0</strong>
+      </div>
+      <div class="status-row">
+        <span>Login forms</span>
+        <strong id="loginForms">0</strong>
       </div>
     </section>
 
@@ -42,7 +73,11 @@
       <ul id="reasons"></ul>
     </section>
 
-    <a id="lookupLink" class="lookup-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open public HIP lookup</a>
+    <div class="button-row">
+      <a id="lookupLink" class="lookup-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open lookup</a>
+      <button id="refreshScan" type="button">Refresh scan</button>
+      <button id="settingsButton" type="button">Settings</button>
+    </div>
   </main>
 
   <script type="module" src="popup.js"></script>

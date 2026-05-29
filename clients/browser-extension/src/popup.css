@@ -73,6 +73,7 @@ p {
 .score-panel {
   display: grid;
   gap: 9px;
+  margin-top: 12px;
 }
 
 .score-row,
@@ -122,11 +123,26 @@ li {
   color: #334155;
 }
 
-.lookup-link {
-  display: block;
+.button-row {
+  display: flex;
+  gap: 8px;
   margin-top: 12px;
+}
+
+.lookup-link,
+button {
+  border: 1px solid #0f766e;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fff;
   color: #0f766e;
   font-size: 13px;
   font-weight: 650;
   text-decoration: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HIP Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="settings-shell">
+    <header>
+      <h1>HIP Settings</h1>
+      <p>Configure local HIP API access and privacy-safe scan behavior.</p>
+    </header>
+
+    <form id="settingsForm">
+      <label>HIP API base URL
+        <input id="apiBaseUrl" type="url" required>
+      </label>
+
+      <label>HIP Web base URL
+        <input id="webBaseUrl" type="url" required>
+      </label>
+
+      <label>Scan mode
+        <select id="scanMode">
+          <option>Quiet</option>
+          <option>Normal</option>
+          <option>Strict</option>
+          <option>Paranoid</option>
+        </select>
+      </label>
+
+      <label class="checkbox-row">
+        <input id="enableLinkBadges" type="checkbox">
+        Enable link badges
+      </label>
+
+      <label class="checkbox-row">
+        <input id="enableWarningBanner" type="checkbox">
+        Enable warning banner
+      </label>
+
+      <label class="checkbox-row">
+        <input id="enableSafetyRouting" type="checkbox">
+        Enable safety page routing
+      </label>
+
+      <div class="button-row">
+        <button type="submit">Save Settings</button>
+        <button id="restoreDefaults" type="button">Restore Defaults</button>
+      </div>
+
+      <p id="status" class="status"></p>
+    </form>
+  </main>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
