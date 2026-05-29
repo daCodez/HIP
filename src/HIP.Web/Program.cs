@@ -14,12 +14,15 @@ using HIP.Domain.Reputation;
 using HIP.Domain.Identity;
 using HIP.Domain.Rules;
 using HIP.Domain.SelfHealing;
+using HIP.Infrastructure;
+using HIP.Infrastructure.Persistence;
 using HIP.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.Services.AddHipApplication();
+builder.Services.AddHipInfrastructure(builder.Configuration);
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("PublicHipReadOnly", policy =>
@@ -33,6 +36,8 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var app = builder.Build();
+
+await HipDatabaseInitializer.EnsureCreatedAsync(app.Services);
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

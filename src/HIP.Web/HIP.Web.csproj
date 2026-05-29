@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\HIP.Application\HIP.Application.csproj" />
     <ProjectReference Include="..\HIP.ServiceDefaults\HIP.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\HIP.Infrastructure\HIP.Infrastructure.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
