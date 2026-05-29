@@ -74,7 +74,7 @@ public sealed class SecondLifeHudService(IRiskFindingIngestionService ingestionS
         new(false, "Inactive", message, DefaultConfig());
 
     private static SecondLifeHudClientConfig DefaultConfig() =>
-        new("Normal", true, "/safety", "/api/v1/public/sl-hud/report-finding");
+        new("Normal", true, "/safety", "/api/v1/sl-hud/report-finding");
 
     private static string SafetyPageUrl(string? riskyUrl, string domain, string reason)
     {

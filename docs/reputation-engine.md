@@ -70,13 +70,13 @@ Scores are clamped to `0-100`.
 
 Admin/dev routes:
 
-- `GET /api/admin/reputation/{targetType}/{targetId}`
-- `POST /api/admin/reputation/events`
-- `POST /api/admin/reputation/{targetType}/{targetId}/recalculate`
+- `GET /api/v1/admin/reputation/{targetType}/{targetId}`
+- `POST /api/v1/admin/reputation/events`
+- `POST /api/v1/admin/reputation/{targetType}/{targetId}/recalculate`
 
 Public privacy-safe feedback:
 
-- `POST /api/public/feedback`
+- `POST /api/v1/public/feedback`
 
 ## Known Limitations
 

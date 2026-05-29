@@ -25,7 +25,7 @@ app.UseHttpsRedirection();
 app.UseCors("PublicHipReadOnly");
 app.MapDefaultEndpoints();
 
-var publicApi = app.MapGroup("/api/public");
+var publicApi = app.MapGroup("/api/v1/public");
 
 publicApi.MapGet("/lookup/domain/{domain}", async (
     string domain,

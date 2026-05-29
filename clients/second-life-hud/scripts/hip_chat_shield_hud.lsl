@@ -80,7 +80,7 @@ ActivateHud()
         JsonPair("avatarHash", OwnerHash()) +
         "}";
 
-    llHTTPRequest(HIP_API_BASE_URL + "/api/v1/public/sl-hud/activate",
+    llHTTPRequest(HIP_API_BASE_URL + "/api/v1/sl-hud/activate",
         [HTTP_METHOD, "POST", HTTP_MIMETYPE, "application/json"],
         payload);
 }
@@ -153,7 +153,7 @@ ReportFinding(string senderHash, string risk, string reason, string url)
         JsonPair("hipSignature", "sl-hud-signature-placeholder") +
         "}";
 
-    llHTTPRequest(HIP_API_BASE_URL + "/api/v1/public/sl-hud/report-finding",
+    llHTTPRequest(HIP_API_BASE_URL + "/api/v1/sl-hud/report-finding",
         [HTTP_METHOD, "POST", HTTP_MIMETYPE, "application/json"],
         payload);
 }

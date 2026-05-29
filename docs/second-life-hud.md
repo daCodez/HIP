@@ -16,8 +16,8 @@ The HUD MVP foundation supports:
 
 ## API Endpoints
 
-- `POST /api/v1/public/sl-hud/activate`
-- `POST /api/v1/public/sl-hud/report-finding`
+- `POST /api/v1/sl-hud/activate`
+- `POST /api/v1/sl-hud/report-finding`
 
 Activation input:
 

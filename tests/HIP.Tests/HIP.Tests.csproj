@@ -11,6 +11,7 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="FluentValidation" Version="12.1.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.8" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
     <PackageReference Include="NUnit" Version="4.3.2" />
@@ -26,6 +27,7 @@
     <ProjectReference Include="..\..\src\HIP.Domain\HIP.Domain.csproj" />
     <ProjectReference Include="..\..\src\HIP.Application\HIP.Application.csproj" />
     <ProjectReference Include="..\..\src\HIP.Infrastructure\HIP.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\HIP.Web\HIP.Web.csproj" />
   </ItemGroup>
 
 </Project>

@@ -71,9 +71,9 @@ The current MVP stores only metadata. Full rollback execution and UI review are 
 ## Admin Routes
 
 - UI: `/admin/self-healing`
-- Detect patterns: `POST /api/admin/self-healing/detect-patterns`
-- Generate rule from cluster: `POST /api/admin/self-healing/generate-rule`
-- Analyze findings end-to-end: `POST /api/admin/self-healing/analyze-findings`
+- Detect patterns: `POST /api/v1/admin/self-healing/detect-patterns`
+- Generate rule from cluster: `POST /api/v1/admin/self-healing/generate-rule`
+- Analyze findings end-to-end: `POST /api/v1/admin/self-healing/analyze-findings`
 
 ## Known Limitations
 

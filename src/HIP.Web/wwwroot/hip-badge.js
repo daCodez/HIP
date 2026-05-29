@@ -23,7 +23,7 @@
     }
 
     const apiBase = container.dataset.apiBase || scriptOrigin;
-    const response = await fetch(`${apiBase}/api/public/badge/domain/${encodeURIComponent(requestedDomain)}`, {
+    const response = await fetch(`${apiBase}/api/v1/public/badge/domain/${encodeURIComponent(requestedDomain)}`, {
       method: "GET",
       headers: {
         "Accept": "application/json"

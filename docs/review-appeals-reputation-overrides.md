@@ -79,32 +79,32 @@ Audit entries include actor, action, target type, target ID, summary, timestamp,
 
 Review queue:
 
-- `GET /api/admin/review`
-- `GET /api/admin/review/{id}`
-- `POST /api/admin/review`
-- `POST /api/admin/review/{id}/approve`
-- `POST /api/admin/review/{id}/reject`
-- `POST /api/admin/review/{id}/needs-more-info`
-- `POST /api/admin/review/{id}/assign`
+- `GET /api/v1/admin/review`
+- `GET /api/v1/admin/review/{id}`
+- `POST /api/v1/admin/review`
+- `POST /api/v1/admin/review/{id}/approve`
+- `POST /api/v1/admin/review/{id}/reject`
+- `POST /api/v1/admin/review/{id}/needs-more-info`
+- `POST /api/v1/admin/review/{id}/assign`
 
 Appeals:
 
-- `POST /api/public/appeals`
-- `GET /api/admin/appeals`
-- `POST /api/admin/appeals/{id}/approve`
-- `POST /api/admin/appeals/{id}/reject`
-- `POST /api/admin/appeals/{id}/needs-more-info`
+- `POST /api/v1/public/appeals`
+- `GET /api/v1/admin/appeals`
+- `POST /api/v1/admin/appeals/{id}/approve`
+- `POST /api/v1/admin/appeals/{id}/reject`
+- `POST /api/v1/admin/appeals/{id}/needs-more-info`
 
 Reputation overrides:
 
-- `POST /api/admin/reputation-overrides`
-- `GET /api/admin/reputation-overrides`
-- `POST /api/admin/reputation-overrides/{id}/approve`
-- `POST /api/admin/reputation-overrides/{id}/reject`
+- `POST /api/v1/admin/reputation-overrides`
+- `GET /api/v1/admin/reputation-overrides`
+- `POST /api/v1/admin/reputation-overrides/{id}/approve`
+- `POST /api/v1/admin/reputation-overrides/{id}/reject`
 
 Audit logs:
 
-- `GET /api/admin/audit-logs`
+- `GET /api/v1/admin/audit-logs`
 
 ## UI Routes
 

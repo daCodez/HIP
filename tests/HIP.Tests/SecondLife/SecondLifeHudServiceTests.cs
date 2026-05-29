@@ -82,7 +82,7 @@ public sealed class SecondLifeHudServiceTests
         var response = service.Activate(new SecondLifeHudActivationRequest("HIP-DEV-SETUP", "hud-1", null));
 
         Assert.That(response.LicenseStatus, Is.Not.Empty);
-        Assert.That(response.ClientConfig.ReportFindingUrl, Is.EqualTo("/api/v1/public/sl-hud/report-finding"));
+        Assert.That(response.ClientConfig.ReportFindingUrl, Is.EqualTo("/api/v1/sl-hud/report-finding"));
     }
 
     private static SecondLifeHudService Service(IReviewQueueService? reviewQueueService = null)

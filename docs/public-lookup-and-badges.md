@@ -10,7 +10,7 @@ Routes:
 
 - `/lookup`
 - `/lookup/domain/{domain}`
-- `/api/public/lookup/domain/{domain}`
+- `/api/v1/public/lookup/domain/{domain}`
 
 Public lookup can show:
 
@@ -36,7 +36,7 @@ HIP badges are live data widgets, not static images. A badge must always show th
 
 Badge API:
 
-- `/api/public/badge/domain/{domain}`
+- `/api/v1/public/badge/domain/{domain}`
 
 The response always includes:
 

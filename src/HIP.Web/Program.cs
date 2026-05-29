@@ -16,6 +16,7 @@ using HIP.Domain.Rules;
 using HIP.Domain.SelfHealing;
 using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
+using HIP.Web;
 using HIP.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -52,26 +53,16 @@ app.UseCors("PublicHipReadOnly");
 
 app.UseAntiforgery();
 
-MapPublicApis(app.MapGroup("/api/v1/public"));
-MapPublicApis(app.MapGroup("/api/public"));
-MapSecondLifeHudApis(app.MapGroup("/api/v1/public/sl-hud"));
-MapSecondLifeHudApis(app.MapGroup("/api/public/sl-hud"));
-MapRulesApis(app.MapGroup("/api/v1/admin/rules"));
-MapRulesApis(app.MapGroup("/api/admin/rules"));
-MapSelfHealingApis(app.MapGroup("/api/v1/admin/self-healing"));
-MapSelfHealingApis(app.MapGroup("/api/admin/self-healing"));
-MapReviewApis(app.MapGroup("/api/v1/admin/review"));
-MapReviewApis(app.MapGroup("/api/admin/review"));
-MapAppealApis(app.MapGroup("/api/v1/admin/appeals"));
-MapAppealApis(app.MapGroup("/api/admin/appeals"));
-MapReputationOverrideApis(app.MapGroup("/api/v1/admin/reputation-overrides"));
-MapReputationOverrideApis(app.MapGroup("/api/admin/reputation-overrides"));
-MapReputationApis(app.MapGroup("/api/v1/admin/reputation"));
-MapReputationApis(app.MapGroup("/api/admin/reputation"));
-MapIdentityApis(app.MapGroup("/api/v1/identity"));
-MapIdentityApis(app.MapGroup("/api/identity"));
-app.MapGet("/api/v1/admin/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()));
-app.MapGet("/api/admin/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()));
+MapPublicApis(app.MapGroup(ApiRoutes.Public));
+MapSecondLifeHudApis(app.MapGroup(ApiRoutes.SecondLifeHud));
+MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules"));
+MapSelfHealingApis(app.MapGroup($"{ApiRoutes.Admin}/self-healing"));
+MapReviewApis(app.MapGroup($"{ApiRoutes.Admin}/review"));
+MapAppealApis(app.MapGroup($"{ApiRoutes.Admin}/appeals"));
+MapReputationOverrideApis(app.MapGroup($"{ApiRoutes.Admin}/reputation-overrides"));
+MapReputationApis(app.MapGroup($"{ApiRoutes.Admin}/reputation"));
+MapIdentityApis(app.MapGroup(ApiRoutes.Identity));
+app.MapGet($"{ApiRoutes.Admin}/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()));
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
@@ -435,3 +426,5 @@ public sealed record AdminDecisionRequest(string ActorId, string Reason);
 public sealed record AdminAssignRequest(string ActorId, string AssignedTo);
 
 public sealed record DomainVerificationApiRequest(string Domain, VerificationMethod Method, string? Token);
+
+public partial class Program;
