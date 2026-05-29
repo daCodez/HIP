@@ -1,4 +1,5 @@
 using HIP.Application;
+using HIP.Application.Dashboard;
 using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
@@ -68,6 +69,7 @@ MapReviewApis(app.MapGroup($"{ApiRoutes.Admin}/review").RequireAuthorization(Adm
 MapAppealApis(app.MapGroup($"{ApiRoutes.Admin}/appeals").RequireAuthorization(AdminPolicies.CanReviewReports));
 MapReputationOverrideApis(app.MapGroup($"{ApiRoutes.Admin}/reputation-overrides").RequireAuthorization(AdminPolicies.CanApproveOverrides));
 MapReputationApis(app.MapGroup($"{ApiRoutes.Admin}/reputation").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
+MapDashboardApis(app.MapGroup($"{ApiRoutes.Admin}/dashboard").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapIdentityApis(app.MapGroup(ApiRoutes.Identity));
 app.MapGet($"{ApiRoutes.Admin}/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()))
     .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
@@ -149,6 +151,14 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
         var response = await ingestionService.IngestAsync(report, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
     });
+}
+
+static void MapDashboardApis(RouteGroupBuilder dashboardApi)
+{
+    dashboardApi.MapGet("/summary", async (
+        IAdminDashboardService dashboardService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await dashboardService.GetSummaryAsync(cancellationToken)));
 }
 
 static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)

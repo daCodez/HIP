@@ -1,0 +1,109 @@
+@page "/admin"
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@rendermode InteractiveServer
+@inject IAdminDashboardService DashboardService
+
+<PageTitle>HIP Admin Dashboard</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">HIP Admin</p>
+            <h1>Dashboard</h1>
+            <p>Privacy-safe operational overview for HIP review, rules, reputation, and reporting.</p>
+        </div>
+        <button class="primary-button" @onclick="RefreshAsync">Refresh</button>
+    </section>
+
+    @if (_summary is null)
+    {
+        <p>Loading dashboard...</p>
+    }
+    else
+    {
+        <section class="score-grid dashboard-grid">
+            @foreach (var card in _summary.Cards)
+            {
+                <article class="score-card">
+                    <span>@card.Status</span>
+                    <strong>@card.Value</strong>
+                    <h3>@card.Label</h3>
+                    <p>@card.Description</p>
+                    @if (card.IsPlaceholder)
+                    {
+                        <small>Placeholder</small>
+                    }
+                </article>
+            }
+        </section>
+
+        <section class="lookup-result">
+            <div class="result-header">
+                <div>
+                    <h2>Recent Activity</h2>
+                    <p>Summaries only. HIP does not show private chat logs, message bodies, or raw private evidence here.</p>
+                </div>
+                <span>@_summary.ApiHealth</span>
+            </div>
+
+            @if (_summary.RecentActivity.Count == 0)
+            {
+                <p>No recent activity yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Type</th>
+                                <th>Target</th>
+                                <th>Risk</th>
+                                <th>Summary</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _summary.RecentActivity)
+                            {
+                                <tr>
+                                    <td>@item.CreatedAtUtc.UtcDateTime.ToString("u")</td>
+                                    <td>@item.ActivityType</td>
+                                    <td>@item.TargetType: @item.TargetId</td>
+                                    <td>@(item.RiskLevel?.ToString() ?? "-")</td>
+                                    <td>@item.Summary</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="lookup-result">
+            <h2>Quick Links</h2>
+            <div class="quick-link-grid">
+                <a href="/admin/rules">Rules</a>
+                <a href="/admin/self-healing">Self-Healing</a>
+                <a href="/admin/review">Review Queue</a>
+                <a href="/admin/appeals">Appeals</a>
+                <a href="/admin/reputation-overrides">Reputation Overrides</a>
+                <a href="/admin/audit-logs">Audit Logs</a>
+                <a href="/lookup">Public Lookup</a>
+                <a href="/docs/public-lookup-and-badges.md">Badge Docs</a>
+                <a href="/clients/browser-extension/README.md">Browser Plugin Docs</a>
+            </div>
+        </section>
+    }
+</main>
+
+@code {
+    private AdminDashboardSummary? _summary;
+
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+    }
+}

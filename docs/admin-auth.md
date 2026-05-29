@@ -44,11 +44,13 @@ Protected API route groups:
 - `/api/v1/admin/appeals/...`
 - `/api/v1/admin/reputation-overrides/...`
 - `/api/v1/admin/reputation/...`
+- `/api/v1/admin/dashboard/summary`
 - `/api/v1/admin/audit-logs`
 
 Protected UI routes:
 
 - `/admin/rules`
+- `/admin`
 - `/admin/self-healing`
 - `/admin/review`
 - `/admin/appeals`

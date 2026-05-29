@@ -436,6 +436,73 @@ h1:focus {
     background: #fff;
 }
 
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+    max-width: 1180px;
+    margin: 0 auto 18px;
+}
+
+.dashboard-grid .score-card {
+    margin: 0;
+}
+
+.lookup-result {
+    max-width: 1180px;
+    margin: 0 auto 18px;
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.result-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: start;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.table-wrap table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table-wrap th,
+.table-wrap td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 8px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.quick-link-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.quick-link-grid a,
+.primary-button {
+    border: 1px solid #0f766e;
+    border-radius: 6px;
+    padding: 9px 12px;
+    color: #0f766e;
+    background: #fff;
+    text-decoration: none;
+    font-weight: 650;
+}
+
+.primary-button {
+    color: #fff;
+    background: #0f766e;
+}
+
 @media (max-width: 900px) {
     .rule-builder-grid,
     .self-healing-grid,
