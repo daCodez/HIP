@@ -14,7 +14,8 @@
   window.HipRiskBadgeRenderer = {
     ensureStyles,
     renderLinkBadge,
-    renderWarningBanner
+    renderWarningBanner,
+    renderFormIndicator
   };
 
   function renderLinkBadge(anchor, status, lookup) {
@@ -61,6 +62,20 @@
 
     banner.querySelector(".hip-warning-dismiss").addEventListener("click", () => banner.remove());
     document.documentElement.prepend(banner);
+  }
+
+  function renderFormIndicator(form, lookup, reason) {
+    ensureStyles();
+
+    if (form.dataset.hipFormIndicatorRendered === "true") {
+      return;
+    }
+
+    const element = document.createElement("div");
+    element.className = "hip-form-risk-indicator";
+    element.textContent = `HIP caution: ${reason} Status: ${lookup.status}.`;
+    form.insertAdjacentElement("beforebegin", element);
+    form.dataset.hipFormIndicatorRendered = "true";
   }
 
   function ensureStyles() {
@@ -128,6 +143,15 @@
       #hip-warning-banner .hip-warning-dismiss {
         font-size: 18px;
         line-height: 1;
+      }
+      .hip-form-risk-indicator {
+        margin: 8px 0;
+        padding: 8px 10px;
+        border: 1px solid #f59e0b;
+        border-radius: 6px;
+        color: #713f12;
+        background: #fffbeb;
+        font: 600 12px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
     `;
     document.head.appendChild(style);

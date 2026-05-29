@@ -3,6 +3,15 @@ export const HIP_CONFIG = Object.freeze({
   webBaseUrl: "https://localhost:7053"
 });
 
+export const DEFAULT_HIP_SETTINGS = Object.freeze({
+  apiBaseUrl: HIP_CONFIG.apiBaseUrl,
+  webBaseUrl: HIP_CONFIG.webBaseUrl,
+  enableLinkBadges: true,
+  enableWarningBanner: true,
+  enableSafetyRouting: true,
+  scanMode: "Normal"
+});
+
 export class HipApiClient {
   constructor(config = HIP_CONFIG) {
     this.config = config;
@@ -60,6 +69,27 @@ export class HipApiClient {
 
     return url.toString();
   }
+}
+
+export async function loadHipSettings() {
+  if (!globalThis.chrome?.storage?.sync) {
+    return { ...DEFAULT_HIP_SETTINGS };
+  }
+
+  const stored = await chrome.storage.sync.get(DEFAULT_HIP_SETTINGS);
+  return {
+    ...DEFAULT_HIP_SETTINGS,
+    ...stored
+  };
+}
+
+export async function saveHipSettings(settings) {
+  const normalized = {
+    ...DEFAULT_HIP_SETTINGS,
+    ...settings
+  };
+  await chrome.storage.sync.set(normalized);
+  return normalized;
 }
 
 export function normalizeHost(hostname) {

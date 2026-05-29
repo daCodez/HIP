@@ -1,50 +1,113 @@
 # HIP Browser Extension MVP
 
-This is the first Chromium Manifest V3 client for HIP. It checks the current website domain, scans links on the page, shows risk badges only when attention is needed, and routes high-risk links through the HIP safety page.
+This Chromium Manifest V3 client helps users see HIP website trust, link risk, and safety warnings. HIP itself is the product; this extension is only one HIP client.
+
+## Features
+
+- Current website HIP score and status in the popup.
+- Verified identity and signed identity status where available.
+- Page link scan summary.
+- Risky link badges.
+- High-risk website warning banner.
+- Safety page routing for HighRisk, Dangerous, and Critical links.
+- Privacy-safe risk finding reports for risky links.
+- Download-like link detection foundation.
+- Login/form risk indicator foundation.
+- Social feed and webmail link detection hooks.
+- API availability status.
+- Scan refresh button.
+- Settings page.
+
+## Settings
+
+Open extension settings from the popup.
+
+Settings:
+
+- HIP API base URL
+- HIP Web base URL
+- Enable link badges
+- Enable warning banner
+- Enable safety routing
+- Scan mode
+
+Scan modes:
+
+- Quiet: popup score only; no page badges unless dangerous.
+- Normal: suspicious/dangerous badges and high-risk banner.
+- Strict: unknown, caution, suspicious, and dangerous badges.
+- Paranoid: all non-trusted signals.
+
+Settings are stored with `chrome.storage.sync`.
 
 ## Configuration
 
-The default local endpoints are in `src/hipApiClient.js`:
+Default local endpoints:
 
 ```js
 apiBaseUrl: "https://localhost:7257"
 webBaseUrl: "https://localhost:7053"
 ```
 
-Update those values if your local launch profile uses different ports.
+Update these in settings if local launch profiles use different ports.
+
+## Privacy Promises
+
+The extension must not send:
+
+- page body text
+- form values
+- passwords
+- usernames
+- email text
+- message bodies
+- private chat content
+
+The extension may send:
+
+- current domain
+- target link domain
+- URL hash
+- risk reason
+- scan mode
+- source client
+
+Login detection only checks whether a form and password field exist and whether the form action points to a different domain. It does not read field values.
+
+Social and webmail detection only scans `href` URLs. It does not parse message text.
+
+Download detection only flags download-like links by URL extension. It does not download or inspect files.
 
 ## Manual Test Steps
 
-1. Start the HIP API:
-   ```powershell
-   dotnet run --project src/HIP.ApiService/HIP.ApiService.csproj --launch-profile https
-   ```
-2. Start the HIP Web app:
+1. Start the HIP API/Web host:
    ```powershell
    dotnet run --project src/HIP.Web/HIP.Web.csproj --launch-profile https
    ```
-3. Open Chrome or Edge.
-4. Go to `chrome://extensions` or `edge://extensions`.
-5. Enable developer mode.
-6. Select **Load unpacked**.
-7. Choose `clients/browser-extension`.
-8. Visit a normal test page with external links.
-9. Open the HIP extension popup and confirm the website score appears.
+2. Open Chrome or Edge.
+3. Go to `chrome://extensions` or `edge://extensions`.
+4. Enable developer mode.
+5. Select **Load unpacked**.
+6. Choose `clients/browser-extension`.
+7. Visit a normal test page.
+8. Open the HIP popup and confirm the website score appears.
+9. Confirm the link scan count appears.
 10. Add or visit links containing test domains such as `danger-example.com`, `new-short-example.com`, or `verified-example.com`.
-11. Confirm risky link badges appear beside risky links.
-12. Click a risky link and confirm routing to `/safety?url=...`.
-
-## Behavior
-
-- Sends only domains to the HIP lookup API during page scanning.
-- Does not send page body text, form contents, private messages, or full chat logs.
-- Sends the original URL only when constructing the safety page route.
-- If HIP is unavailable, the popup shows `HIP unavailable`, page behavior is not blocked, and links continue to work.
+11. Confirm risky link badges appear.
+12. Confirm a warning banner appears for a high-risk site.
+13. Click a risky link and confirm safety page routing.
+14. Open settings, change scan mode, save, close, reopen, and confirm settings reload.
+15. Add a download-like link such as `.exe`, `.zip`, `.msi`, `.dmg`, `.pdf`, `.docx`, or `.scr` and confirm it is flagged as a download risk candidate.
+16. Add a login form with a cross-domain action and confirm a caution indicator appears without entering or collecting values.
+17. Stop HIP locally and confirm the popup shows HIP unavailable while links continue to work.
 
 ## Known Limitations
 
-- No packaged image icons yet; SVG placeholders are used.
-- No download scanning, form scanning, webmail parsing, social post parsing, or AI analysis.
-- Link lookups are per target domain, not per full URL.
-- Safety page risk details are query-string based until a richer backend risk lookup exists.
-- Local HTTPS development certificates may need to be trusted before the extension can call HIP.
+- No full download scanning.
+- No file content inspection.
+- No AI page reading.
+- No webmail message parsing.
+- No form data collection.
+- Link lookups are still domain-based.
+- Risk reports use a placeholder HIP signature.
+- Local HTTPS development certificates may need to be trusted before extension API calls work.
