@@ -13,7 +13,7 @@ export class HipApiClient {
       throw new Error("Domain is required.");
     }
 
-    const url = `${this.config.apiBaseUrl}/api/public/lookup/domain/${encodeURIComponent(domain)}`;
+    const url = `${this.config.apiBaseUrl}/api/v1/public/lookup/domain/${encodeURIComponent(domain)}`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -23,6 +23,24 @@ export class HipApiClient {
 
     if (!response.ok) {
       throw new Error(`HIP lookup failed with status ${response.status}.`);
+    }
+
+    return response.json();
+  }
+
+  async reportRiskFinding(report) {
+    const url = `${this.config.apiBaseUrl}/api/v1/public/risk-findings`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(report)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HIP risk finding report failed with status ${response.status}.`);
     }
 
     return response.json();
