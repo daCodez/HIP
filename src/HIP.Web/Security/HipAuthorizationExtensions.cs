@@ -29,6 +29,8 @@ public static class HipAuthorizationExtensions
                 policy.RequireRole(AdminRoles.Owner, AdminRoles.Admin, AdminRoles.Support));
             options.AddPolicy(AdminPolicies.CanViewAdminDashboard, policy =>
                 policy.RequireRole(AdminRoles.Owner, AdminRoles.Admin, AdminRoles.Moderator, AdminRoles.Support, AdminRoles.ReadOnly));
+            options.AddPolicy(ConsumerPolicies.CanUseConsumerPortal, policy =>
+                policy.RequireAuthenticatedUser());
         });
 
         return services;

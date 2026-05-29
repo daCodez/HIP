@@ -1,0 +1,48 @@
+@page "/consumer"
+@attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
+@rendermode InteractiveServer
+
+<PageTitle>HIP Consumer Portal</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">HIP Consumer</p>
+            <h1>Consumer Portal</h1>
+            <p>Optional control center for protection status, scan history, reports, appeals, settings, and devices.</p>
+        </div>
+    </section>
+
+    <section class="dashboard-grid">
+        <article class="score-card">
+            <span>Protection</span>
+            <strong>Active</strong>
+            <h3>Status</h3>
+            <p>HIP protection is available through connected clients.</p>
+        </article>
+        <article class="score-card">
+            <span>License</span>
+            <strong>Dev</strong>
+            <h3>Device Status</h3>
+            <p>Second Life HUD can still work without web login.</p>
+        </article>
+        <article class="score-card">
+            <span>Future</span>
+            <strong>Later</strong>
+            <h3>Trusted Identities</h3>
+            <p>Trusted identity controls will be added after identity accounts are mature.</p>
+        </article>
+    </section>
+
+    <section class="lookup-result">
+        <h2>Portal Sections</h2>
+        <div class="quick-link-grid">
+            <a href="/consumer/scans">Scan History</a>
+            <a href="/consumer/reports">Report History</a>
+            <a href="/consumer/appeals">Appeals</a>
+            <a href="/consumer/settings">Alert Settings</a>
+            <a href="/consumer/devices">Devices</a>
+            <a href="/lookup">Public Lookup</a>
+        </div>
+    </section>
+</main>

@@ -1,0 +1,30 @@
+@page "/consumer/devices"
+@attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
+@rendermode InteractiveServer
+
+<PageTitle>HIP Consumer Devices</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">Consumer Portal</p>
+            <h1>Devices</h1>
+            <p>Device/license status foundation for browser plugin and Second Life HUD clients.</p>
+        </div>
+    </section>
+
+    <section class="dashboard-grid">
+        <article class="score-card">
+            <span>Second Life HUD</span>
+            <strong>Ready</strong>
+            <h3>Login Optional</h3>
+            <p>The HUD can activate with setup code/license flow and does not require web login.</p>
+        </article>
+        <article class="score-card">
+            <span>Browser Plugin</span>
+            <strong>MVP</strong>
+            <h3>Connected Client</h3>
+            <p>Browser plugin can use HIP APIs and privacy-safe reporting.</p>
+        </article>
+    </section>
+</main>

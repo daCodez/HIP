@@ -1,0 +1,28 @@
+@page "/consumer/scans"
+@attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
+@rendermode InteractiveServer
+@inject IConsumerPortalService ConsumerPortalService
+
+<PageTitle>HIP Consumer Scans</PageTitle>
+
+<ConsumerTable Title="Scan History" Description="Privacy-safe scan summaries only. No private chat logs or message bodies are shown.">
+    @foreach (var item in _items)
+    {
+        <tr>
+            <td>@item.DateUtc.UtcDateTime.ToString("u")</td>
+            <td>@item.Domain</td>
+            <td>@item.RiskLevel</td>
+            <td>@item.ReasonSummary</td>
+            <td>@item.ActionTaken</td>
+        </tr>
+    }
+</ConsumerTable>
+
+@code {
+    private IReadOnlyCollection<ConsumerScanHistoryItem> _items = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _items = await ConsumerPortalService.GetScansAsync("development-consumer", CancellationToken.None);
+    }
+}

@@ -1,4 +1,5 @@
 using FluentValidation;
+using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
 using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
@@ -38,6 +39,7 @@ public static class DependencyInjection
         services.AddSingleton<IRuleRollbackService, RuleRollbackService>();
         services.AddSingleton<IRuleCandidateGenerator, RuleCandidateGenerator>();
         services.AddSingleton<ISelfHealingAnalysisService, SelfHealingAnalysisService>();
+        services.AddScoped<IConsumerPortalService, ConsumerPortalService>();
         services.AddScoped<IAdminDashboardService, AdminDashboardService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddScoped<IReviewQueueService, ReviewQueueService>();

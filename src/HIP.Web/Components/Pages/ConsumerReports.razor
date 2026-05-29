@@ -1,0 +1,28 @@
+@page "/consumer/reports"
+@attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
+@rendermode InteractiveServer
+@inject IConsumerPortalService ConsumerPortalService
+
+<PageTitle>HIP Consumer Reports</PageTitle>
+
+<ConsumerTable Title="Report History" Description="Reports submitted by the current development consumer/device. Evidence remains summarized.">
+    @foreach (var item in _items)
+    {
+        <tr>
+            <td>@item.DateUtc.UtcDateTime.ToString("u")</td>
+            <td>@item.Domain</td>
+            <td>@item.RiskLevel</td>
+            <td>@item.Status</td>
+            <td>@item.ReasonSummary</td>
+        </tr>
+    }
+</ConsumerTable>
+
+@code {
+    private IReadOnlyCollection<ConsumerReportHistoryItem> _items = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _items = await ConsumerPortalService.GetReportsAsync("development-consumer", CancellationToken.None);
+    }
+}

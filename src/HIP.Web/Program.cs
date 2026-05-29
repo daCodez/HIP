@@ -1,4 +1,5 @@
 using HIP.Application;
+using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
 using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
@@ -70,6 +71,7 @@ MapAppealApis(app.MapGroup($"{ApiRoutes.Admin}/appeals").RequireAuthorization(Ad
 MapReputationOverrideApis(app.MapGroup($"{ApiRoutes.Admin}/reputation-overrides").RequireAuthorization(AdminPolicies.CanApproveOverrides));
 MapReputationApis(app.MapGroup($"{ApiRoutes.Admin}/reputation").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapDashboardApis(app.MapGroup($"{ApiRoutes.Admin}/dashboard").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
+MapConsumerApis(app.MapGroup(ApiRoutes.Consumer).RequireAuthorization(ConsumerPolicies.CanUseConsumerPortal));
 MapIdentityApis(app.MapGroup(ApiRoutes.Identity));
 app.MapGet($"{ApiRoutes.Admin}/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()))
     .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
@@ -160,6 +162,52 @@ static void MapDashboardApis(RouteGroupBuilder dashboardApi)
         CancellationToken cancellationToken) =>
         Results.Ok(await dashboardService.GetSummaryAsync(cancellationToken)));
 }
+
+static void MapConsumerApis(RouteGroupBuilder consumerApi)
+{
+    consumerApi.MapGet("/status", async (
+        HttpContext httpContext,
+        IConsumerPortalService consumerPortalService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await consumerPortalService.GetStatusAsync(ConsumerId(httpContext), cancellationToken)));
+
+    consumerApi.MapGet("/scans", async (
+        HttpContext httpContext,
+        IConsumerPortalService consumerPortalService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await consumerPortalService.GetScansAsync(ConsumerId(httpContext), cancellationToken)));
+
+    consumerApi.MapGet("/reports", async (
+        HttpContext httpContext,
+        IConsumerPortalService consumerPortalService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await consumerPortalService.GetReportsAsync(ConsumerId(httpContext), cancellationToken)));
+
+    consumerApi.MapGet("/appeals", async (
+        HttpContext httpContext,
+        IConsumerPortalService consumerPortalService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await consumerPortalService.GetAppealsAsync(ConsumerId(httpContext), cancellationToken)));
+
+    consumerApi.MapGet("/settings", (
+        HttpContext httpContext,
+        IConsumerPortalService consumerPortalService) =>
+        Results.Ok(consumerPortalService.GetSettings(ConsumerId(httpContext))));
+
+    consumerApi.MapPost("/settings", (
+        HttpContext httpContext,
+        ConsumerSettings settings,
+        IConsumerPortalService consumerPortalService) =>
+    {
+        var result = consumerPortalService.SaveSettings(ConsumerId(httpContext), settings);
+        return result.Saved ? Results.Ok(result) : Results.BadRequest(result);
+    });
+}
+
+static string ConsumerId(HttpContext httpContext) =>
+    httpContext.User.FindFirst("hip_consumer_id")?.Value
+    ?? httpContext.User.Identity?.Name
+    ?? "development-consumer";
 
 static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
 {

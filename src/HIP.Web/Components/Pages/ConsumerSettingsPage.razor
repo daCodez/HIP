@@ -1,0 +1,69 @@
+@page "/consumer/settings"
+@attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
+@rendermode InteractiveServer
+@inject IConsumerPortalService ConsumerPortalService
+
+<PageTitle>HIP Consumer Settings</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">Consumer Portal</p>
+            <h1>Alert Settings</h1>
+            <p>Settings are development MVP settings for connected clients. They do not collect message contents.</p>
+        </div>
+    </section>
+
+    <section class="rule-builder-panel">
+        <label><input type="checkbox" @bind="_enablePopupAlerts" /> Enable popup alerts</label>
+        <label><input type="checkbox" @bind="_enablePrivateWarnings" /> Enable private warnings</label>
+        <label><input type="checkbox" @bind="_enableSafetyPageRouting" /> Enable safety page routing</label>
+        <label>
+            Scan mode
+            <select @bind="_scanMode">
+                <option>Quiet</option>
+                <option>Normal</option>
+                <option>Strict</option>
+                <option>Paranoid</option>
+            </select>
+        </label>
+        <button class="primary-button" @onclick="Save">Save Settings</button>
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <p class="admin-message">@_message</p>
+        }
+    </section>
+</main>
+
+@code {
+    private bool _enablePopupAlerts = true;
+    private bool _enablePrivateWarnings = true;
+    private bool _enableSafetyPageRouting = true;
+    private string _scanMode = "Normal";
+    private string _message = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        Apply(ConsumerPortalService.GetSettings("development-consumer"));
+    }
+
+    private void Save()
+    {
+        var result = ConsumerPortalService.SaveSettings(
+            "development-consumer",
+            new ConsumerSettings(_enablePopupAlerts, _enablePrivateWarnings, _enableSafetyPageRouting, _scanMode));
+        _message = result.Message;
+        if (result.Settings is not null)
+        {
+            Apply(result.Settings);
+        }
+    }
+
+    private void Apply(ConsumerSettings settings)
+    {
+        _enablePopupAlerts = settings.EnablePopupAlerts;
+        _enablePrivateWarnings = settings.EnablePrivateWarnings;
+        _enableSafetyPageRouting = settings.EnableSafetyPageRouting;
+        _scanMode = settings.ScanMode;
+    }
+}
