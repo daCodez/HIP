@@ -2,7 +2,7 @@
 
 HIP must not blindly punish users, domains, keys, organizations, or content patterns. The review foundation gives admins a privacy-safe way to inspect serious decisions, process appeals, and approve risky reputation changes.
 
-This is a dev/admin MVP. It uses in-memory storage and does not include production authentication. Production deployment must add authentication, authorization, durable storage, and tamper-resistant audit retention.
+This is a dev/admin MVP. Admin routes require development admin authorization. Production deployment must replace dev auth with production authentication, durable storage, and tamper-resistant audit retention.
 
 ## Review Queue
 
@@ -116,7 +116,7 @@ Audit logs:
 ## Known Limitations
 
 - In-memory only.
-- No production authentication or role enforcement.
+- Development-only role enforcement; no production authentication yet.
 - No durable audit retention.
 - No full approval workflow for generated rule promotion yet.
 - No appeal notification system.

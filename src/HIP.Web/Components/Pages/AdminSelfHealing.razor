@@ -1,4 +1,5 @@
 @page "/admin/self-healing"
+@attribute [Authorize(Policy = AdminPolicies.CanManageRules)]
 @rendermode InteractiveServer
 @inject ISelfHealingAnalysisService SelfHealingAnalysisService
 

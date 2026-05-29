@@ -2,7 +2,7 @@
 
 The Admin Rule Builder is available at `/admin/rules`.
 
-This is a development-only MVP. Authentication, durable storage, full approval workflows, and audit logging are future work.
+This is a development-only MVP. Admin routes now require development admin authorization. Durable storage integration, full approval workflows, and production authentication are future work.
 
 ## How It Works
 

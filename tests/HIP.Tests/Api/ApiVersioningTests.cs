@@ -66,6 +66,7 @@ public sealed class ApiVersioningTests
     {
         await using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Admin");
 
         var response = await client.PostAsJsonAsync("/api/v1/admin/rules/simulate", new
         {

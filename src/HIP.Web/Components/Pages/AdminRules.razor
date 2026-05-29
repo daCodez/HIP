@@ -1,4 +1,5 @@
 @page "/admin/rules"
+@attribute [Authorize(Policy = AdminPolicies.CanManageRules)]
 @rendermode InteractiveServer
 @inject IRuleJsonService RuleJsonService
 @inject IAdminRuleService AdminRuleService
@@ -9,7 +10,7 @@
     <section class="admin-rule-header">
         <p class="eyebrow">Dev-only MVP</p>
         <h1>Admin Rule Builder</h1>
-        <p>Create simple HIP rules, inspect live JSON, run simulation, and save rules in memory. Authentication and durable storage are future work.</p>
+        <p>Create simple HIP rules, inspect live JSON, run simulation, and save rules in memory. Production authentication and durable storage integration are future work.</p>
     </section>
 
     <section class="rule-builder-grid">

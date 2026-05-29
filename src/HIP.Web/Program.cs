@@ -18,12 +18,15 @@ using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
 using HIP.Web;
 using HIP.Web.Components;
+using HIP.Web.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.Services.AddHipApplication();
 builder.Services.AddHipInfrastructure(builder.Configuration);
+builder.Services.AddHipAdminAuthorization();
+builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("PublicHipReadOnly", policy =>
@@ -47,22 +50,27 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/api"),
+    branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
 app.UseHttpsRedirection();
 app.UseCors("PublicHipReadOnly");
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.UseAntiforgery();
 
 MapPublicApis(app.MapGroup(ApiRoutes.Public));
 MapSecondLifeHudApis(app.MapGroup(ApiRoutes.SecondLifeHud));
-MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules"));
-MapSelfHealingApis(app.MapGroup($"{ApiRoutes.Admin}/self-healing"));
-MapReviewApis(app.MapGroup($"{ApiRoutes.Admin}/review"));
-MapAppealApis(app.MapGroup($"{ApiRoutes.Admin}/appeals"));
-MapReputationOverrideApis(app.MapGroup($"{ApiRoutes.Admin}/reputation-overrides"));
-MapReputationApis(app.MapGroup($"{ApiRoutes.Admin}/reputation"));
+MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules").RequireAuthorization(AdminPolicies.CanManageRules));
+MapSelfHealingApis(app.MapGroup($"{ApiRoutes.Admin}/self-healing").RequireAuthorization(AdminPolicies.CanManageRules));
+MapReviewApis(app.MapGroup($"{ApiRoutes.Admin}/review").RequireAuthorization(AdminPolicies.CanReviewReports));
+MapAppealApis(app.MapGroup($"{ApiRoutes.Admin}/appeals").RequireAuthorization(AdminPolicies.CanReviewReports));
+MapReputationOverrideApis(app.MapGroup($"{ApiRoutes.Admin}/reputation-overrides").RequireAuthorization(AdminPolicies.CanApproveOverrides));
+MapReputationApis(app.MapGroup($"{ApiRoutes.Admin}/reputation").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapIdentityApis(app.MapGroup(ApiRoutes.Identity));
-app.MapGet($"{ApiRoutes.Admin}/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()));
+app.MapGet($"{ApiRoutes.Admin}/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()))
+    .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
