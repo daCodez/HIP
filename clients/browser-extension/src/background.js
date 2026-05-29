@@ -23,6 +23,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     });
   }
 
+  if (message?.type === "HIP_REPORT_RISK_FINDING") {
+    client.reportRiskFinding(message.report)
+      .then(result => sendResponse({ ok: true, result }))
+      .catch(error => {
+        console.warn("HIP risk finding report unavailable.", error);
+        sendResponse({ ok: false, error: "HIP reporting unavailable" });
+      });
+
+    return true;
+  }
+
   return false;
 });
 

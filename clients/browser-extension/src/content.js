@@ -2,6 +2,7 @@
   const riskyStatuses = new Set(["HighRisk", "Dangerous", "Critical"]);
   const attentionStatuses = new Set(["Unknown", "Caution", "HighRisk", "Dangerous", "Critical"]);
   const ignoredProtocols = new Set(["javascript:", "mailto:", "tel:", "data:", "blob:"]);
+  const reportedDomains = new Set();
 
   const currentDomain = normalizeHost(window.location.hostname);
   if (!currentDomain) {
@@ -64,7 +65,49 @@
       anchor.addEventListener("click", event =>
         window.HipSafetyPageRouter.routeClick(event, anchor, lookup, currentDomain), true);
       anchor.dataset.hipSafetyBound = "true";
+      reportRiskFinding(anchor, lookup).catch(error => console.warn("HIP reporting failed safely.", error));
     }
+  }
+
+  async function reportRiskFinding(anchor, lookup) {
+    if (reportedDomains.has(lookup.domain)) {
+      return;
+    }
+
+    reportedDomains.add(lookup.domain);
+    const targetUrl = new URL(anchor.href, window.location.href);
+    const report = {
+      reportId: "",
+      sourceClient: "BrowserPlugin",
+      platform: "Web",
+      targetType: "Url",
+      domain: lookup.domain,
+      urlHash: await sha256(targetUrl.href),
+      originalUrl: null,
+      senderHash: null,
+      riskLevel: lookup.status,
+      reason: lookup.explanations?.[0] || lookup.knownRisks?.[0] || "HIP detected a risky link on the current page.",
+      detectedAtUtc: new Date().toISOString(),
+      reporterTrustLevel: "Medium",
+      privacySafeEvidence: {
+        evidenceType: "browser-link-risk",
+        summary: "Browser plugin reported a risky link domain without page body text.",
+        facts: {
+          sourceDomain: currentDomain,
+          targetDomain: lookup.domain
+        },
+        containsPrivateContent: false
+      },
+      hipSignature: "browser-plugin-signature-placeholder"
+    };
+
+    await chrome.runtime.sendMessage({ type: "HIP_REPORT_RISK_FINDING", report });
+  }
+
+  async function sha256(value) {
+    const encoded = new TextEncoder().encode(value);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
+    return `sha256:${Array.from(new Uint8Array(hashBuffer)).map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
   }
 
   async function lookupDomain(domain) {
