@@ -1,10 +1,12 @@
 using HIP.Application;
 using HIP.Application.PublicLookup;
+using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.SelfHealing;
 using HIP.Application.Simulation;
 using HIP.Domain.Review;
+using HIP.Domain.Reputation;
 using HIP.Domain.Rules;
 using HIP.Domain.SelfHealing;
 using HIP.Web.Components;
@@ -81,6 +83,21 @@ publicApi.MapPost("/appeals", (
         return Results.Ok(appealService.Submit(appeal));
     }
     catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+publicApi.MapPost("/feedback", async (
+    ReputationFeedbackRequest feedback,
+    IReputationService reputationService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await reputationService.SubmitFeedbackAsync(feedback, cancellationToken));
+    }
+    catch (ArgumentException ex)
     {
         return Results.BadRequest(new { error = ex.Message });
     }
@@ -208,6 +225,55 @@ overrideApi.MapPost("/{id}/reject", (string id, AdminDecisionRequest request, IR
     Results.Ok(reputationOverrideService.Reject(id, request.ActorId, request.Reason)));
 
 app.MapGet("/api/admin/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()));
+
+var reputationApi = app.MapGroup("/api/admin/reputation");
+
+reputationApi.MapGet("/{targetType}/{targetId}", async (
+    ReputationSubjectType targetType,
+    string targetId,
+    IReputationService reputationService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await reputationService.GetProfileAsync(targetType, targetId, cancellationToken));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+reputationApi.MapPost("/events", async (
+    ReputationEvent reputationEvent,
+    IReputationService reputationService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await reputationService.ApplyEventAsync(reputationEvent, cancellationToken));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+reputationApi.MapPost("/{targetType}/{targetId}/recalculate", async (
+    ReputationSubjectType targetType,
+    string targetId,
+    IReputationService reputationService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await reputationService.RecalculateAsync(targetType, targetId, cancellationToken));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

@@ -6,5 +6,7 @@ public enum ReputationSubjectType
     Domain,
     DeviceKey,
     Organization,
-    Content
+    ContentPattern,
+    Website,
+    Url
 }

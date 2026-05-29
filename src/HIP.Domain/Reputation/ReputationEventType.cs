@@ -4,7 +4,9 @@ public enum ReputationEventType
 {
     PositiveReport,
     AccidentalIssue,
+    SuspiciousReport,
     RepeatedAbuse,
     ConfirmedMaliciousBehavior,
-    FalsePositiveCorrection
+    FalsePositiveCorrection,
+    ManualCorrection
 }

@@ -1,13 +1,15 @@
-using HIP.Domain.Scoring;
+using HIP.Domain.Risk;
 
 namespace HIP.Domain.Reputation;
 
 public sealed record ReputationProfile(
-    ReputationSubjectType SubjectType,
-    string SubjectId,
-    ScoreValue Score,
-    IReadOnlyCollection<ReputationEvent> Events)
-{
-    public bool HasPermanentRestriction =>
-        Events.Any(e => e.EventType is ReputationEventType.ConfirmedMaliciousBehavior or ReputationEventType.RepeatedAbuse);
-}
+    string ProfileId,
+    ReputationSubjectType TargetType,
+    string TargetId,
+    int CurrentScore,
+    RiskStatus Status,
+    int EventCount,
+    int ConfirmedAbuseCount,
+    int AccidentalIssueCount,
+    DateTimeOffset LastUpdatedUtc,
+    IReadOnlyCollection<string> Explanations);

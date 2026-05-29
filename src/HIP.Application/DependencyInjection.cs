@@ -1,5 +1,6 @@
 using FluentValidation;
 using HIP.Application.PublicLookup;
+using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.Safety;
@@ -37,6 +38,9 @@ public static class DependencyInjection
         services.AddSingleton<IReviewQueueService, ReviewQueueService>();
         services.AddSingleton<IAppealService, AppealService>();
         services.AddSingleton<IReputationOverrideService, ReputationOverrideService>();
+        services.AddSingleton<IReputationEventRepository, InMemoryReputationEventRepository>();
+        services.AddSingleton<IReputationProfileRepository, InMemoryReputationProfileRepository>();
+        services.AddSingleton<IReputationService, ReputationService>();
 
         return services;
     }
