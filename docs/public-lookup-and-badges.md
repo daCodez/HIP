@@ -9,8 +9,11 @@ Public lookup lets anyone check public trust data for a domain without exposing 
 Routes:
 
 - `/lookup`
+- `/lookup/{domain}`
 - `/lookup/domain/{domain}`
+- `/api/v1/public/lookup/{domain}`
 - `/api/v1/public/lookup/domain/{domain}`
+- `POST /api/v1/public/lookup`
 
 Public lookup can show:
 
@@ -21,14 +24,48 @@ Public lookup can show:
 - signed identity status
 - known public risks
 - plain-English reasons
+- recommended action
 - last checked date
 - separate score breakdown
+- signed identity placeholders for future DNS TXT and `.well-known/hip.json` verification
 
 Public lookup must not expose private chat logs, private reports, user identities, private sender names, private scan history, or raw user-submitted evidence.
+
+## Website Scoring MVP
+
+HIP website scoring currently uses MVP/demo logic until it is connected to real reputation, rules, AI-assisted analysis, and threat intelligence.
+
+Current score bands:
+
+- `0-20` = Dangerous
+- `21-40` = High Risk
+- `41-60` = Unknown / Caution
+- `61-80` = Probably Safe
+- `81-100` = Trusted
+
+Current recommended actions:
+
+- `Allow`
+- `ShowCaution`
+- `ShowWarning`
+- `RouteToSafetyPage`
+- `Block`
+
+MVP placeholder signals include:
+
+- malformed or missing domains are rejected
+- suspicious test domains such as `danger-example.com` are treated as dangerous
+- shortened domains are treated with caution
+- normal unknown domains return a cautious/probably-safe MVP result
+- `verified` test domains return placeholder signed identity fields
+
+HIP must not claim real-world safety until live reputation, rule simulation, verified identity data, and threat feeds are connected.
 
 ## Verified Does Not Mean Safe
 
 A verified identity does not automatically mean safe. It means HIP knows who signed or owns the domain or content. The trust score still matters.
+
+Future signed website support is expected to use DNS TXT and `.well-known/hip.json` verification. The public lookup response already includes placeholders for signed identity status, verification method, verified organization, and signature status.
 
 ## Live Trust Badges
 

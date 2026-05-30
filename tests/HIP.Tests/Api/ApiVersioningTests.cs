@@ -24,13 +24,42 @@ public sealed class ApiVersioningTests
         await using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/public/lookup/domain/example.com");
+        var response = await client.GetAsync("/api/v1/public/lookup/example.com");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         Assert.That(json.RootElement.GetProperty("domain").GetString(), Is.EqualTo("example.com"));
+        Assert.That(json.RootElement.GetProperty("score").GetInt32(), Is.InRange(0, 100));
         Assert.That(json.RootElement.TryGetProperty("finalHipScore", out _), Is.True);
         Assert.That(json.RootElement.TryGetProperty("status", out _), Is.True);
+        Assert.That(json.RootElement.GetProperty("status").GetString(), Is.Not.Empty);
+        Assert.That(json.RootElement.GetProperty("reasons").GetArrayLength(), Is.GreaterThan(0));
+        Assert.That(json.RootElement.GetProperty("recommendedAction").GetString(), Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task Public_lookup_post_v1_route_works()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/public/lookup", new { Domain = "example.com" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.That(json.RootElement.GetProperty("domain").GetString(), Is.EqualTo("example.com"));
+        Assert.That(json.RootElement.GetProperty("verificationStatus").GetString(), Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task Public_lookup_rejects_invalid_domain()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/public/lookup/https:%2F%2Fexample.com%2Fpath");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
     [Test]

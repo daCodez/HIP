@@ -1,4 +1,5 @@
 @page "/lookup/domain/{Domain}"
+@page "/lookup/{Domain}"
 @inject IPublicDomainLookupService LookupService
 
 <PageTitle>HIP Domain Lookup</PageTitle>
@@ -34,6 +35,9 @@
                 <p>Status: @_lookup.Status</p>
                 <p>Verified: @_lookup.VerificationStatus</p>
                 <p>Signed Identity: @_lookup.SignedIdentityStatus</p>
+                <p>Signature Status: @_lookup.SignatureStatus</p>
+                <p>Verification Method: @_lookup.VerificationMethod</p>
+                <p>Recommended Action: @_lookup.RecommendedAction</p>
                 <p>Last checked UTC: @_lookup.LastCheckedUtc.ToString("u")</p>
             </div>
 
@@ -69,11 +73,18 @@
             <section class="lookup-section">
                 <h2>Explanation</h2>
                 <ul>
-                    @foreach (var explanation in _lookup.Explanations.Take(6))
+                    @foreach (var explanation in _lookup.Reasons.Take(6))
                     {
                         <li>@explanation</li>
                     }
                 </ul>
+            </section>
+
+            <section class="lookup-section">
+                <h2>Signed Identity Foundation</h2>
+                <p>Verification status: @_lookup.IdentityVerificationStatus</p>
+                <p>Verified organization: @(_lookup.VerifiedOrganization ?? "Not configured")</p>
+                <p>DNS TXT and .well-known/hip.json verification are planned for signed website support.</p>
             </section>
 
             <section class="lookup-section">

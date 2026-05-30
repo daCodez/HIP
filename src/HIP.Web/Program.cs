@@ -88,6 +88,21 @@ app.Run();
 
 static void MapPublicApis(RouteGroupBuilder publicApi)
 {
+    publicApi.MapGet("/lookup/{domain}", async (
+        string domain,
+        IPublicDomainLookupService lookupService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(PublicLookupApiResponse.From(await lookupService.LookupDomainAsync(domain, cancellationToken)));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
     publicApi.MapGet("/lookup/domain/{domain}", async (
         string domain,
         IPublicDomainLookupService lookupService,
@@ -95,7 +110,22 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
     {
         try
         {
-            return Results.Ok(await lookupService.LookupDomainAsync(domain, cancellationToken));
+            return Results.Ok(PublicLookupApiResponse.From(await lookupService.LookupDomainAsync(domain, cancellationToken)));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    publicApi.MapPost("/lookup", async (
+        PublicLookupRequest request,
+        IPublicDomainLookupService lookupService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(PublicLookupApiResponse.From(await lookupService.LookupDomainAsync(request.Domain, cancellationToken)));
         }
         catch (ArgumentException ex)
         {
@@ -527,5 +557,62 @@ public sealed record AdminDecisionRequest(string ActorId, string Reason);
 public sealed record AdminAssignRequest(string ActorId, string AssignedTo);
 
 public sealed record DomainVerificationApiRequest(string Domain, VerificationMethod Method, string? Token);
+
+public sealed record PublicLookupRequest(string Domain);
+
+public sealed record PublicLookupApiResponse(
+    string Domain,
+    int Score,
+    int FinalHipScore,
+    string Status,
+    string VerificationStatus,
+    IReadOnlyCollection<string> KnownRisks,
+    IReadOnlyCollection<string> Reasons,
+    IReadOnlyCollection<string> Explanations,
+    string RecommendedAction,
+    DateTimeOffset LastCheckedUtc,
+    string SignedIdentityStatus,
+    string VerificationMethod,
+    string? VerifiedOrganization,
+    string SignatureStatus,
+    string IdentityVerificationStatus,
+    bool? SignatureValid,
+    bool PublicBadgeEligible,
+    string PublicLookupUrl,
+    IReadOnlyCollection<ScoreBreakdownApiItem> ScoreBreakdown)
+{
+    public static PublicLookupApiResponse From(PublicDomainLookupResponse lookup) =>
+        new(
+            lookup.Domain,
+            lookup.Score,
+            lookup.FinalHipScore,
+            lookup.Status.ToString(),
+            lookup.VerificationStatus,
+            lookup.KnownRisks,
+            lookup.Reasons,
+            lookup.Explanations,
+            lookup.RecommendedAction,
+            lookup.LastCheckedUtc,
+            lookup.SignedIdentityStatus,
+            lookup.VerificationMethod,
+            lookup.VerifiedOrganization,
+            lookup.SignatureStatus,
+            lookup.IdentityVerificationStatus,
+            lookup.SignatureValid,
+            lookup.PublicBadgeEligible,
+            lookup.PublicLookupUrl,
+            lookup.ScoreBreakdown.Select(ScoreBreakdownApiItem.From).ToArray());
+}
+
+public sealed record ScoreBreakdownApiItem(
+    string Category,
+    int Score,
+    string Status,
+    string Explanation,
+    IReadOnlyCollection<string> Reasons)
+{
+    public static ScoreBreakdownApiItem From(ScoreBreakdownItem item) =>
+        new(item.Category, item.Score, item.Status.ToString(), item.Explanation, item.Reasons);
+}
 
 public partial class Program;
