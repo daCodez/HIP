@@ -127,7 +127,8 @@ public sealed class RiskFindingIngestionTests
             new RiskFindingReportValidator(),
             new InMemoryRiskFindingReportRepository(),
             reviewQueueService ?? new ReviewQueueService(new ReviewItemValidator(), new AuditLogService()),
-            new PatternDetectionService());
+            new PatternDetectionService(),
+            new Sha256PrivacyHashingService());
 
     private static RiskFindingReport Report(RiskStatus riskStatus = RiskStatus.HighRisk) =>
         new(

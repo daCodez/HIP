@@ -13,6 +13,7 @@ using HIP.Application.Scoring;
 using HIP.Application.SecondLife;
 using HIP.Application.SelfHealing;
 using HIP.Application.Simulation;
+using HIP.Domain.Reporting;
 using HIP.Domain.Review;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +31,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<ReviewItem>, ReviewItemValidator>();
         services.AddSingleton<IValidator<AppealRequest>, AppealRequestValidator>();
         services.AddSingleton<IValidator<ReputationOverrideRequest>, ReputationOverrideRequestValidator>();
+        services.AddSingleton<IValidator<PrivacySafeReport>, PrivacySafeReportValidator>();
         services.AddSingleton<IAiRiskAnalysisService, NoOpAiRiskAnalysisService>();
         services.AddSingleton<IRuleMatchingEngine, RuleMatchingEngine>();
         services.AddSingleton<IRuleActionApplier, RuleActionApplier>();
@@ -57,6 +59,9 @@ public static class DependencyInjection
         services.AddScoped<IReputationService, ReputationService>();
         services.AddScoped<IRiskFindingReportRepository, InMemoryRiskFindingReportRepository>();
         services.AddScoped<IRiskFindingIngestionService, RiskFindingIngestionService>();
+        services.AddSingleton<IPrivacyHashingService, Sha256PrivacyHashingService>();
+        services.AddSingleton<IReportRetentionPolicyService, ReportRetentionPolicyService>();
+        services.AddSingleton<IPrivacySafeReportService, PrivacySafeReportService>();
         services.AddSingleton<IHipCryptoProvider, DevelopmentHipCryptoProvider>();
         services.AddScoped<IHipIdentityRepository, InMemoryHipIdentityRepository>();
         services.AddScoped<IHipIdentityService, HipIdentityService>();

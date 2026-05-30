@@ -2,9 +2,45 @@
 
 HIP clients can report suspicious findings without sending full private chats, private page content, form contents, or personal data.
 
-The primary ingestion route is:
+The primary MVP report routes are:
 
-`POST /api/v1/public/risk-findings`
+- `POST /api/v1/reports`
+- `POST /api/v1/public/risk-findings`
+- `GET /api/v1/consumer/reports`
+- `GET /api/v1/admin/reports`
+
+`/api/v1/reports` is the general privacy-safe reporting foundation. `/api/v1/public/risk-findings` remains the client-focused risk finding path used by the browser plugin and SL HUD foundations.
+
+## Report Types
+
+Supported report types:
+
+- RiskyUrl
+- SuspiciousSender
+- FalsePositive
+- ReportAsSafe
+- ReportAsDangerous
+- SuspiciousDomain
+- SuspiciousContentPattern
+
+Supported report statuses:
+
+- Submitted
+- InReview
+- Confirmed
+- Rejected
+- NeedsMoreInfo
+- Closed
+
+Supported sources:
+
+- BrowserPlugin
+- SecondLifeHud
+- PublicLookup
+- SafetyPage
+- ConsumerPortal
+- AdminPortal
+- ApiClient
 
 ## What HIP Collects
 
@@ -24,6 +60,21 @@ Risk finding reports may include:
 - short privacy-safe evidence summary
 - HIP signature placeholder
 
+General privacy-safe reports may include:
+
+- report type
+- source
+- platform
+- domain
+- risky URL when needed
+- URL hash
+- sender hash when needed
+- device/license hash when needed
+- risk level
+- reason summary
+- timestamp
+- HIP signature placeholder
+
 If an original URL is supplied, it is treated as sensitive and is not returned in the ingestion response.
 
 ## What HIP Must Not Collect By Default
@@ -37,8 +88,32 @@ HIP reports must not require:
 - real user names
 - unrelated user data
 - personal data
+- passwords
+- tokens
+- harmless messages
+- unrelated browsing history
 
 Reports marked as containing private content are rejected by the ingestion service.
+
+## Hashing Behavior
+
+HIP hashes privacy-sensitive identifiers before storage when raw values are supplied:
+
+- full URL when a URL hash is not supplied
+- sender identity when a raw sender identifier is supplied
+- device or license identity when a raw device/license identifier is supplied
+
+The MVP hashing service uses SHA-256 with a `sha256:` prefix. This is for privacy minimization, not authentication.
+
+## Retention Policy
+
+The MVP retention model defines:
+
+- normal risky findings: about 90 days
+- confirmed dangerous patterns: long-term
+- user-linked/private-adjacent data: shortest practical period, currently modeled as 30 days
+
+No cleanup worker is enabled yet.
 
 ## Browser Plugin Reporting
 
@@ -86,5 +161,5 @@ Accepted reports can be converted into privacy-safe suspicious findings for self
 - In-memory report storage only.
 - HIP signatures are placeholders.
 - No rate limiting or reporter identity trust enforcement yet.
-- Original URL retention policy is not implemented yet.
+- Retention policy is modeled but cleanup is not automated yet.
 - No production queue or database persistence yet.

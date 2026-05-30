@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using FluentValidation;
 using HIP.Application.Review;
 using HIP.Application.SelfHealing;
@@ -14,7 +12,8 @@ public sealed class RiskFindingIngestionService(
     IValidator<RiskFindingReport> validator,
     IRiskFindingReportRepository repository,
     IReviewQueueService reviewQueueService,
-    IPatternDetectionService patternDetectionService) : IRiskFindingIngestionService
+    IPatternDetectionService patternDetectionService,
+    IPrivacyHashingService hashingService) : IRiskFindingIngestionService
 {
     public async Task<RiskFindingIngestionResponse> IngestAsync(RiskFindingReport report, CancellationToken cancellationToken)
     {
@@ -30,7 +29,7 @@ public sealed class RiskFindingIngestionService(
         {
             ReportId = string.IsNullOrWhiteSpace(report.ReportId) ? $"risk-report-{Guid.NewGuid():N}" : report.ReportId,
             Domain = normalizedDomain,
-            UrlHash = string.IsNullOrWhiteSpace(report.UrlHash) ? Sha256(report.OriginalUrl!) : report.UrlHash,
+            UrlHash = string.IsNullOrWhiteSpace(report.UrlHash) ? hashingService.Hash(report.OriginalUrl!) : report.UrlHash,
             DetectedAtUtc = report.DetectedAtUtc == default ? DateTimeOffset.UtcNow : report.DetectedAtUtc,
             PrivacySafeEvidence = report.PrivacySafeEvidence with { ContainsPrivateContent = false }
         };
@@ -140,9 +139,4 @@ public sealed class RiskFindingIngestionService(
         return (value ?? string.Empty).Trim().TrimEnd('.').ToLowerInvariant().Replace("www.", string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string Sha256(string value)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
-        return $"sha256:{Convert.ToHexString(bytes).ToLowerInvariant()}";
-    }
 }

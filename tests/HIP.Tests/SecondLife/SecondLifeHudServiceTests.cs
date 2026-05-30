@@ -91,7 +91,8 @@ public sealed class SecondLifeHudServiceTests
             new RiskFindingReportValidator(),
             new InMemoryRiskFindingReportRepository(),
             reviewQueueService ?? new ReviewQueueService(new ReviewItemValidator(), new AuditLogService()),
-            new PatternDetectionService());
+            new PatternDetectionService(),
+            new Sha256PrivacyHashingService());
 
         return new SecondLifeHudService(ingestion);
     }

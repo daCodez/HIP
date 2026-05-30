@@ -69,6 +69,7 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 MapPublicApis(app.MapGroup(ApiRoutes.Public));
+MapReportApis(app.MapGroup($"{ApiRoutes.V1}/reports"));
 MapBadgeApis(app.MapGroup(ApiRoutes.Badge));
 MapBrowserApis(app.MapGroup(ApiRoutes.Browser));
 MapSafetyApis(app.MapGroup(ApiRoutes.Safety));
@@ -102,6 +103,11 @@ app.MapPost($"{ApiRoutes.Admin}/audit/query", (AuditQueryRequest request, IAudit
     .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
 app.MapGet($"{ApiRoutes.Admin}/roles", (HttpContext httpContext) => Results.Ok(AdminRoleCatalog.Roles))
     .RequireAuthorization(AdminPolicies.CanViewAdminDashboard);
+app.MapGet($"{ApiRoutes.Admin}/reports", async (
+    IPrivacySafeReportService reportService,
+    CancellationToken cancellationToken) =>
+    Results.Ok((await reportService.ListAsync(cancellationToken)).Select(PrivacySafeReportListItem.From).ToArray()))
+    .RequireAuthorization(AdminPolicies.CanReviewReports);
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
@@ -209,6 +215,18 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
     {
         var response = await ingestionService.IngestAsync(report, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
+    });
+}
+
+static void MapReportApis(RouteGroupBuilder reportApi)
+{
+    reportApi.MapPost("/", async (
+        PrivacySafeReport report,
+        IPrivacySafeReportService reportService,
+        CancellationToken cancellationToken) =>
+    {
+        var result = await reportService.SubmitAsync(report, cancellationToken);
+        return result.Accepted ? Results.Ok(result) : Results.BadRequest(result);
     });
 }
 
@@ -741,6 +759,34 @@ public sealed record AdminAppealDecisionRequest(string ActorId, AppealStatus Sta
 public sealed record AdminAssignRequest(string ActorId, string AssignedTo);
 
 public sealed record AuditQueryRequest(string? Action, TargetType? TargetType, string? TargetId, AuditSeverity? Severity, int? Limit);
+
+public sealed record PrivacySafeReportListItem(
+    string ReportId,
+    string ReportType,
+    string Source,
+    string Platform,
+    string Domain,
+    string? UrlHash,
+    string? SenderHash,
+    string RiskLevel,
+    string ReasonSummary,
+    DateTimeOffset ReportedAtUtc,
+    string Status)
+{
+    public static PrivacySafeReportListItem From(PrivacySafeReport report) =>
+        new(
+            report.ReportId,
+            report.ReportType.ToString(),
+            report.Source.ToString(),
+            report.Platform.ToString(),
+            report.Domain,
+            report.UrlHash,
+            report.SenderHash,
+            report.RiskLevel.ToString(),
+            report.ReasonSummary,
+            report.ReportedAtUtc,
+            report.Status.ToString());
+}
 
 public sealed record DomainVerificationApiRequest(string Domain, VerificationMethod Method, string? Token);
 
