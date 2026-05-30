@@ -73,6 +73,8 @@ HIP badges are live data widgets, not static images. A badge must always show th
 
 Badge API:
 
+- `/api/v1/badge/{domain}`
+- `/api/v1/badge/{domain}/script`
 - `/api/v1/public/badge/domain/{domain}`
 
 The response always includes:
@@ -82,11 +84,20 @@ The response always includes:
 - status
 - verified domain state
 - last checked UTC
-- public lookup URL
+- public lookup URL / lookup URL
 - badge text
 - badge variant
 
 ## Embed Example
+
+Preferred MVP embed:
+
+```html
+<div data-hip-badge="example.com"></div>
+<script src="https://hip.example.com/api/v1/badge/example.com/script"></script>
+```
+
+Static shared script alternative:
 
 ```html
 <div
@@ -114,6 +125,10 @@ The badge API returns the domain it verified. The badge script compares the requ
 `HIP Badge Domain Mismatch`
 
 Every badge links to the official public HIP lookup page.
+
+The badge is live data, not a static image. It must always show the score or status. A site must not be able to display only `Verified by HIP` because verified identity does not automatically mean safe.
+
+The browser plugin is expected to later detect fake, hidden, or altered badges by comparing page badge data with official HIP lookup data.
 
 ## Known Limitations
 
