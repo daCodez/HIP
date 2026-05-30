@@ -24,6 +24,28 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "HIP_SCORE_SITE") {
+    scoreSite(message.request)
+      .then(result => sendResponse({ ok: true, result }))
+      .catch(error => {
+        console.warn("HIP site score unavailable.", error);
+        sendResponse({ ok: false, error: "HIP unavailable" });
+      });
+
+    return true;
+  }
+
+  if (message?.type === "HIP_SCAN_LINKS") {
+    scanLinks(message.pageUrl, message.links)
+      .then(result => sendResponse({ ok: true, result }))
+      .catch(error => {
+        console.warn("HIP link scan unavailable.", error);
+        sendResponse({ ok: false, error: "HIP unavailable" });
+      });
+
+    return true;
+  }
+
   if (message?.type === "HIP_SAFETY_URL") {
     safetyPageUrl(message.originalUrl, message.sourceDomain, message.riskStatus)
       .then(result => sendResponse({ ok: true, result }))
@@ -64,16 +86,41 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 async function lookupDomain(domain) {
   const normalized = normalizeHost(domain);
+  const cacheKey = `lookup:${normalized}`;
   const settings = await loadHipSettings();
-  const cached = lookupCache.get(normalized);
+  const cached = lookupCache.get(cacheKey);
   if (cached && Date.now() - cached.createdAt < cacheTtlMs) {
     return cached.value;
   }
 
   const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
   const value = await client.lookupDomain(normalized);
-  lookupCache.set(normalized, { createdAt: Date.now(), value });
+  lookupCache.set(cacheKey, { createdAt: Date.now(), value });
   return value;
+}
+
+async function scoreSite(request) {
+  const domain = normalizeHost(request?.domain);
+  const cacheKey = `score:${domain}`;
+  const settings = await loadHipSettings();
+  const cached = domain ? lookupCache.get(cacheKey) : null;
+  if (cached && Date.now() - cached.createdAt < cacheTtlMs) {
+    return cached.value;
+  }
+
+  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+  const value = await client.scoreSite(request);
+  if (domain) {
+    lookupCache.set(cacheKey, { createdAt: Date.now(), value });
+  }
+
+  return value;
+}
+
+async function scanLinks(pageUrl, links) {
+  const settings = await loadHipSettings();
+  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+  return client.scanLinks(pageUrl, links);
 }
 
 async function safetyPageUrl(originalUrl, sourceDomain, riskStatus) {

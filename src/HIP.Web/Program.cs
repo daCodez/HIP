@@ -1,4 +1,5 @@
 using HIP.Application;
+using HIP.Application.Browser;
 using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
 using HIP.Application.Identity;
@@ -63,6 +64,7 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 MapPublicApis(app.MapGroup(ApiRoutes.Public));
+MapBrowserApis(app.MapGroup(ApiRoutes.Browser));
 MapSecondLifeHudApis(app.MapGroup(ApiRoutes.SecondLifeHud));
 MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules").RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingApis(app.MapGroup($"{ApiRoutes.Admin}/self-healing").RequireAuthorization(AdminPolicies.CanManageRules));
@@ -161,6 +163,39 @@ static void MapDashboardApis(RouteGroupBuilder dashboardApi)
         IAdminDashboardService dashboardService,
         CancellationToken cancellationToken) =>
         Results.Ok(await dashboardService.GetSummaryAsync(cancellationToken)));
+}
+
+static void MapBrowserApis(RouteGroupBuilder browserApi)
+{
+    browserApi.MapPost("/score-site", async (
+        BrowserScoreSiteRequest request,
+        IBrowserPluginService browserPluginService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await browserPluginService.ScoreSiteAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    browserApi.MapPost("/scan-links", async (
+        BrowserScanLinksRequest request,
+        IBrowserPluginService browserPluginService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await browserPluginService.ScanLinksAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
 }
 
 static void MapConsumerApis(RouteGroupBuilder consumerApi)

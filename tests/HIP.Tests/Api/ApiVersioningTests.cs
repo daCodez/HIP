@@ -112,6 +112,8 @@ public sealed class ApiVersioningTests
 
         Assert.That(source, Does.Contain("/api/v1/public/lookup/domain/"));
         Assert.That(source, Does.Contain("/api/v1/public/risk-findings"));
+        Assert.That(source, Does.Contain("/api/v1/browser/score-site"));
+        Assert.That(source, Does.Contain("/api/v1/browser/scan-links"));
         Assert.That(source, Does.Not.Contain("/api/public/lookup"));
     }
 

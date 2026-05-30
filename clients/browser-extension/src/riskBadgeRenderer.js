@@ -5,6 +5,7 @@
   const badgeMap = {
     Unknown: { label: "Unknown", className: "unknown", icon: "?" },
     Caution: { label: "Caution", className: "caution", icon: "!" },
+    Suspicious: { label: "Suspicious", className: "high-risk", icon: "!" },
     HighRisk: { label: "Suspicious", className: "high-risk", icon: "!" },
     Dangerous: { label: "Dangerous", className: "dangerous", icon: "x" },
     Critical: { label: "Critical", className: "critical", icon: "x" },

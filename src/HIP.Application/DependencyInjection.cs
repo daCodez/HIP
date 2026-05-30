@@ -1,4 +1,5 @@
 using FluentValidation;
+using HIP.Application.Browser;
 using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
 using HIP.Application.Identity;
@@ -55,6 +56,7 @@ public static class DependencyInjection
         services.AddScoped<IHipIdentityService, HipIdentityService>();
         services.AddScoped<IDomainVerificationService, InMemoryDomainVerificationService>();
         services.AddScoped<ISecondLifeHudService, SecondLifeHudService>();
+        services.AddScoped<IBrowserPluginService, BrowserPluginService>();
 
         return services;
     }
