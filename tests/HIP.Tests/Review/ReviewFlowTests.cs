@@ -16,6 +16,7 @@ public sealed class ReviewFlowTests
         var created = services.ReviewQueue.Create(ReviewItem());
 
         Assert.That(created.ReviewItemId, Is.Not.Empty);
+        Assert.That(created.Status, Is.EqualTo(ReviewStatus.Submitted));
         Assert.That(services.ReviewQueue.List(), Has.Count.EqualTo(1));
     }
 
@@ -27,7 +28,7 @@ public sealed class ReviewFlowTests
 
         var approved = services.ReviewQueue.Approve(created.ReviewItemId, "admin", "Evidence supports action.");
 
-        Assert.That(approved.Status, Is.EqualTo(ReviewStatus.Approved));
+        Assert.That(approved.Status, Is.EqualTo(ReviewStatus.Confirmed));
         Assert.That(approved.Decision, Is.EqualTo("Approved"));
     }
 
@@ -52,6 +53,34 @@ public sealed class ReviewFlowTests
 
         Assert.That(appeal.AppealId, Is.Not.Empty);
         Assert.That(appeal.Status, Is.EqualTo(AppealStatus.Submitted));
+    }
+
+    [Test]
+    public void Appeal_status_can_be_viewed()
+    {
+        var services = Services();
+        var appeal = services.Appeals.Submit(Appeal());
+
+        var found = services.Appeals.Get(appeal.AppealId);
+
+        Assert.That(found, Is.Not.Null);
+        Assert.That(found!.Status, Is.EqualTo(AppealStatus.Submitted));
+    }
+
+    [Test]
+    public void False_positive_item_is_supported()
+    {
+        var services = Services();
+        var falsePositive = ReviewItem() with
+        {
+            ReviewType = ReviewType.FalsePositive,
+            Title = "Review false positive report",
+            Summary = "Reporter says this domain was incorrectly flagged."
+        };
+
+        var created = services.ReviewQueue.Create(falsePositive);
+
+        Assert.That(created.ReviewType, Is.EqualTo(ReviewType.FalsePositive));
     }
 
     [Test]
@@ -180,13 +209,13 @@ public sealed class ReviewFlowTests
 
     private static ReviewItem ReviewItem() => new(
         "",
-        ReviewType.SuspiciousFinding,
+        ReviewType.RiskyDomain,
         TargetType.Domain,
         "suspicious.example",
         "Review suspicious domain",
         "Repeated privacy-safe suspicious findings.",
         RiskStatus.HighRisk,
-        ReviewStatus.Open,
+        ReviewStatus.Submitted,
         ReviewPriority.High,
         DateTimeOffset.UtcNow,
         DateTimeOffset.UtcNow,

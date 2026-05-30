@@ -32,6 +32,20 @@ public sealed record ConsumerAppealItem(
     DateTimeOffset UpdatedAtUtc,
     string Summary);
 
+public sealed record ConsumerAppealSubmissionRequest(
+    TargetType TargetType,
+    string TargetId,
+    string Reason,
+    IReadOnlyDictionary<string, string>? PrivacySafeEvidence);
+
+public sealed record ConsumerAppealSubmissionResult(
+    bool Accepted,
+    string AppealId,
+    TargetType TargetType,
+    string TargetId,
+    AppealStatus Status,
+    string Message);
+
 public sealed record ConsumerSettings(
     bool EnablePopupAlerts,
     bool EnablePrivateWarnings,

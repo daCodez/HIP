@@ -10,6 +10,8 @@ public interface IConsumerPortalService
 
     Task<IReadOnlyCollection<ConsumerAppealItem>> GetAppealsAsync(string consumerId, CancellationToken cancellationToken);
 
+    ConsumerAppealSubmissionResult SubmitAppeal(string consumerId, ConsumerAppealSubmissionRequest request);
+
     ConsumerSettings GetSettings(string consumerId);
 
     ConsumerSettingsSaveResult SaveSettings(string consumerId, ConsumerSettings settings);

@@ -316,6 +316,15 @@ static void MapConsumerApis(RouteGroupBuilder consumerApi)
         CancellationToken cancellationToken) =>
         Results.Ok(await consumerPortalService.GetAppealsAsync(ConsumerId(httpContext), cancellationToken)));
 
+    consumerApi.MapPost("/appeals", (
+        HttpContext httpContext,
+        ConsumerAppealSubmissionRequest request,
+        IConsumerPortalService consumerPortalService) =>
+    {
+        var result = consumerPortalService.SubmitAppeal(ConsumerId(httpContext), request);
+        return result.Accepted ? Results.Ok(result) : Results.BadRequest(result);
+    });
+
     consumerApi.MapGet("/settings", (
         HttpContext httpContext,
         IConsumerPortalService consumerPortalService) =>
@@ -447,6 +456,9 @@ static void MapReviewApis(RouteGroupBuilder reviewApi)
     reviewApi.MapPost("/{id}/needs-more-info", (string id, AdminDecisionRequest request, IReviewQueueService reviewQueueService) =>
         Results.Ok(reviewQueueService.RequestMoreInfo(id, request.ActorId, request.Reason)));
 
+    reviewApi.MapPost("/{id}/decision", (string id, AdminReviewDecisionRequest request, IReviewQueueService reviewQueueService) =>
+        ReviewDecision(id, request, reviewQueueService));
+
     reviewApi.MapPost("/{id}/assign", (string id, AdminAssignRequest request, IReviewQueueService reviewQueueService) =>
         Results.Ok(reviewQueueService.Assign(id, request.AssignedTo, request.ActorId)));
 }
@@ -454,13 +466,37 @@ static void MapReviewApis(RouteGroupBuilder reviewApi)
 static void MapAppealApis(RouteGroupBuilder appealApi)
 {
     appealApi.MapGet("/", (IAppealService appealService) => Results.Ok(appealService.List()));
+    appealApi.MapGet("/{id}", (string id, IAppealService appealService) =>
+        appealService.Get(id) is { } appeal ? Results.Ok(appeal) : Results.NotFound());
     appealApi.MapPost("/{id}/approve", (string id, AdminDecisionRequest request, IAppealService appealService) =>
         Results.Ok(appealService.Approve(id, request.ActorId, request.Reason)));
     appealApi.MapPost("/{id}/reject", (string id, AdminDecisionRequest request, IAppealService appealService) =>
         Results.Ok(appealService.Reject(id, request.ActorId, request.Reason)));
     appealApi.MapPost("/{id}/needs-more-info", (string id, AdminDecisionRequest request, IAppealService appealService) =>
         Results.Ok(appealService.RequestMoreInfo(id, request.ActorId, request.Reason)));
+    appealApi.MapPost("/{id}/decision", (string id, AdminAppealDecisionRequest request, IAppealService appealService) =>
+        AppealDecision(id, request, appealService));
 }
+
+static IResult ReviewDecision(string id, AdminReviewDecisionRequest request, IReviewQueueService reviewQueueService) =>
+    request.Status switch
+    {
+        ReviewStatus.Confirmed or ReviewStatus.Approved => Results.Ok(reviewQueueService.Approve(id, request.ActorId, request.Reason)),
+        ReviewStatus.Rejected => Results.Ok(reviewQueueService.Reject(id, request.ActorId, request.Reason)),
+        ReviewStatus.NeedsMoreInfo => Results.Ok(reviewQueueService.RequestMoreInfo(id, request.ActorId, request.Reason)),
+        ReviewStatus.Closed => Results.Ok(reviewQueueService.Close(id, request.ActorId, request.Reason)),
+        ReviewStatus.InReview => Results.Ok(reviewQueueService.UpdateStatus(id, ReviewStatus.InReview, request.ActorId, request.Reason)),
+        _ => Results.BadRequest(new { error = "Decision status must be InReview, Confirmed, Rejected, NeedsMoreInfo, or Closed." })
+    };
+
+static IResult AppealDecision(string id, AdminAppealDecisionRequest request, IAppealService appealService) =>
+    request.Status switch
+    {
+        AppealStatus.Approved => Results.Ok(appealService.Approve(id, request.ActorId, request.Reason)),
+        AppealStatus.Rejected => Results.Ok(appealService.Reject(id, request.ActorId, request.Reason)),
+        AppealStatus.NeedsMoreInfo => Results.Ok(appealService.RequestMoreInfo(id, request.ActorId, request.Reason)),
+        _ => Results.BadRequest(new { error = "Decision status must be Approved, Rejected, or NeedsMoreInfo." })
+    };
 
 static void MapReputationOverrideApis(RouteGroupBuilder overrideApi)
 {
@@ -615,6 +651,10 @@ public sealed record AdminRuleSimulationRequest(
     IReadOnlyCollection<RuleSimulationTestCase>? TestCases);
 
 public sealed record AdminDecisionRequest(string ActorId, string Reason);
+
+public sealed record AdminReviewDecisionRequest(string ActorId, ReviewStatus Status, string Reason);
+
+public sealed record AdminAppealDecisionRequest(string ActorId, AppealStatus Status, string Reason);
 
 public sealed record AdminAssignRequest(string ActorId, string AssignedTo);
 

@@ -13,6 +13,7 @@ using HIP.Application.Scoring;
 using HIP.Application.SecondLife;
 using HIP.Application.SelfHealing;
 using HIP.Application.Simulation;
+using HIP.Domain.Review;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,6 +27,9 @@ public static class DependencyInjection
 
         services.AddMediatR(configuration => configuration.RegisterServicesFromAssembly(assembly));
         services.AddValidatorsFromAssembly(assembly);
+        services.AddSingleton<IValidator<ReviewItem>, ReviewItemValidator>();
+        services.AddSingleton<IValidator<AppealRequest>, AppealRequestValidator>();
+        services.AddSingleton<IValidator<ReputationOverrideRequest>, ReputationOverrideRequestValidator>();
         services.AddSingleton<IAiRiskAnalysisService, NoOpAiRiskAnalysisService>();
         services.AddSingleton<IRuleMatchingEngine, RuleMatchingEngine>();
         services.AddSingleton<IRuleActionApplier, RuleActionApplier>();
@@ -44,10 +48,10 @@ public static class DependencyInjection
         services.AddSingleton<ISelfHealingAnalysisService, SelfHealingAnalysisService>();
         services.AddScoped<IConsumerPortalService, ConsumerPortalService>();
         services.AddScoped<IAdminDashboardService, AdminDashboardService>();
-        services.AddScoped<IAuditLogService, AuditLogService>();
-        services.AddScoped<IReviewQueueService, ReviewQueueService>();
-        services.AddScoped<IAppealService, AppealService>();
-        services.AddScoped<IReputationOverrideService, ReputationOverrideService>();
+        services.AddSingleton<IAuditLogService, AuditLogService>();
+        services.AddSingleton<IReviewQueueService, ReviewQueueService>();
+        services.AddSingleton<IAppealService, AppealService>();
+        services.AddSingleton<IReputationOverrideService, ReputationOverrideService>();
         services.AddScoped<IReputationEventRepository, InMemoryReputationEventRepository>();
         services.AddScoped<IReputationProfileRepository, InMemoryReputationProfileRepository>();
         services.AddScoped<IReputationService, ReputationService>();

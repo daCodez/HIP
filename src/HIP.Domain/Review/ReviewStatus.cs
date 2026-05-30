@@ -2,9 +2,11 @@ namespace HIP.Domain.Review;
 
 public enum ReviewStatus
 {
-    Open = 0,
+    Submitted = 0,
+    Open = Submitted,
     InReview = 1,
-    Approved = 2,
+    Confirmed = 2,
+    Approved = Confirmed,
     Rejected = 3,
     NeedsMoreInfo = 4,
     Closed = 5

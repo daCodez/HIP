@@ -8,14 +8,26 @@ This is a dev/admin MVP. Admin routes require development admin authorization. P
 
 Review items can represent:
 
-- suspicious findings
-- generated rules
+- risky domains
+- risky senders
+- risky device keys
+- risky organizations
 - reputation overrides
 - appeals
 - false positives
+- rule suggestions
 - safety reports
 
 Review items include target type, target ID, risk level, priority, status, evidence summary, privacy-safe evidence, recommended action, and decision details.
+
+Review statuses:
+
+- Submitted
+- InReview
+- Confirmed
+- Rejected
+- NeedsMoreInfo
+- Closed
 
 Supported actions:
 
@@ -42,6 +54,8 @@ Appeal statuses:
 - Closed
 
 Full private chat logs, raw private conversations, private user names, and personal information are not required by default.
+
+Consumers can submit and view appeal status through the consumer portal. Consumer appeal responses do not expose private reviewer IDs or internal reviewer notes beyond privacy-safe status and summary fields.
 
 ## Reputation Override Approval Flow
 
@@ -82,6 +96,7 @@ Review queue:
 - `GET /api/v1/admin/review`
 - `GET /api/v1/admin/review/{id}`
 - `POST /api/v1/admin/review`
+- `POST /api/v1/admin/review/{id}/decision`
 - `POST /api/v1/admin/review/{id}/approve`
 - `POST /api/v1/admin/review/{id}/reject`
 - `POST /api/v1/admin/review/{id}/needs-more-info`
@@ -90,7 +105,11 @@ Review queue:
 Appeals:
 
 - `POST /api/v1/public/appeals`
+- `GET /api/v1/consumer/appeals`
+- `POST /api/v1/consumer/appeals`
 - `GET /api/v1/admin/appeals`
+- `GET /api/v1/admin/appeals/{id}`
+- `POST /api/v1/admin/appeals/{id}/decision`
 - `POST /api/v1/admin/appeals/{id}/approve`
 - `POST /api/v1/admin/appeals/{id}/reject`
 - `POST /api/v1/admin/appeals/{id}/needs-more-info`
@@ -109,9 +128,12 @@ Audit logs:
 ## UI Routes
 
 - `/admin/review`
+- `/admin/review/{id}`
 - `/admin/appeals`
+- `/admin/appeals/{id}`
 - `/admin/reputation-overrides`
 - `/admin/audit-logs`
+- `/consumer/appeals`
 
 ## Known Limitations
 

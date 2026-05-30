@@ -1,4 +1,5 @@
 @page "/admin/review"
+@page "/admin/review/{ReviewItemId}"
 @attribute [Authorize(Policy = AdminPolicies.CanReviewReports)]
 @rendermode InteractiveServer
 @inject IReviewQueueService ReviewQueueService
@@ -7,11 +8,27 @@
 
 <main class="admin-rule-page">
     <section class="admin-rule-header">
-        <p class="eyebrow">Dev-only MVP</p>
+        <p class="eyebrow">Admin MVP</p>
         <h1>Review Queue</h1>
-        <p>Review suspicious findings, generated rules, false positives, safety reports, and risky admin decisions. Production auth is required before deployment.</p>
+        <p>Review suspicious findings, generated rules, false positives, safety reports, and risky admin decisions using privacy-safe summaries only.</p>
         <button type="button" @onclick="CreateSample">Create Sample Review</button>
     </section>
+
+    @if (_selected is not null)
+    {
+        <section class="rule-builder-panel">
+            <h2>Review Detail</h2>
+            <dl class="lookup-details">
+                <dt>ID</dt><dd>@_selected.ReviewItemId</dd>
+                <dt>Type</dt><dd>@_selected.ReviewType</dd>
+                <dt>Target</dt><dd>@_selected.TargetType: @_selected.TargetId</dd>
+                <dt>Status</dt><dd>@_selected.Status</dd>
+                <dt>Reason Summary</dt><dd>@_selected.Summary</dd>
+                <dt>Evidence Summary</dt><dd>@_selected.EvidenceSummary</dd>
+                <dt>Decision</dt><dd>@_selected.Decision @_selected.DecisionReason</dd>
+            </dl>
+        </section>
+    }
 
     <section class="rule-builder-panel">
         <h2>Open Reviews</h2>
@@ -43,23 +60,33 @@
 </main>
 
 @code {
+    [Parameter]
+    public string? ReviewItemId { get; set; }
+
     private IReadOnlyCollection<ReviewItem> _items = [];
+    private ReviewItem? _selected;
 
     protected override void OnInitialized() => Refresh();
 
-    private void Refresh() => _items = ReviewQueueService.List();
+    protected override void OnParametersSet() => Refresh();
+
+    private void Refresh()
+    {
+        _items = ReviewQueueService.List();
+        _selected = string.IsNullOrWhiteSpace(ReviewItemId) ? null : ReviewQueueService.Get(ReviewItemId);
+    }
 
     private void CreateSample()
     {
         ReviewQueueService.Create(new ReviewItem(
             "",
-            ReviewType.SuspiciousFinding,
+            ReviewType.RiskyDomain,
             TargetType.Domain,
             "suspicious-example.com",
             "Review repeated suspicious domain findings",
             "Multiple privacy-safe findings indicate shortened URL abuse.",
             RiskStatus.HighRisk,
-            ReviewStatus.Open,
+            ReviewStatus.Submitted,
             ReviewPriority.High,
             DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow,
@@ -67,7 +94,7 @@
             null,
             "self-healing",
             "URL hashes and domain risk reason only.",
-            new Dictionary<string, string> { ["urlHash"] = "sha256:sample", ["privateChatLog"] = "not-collected" },
+            new Dictionary<string, string> { ["urlHash"] = "sha256:sample", ["evidenceType"] = "anonymized-finding" },
             "Keep generated rule in watch mode pending approval.",
             null,
             null));

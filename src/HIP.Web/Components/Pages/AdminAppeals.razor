@@ -1,4 +1,5 @@
 @page "/admin/appeals"
+@page "/admin/appeals/{AppealId}"
 @attribute [Authorize(Policy = AdminPolicies.CanReviewReports)]
 @rendermode InteractiveServer
 @inject IAppealService AppealService
@@ -7,11 +8,25 @@
 
 <main class="admin-rule-page">
     <section class="admin-rule-header">
-        <p class="eyebrow">Dev-only MVP</p>
+        <p class="eyebrow">Admin MVP</p>
         <h1>Appeals</h1>
         <p>Review privacy-safe appeals for domains, senders, device keys, organizations, and content patterns.</p>
         <button type="button" @onclick="CreateSample">Create Sample Appeal</button>
     </section>
+
+    @if (_selected is not null)
+    {
+        <section class="rule-builder-panel">
+            <h2>Appeal Detail</h2>
+            <dl class="lookup-details">
+                <dt>ID</dt><dd>@_selected.AppealId</dd>
+                <dt>Target</dt><dd>@_selected.TargetType: @_selected.TargetId</dd>
+                <dt>Status</dt><dd>@_selected.Status</dd>
+                <dt>Reason</dt><dd>@_selected.Reason</dd>
+                <dt>Decision</dt><dd>@_selected.Decision @_selected.DecisionReason</dd>
+            </dl>
+        </section>
+    }
 
     <section class="rule-builder-panel">
         <h2>Appeal Requests</h2>
@@ -41,11 +56,21 @@
 </main>
 
 @code {
+    [Parameter]
+    public string? AppealId { get; set; }
+
     private IReadOnlyCollection<AppealRequest> _appeals = [];
+    private AppealRequest? _selected;
 
     protected override void OnInitialized() => Refresh();
 
-    private void Refresh() => _appeals = AppealService.List();
+    protected override void OnParametersSet() => Refresh();
+
+    private void Refresh()
+    {
+        _appeals = AppealService.List();
+        _selected = string.IsNullOrWhiteSpace(AppealId) ? null : AppealService.Get(AppealId);
+    }
 
     private void CreateSample()
     {

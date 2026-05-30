@@ -8,6 +8,8 @@ public interface IAppealService
 
     IReadOnlyCollection<AppealRequest> List();
 
+    AppealRequest? Get(string appealId);
+
     AppealRequest Approve(string appealId, string reviewerId, string reason);
 
     AppealRequest Reject(string appealId, string reviewerId, string reason);

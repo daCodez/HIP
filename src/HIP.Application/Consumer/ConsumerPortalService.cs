@@ -71,6 +71,30 @@ public sealed class ConsumerPortalService(
         return Task.FromResult<IReadOnlyCollection<ConsumerAppealItem>>(appeals);
     }
 
+    public ConsumerAppealSubmissionResult SubmitAppeal(string consumerId, ConsumerAppealSubmissionRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.TargetId) || string.IsNullOrWhiteSpace(request.Reason))
+        {
+            return new ConsumerAppealSubmissionResult(false, string.Empty, request.TargetType, request.TargetId, AppealStatus.Submitted, "Target ID and reason are required.");
+        }
+
+        var appeal = appealService.Submit(new AppealRequest(
+            "",
+            request.TargetType,
+            request.TargetId.Trim(),
+            NormalizeConsumerId(consumerId),
+            request.Reason.Trim(),
+            AppealStatus.Submitted,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            null,
+            "AutomatedFirstPass",
+            "MVP automated first pass accepted privacy-safe appeal for human review.",
+            request.PrivacySafeEvidence ?? new Dictionary<string, string>()));
+
+        return new ConsumerAppealSubmissionResult(true, appeal.AppealId, appeal.TargetType, appeal.TargetId, appeal.Status, "Appeal submitted for HIP review.");
+    }
+
     public ConsumerSettings GetSettings(string consumerId) =>
         SettingsByConsumer.GetOrAdd(NormalizeConsumerId(consumerId), _ => DefaultSettings());
 

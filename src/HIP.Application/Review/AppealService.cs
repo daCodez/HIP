@@ -41,6 +41,14 @@ public sealed class AppealService(
         }
     }
 
+    public AppealRequest? Get(string appealId)
+    {
+        lock (_lock)
+        {
+            return _appeals.GetValueOrDefault(appealId);
+        }
+    }
+
     public AppealRequest Approve(string appealId, string reviewerId, string reason)
     {
         var updated = Decide(appealId, AppealStatus.Approved, reviewerId, "Approved", reason);
