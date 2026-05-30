@@ -1,4 +1,7 @@
 using FluentValidation;
+using HIP.Application.Review;
+using HIP.Domain.Audit;
+using HIP.Domain.Review;
 using HIP.Application.Simulation;
 using HIP.Domain.Rules;
 
@@ -16,7 +19,8 @@ public interface IAdminRuleService
 public sealed class AdminRuleService(
     IValidator<TrustRule> validator,
     IRuleRepository repository,
-    IRuleSimulationService simulationService) : IAdminRuleService
+    IRuleSimulationService simulationService,
+    IAuditLogService auditLogService) : IAdminRuleService
 {
     public async Task<TrustRule> SaveAsync(TrustRule rule, CancellationToken cancellationToken)
     {
@@ -26,7 +30,23 @@ public sealed class AdminRuleService(
             throw new ValidationException(validation.Errors);
         }
 
-        return await repository.SaveAsync(rule, cancellationToken);
+        var saved = await repository.SaveAsync(rule, cancellationToken);
+        auditLogService.Write(
+            "admin-rule-service",
+            "Rule changed",
+            TargetType.Rule,
+            saved.RuleId,
+            $"Rule '{saved.Name}' saved with mode {saved.Mode} and severity {saved.Severity}.",
+            AuditSeverity.Medium,
+            afterMetadata: new Dictionary<string, string>
+            {
+                ["enabled"] = saved.Enabled.ToString(),
+                ["mode"] = saved.Mode.ToString(),
+                ["severity"] = saved.Severity.ToString(),
+                ["version"] = saved.Version.ToString()
+            });
+
+        return saved;
     }
 
     public Task<IReadOnlyCollection<TrustRule>> ListAsync(CancellationToken cancellationToken) =>

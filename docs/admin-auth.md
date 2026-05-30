@@ -25,6 +25,29 @@ curl -H "X-HIP-Admin-Role: Owner" https://localhost:7001/api/v1/admin/audit-logs
 - Support: look up license status, reset setup codes, help users activate, escalate issues.
 - ReadOnly: view dashboards, reports, reputation, and logs only.
 
+## Permission Model
+
+The MVP exposes a permission catalog through `AdminRoleCatalog` and `GET /api/v1/admin/roles`.
+
+Current permissions:
+
+- `Rules.View`
+- `Rules.Edit`
+- `Rules.Simulate`
+- `Reputation.View`
+- `Reputation.OverrideRequest`
+- `Review.View`
+- `Review.Decide`
+- `Appeals.View`
+- `Appeals.Decide`
+- `Licenses.View`
+- `Licenses.Manage`
+- `Audit.View`
+- `Admins.Manage`
+- `System.Manage`
+
+Owner has every permission. Admin has operational edit permissions for rules, review, appeals, reputation requests, licenses, and audit viewing. Moderator can review and decide reports/appeals but cannot manage the system. Support can view and manage license support flows but cannot request reputation overrides. ReadOnly can view but cannot change state.
+
 ## Policies
 
 - `CanManageRules`: Owner, Admin
@@ -46,6 +69,9 @@ Protected API route groups:
 - `/api/v1/admin/reputation/...`
 - `/api/v1/admin/dashboard/summary`
 - `/api/v1/admin/audit-logs`
+- `/api/v1/admin/audit`
+- `/api/v1/admin/audit/query`
+- `/api/v1/admin/roles`
 
 Protected UI routes:
 
@@ -56,6 +82,25 @@ Protected UI routes:
 - `/admin/appeals`
 - `/admin/reputation-overrides`
 - `/admin/audit-logs`
+- `/admin/audit`
+- `/admin/roles`
+
+## Audit Log
+
+Audit entries are privacy-safe records for serious admin actions, including:
+
+- rule created or changed
+- rule enabled or disabled
+- simulation run
+- reputation override requested, approved, or rejected
+- review decision made
+- appeal decision made
+- license reset or revoked
+- admin role changed
+
+Each audit entry includes an ID, timestamp, actor placeholder, actor role placeholder, action, target type, target ID, summary, safe metadata, optional before/after metadata, severity, and optional correlation ID.
+
+Audit logging must not store full private chat logs, raw private messages, form contents, or unrelated private evidence. The MVP sanitizer drops private-content metadata keys and redacts obvious private-content markers in summaries.
 
 Public routes remain public:
 

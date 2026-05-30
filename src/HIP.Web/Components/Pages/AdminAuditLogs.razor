@@ -1,4 +1,5 @@
 @page "/admin/audit-logs"
+@page "/admin/audit"
 @attribute [Authorize(Policy = AdminPolicies.CanViewAuditLogs)]
 @rendermode InteractiveServer
 @inject IAuditLogService AuditLogService
@@ -7,7 +8,7 @@
 
 <main class="admin-rule-page">
     <section class="admin-rule-header">
-        <p class="eyebrow">Dev-only MVP</p>
+        <p class="eyebrow">Admin MVP</p>
         <h1>Audit Logs</h1>
         <p>Serious admin actions are audit logged with privacy-safe metadata.</p>
     </section>
@@ -16,7 +17,7 @@
         <h2>Recent Audit Entries</h2>
         <table class="admin-rule-table">
             <thead>
-                <tr><th>Date</th><th>Actor</th><th>Action</th><th>Target</th><th>Summary</th><th>Severity</th></tr>
+                <tr><th>Date</th><th>Actor</th><th>Role</th><th>Action</th><th>Target</th><th>Summary</th><th>Severity</th><th>Correlation</th></tr>
             </thead>
             <tbody>
                 @foreach (var entry in AuditLogService.List())
@@ -24,10 +25,12 @@
                     <tr>
                         <td>@entry.CreatedAtUtc.UtcDateTime.ToString("u")</td>
                         <td>@entry.ActorId</td>
+                        <td>@entry.ActorRole</td>
                         <td>@entry.Action</td>
                         <td>@entry.TargetType: @entry.TargetId</td>
                         <td>@entry.Summary</td>
                         <td>@entry.Severity</td>
+                        <td>@(entry.CorrelationId ?? "-")</td>
                     </tr>
                 }
             </tbody>

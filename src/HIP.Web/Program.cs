@@ -14,6 +14,7 @@ using HIP.Application.Safety;
 using HIP.Application.SelfHealing;
 using HIP.Application.SecondLife;
 using HIP.Application.Simulation;
+using HIP.Domain.Audit;
 using HIP.Domain.Review;
 using HIP.Domain.Reporting;
 using HIP.Domain.Reputation;
@@ -84,6 +85,23 @@ MapConsumerApis(app.MapGroup(ApiRoutes.Consumer).RequireAuthorization(ConsumerPo
 MapIdentityApis(app.MapGroup(ApiRoutes.Identity));
 app.MapGet($"{ApiRoutes.Admin}/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()))
     .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
+app.MapGet($"{ApiRoutes.Admin}/audit", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()))
+    .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
+app.MapPost($"{ApiRoutes.Admin}/audit/query", (AuditQueryRequest request, IAuditLogService auditLogService) =>
+{
+    var entries = auditLogService.List()
+        .Where(entry => string.IsNullOrWhiteSpace(request.Action) || entry.Action.Contains(request.Action, StringComparison.OrdinalIgnoreCase))
+        .Where(entry => request.TargetType is null || entry.TargetType == request.TargetType)
+        .Where(entry => string.IsNullOrWhiteSpace(request.TargetId) || string.Equals(entry.TargetId, request.TargetId, StringComparison.OrdinalIgnoreCase))
+        .Where(entry => request.Severity is null || entry.Severity == request.Severity)
+        .Take(request.Limit is > 0 and <= 500 ? request.Limit.Value : 100)
+        .ToArray();
+
+    return Results.Ok(entries);
+})
+    .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
+app.MapGet($"{ApiRoutes.Admin}/roles", (HttpContext httpContext) => Results.Ok(AdminRoleCatalog.Roles))
+    .RequireAuthorization(AdminPolicies.CanViewAdminDashboard);
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
@@ -657,6 +675,8 @@ public sealed record AdminReviewDecisionRequest(string ActorId, ReviewStatus Sta
 public sealed record AdminAppealDecisionRequest(string ActorId, AppealStatus Status, string Reason);
 
 public sealed record AdminAssignRequest(string ActorId, string AssignedTo);
+
+public sealed record AuditQueryRequest(string? Action, TargetType? TargetType, string? TargetId, AuditSeverity? Severity, int? Limit);
 
 public sealed record DomainVerificationApiRequest(string Domain, VerificationMethod Method, string? Token);
 

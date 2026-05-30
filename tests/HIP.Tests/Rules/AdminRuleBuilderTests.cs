@@ -195,7 +195,7 @@ public sealed class AdminRuleBuilderTests
     {
         var matching = new RuleMatchingEngine();
         var applier = new RuleActionApplier(matching);
-        return new AdminRuleService(new TrustRuleValidator(), new InMemoryRuleRepository(), new RuleSimulationService(applier));
+        return new AdminRuleService(new TrustRuleValidator(), new InMemoryRuleRepository(), new RuleSimulationService(applier), new HIP.Application.Review.AuditLogService());
     }
 
     private static string RuleJson() => """

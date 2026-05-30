@@ -1,0 +1,31 @@
+@page "/admin/roles"
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+
+<PageTitle>HIP Admin Roles</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <p class="eyebrow">Admin MVP</p>
+        <h1>Roles and Permissions</h1>
+        <p>HIP role definitions and MVP permission mapping. Role management is a production hardening item.</p>
+    </section>
+
+    <section class="rule-builder-panel">
+        <h2>Role Definitions</h2>
+        <table class="admin-rule-table">
+            <thead>
+                <tr><th>Role</th><th>Description</th><th>Permissions</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var role in AdminRoleCatalog.Roles)
+                {
+                    <tr>
+                        <td>@role.Role</td>
+                        <td>@role.Description</td>
+                        <td>@string.Join(", ", role.Permissions)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+</main>
