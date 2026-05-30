@@ -34,7 +34,7 @@
   async function initialize() {
     settings = await loadSettings();
     lastSummary = emptySummary();
-    const currentLookup = await lookupDomain(currentDomain);
+    const currentLookup = await scoreSite(currentDomain, window.location.href);
     lastSummary.website = compactLookup(currentLookup);
     lastSummary.apiStatus = currentLookup ? "Available" : "Unavailable";
 
@@ -76,22 +76,30 @@
       anchorsByDomain.get(target.domain).push({ anchor, target });
     }
 
-    for (const [domain, items] of anchorsByDomain) {
-      const lookup = await lookupDomain(domain);
-      if (!lookup?.status) {
-        lastSummary.apiStatus = "Unavailable";
-        continue;
-      }
+    const scanResults = await scanPageLinks(Array.from(anchorsByDomain.values()).flat().map(item => item.target.url.href));
+    if (!scanResults) {
+      lastSummary.apiStatus = "Unavailable";
+      return;
+    }
 
-      if (lookup.status === "Unknown") {
-        lastSummary.unknownLinks += items.length;
-      }
-      if (riskyStatuses.has(lookup.status)) {
-        lastSummary.riskyLinks += items.length;
-      }
+    const resultsByUrl = new Map(scanResults.results.map(result => [result.url, result]));
 
+    for (const items of anchorsByDomain.values()) {
       for (const item of items) {
-        applyLinkProtection(item.anchor, item.target, withLookupUrl(lookup));
+        const result = resultsByUrl.get(item.target.url.href);
+        if (!result) {
+          continue;
+        }
+
+        const lookup = browserResultToLookup(result);
+        if (lookup.status === "Unknown") {
+          lastSummary.unknownLinks++;
+        }
+        if (riskyStatuses.has(lookup.status)) {
+          lastSummary.riskyLinks++;
+        }
+
+        applyLinkProtection(item.anchor, item.target, withLookupUrl(lookup), result);
       }
     }
   }
@@ -112,20 +120,20 @@
       }
 
       lastSummary.crossDomainLoginForms++;
-      const lookup = await lookupDomain(actionDomain);
+      const lookup = await scoreSite(actionDomain, `https://${actionDomain}`);
       if (lookup?.status && attentionStatuses.has(lookup.status)) {
         window.HipRiskBadgeRenderer.renderFormIndicator(form, lookup, "Login form submits to a different domain. HIP checked the action domain only; no form values were read.");
       }
     }
   }
 
-  function applyLinkProtection(anchor, target, lookup) {
+  function applyLinkProtection(anchor, target, lookup, browserResult = null) {
     const status = lookup.status;
     const verified = lookup.verificationStatus === "Verified" || lookup.signedIdentityStatus === "PostQuantumSignaturePresent";
-    const shouldBadge = shouldRenderBadge(status, verified, target.isDownloadCandidate);
+    const shouldBadge = browserResult?.requiresIcon || shouldRenderBadge(status, verified, target.isDownloadCandidate);
 
     if (settings.enableLinkBadges && shouldBadge) {
-      const badgeStatus = target.isDownloadCandidate && !riskyStatuses.has(status) ? "Caution" : (verified && status === "Trusted" ? "Verified" : status);
+      const badgeStatus = browserResult?.label || (target.isDownloadCandidate && !riskyStatuses.has(status) ? "Caution" : (verified && status === "Trusted" ? "Verified" : status));
       const badgeLookup = target.isDownloadCandidate
         ? { ...lookup, knownRisks: ["Download risk candidate"], finalHipScore: lookup.finalHipScore }
         : lookup;
@@ -199,6 +207,31 @@
     const response = await chrome.runtime.sendMessage({ type: "HIP_LOOKUP_DOMAIN", domain });
     if (!response?.ok) {
       console.warn("HIP unavailable for domain lookup.", domain, response?.error);
+      return null;
+    }
+
+    return response.result;
+  }
+
+  async function scoreSite(domain, url) {
+    const response = await chrome.runtime.sendMessage({ type: "HIP_SCORE_SITE", request: { domain, url } });
+    if (!response?.ok) {
+      console.warn("HIP unavailable for site score.", domain, response?.error);
+      return null;
+    }
+
+    return response.result;
+  }
+
+  async function scanPageLinks(links) {
+    const response = await chrome.runtime.sendMessage({
+      type: "HIP_SCAN_LINKS",
+      pageUrl: window.location.href,
+      links
+    });
+
+    if (!response?.ok) {
+      console.warn("HIP unavailable for link scan.", response?.error);
       return null;
     }
 
@@ -280,6 +313,19 @@
     return {
       ...lookup,
       publicLookupUrl: lookup.publicLookupUrl || `https://localhost:7053/lookup/domain/${encodeURIComponent(lookup.domain)}`
+    };
+  }
+
+  function browserResultToLookup(result) {
+    return {
+      domain: result.domain,
+      finalHipScore: result.score,
+      status: result.riskLevel,
+      verificationStatus: "Unverified",
+      signedIdentityStatus: "NoSignedIdentityFound",
+      knownRisks: result.reasons || [],
+      explanations: result.reasons || [],
+      publicLookupUrl: result.publicLookupUrl
     };
   }
 

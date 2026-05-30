@@ -48,7 +48,7 @@ async function initialize() {
   const domain = normalizeHost(currentUrl.hostname);
   elements.domain.textContent = domain;
 
-  const lookup = await client.lookupDomain(domain);
+  const lookup = await client.scoreSite({ url: currentUrl.toString(), domain });
   renderLookup(lookup);
   await renderScanSummary();
 }
@@ -58,21 +58,23 @@ function renderLookup(lookup) {
   elements.scorePanel.hidden = false;
   elements.reasonsPanel.hidden = false;
 
-  elements.score.textContent = `${lookup.finalHipScore}/100`;
+  elements.score.textContent = `${lookup.score ?? lookup.finalHipScore}/100`;
   elements.status.textContent = lookup.status;
   elements.status.dataset.status = lookup.status;
   elements.verified.textContent = lookup.verificationStatus === "Verified" ? "Yes" : "No";
   elements.identityStatus.textContent = lookup.identityVerificationStatus || lookup.signedIdentityStatus || "Unknown";
   elements.lastChecked.textContent = new Date(lookup.lastCheckedUtc).toLocaleString();
 
-  const reasons = lookup.knownRisks?.length ? lookup.knownRisks : lookup.explanations || [];
+  const reasons = lookup.reasons?.length ? lookup.reasons : lookup.knownRisks?.length ? lookup.knownRisks : lookup.explanations || [];
   elements.reasons.replaceChildren(...reasons.slice(0, 5).map(reason => {
     const item = document.createElement("li");
     item.textContent = reason;
     return item;
   }));
 
-  elements.lookupLink.href = `${settings.webBaseUrl}/lookup/domain/${encodeURIComponent(lookup.domain)}`;
+  elements.lookupLink.href = lookup.publicLookupUrl?.startsWith("http")
+    ? lookup.publicLookupUrl
+    : `${settings.webBaseUrl}/lookup/domain/${encodeURIComponent(lookup.domain)}`;
   elements.lookupLink.hidden = false;
 }
 

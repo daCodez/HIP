@@ -37,6 +37,48 @@ export class HipApiClient {
     return response.json();
   }
 
+  async scoreSite(request) {
+    const url = `${this.config.apiBaseUrl}/api/v1/browser/score-site`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        url: request?.url || "",
+        domain: request?.domain || ""
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HIP site scoring failed with status ${response.status}.`);
+    }
+
+    return response.json();
+  }
+
+  async scanLinks(pageUrl, links) {
+    const url = `${this.config.apiBaseUrl}/api/v1/browser/scan-links`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        pageUrl,
+        links: Array.isArray(links) ? links : []
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HIP link scanning failed with status ${response.status}.`);
+    }
+
+    return response.json();
+  }
+
   async reportRiskFinding(report) {
     const url = `${this.config.apiBaseUrl}/api/v1/public/risk-findings`;
     const response = await fetch(url, {
