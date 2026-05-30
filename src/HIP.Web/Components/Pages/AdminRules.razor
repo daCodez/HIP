@@ -1,16 +1,19 @@
 @page "/admin/rules"
+@page "/admin/rules/new"
+@page "/admin/rules/{RuleId}"
 @attribute [Authorize(Policy = AdminPolicies.CanManageRules)]
 @rendermode InteractiveServer
 @inject IRuleJsonService RuleJsonService
 @inject IAdminRuleService AdminRuleService
+@inject IRuleRepository RuleRepository
 
 <PageTitle>HIP Admin Rule Builder</PageTitle>
 
 <main class="admin-rule-page">
     <section class="admin-rule-header">
-        <p class="eyebrow">Dev-only MVP</p>
+        <p class="eyebrow">Admin MVP</p>
         <h1>Admin Rule Builder</h1>
-        <p>Create simple HIP rules, inspect live JSON, run simulation, and save rules in memory. Production authentication and durable storage integration are future work.</p>
+        <p>Create simple HIP rules, inspect live JSON, run simulation, and save rules. This route is protected by the rule-management admin policy.</p>
     </section>
 
     <section class="rule-builder-grid">
@@ -28,7 +31,7 @@
             <div class="form-row">
                 <label>Mode
                     <select @bind="_form.Mode" @bind:after="SyncJsonFromForm">
-                        @foreach (var mode in Enum.GetValues<RuleMode>())
+                        @foreach (var mode in RuleBuilderFormModel.SupportedModes)
                         {
                             <option value="@mode">@mode</option>
                         }
@@ -36,7 +39,7 @@
                 </label>
                 <label>Severity
                     <select @bind="_form.Severity" @bind:after="SyncJsonFromForm">
-                        @foreach (var severity in Enum.GetValues<RuleSeverity>())
+                        @foreach (var severity in RuleBuilderFormModel.MvpSeverities)
                         {
                             <option value="@severity">@severity</option>
                         }
@@ -60,7 +63,7 @@
                             <option value="@ruleOperator">@ruleOperator</option>
                         }
                     </select>
-                    <input @bind="condition.Value" @bind:after="SyncJsonFromForm" />
+                    <input @bind="condition.Value" @bind:after="SyncJsonFromForm" aria-label="Condition value" />
                     <button type="button" @onclick="() => RemoveCondition(condition)">Remove</button>
                 </div>
             }
@@ -71,12 +74,12 @@
             {
                 <div class="condition-row">
                     <select @bind="action.Type" @bind:after="SyncJsonFromForm">
-                        @foreach (var actionType in Enum.GetValues<RuleActionType>().Where(IsSupportedAction))
+                        @foreach (var actionType in RuleBuilderFormModel.MvpActions)
                         {
                             <option value="@actionType">@actionType</option>
                         }
                     </select>
-                    <input @bind="action.Value" @bind:after="SyncJsonFromForm" />
+                    <input @bind="action.Value" @bind:after="SyncJsonFromForm" aria-label="Action value" />
                     <button type="button" @onclick="() => RemoveAction(action)">Remove</button>
                 </div>
             }
@@ -135,6 +138,7 @@
                 <span>Privacy impact: <strong>@_simulation.PrivacyImpact</strong></span>
                 <span>Confidence: <strong>@_simulation.ConfidenceScore</strong></span>
                 <span>Recommended action: <strong>@_simulation.RecommendedAction</strong></span>
+                <span>Recommended mode: <strong>@_simulation.RecommendedMode</strong></span>
             </div>
 
             @foreach (var failed in _simulation.CaseResults.Where(result => !result.Passed))
@@ -148,7 +152,7 @@
         <h2>Saved Rules</h2>
         @if (_savedRules.Count == 0)
         {
-            <p>No saved rules yet. Rules are stored in memory for this MVP.</p>
+            <p>No saved rules yet.</p>
         }
         else
         {
@@ -177,7 +181,10 @@
 </main>
 
 @code {
-    private readonly AdminRuleForm _form = AdminRuleForm.Default();
+    [Parameter]
+    public string? RuleId { get; set; }
+
+    private readonly RuleBuilderFormModel _form = RuleBuilderFormModel.Default();
     private string _json = string.Empty;
     private string? _jsonError;
     private string? _message;
@@ -187,17 +194,24 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadRouteRuleAsync();
         SyncJsonFromForm();
         _savedRules = await AdminRuleService.ListAsync(CancellationToken.None);
     }
 
-    private void AddCondition()
+    protected override async Task OnParametersSetAsync()
     {
-        _form.Conditions.Add(new RuleConditionForm());
+        await LoadRouteRuleAsync();
         SyncJsonFromForm();
     }
 
-    private void RemoveCondition(RuleConditionForm condition)
+    private void AddCondition()
+    {
+        _form.Conditions.Add(new RuleConditionInput());
+        SyncJsonFromForm();
+    }
+
+    private void RemoveCondition(RuleConditionInput condition)
     {
         _form.Conditions.Remove(condition);
         SyncJsonFromForm();
@@ -205,11 +219,11 @@
 
     private void AddAction()
     {
-        _form.Actions.Add(new RuleActionForm());
+        _form.Actions.Add(new RuleActionInput());
         SyncJsonFromForm();
     }
 
-    private void RemoveAction(RuleActionForm action)
+    private void RemoveAction(RuleActionInput action)
     {
         _form.Actions.Remove(action);
         SyncJsonFromForm();
@@ -226,7 +240,7 @@
         {
             await AdminRuleService.SaveAsync(rule, CancellationToken.None);
             _savedRules = await AdminRuleService.ListAsync(CancellationToken.None);
-            _message = "Rule saved in memory.";
+            _message = "Rule saved.";
         }
         catch (FluentValidation.ValidationException ex)
         {
@@ -262,7 +276,7 @@
 
     private void CopyJson()
     {
-        _message = "JSON is ready to copy from the preview.";
+        _message = "MVP placeholder: select the preview text to copy JSON.";
     }
 
     private void EditJson()
@@ -321,100 +335,18 @@
         }
     }
 
-    private static bool IsSupportedAction(RuleActionType action) =>
-        action is RuleActionType.SetRiskLevel or RuleActionType.AddScorePenalty or RuleActionType.AddScoreBonus or
-            RuleActionType.AddReason or RuleActionType.RouteToSafetyPage or RuleActionType.RequireReview or RuleActionType.MarkForSimulation;
-
-    private sealed class AdminRuleForm
+    private async Task LoadRouteRuleAsync()
     {
-        public string RuleId { get; set; } = "new-domain-shortener-high-risk";
-        public string Name { get; set; } = "New Domain With Shortened URL";
-        public string Description { get; set; } = "Flags shortened links that resolve to new domains.";
-        public bool Enabled { get; set; } = true;
-        public RuleMode Mode { get; set; } = RuleMode.Watch;
-        public RuleSeverity Severity { get; set; } = RuleSeverity.HighRisk;
-        public List<RuleConditionForm> Conditions { get; } = [];
-        public List<RuleActionForm> Actions { get; } = [];
-        public bool RequiresApproval { get; set; } = true;
-        public bool SimulationRequired { get; set; } = true;
-        public string CreatedBy { get; set; } = "admin";
-        public string CreatedReason { get; set; } = "Suspicious shortened URL pattern";
-        public decimal ConfidenceScore { get; set; }
-        public int Version { get; set; } = 1;
-
-        public static AdminRuleForm Default()
+        if (string.IsNullOrWhiteSpace(RuleId) || RuleId.Equals("new", StringComparison.OrdinalIgnoreCase))
         {
-            var form = new AdminRuleForm();
-            form.Conditions.Add(new RuleConditionForm { Field = "domain.ageDays", Operator = RuleOperator.LessThan, Value = "30" });
-            form.Conditions.Add(new RuleConditionForm { Field = "url.usesShortener", Operator = RuleOperator.Equals, Value = "true" });
-            form.Actions.Add(new RuleActionForm { Type = RuleActionType.SetRiskLevel, Value = "HighRisk" });
-            form.Actions.Add(new RuleActionForm { Type = RuleActionType.RouteToSafetyPage, Value = "true" });
-            return form;
+            return;
         }
 
-        public TrustRule ToRule() => new(
-            RuleId,
-            Name,
-            Description,
-            Enabled,
-            Mode,
-            Severity,
-            Conditions.Select(condition => new RuleCondition(condition.Field, condition.Operator, ToJsonElement(condition.Value))).ToArray(),
-            Actions.Select(action => new RuleAction(action.Type, ToJsonElement(action.Value))).ToArray(),
-            RequiresApproval,
-            SimulationRequired,
-            CreatedBy,
-            CreatedReason,
-            RequiresApproval ? ApprovalStatus.Pending : ApprovalStatus.NotRequired,
-            ConfidenceScore,
-            Version);
-
-        public void Load(TrustRule rule)
+        var existing = await RuleRepository.GetByIdAsync(RuleId, CancellationToken.None);
+        if (existing is not null)
         {
-            RuleId = rule.RuleId;
-            Name = rule.Name;
-            Description = rule.Description;
-            Enabled = rule.Enabled;
-            Mode = rule.Mode;
-            Severity = rule.Severity;
-            Conditions.Clear();
-            Conditions.AddRange(rule.Conditions.Select(condition => new RuleConditionForm { Field = condition.Field, Operator = condition.Operator, Value = condition.Value.ToString() }));
-            Actions.Clear();
-            Actions.AddRange(rule.Actions.Select(action => new RuleActionForm { Type = action.Type, Value = action.Value.ToString() }));
-            RequiresApproval = rule.RequiresApproval;
-            SimulationRequired = rule.SimulationRequired;
-            CreatedBy = rule.CreatedBy;
-            CreatedReason = rule.CreatedReason;
-            ConfidenceScore = rule.ConfidenceScore;
-            Version = rule.Version;
-        }
-
-        private static JsonElement ToJsonElement(string value)
-        {
-            if (bool.TryParse(value, out var boolean))
-            {
-                return JsonSerializer.SerializeToElement(boolean);
-            }
-
-            if (decimal.TryParse(value, out var number))
-            {
-                return JsonSerializer.SerializeToElement(number);
-            }
-
-            return JsonSerializer.SerializeToElement(value);
+            _form.Load(existing);
         }
     }
 
-    private sealed class RuleConditionForm
-    {
-        public string Field { get; set; } = "domain.ageDays";
-        public RuleOperator Operator { get; set; } = RuleOperator.LessThan;
-        public string Value { get; set; } = "30";
-    }
-
-    private sealed class RuleActionForm
-    {
-        public RuleActionType Type { get; set; } = RuleActionType.SetRiskLevel;
-        public string Value { get; set; } = "HighRisk";
-    }
 }

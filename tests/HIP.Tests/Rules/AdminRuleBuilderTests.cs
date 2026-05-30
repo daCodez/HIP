@@ -67,6 +67,65 @@ public sealed class AdminRuleBuilderTests
     }
 
     [Test]
+    public void Rule_builder_form_generates_valid_json()
+    {
+        var service = JsonService();
+        var form = RuleBuilderFormModel.Default();
+        var json = service.ToJson(form.ToRule());
+
+        var parsed = service.TryParse(json, out var rule, out var errors);
+
+        Assert.That(parsed, Is.True, string.Join(" ", errors));
+        Assert.That(rule!.Name, Is.EqualTo(form.Name));
+    }
+
+    [Test]
+    public void Json_preview_includes_conditions()
+    {
+        var json = JsonService().ToJson(RuleBuilderFormModel.Default().ToRule());
+
+        Assert.That(json, Does.Contain("\"conditions\""));
+        Assert.That(json, Does.Contain("domain.ageDays"));
+        Assert.That(json, Does.Contain("url.usesShortener"));
+    }
+
+    [Test]
+    public void Json_preview_includes_actions()
+    {
+        var json = JsonService().ToJson(RuleBuilderFormModel.Default().ToRule());
+
+        Assert.That(json, Does.Contain("\"actions\""));
+        Assert.That(json, Does.Contain("setRiskLevel"));
+        Assert.That(json, Does.Contain("routeToSafetyPage"));
+    }
+
+    [Test]
+    public void Save_rejects_unsupported_operator()
+    {
+        var service = JsonService();
+        var json = RuleJson().Replace("\"LessThan\"", "\"UnsupportedOperator\"");
+
+        var parsed = service.TryParse(json, out _, out var errors);
+
+        Assert.That(parsed, Is.False);
+        Assert.That(errors, Does.Contain("Unsupported operator."));
+    }
+
+    [Test]
+    public void Run_simulation_returns_mvp_summary()
+    {
+        var service = AdminService();
+
+        var result = service.Simulate(RuleBuilderFormModel.Default().ToRule(), null);
+
+        Assert.That(result.TotalTestCases, Is.GreaterThan(0));
+        Assert.That(result.RecommendedAction, Is.Not.Empty);
+        Assert.That(result.RecommendedMode, Is.Not.Empty);
+        Assert.That(result.FalsePositiveRisk, Is.InRange(0m, 1m));
+        Assert.That(result.FalseNegativeRisk, Is.InRange(0m, 1m));
+    }
+
+    [Test]
     public void Simulation_works_with_default_test_cases()
     {
         var service = AdminService();
