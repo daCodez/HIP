@@ -34,6 +34,12 @@ public sealed class InMemoryRuleRepository : IRuleRepository
     public Task<IReadOnlyCollection<TrustRule>> ListAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<TrustRule>>(_rules.Values.OrderBy(rule => rule.Name).ToArray());
 
+    public Task<TrustRule?> GetByIdAsync(string ruleId, CancellationToken cancellationToken)
+    {
+        _rules.TryGetValue(ruleId, out var rule);
+        return Task.FromResult(rule);
+    }
+
     private static string Slug(string value)
     {
         var chars = value.Trim().ToLowerInvariant()

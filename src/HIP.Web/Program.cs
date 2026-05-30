@@ -71,6 +71,7 @@ MapPublicApis(app.MapGroup(ApiRoutes.Public));
 MapBadgeApis(app.MapGroup(ApiRoutes.Badge));
 MapBrowserApis(app.MapGroup(ApiRoutes.Browser));
 MapSafetyApis(app.MapGroup(ApiRoutes.Safety));
+Program.MapJsonRulesApis(app.MapGroup(ApiRoutes.Rules));
 MapSecondLifeHudApis(app.MapGroup(ApiRoutes.SecondLifeHud));
 MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules").RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingApis(app.MapGroup($"{ApiRoutes.Admin}/self-healing").RequireAuthorization(AdminPolicies.CanManageRules));
@@ -671,6 +672,94 @@ public sealed record SafetyReportResponse(
         new(true, url, source, message);
 }
 
+public sealed record RuleEvaluationApiRequest(
+    IReadOnlyCollection<TrustRule>? Rules,
+    RuleScanContext Context);
+
+public sealed record RuleApiResponse(
+    string RuleId,
+    string Name,
+    bool Enabled,
+    string Mode,
+    string Severity,
+    IReadOnlyCollection<RuleCondition> Conditions,
+    IReadOnlyCollection<RuleActionApiResponse> Actions,
+    bool RequiresApproval,
+    bool SimulationRequired)
+{
+    public static RuleApiResponse From(TrustRule rule) =>
+        new(
+            rule.RuleId,
+            rule.Name,
+            rule.Enabled,
+            rule.Mode.ToString(),
+            rule.Severity.ToString(),
+            rule.Conditions,
+            rule.Actions.Select(RuleActionApiResponse.From).ToArray(),
+            rule.RequiresApproval,
+            rule.SimulationRequired);
+}
+
+public sealed record RuleActionApiResponse(
+    string Type,
+    JsonElement Value)
+{
+    public static RuleActionApiResponse From(RuleAction action) =>
+        new(action.Type.ToString(), action.Value);
+}
+
+public sealed record RuleEvaluationApiResponse(
+    IReadOnlyCollection<string> MatchedRules,
+    IReadOnlyCollection<RuleActionSummaryApiResponse> Actions,
+    string RiskLevel,
+    IReadOnlyCollection<string> Reasons,
+    IReadOnlyCollection<RuleEvaluationItemApiResponse> WatchModeResults,
+    IReadOnlyCollection<RuleEvaluationItemApiResponse> EnforcementResults,
+    bool ShouldRouteToSafetyPage,
+    bool ShouldBlock,
+    bool RequiresReview)
+{
+    public static RuleEvaluationApiResponse From(RuleEvaluationResponse result) =>
+        new(
+            result.MatchedRules,
+            result.Actions.Select(RuleActionSummaryApiResponse.From).ToArray(),
+            result.RiskLevel.ToString(),
+            result.Reasons,
+            result.WatchModeResults.Select(RuleEvaluationItemApiResponse.From).ToArray(),
+            result.EnforcementResults.Select(RuleEvaluationItemApiResponse.From).ToArray(),
+            result.ShouldRouteToSafetyPage,
+            result.ShouldBlock,
+            result.RequiresReview);
+}
+
+public sealed record RuleEvaluationItemApiResponse(
+    string RuleId,
+    string Name,
+    string Mode,
+    bool Matched,
+    IReadOnlyCollection<RuleActionSummaryApiResponse> Actions,
+    IReadOnlyCollection<string> Reasons,
+    bool Enforced)
+{
+    public static RuleEvaluationItemApiResponse From(RuleEvaluationItem item) =>
+        new(
+            item.RuleId,
+            item.Name,
+            item.Mode.ToString(),
+            item.Matched,
+            item.Actions.Select(RuleActionSummaryApiResponse.From).ToArray(),
+            item.Reasons,
+            item.Enforced);
+}
+
+public sealed record RuleActionSummaryApiResponse(
+    string Type,
+    string Value)
+{
+    public static RuleActionSummaryApiResponse From(RuleActionSummary action) =>
+        new(action.Type.ToString(), action.Value);
+}
+
 public sealed record PublicBadgeApiResponse(
     string Domain,
     int Score,
@@ -762,6 +851,69 @@ public sealed record ScoreBreakdownApiItem(
 
 public partial class Program
 {
+    public static void MapJsonRulesApis(RouteGroupBuilder rulesApi)
+    {
+        rulesApi.MapGet("/", async (
+            IRuleRepository repository,
+            CancellationToken cancellationToken) =>
+        {
+            var rules = await RulesOrSamplesAsync(repository, cancellationToken);
+            return Results.Ok(rules.Select(RuleApiResponse.From).ToArray());
+        });
+
+        rulesApi.MapGet("/{id}", async (
+            string id,
+            IRuleRepository repository,
+            CancellationToken cancellationToken) =>
+        {
+            var rule = await repository.GetByIdAsync(id, cancellationToken)
+                ?? SampleRules().FirstOrDefault(sample => sample.RuleId.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+            return rule is null ? Results.NotFound() : Results.Ok(RuleApiResponse.From(rule));
+        });
+
+        rulesApi.MapPost("/evaluate", (
+            RuleEvaluationApiRequest request,
+            IRuleEvaluationService evaluationService) =>
+        {
+            var rules = request.Rules is { Count: > 0 } ? request.Rules : SampleRules();
+            return Results.Ok(RuleEvaluationApiResponse.From(evaluationService.Evaluate(rules, request.Context)));
+        });
+    }
+
+    private static async Task<IReadOnlyCollection<TrustRule>> RulesOrSamplesAsync(IRuleRepository repository, CancellationToken cancellationToken)
+    {
+        var rules = await repository.ListAsync(cancellationToken);
+        return rules.Count == 0 ? SampleRules() : rules;
+    }
+
+    private static IReadOnlyCollection<TrustRule> SampleRules() =>
+    [
+        new TrustRule(
+            "new-domain-shortener-high-risk",
+            "New Domain With Shortened URL",
+            "Flags shortened links that resolve to new domains.",
+            true,
+            RuleMode.Watch,
+            RuleSeverity.High,
+            [
+                new RuleCondition("domain.ageDays", RuleOperator.LessThan, JsonSerializer.SerializeToElement(30)),
+                new RuleCondition("url.usesShortener", RuleOperator.Equals, JsonSerializer.SerializeToElement(true))
+            ],
+            [
+                new RuleAction(RuleActionType.SetRiskLevel, JsonSerializer.SerializeToElement("HighRisk")),
+                new RuleAction(RuleActionType.AddReason, JsonSerializer.SerializeToElement("This link is risky because it uses a shortener and resolves to a new domain.")),
+                new RuleAction(RuleActionType.RouteToSafetyPage, JsonSerializer.SerializeToElement(true))
+            ],
+            true,
+            true,
+            "system",
+            "MVP sample JSON rule.",
+            ApprovalStatus.Pending,
+            0m,
+            1)
+    ];
+
     public static string BuildBadgeScript(string domain)
     {
         var domainLiteral = JsonSerializer.Serialize(domain);

@@ -10,6 +10,7 @@ public enum RuleActionType
     AddWarning,
     RouteToSafetyPage,
     Block,
+    Allow,
     RequireReview,
     MarkForSimulation
 }

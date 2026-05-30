@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddSingleton<IAiRiskAnalysisService, NoOpAiRiskAnalysisService>();
         services.AddSingleton<IRuleMatchingEngine, RuleMatchingEngine>();
         services.AddSingleton<IRuleActionApplier, RuleActionApplier>();
+        services.AddSingleton<IRuleEvaluationService, RuleEvaluationService>();
         services.AddSingleton<IRuleSimulationService, RuleSimulationService>();
         services.AddScoped<IRuleJsonService, RuleJsonService>();
         services.AddScoped<IRuleRepository, InMemoryRuleRepository>();

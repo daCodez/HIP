@@ -25,9 +25,7 @@ public sealed class RuleActionApplier(IRuleMatchingEngine matchingEngine) : IRul
             switch (action.Type)
             {
                 case RuleActionType.SetRiskLevel:
-                    riskLevel = Enum.TryParse<RiskStatus>(Text(action.Value), ignoreCase: true, out var parsed)
-                        ? parsed
-                        : riskLevel;
+                    riskLevel = ParseRiskLevel(Text(action.Value), riskLevel);
                     break;
                 case RuleActionType.AddScorePenalty:
                     scoreDelta -= Number(action.Value);
@@ -42,6 +40,16 @@ public sealed class RuleActionApplier(IRuleMatchingEngine matchingEngine) : IRul
                 case RuleActionType.RouteToSafetyPage:
                     routeToSafetyPage = Boolean(action.Value);
                     break;
+                case RuleActionType.Block:
+                    riskLevel = RiskStatus.Critical;
+                    routeToSafetyPage = true;
+                    requiresReview = true;
+                    reasons.Add("Rule action blocked this target.");
+                    break;
+                case RuleActionType.Allow:
+                    riskLevel = RiskStatus.ProbablySafe;
+                    routeToSafetyPage = false;
+                    break;
                 case RuleActionType.RequireReview:
                     requiresReview = Boolean(action.Value);
                     break;
@@ -49,7 +57,6 @@ public sealed class RuleActionApplier(IRuleMatchingEngine matchingEngine) : IRul
                     markedForSimulation = Boolean(action.Value);
                     break;
                 case RuleActionType.AdjustScore:
-                case RuleActionType.Block:
                 default:
                     break;
             }
@@ -72,4 +79,17 @@ public sealed class RuleActionApplier(IRuleMatchingEngine matchingEngine) : IRul
             System.Text.Json.JsonValueKind.String => bool.TryParse(value.GetString(), out var parsed) && parsed,
             _ => false
         };
+
+    private static RiskStatus ParseRiskLevel(string value, RiskStatus fallback)
+    {
+        if (value.Equals("High", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("Suspicious", StringComparison.OrdinalIgnoreCase))
+        {
+            return RiskStatus.HighRisk;
+        }
+
+        return Enum.TryParse<RiskStatus>(value, ignoreCase: true, out var parsed)
+            ? parsed
+            : fallback;
+    }
 }

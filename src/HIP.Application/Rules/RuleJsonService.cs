@@ -13,7 +13,7 @@ public sealed class RuleJsonService(IValidator<TrustRule> validator) : IRuleJson
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
         PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() }
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
     public string ToJson(TrustRule rule) => JsonSerializer.Serialize(rule, JsonOptions);

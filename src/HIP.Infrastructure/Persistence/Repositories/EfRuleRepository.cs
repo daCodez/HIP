@@ -15,4 +15,7 @@ public sealed class EfRuleRepository(HipRecordStore store) : IRuleRepository
 
     public Task<IReadOnlyCollection<TrustRule>> ListAsync(CancellationToken cancellationToken) =>
         store.ListAsync<TrustRule>(Partition, cancellationToken);
+
+    public Task<TrustRule?> GetByIdAsync(string ruleId, CancellationToken cancellationToken) =>
+        store.GetAsync<TrustRule>(Partition, ruleId, cancellationToken);
 }
