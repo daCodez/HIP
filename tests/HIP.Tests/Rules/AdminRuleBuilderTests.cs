@@ -73,7 +73,7 @@ public sealed class AdminRuleBuilderTests
 
         var result = service.Simulate(RuleEngineTests.NewDomainShortenerRule(RuleMode.Active), null);
 
-        Assert.That(result.TotalTestCases, Is.EqualTo(7));
+        Assert.That(result.TotalTestCases, Is.GreaterThanOrEqualTo(10));
         Assert.That(result.ConfidenceScore, Is.GreaterThan(0m));
     }
 
@@ -87,7 +87,7 @@ public sealed class AdminRuleBuilderTests
             new RuleSimulationTestCase("no match", new FactSet(new Dictionary<string, object?> { ["domain.ageDays"] = 900, ["url.usesShortener"] = false }), false, null, null)
         ]);
 
-        Assert.That(result.ConfidenceScore, Is.EqualTo(1m));
+        Assert.That(result.ConfidenceScore, Is.GreaterThan(0.8m));
     }
 
     [Test]

@@ -676,6 +676,45 @@ public sealed record RuleEvaluationApiRequest(
     IReadOnlyCollection<TrustRule>? Rules,
     RuleScanContext Context);
 
+public sealed record RuleSimulationApiRequest(
+    string? RuleId,
+    TrustRule? Rule,
+    IReadOnlyCollection<RuleSimulationTestCase>? TestCases);
+
+public sealed record RuleSimulationApiResponse(
+    string SimulationId,
+    string RuleId,
+    bool Passed,
+    decimal ConfidenceScore,
+    decimal DetectionRate,
+    decimal FalsePositiveRisk,
+    decimal FalseNegativeRisk,
+    string SpeedImpact,
+    string PrivacyImpact,
+    string RecommendedAction,
+    string RecommendedMode,
+    string ImpactClassification,
+    IReadOnlyCollection<string> MatchedRules,
+    IReadOnlyCollection<RuleSimulationCaseResult> FailedCases)
+{
+    public static RuleSimulationApiResponse From(RuleSimulationResult result) =>
+        new(
+            result.SimulationId,
+            result.RuleId,
+            result.Passed,
+            result.ConfidenceScore,
+            result.DetectionRate,
+            result.FalsePositiveRisk,
+            result.FalseNegativeRisk,
+            result.SpeedImpact,
+            result.PrivacyImpact,
+            result.RecommendedAction,
+            result.RecommendedMode,
+            result.ImpactClassification,
+            result.MatchedRules,
+            result.FailedCases);
+}
+
 public sealed record RuleApiResponse(
     string RuleId,
     string Name,
@@ -878,6 +917,39 @@ public partial class Program
         {
             var rules = request.Rules is { Count: > 0 } ? request.Rules : SampleRules();
             return Results.Ok(RuleEvaluationApiResponse.From(evaluationService.Evaluate(rules, request.Context)));
+        });
+
+        rulesApi.MapPost("/simulate", async (
+            RuleSimulationApiRequest request,
+            IRuleRepository ruleRepository,
+            IRuleSimulationService simulationService,
+            IRuleSimulationResultRepository simulationRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var rule = request.Rule;
+            if (rule is null && !string.IsNullOrWhiteSpace(request.RuleId))
+            {
+                rule = await ruleRepository.GetByIdAsync(request.RuleId, cancellationToken)
+                    ?? SampleRules().FirstOrDefault(sample => sample.RuleId.Equals(request.RuleId, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (rule is null)
+            {
+                return Results.BadRequest(new { error = "A rule or known ruleId is required." });
+            }
+
+            var result = simulationService.Simulate(rule, request.TestCases);
+            await simulationRepository.SaveAsync(result.SimulationId, result, cancellationToken);
+            return Results.Ok(RuleSimulationApiResponse.From(result));
+        });
+
+        rulesApi.MapGet("/simulations/{id}", async (
+            string id,
+            IRuleSimulationResultRepository simulationRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await simulationRepository.GetAsync(id, cancellationToken);
+            return result is null ? Results.NotFound() : Results.Ok(RuleSimulationApiResponse.From(result));
         });
     }
 
