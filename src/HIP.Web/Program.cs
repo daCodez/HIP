@@ -10,6 +10,7 @@ using HIP.Application.Reporting;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Rules;
+using HIP.Application.Safety;
 using HIP.Application.SelfHealing;
 using HIP.Application.SecondLife;
 using HIP.Application.Simulation;
@@ -18,6 +19,7 @@ using HIP.Domain.Reporting;
 using HIP.Domain.Reputation;
 using HIP.Domain.Identity;
 using HIP.Domain.Rules;
+using HIP.Domain.Safety;
 using HIP.Domain.SelfHealing;
 using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
@@ -68,6 +70,7 @@ app.UseAntiforgery();
 MapPublicApis(app.MapGroup(ApiRoutes.Public));
 MapBadgeApis(app.MapGroup(ApiRoutes.Badge));
 MapBrowserApis(app.MapGroup(ApiRoutes.Browser));
+MapSafetyApis(app.MapGroup(ApiRoutes.Safety));
 MapSecondLifeHudApis(app.MapGroup(ApiRoutes.SecondLifeHud));
 MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules").RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingApis(app.MapGroup($"{ApiRoutes.Admin}/self-healing").RequireAuthorization(AdminPolicies.CanManageRules));
@@ -261,6 +264,29 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     });
+}
+
+static void MapSafetyApis(RouteGroupBuilder safetyApi)
+{
+    safetyApi.MapPost("/evaluate", (
+        SafetyEvaluateRequest request,
+        ISafetyRoutingService safetyRoutingService) =>
+    {
+        try
+        {
+            return Results.Ok(SafetyEvaluateResponse.From(safetyRoutingService.EvaluateUrl(request.Url, request.Source)));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    safetyApi.MapPost("/report-safe", (SafetyReportRequest request) =>
+        Results.Ok(SafetyReportResponse.CreateAccepted(request.Url, request.Source, "Report as safe was accepted for MVP review.")));
+
+    safetyApi.MapPost("/report-dangerous", (SafetyReportRequest request) =>
+        Results.Ok(SafetyReportResponse.CreateAccepted(request.Url, request.Source, "Report as dangerous was accepted for MVP review.")));
 }
 
 static void MapConsumerApis(RouteGroupBuilder consumerApi)
@@ -594,6 +620,56 @@ public sealed record AdminAssignRequest(string ActorId, string AssignedTo);
 public sealed record DomainVerificationApiRequest(string Domain, VerificationMethod Method, string? Token);
 
 public sealed record PublicLookupRequest(string Domain);
+
+public sealed record SafetyEvaluateRequest(string Url, string? Source);
+
+public sealed record SafetyEvaluateResponse(
+    string Url,
+    string Domain,
+    string? FinalDestinationUrl,
+    string RiskLevel,
+    int Score,
+    int DomainScore,
+    int? SenderScore,
+    IReadOnlyCollection<string> Reasons,
+    string ReasonSummary,
+    string RecommendedAction,
+    bool AllowContinue,
+    bool ShouldRouteToSafetyPage)
+{
+    public static SafetyEvaluateResponse From(SafetyResult result)
+    {
+        var domain = Uri.TryCreate(result.OriginalUrl, UriKind.Absolute, out var uri)
+            ? uri.Host.Replace("www.", string.Empty, StringComparison.OrdinalIgnoreCase).ToLowerInvariant()
+            : string.Empty;
+
+        return new SafetyEvaluateResponse(
+            result.OriginalUrl,
+            domain,
+            result.FinalDestinationUrl,
+            SafetyRoutingService.DisplayRiskLevel(result.RiskLevel),
+            result.DomainScore,
+            result.DomainScore,
+            result.SenderScore,
+            [result.Reason],
+            result.Reason,
+            result.RecommendedAction,
+            result.AllowContinue,
+            result.ShouldRouteToSafetyPage);
+    }
+}
+
+public sealed record SafetyReportRequest(string Url, string? Source, string? Reason);
+
+public sealed record SafetyReportResponse(
+    bool Accepted,
+    string Url,
+    string? Source,
+    string Message)
+{
+    public static SafetyReportResponse CreateAccepted(string url, string? source, string message) =>
+        new(true, url, source, message);
+}
 
 public sealed record PublicBadgeApiResponse(
     string Domain,

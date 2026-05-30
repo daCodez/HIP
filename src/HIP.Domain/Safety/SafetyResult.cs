@@ -9,6 +9,7 @@ public sealed record SafetyResult(
     string Reason,
     int DomainScore,
     int? SenderScore,
+    string RecommendedAction,
     bool AllowContinue,
     bool ShouldRouteToSafetyPage,
     bool CanReportAsSafe,

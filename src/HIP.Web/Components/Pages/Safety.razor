@@ -1,39 +1,70 @@
 @page "/safety"
 @inject NavigationManager Navigation
+@inject ISafetyRoutingService SafetyService
 
 <PageTitle>HIP Safety Warning</PageTitle>
 
 <main class="hip-safety-page">
     <section class="hip-safety-panel">
         <p class="eyebrow">HIP Safety Page</p>
-        <h1>Review this link before continuing</h1>
+        <h1>@Heading</h1>
 
-        <dl>
-            <div>
-                <dt>Original URL</dt>
-                <dd>@DisplayUrl</dd>
+        @if (_error is not null)
+        {
+            <p class="reason">@_error</p>
+            <div class="actions">
+                <button type="button" @onclick="GoBack">Go Back</button>
             </div>
-            <div>
-                <dt>Risk</dt>
-                <dd>@DisplayRisk</dd>
-            </div>
-            <div>
-                <dt>Source</dt>
-                <dd>@DisplaySource</dd>
-            </div>
-        </dl>
+        }
+        else if (_result is not null)
+        {
+            <dl>
+                <div>
+                    <dt>Original URL</dt>
+                    <dd>@_result.OriginalUrl</dd>
+                </div>
+                <div>
+                    <dt>Final destination</dt>
+                    <dd>@(_result.FinalDestinationUrl ?? "Not resolved in MVP")</dd>
+                </div>
+                <div>
+                    <dt>Risk</dt>
+                    <dd>@SafetyRoutingService.DisplayRiskLevel(_result.RiskLevel)</dd>
+                </div>
+                <div>
+                    <dt>Domain score</dt>
+                    <dd>@_result.DomainScore/100</dd>
+                </div>
+                <div>
+                    <dt>Sender score</dt>
+                    <dd>@(_result.SenderScore?.ToString() ?? "Not supplied")</dd>
+                </div>
+                <div>
+                    <dt>Recommended action</dt>
+                    <dd>@_result.RecommendedAction</dd>
+                </div>
+                <div>
+                    <dt>Source</dt>
+                    <dd>@DisplaySource</dd>
+                </div>
+            </dl>
 
-        <p class="reason">HIP routed this link through the safety page because it may be suspicious or dangerous.</p>
+            <p class="reason">@_result.Reason</p>
 
-        <div class="actions">
-            <button type="button" @onclick="GoBack">Go Back</button>
-            @if (CanContinue)
-            {
-                <a class="continue" href="@Url" rel="noreferrer">Continue Anyway</a>
-            }
-            <button type="button">Report Safe</button>
-            <button type="button">Report Dangerous</button>
-        </div>
+            <div class="actions">
+                <button type="button" @onclick="GoBack">Go Back</button>
+                @if (_result.AllowContinue)
+                {
+                    <a class="continue" href="@_result.OriginalUrl" target="_self" rel="noreferrer noopener">Continue Anyway</a>
+                }
+                else
+                {
+                    <span class="blocked">Continue is blocked for critical risk.</span>
+                }
+                <button type="button">Report Safe</button>
+                <button type="button">Report Dangerous</button>
+            </div>
+        }
     </section>
 </main>
 
@@ -47,18 +78,51 @@
     [SupplyParameterFromQuery(Name = "risk")]
     private string? Risk { get; set; }
 
-    private string DisplayUrl => string.IsNullOrWhiteSpace(Url) ? "No URL provided." : Url;
+    private SafetyResult? _result;
+    private string? _error;
 
     private string DisplaySource => string.IsNullOrWhiteSpace(Source) ? "Unknown" : Source;
 
-    private string DisplayRisk => string.IsNullOrWhiteSpace(Risk) ? "Unknown" : Risk;
+    private string Heading => _result?.RiskLevel == RiskStatus.Critical
+        ? "HIP blocked this critical-risk link"
+        : "Review this link before continuing";
 
-    private bool CanContinue =>
-        !string.Equals(Risk, nameof(RiskStatus.Dangerous), StringComparison.OrdinalIgnoreCase) &&
-        !string.Equals(Risk, nameof(RiskStatus.Critical), StringComparison.OrdinalIgnoreCase);
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrWhiteSpace(Url))
+        {
+            _error = "No URL was provided.";
+            _result = null;
+            return;
+        }
+
+        try
+        {
+            _result = SafetyService.EvaluateUrl(Url, Source);
+            if (Enum.TryParse<RiskStatus>(Risk, ignoreCase: true, out var suppliedRisk) &&
+                suppliedRisk == RiskStatus.Critical)
+            {
+                _result = _result with
+                {
+                    RiskLevel = RiskStatus.Critical,
+                    DomainScore = 5,
+                    RecommendedAction = SafetyRoutingService.RecommendedActionFor(RiskStatus.Critical),
+                    AllowContinue = false,
+                    ShouldRouteToSafetyPage = true
+                };
+            }
+
+            _error = null;
+        }
+        catch (ArgumentException ex)
+        {
+            _error = ex.Message;
+            _result = null;
+        }
+    }
 
     private void GoBack()
     {
-        Navigation.NavigateTo("javascript:history.back()");
+        Navigation.NavigateTo("/lookup");
     }
 }

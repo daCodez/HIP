@@ -10,4 +10,5 @@ public static class ApiRoutes
     public const string SecondLifeHud = $"{V1}/sl-hud";
     public const string Consumer = $"{V1}/consumer";
     public const string Browser = $"{V1}/browser";
+    public const string Safety = $"{V1}/safety";
 }
