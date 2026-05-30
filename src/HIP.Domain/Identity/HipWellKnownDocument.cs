@@ -1,9 +1,7 @@
 namespace HIP.Domain.Identity;
 
 public sealed record HipWellKnownDocument(
-    string HipIdentityId,
     string Domain,
-    string PublicKey,
-    string KeyAlgorithm,
-    DateTimeOffset SignedAtUtc,
-    string Signature);
+    string HipIdentityId,
+    IReadOnlyCollection<SigningKey> PublicKeys,
+    DateTimeOffset IssuedAtUtc);

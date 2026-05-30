@@ -603,6 +603,70 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
         }
     });
 
+    identityApi.MapPost("/websites/register", async (
+        WebsiteIdentityRegistrationRequest request,
+        IWebsiteIdentityService websiteIdentityService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await websiteIdentityService.RegisterAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    })
+        .RequireAuthorization(AdminPolicies.CanManageRules);
+
+    identityApi.MapPost("/websites/verify", async (
+        WebsiteVerificationRequest request,
+        IWebsiteIdentityService websiteIdentityService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await websiteIdentityService.VerifyAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    })
+        .RequireAuthorization(AdminPolicies.CanManageRules);
+
+    identityApi.MapGet("/websites/{domain}", async (
+        string domain,
+        IWebsiteIdentityService websiteIdentityService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return await websiteIdentityService.GetAsync(domain, cancellationToken) is { } website
+                ? Results.Ok(website)
+                : Results.NotFound();
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    identityApi.MapPost("/signature/verify", async (
+        HipSignatureVerificationRequest request,
+        IHipSignatureService signatureService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await signatureService.VerifyAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
     identityApi.MapPost("/domain-verification/start", async (
         DomainVerificationApiRequest request,
         IDomainVerificationService domainVerificationService,

@@ -81,6 +81,83 @@ public sealed class IdentitySigningTests
     }
 
     [Test]
+    public async Task Website_identity_can_be_registered()
+    {
+        var service = WebsiteService();
+
+        var response = await service.RegisterAsync(new WebsiteIdentityRegistrationRequest("Example.com", "Example", VerificationMethod.WellKnownHipJson), CancellationToken.None);
+
+        Assert.That(response.WebsiteIdentity.Domain, Is.EqualTo("example.com"));
+        Assert.That(response.WebsiteIdentity.HipIdentityId, Is.EqualTo("hip:web:example.com"));
+        Assert.That(response.WebsiteIdentity.PublicKeys.Single().Algorithm, Is.EqualTo(DevelopmentHipCryptoProvider.Algorithm));
+        Assert.That(response.Warning, Does.Contain("non-production placeholder crypto provider"));
+    }
+
+    [Test]
+    public async Task Well_known_verification_placeholder_works()
+    {
+        var service = WebsiteService();
+        var registered = await service.RegisterAsync(new WebsiteIdentityRegistrationRequest("wellknown.example", "Well Known", VerificationMethod.WellKnownHipJson), CancellationToken.None);
+
+        var verified = await service.VerifyAsync(new WebsiteVerificationRequest("wellknown.example", VerificationMethod.WellKnownHipJson, registered.VerificationRequest.Token), CancellationToken.None);
+        var document = await service.BuildWellKnownDocumentAsync("wellknown.example", CancellationToken.None);
+
+        Assert.That(verified.VerificationStatus, Is.EqualTo(VerificationStatus.Verified));
+        Assert.That(document.Domain, Is.EqualTo("wellknown.example"));
+        Assert.That(document.PublicKeys.Single().KeyId, Is.EqualTo("default"));
+    }
+
+    [Test]
+    public async Task Dns_verification_placeholder_works()
+    {
+        var service = WebsiteService();
+        var registered = await service.RegisterAsync(new WebsiteIdentityRegistrationRequest("dns.example", "DNS Example", VerificationMethod.DnsTxt), CancellationToken.None);
+
+        var verified = await service.VerifyAsync(new WebsiteVerificationRequest("dns.example", VerificationMethod.DnsTxt, registered.VerificationRequest.Token), CancellationToken.None);
+
+        Assert.That(verified.VerificationStatus, Is.EqualTo(VerificationStatus.Verified));
+        Assert.That(registered.VerificationRequest.Token, Does.StartWith("hip-domain-verification="));
+    }
+
+    [Test]
+    public async Task Signature_verification_result_can_be_returned()
+    {
+        var repository = new InMemoryHipIdentityRepository();
+        var crypto = new DevelopmentHipCryptoProvider();
+        var keyPair = crypto.GenerateKeyPair();
+        var identity = new HipIdentity("hip:web:signed.example", IdentitySubjectType.Website, "signed.example", keyPair.PublicKey, keyPair.Algorithm, VerificationStatus.Verified, DateTimeOffset.UtcNow, "signed.example");
+        await repository.SaveAsync(identity, CancellationToken.None);
+        var signatureService = new HipSignatureService(crypto, repository);
+        var hash = crypto.HashContent("homepage");
+        var signature = crypto.SignHash(hash, keyPair.PrivateKey);
+
+        var result = await signatureService.VerifyAsync(new HipSignatureVerificationRequest(identity.IdentityId, hash, signature, "Trusted"), CancellationToken.None);
+
+        Assert.That(result.IsValid, Is.True);
+        Assert.That(result.SignedIdentityStatus, Is.EqualTo("Verified"));
+        Assert.That(result.Reason, Does.Contain("HIP knows who signed it"));
+    }
+
+    [Test]
+    public async Task Valid_signature_does_not_automatically_mark_site_safe()
+    {
+        var repository = new InMemoryHipIdentityRepository();
+        var crypto = new DevelopmentHipCryptoProvider();
+        var keyPair = crypto.GenerateKeyPair();
+        var identity = new HipIdentity("hip:web:low-rep.example", IdentitySubjectType.Website, "low-rep.example", keyPair.PublicKey, keyPair.Algorithm, VerificationStatus.Verified, DateTimeOffset.UtcNow, "low-rep.example");
+        await repository.SaveAsync(identity, CancellationToken.None);
+        var signatureService = new HipSignatureService(crypto, repository);
+        var hash = crypto.HashContent("homepage");
+        var signature = crypto.SignHash(hash, keyPair.PrivateKey);
+
+        var result = await signatureService.VerifyAsync(new HipSignatureVerificationRequest(identity.IdentityId, hash, signature, "Low"), CancellationToken.None);
+
+        Assert.That(result.IsValid, Is.True);
+        Assert.That(result.FinalRiskStatus, Is.EqualTo("Caution"));
+        Assert.That(result.Reason, Does.Contain("does not automatically mean safe"));
+    }
+
+    [Test]
     public async Task Public_lookup_shows_signed_identity_status()
     {
         var lookup = await new PublicDomainLookupService().LookupDomainAsync("verified-example.com", CancellationToken.None);
@@ -115,4 +192,10 @@ public sealed class IdentitySigningTests
         crypto = new DevelopmentHipCryptoProvider();
         return new HipIdentityService(crypto, new InMemoryHipIdentityRepository());
     }
+
+    private static WebsiteIdentityService WebsiteService() =>
+        new(new DevelopmentHipCryptoProvider(), new InMemoryHipIdentityRepository(), new InMemoryDomainVerificationService());
+
+    private static HipSignatureService SignatureService(DevelopmentHipCryptoProvider crypto) =>
+        new(crypto, new InMemoryHipIdentityRepository());
 }

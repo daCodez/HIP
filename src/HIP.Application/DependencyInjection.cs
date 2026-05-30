@@ -60,7 +60,9 @@ public static class DependencyInjection
         services.AddSingleton<IHipCryptoProvider, DevelopmentHipCryptoProvider>();
         services.AddScoped<IHipIdentityRepository, InMemoryHipIdentityRepository>();
         services.AddScoped<IHipIdentityService, HipIdentityService>();
-        services.AddScoped<IDomainVerificationService, InMemoryDomainVerificationService>();
+        services.AddScoped<IHipSignatureService, HipSignatureService>();
+        services.AddScoped<IWebsiteIdentityService, WebsiteIdentityService>();
+        services.AddSingleton<IDomainVerificationService, InMemoryDomainVerificationService>();
         services.AddScoped<ISecondLifeHudService, SecondLifeHudService>();
         services.AddScoped<IBrowserPluginService, BrowserPluginService>();
 

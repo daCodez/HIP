@@ -22,3 +22,31 @@ public sealed record VerifySignatureRequest(
     string IdentityId,
     string ContentHash,
     string SignatureValue);
+
+public sealed record WebsiteIdentityRegistrationRequest(
+    string Domain,
+    string DisplayName,
+    VerificationMethod VerificationMethod);
+
+public sealed record WebsiteIdentityRegistrationResponse(
+    WebsiteIdentity WebsiteIdentity,
+    DomainVerificationRequest VerificationRequest,
+    string? DevelopmentPrivateKey,
+    string Warning);
+
+public sealed record WebsiteVerificationRequest(
+    string Domain,
+    VerificationMethod Method,
+    string Token);
+
+public sealed record HipSignatureRequest(
+    string IdentityId,
+    string ContentHash,
+    string DevelopmentPrivateKey,
+    DateTimeOffset? ExpiresAtUtc);
+
+public sealed record HipSignatureVerificationRequest(
+    string IdentityId,
+    string ContentHash,
+    string SignatureValue,
+    string? SignerReputationStatus);
