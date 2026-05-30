@@ -1,3 +1,5 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using HIP.Application;
 using HIP.Application.Browser;
 using HIP.Application.Consumer;
@@ -64,6 +66,7 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 MapPublicApis(app.MapGroup(ApiRoutes.Public));
+MapBadgeApis(app.MapGroup(ApiRoutes.Badge));
 MapBrowserApis(app.MapGroup(ApiRoutes.Browser));
 MapSecondLifeHudApis(app.MapGroup(ApiRoutes.SecondLifeHud));
 MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules").RequireAuthorization(AdminPolicies.CanManageRules));
@@ -193,6 +196,38 @@ static void MapDashboardApis(RouteGroupBuilder dashboardApi)
         IAdminDashboardService dashboardService,
         CancellationToken cancellationToken) =>
         Results.Ok(await dashboardService.GetSummaryAsync(cancellationToken)));
+}
+
+static void MapBadgeApis(RouteGroupBuilder badgeApi)
+{
+    badgeApi.MapGet("/{domain}", async (
+        string domain,
+        ITrustBadgeService badgeService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(PublicBadgeApiResponse.From(await badgeService.GetDomainBadgeAsync(domain, cancellationToken)));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    badgeApi.MapGet("/{domain}/script", (
+        string domain) =>
+    {
+        try
+        {
+            var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+            return Results.Text(Program.BuildBadgeScript(normalized), "application/javascript");
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.Text($"console.warn('HIP badge unavailable: {JavaScriptEncoder.Default.Encode(ex.Message)}');", "application/javascript");
+        }
+    });
 }
 
 static void MapBrowserApis(RouteGroupBuilder browserApi)
@@ -560,6 +595,40 @@ public sealed record DomainVerificationApiRequest(string Domain, VerificationMet
 
 public sealed record PublicLookupRequest(string Domain);
 
+public sealed record PublicBadgeApiResponse(
+    string Domain,
+    int Score,
+    string Status,
+    bool Verified,
+    bool VerifiedDomain,
+    DateTimeOffset LastCheckedUtc,
+    string LookupUrl,
+    string PublicLookupUrl,
+    string BadgeText,
+    string BadgeVariant,
+    string IdentityVerificationStatus,
+    bool? SignatureValid,
+    string VerifiedMeaning,
+    string? ResponseSignature)
+{
+    public static PublicBadgeApiResponse From(PublicBadgeResponse badge) =>
+        new(
+            badge.Domain,
+            badge.Score,
+            badge.Status.ToString(),
+            badge.VerifiedDomain,
+            badge.VerifiedDomain,
+            badge.LastCheckedUtc,
+            badge.LookupUrl,
+            badge.PublicLookupUrl,
+            badge.BadgeText,
+            badge.BadgeVariant,
+            badge.IdentityVerificationStatus,
+            badge.SignatureValid,
+            badge.VerifiedMeaning,
+            badge.ResponseSignature);
+}
+
 public sealed record PublicLookupApiResponse(
     string Domain,
     int Score,
@@ -615,4 +684,66 @@ public sealed record ScoreBreakdownApiItem(
         new(item.Category, item.Score, item.Status.ToString(), item.Explanation, item.Reasons);
 }
 
-public partial class Program;
+public partial class Program
+{
+    public static string BuildBadgeScript(string domain)
+    {
+        var domainLiteral = JsonSerializer.Serialize(domain);
+        return $$"""
+(function renderHipLiveTrustBadge() {
+  const domain = {{domainLiteral}};
+  const currentScript = document.currentScript;
+  const apiBase = currentScript && currentScript.src ? new URL(currentScript.src).origin : window.location.origin;
+  const selector = `[data-hip-badge="${domain}"], .hip-trust-badge[data-domain="${domain}"]`;
+  let container = document.querySelector(selector);
+  if (!container) {
+    container = document.createElement("div");
+    container.setAttribute("data-hip-badge", domain);
+    if (currentScript && currentScript.parentNode) {
+      currentScript.parentNode.insertBefore(container, currentScript);
+    } else {
+      document.body.appendChild(container);
+    }
+  }
+
+  ensureStyles();
+  fetch(`${apiBase}/api/v1/badge/${encodeURIComponent(domain)}`, { headers: { "Accept": "application/json" } })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HIP badge failed with status ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(render)
+    .catch(() => {
+      container.innerHTML = `<a class="hip-live-badge hip-live-badge-unknown" href="${apiBase}/lookup/${encodeURIComponent(domain)}" target="_blank" rel="noopener noreferrer"><strong>HIP Unavailable</strong><span>Score: unavailable</span><span>Status: Unknown</span></a>`;
+    });
+
+  function render(badge) {
+    const variant = String(badge.badgeVariant || badge.status || "unknown").replace(/[^a-z0-9]/gi, "").toLowerCase();
+    const checked = badge.lastCheckedUtc ? new Date(badge.lastCheckedUtc).toLocaleDateString() : "Unknown";
+    const lookupUrl = new URL(badge.lookupUrl || badge.publicLookupUrl || `/lookup/${badge.domain}`, apiBase).toString();
+    container.innerHTML = `<a class="hip-live-badge hip-live-badge-${variant}" href="${escapeAttribute(lookupUrl)}" target="_blank" rel="noopener noreferrer"><strong>${badge.verified ? "HIP Verified" : "HIP Warning"}</strong><span>Score: ${escapeHtml(badge.score)}/100</span><span>Status: ${escapeHtml(badge.status)}</span><span>Verified domain: ${badge.verifiedDomain ? "Yes" : "No"}</span><small>Last checked: ${escapeHtml(checked)}</small><small>Verified identity does not automatically mean safe.</small></a>`;
+  }
+
+  function ensureStyles() {
+    if (document.getElementById("hip-live-badge-style")) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = "hip-live-badge-style";
+    style.textContent = ".hip-live-badge{display:inline-grid;gap:2px;min-width:168px;padding:10px 12px;border:1px solid #cbd5e1;border-left:5px solid #64748b;border-radius:8px;background:#fff;color:#111827;font:12px/1.3 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-decoration:none;box-shadow:0 6px 16px rgba(15,23,42,.12)}.hip-live-badge strong{font-size:13px;text-transform:uppercase}.hip-live-badge span{font-size:12px}.hip-live-badge small{font-size:11px;color:#475569}.hip-live-badge-trusted{border-left-color:#047857}.hip-live-badge-probablysafe{border-left-color:#0f766e}.hip-live-badge-caution{border-left-color:#ca8a04}.hip-live-badge-highrisk{border-left-color:#ea580c}.hip-live-badge-dangerous,.hip-live-badge-critical{border-left-color:#b91c1c}.hip-live-badge-unknown{border-left-color:#64748b}";
+    document.head.appendChild(style);
+  }
+
+  function escapeHtml(value) {
+    return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\"", "&quot;").replaceAll("'", "&#039;");
+  }
+
+  function escapeAttribute(value) {
+    return escapeHtml(value);
+  }
+})();
+""";
+    }
+}

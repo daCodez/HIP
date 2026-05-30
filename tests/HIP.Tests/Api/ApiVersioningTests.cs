@@ -68,12 +68,14 @@ public sealed class ApiVersioningTests
         await using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/public/badge/domain/example.com");
+        var response = await client.GetAsync("/api/v1/badge/example.com");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         Assert.That(json.RootElement.TryGetProperty("score", out _), Is.True);
         Assert.That(json.RootElement.TryGetProperty("status", out _), Is.True);
+        Assert.That(json.RootElement.GetProperty("domain").GetString(), Is.EqualTo("example.com"));
+        Assert.That(json.RootElement.GetProperty("lookupUrl").GetString(), Is.EqualTo("/lookup/example.com"));
     }
 
     [Test]
@@ -151,7 +153,7 @@ public sealed class ApiVersioningTests
     {
         var source = File.ReadAllText(Path.Combine(RepositoryRoot(), "src/HIP.Web/wwwroot/hip-badge.js"));
 
-        Assert.That(source, Does.Contain("/api/v1/public/badge/domain/"));
+        Assert.That(source, Does.Contain("/api/v1/badge/"));
         Assert.That(source, Does.Not.Contain("/api/public/badge"));
     }
 

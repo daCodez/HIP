@@ -8,9 +8,11 @@ public sealed record PublicBadgeResponse(
     RiskStatus Status,
     bool VerifiedDomain,
     DateTimeOffset LastCheckedUtc,
+    string LookupUrl,
     string PublicLookupUrl,
     string BadgeText,
     string BadgeVariant,
     string IdentityVerificationStatus,
     bool? SignatureValid,
+    string VerifiedMeaning,
     string? ResponseSignature);

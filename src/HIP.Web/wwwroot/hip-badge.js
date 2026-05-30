@@ -23,7 +23,7 @@
     }
 
     const apiBase = container.dataset.apiBase || scriptOrigin;
-    const response = await fetch(`${apiBase}/api/v1/public/badge/domain/${encodeURIComponent(requestedDomain)}`, {
+    const response = await fetch(`${apiBase}/api/v1/badge/${encodeURIComponent(requestedDomain)}`, {
       method: "GET",
       headers: {
         "Accept": "application/json"
@@ -58,6 +58,7 @@
         <span>Status: ${escapeHtml(badge.status)}</span>
         <span>Verified: ${badge.verifiedDomain ? "Yes" : "No"}</span>
         <small>Last checked: ${escapeHtml(checked)}</small>
+        <small>Verified identity does not automatically mean safe.</small>
       </a>
     `;
   }

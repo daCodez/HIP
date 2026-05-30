@@ -15,10 +15,12 @@ public sealed class TrustBadgeService(IPublicDomainLookupService lookupService) 
             lookup.VerificationStatus == "Verified",
             lookup.LastCheckedUtc,
             lookup.PublicLookupUrl,
-            $"{label} - Score: {lookup.FinalHipScore}/100 - Status: {lookup.Status}",
+            lookup.PublicLookupUrl,
+            $"{label} - Score: {lookup.FinalHipScore}/100 - Status: {lookup.Status}. Verified identity does not automatically mean safe.",
             variant,
             lookup.IdentityVerificationStatus,
             lookup.SignatureValid,
+            "Verified means the domain identity is known; the score and status show current trust level.",
             null);
     }
 }
