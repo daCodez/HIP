@@ -1,23 +1,39 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
+<div class="hip-shell">
+    <aside class="hip-sidebar">
         <NavMenu />
-    </div>
+    </aside>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+    <main class="hip-main">
+        <header class="hip-topbar">
+            <label class="hip-search" aria-label="Search HIP">
+                <span aria-hidden="true">⌕</span>
+                <input type="search" placeholder="Search threats, identities, rules..." />
+            </label>
 
-        <article class="content px-4">
+            <div class="hip-topbar-actions">
+                <button class="hip-env" type="button"><span></span> Production</button>
+                <button class="hip-icon-button" type="button" aria-label="Toggle theme">◐</button>
+                <button class="hip-icon-button hip-has-alert" type="button" aria-label="Notifications">!</button>
+                <div class="hip-user">
+                    <span class="hip-avatar">A</span>
+                    <span>
+                        <strong>Alex Rivera</strong>
+                        <small>Security Admin</small>
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <div class="hip-content">
             @Body
-        </article>
+        </div>
     </main>
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    <span class="dismiss">x</span>
 </div>

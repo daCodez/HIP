@@ -1,5 +1,8 @@
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    margin: 0;
+    color: #d8e4f7;
+    background: #050b16;
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
 }
 
 a, .btn-link {
@@ -526,4 +529,268 @@ h1:focus {
 
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
+}
+
+.hip-page-heading {
+    max-width: 1540px;
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 28px;
+}
+
+.hip-page-heading h1,
+.admin-rule-header h1,
+.hip-panel h2,
+.lookup-result h2,
+.rule-builder-panel h2 {
+    margin: 0;
+    color: #eef4ff;
+    font-size: 1.55rem;
+    line-height: 1.2;
+}
+
+.hip-page-heading p,
+.admin-rule-header p,
+.hip-panel p,
+.lookup-result p,
+.rule-builder-panel p {
+    margin: 6px 0 0;
+    color: #6f829e;
+}
+
+.live-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    color: #9db0c8;
+    font-weight: 700;
+}
+
+.hip-metric-grid {
+    max-width: 1540px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 28px;
+}
+
+.hip-metric-card,
+.hip-panel,
+.admin-rule-header,
+.rule-builder-panel,
+.lookup-result,
+.score-card,
+.breakdown-card,
+.self-healing-item,
+.self-healing-candidate,
+.hip-lookup-hero,
+.hip-lookup-info,
+.hip-lookup-panel,
+.hip-safety-panel {
+    border: 1px solid #172b45;
+    border-radius: 8px;
+    background: #0e2036;
+    box-shadow: none;
+}
+
+.hip-metric-card {
+    min-height: 116px;
+    padding: 24px;
+}
+
+.hip-metric-card.wide {
+    grid-column: span 1;
+}
+
+.hip-metric-card span {
+    display: block;
+    color: #6f829e;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.hip-metric-card strong {
+    display: block;
+    margin-top: 12px;
+    color: #eef4ff;
+    font-size: 1.9rem;
+    line-height: 1;
+}
+
+.hip-metric-card small {
+    display: block;
+    margin-top: 12px;
+    color: #12d895;
+    font-weight: 800;
+}
+
+.hip-metric-card.danger strong,
+.hip-metric-card.hot strong {
+    color: #ff6276;
+}
+
+.hip-metric-card.good strong {
+    color: #12d895;
+}
+
+.hip-panel {
+    max-width: 1540px;
+    overflow: hidden;
+}
+
+.hip-panel-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 20px;
+    padding: 22px 24px;
+}
+
+.hip-panel-heading a {
+    color: #08d7ec;
+    text-decoration: none;
+    font-weight: 800;
+}
+
+.hip-table-wrap,
+.table-wrap {
+    overflow-x: auto;
+}
+
+.hip-data-table,
+.admin-rule-table,
+.table-wrap table {
+    width: 100%;
+    border-collapse: collapse;
+    color: #cbd8eb;
+}
+
+.hip-data-table th,
+.hip-data-table td,
+.admin-rule-table th,
+.admin-rule-table td,
+.table-wrap th,
+.table-wrap td {
+    border-bottom: 1px solid #172b45;
+    padding: 16px 20px;
+    text-align: left;
+}
+
+.hip-data-table th,
+.admin-rule-table th,
+.table-wrap th {
+    color: #6f829e;
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.hip-pill {
+    display: inline-flex;
+    border-radius: 7px;
+    padding: 4px 10px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.hip-pill.danger {
+    color: #ff6276;
+    background: rgba(255, 81, 104, 0.16);
+    border: 1px solid rgba(255, 81, 104, 0.25);
+}
+
+.hip-pill.suspicious {
+    color: #ff944d;
+    background: rgba(255, 148, 77, 0.14);
+    border: 1px solid rgba(255, 148, 77, 0.24);
+}
+
+.hip-pill.caution {
+    color: #ffd044;
+    background: rgba(255, 208, 68, 0.14);
+    border: 1px solid rgba(255, 208, 68, 0.24);
+}
+
+.content,
+.admin-rule-page,
+.hip-safety-page,
+.hip-lookup-page {
+    min-height: auto;
+    padding: 0;
+    background: transparent;
+}
+
+.admin-rule-header,
+.rule-builder-panel,
+.lookup-result,
+.hip-lookup-hero,
+.hip-lookup-info,
+.hip-lookup-panel,
+.hip-safety-panel {
+    max-width: 1240px;
+    color: #d8e4f7;
+}
+
+.rule-builder-panel input,
+.rule-builder-panel textarea,
+.rule-builder-panel select,
+.lookup-form input {
+    color: #d8e4f7;
+    border-color: #1c3555;
+    background: #091426;
+}
+
+.rule-builder-panel button,
+.quick-link-grid a,
+.primary-button,
+.lookup-form button,
+.hip-safety-panel button,
+.hip-safety-panel .continue {
+    border-color: #0d7588;
+    border-radius: 8px;
+    color: #06101d;
+    background: #04c7df;
+    font-weight: 800;
+}
+
+.json-preview,
+.json-editor {
+    color: #d8e4f7;
+    border-color: #1c3555;
+    background: #07111f;
+}
+
+.score-card strong,
+.breakdown-card strong,
+.hip-lookup-panel h1,
+.hip-safety-panel h1,
+.breakdown-card h3 {
+    color: #eef4ff;
+}
+
+.score-card span,
+.breakdown-card,
+.hip-safety-panel dt,
+.hip-safety-panel dd,
+.hip-safety-panel .reason,
+.range-list,
+.lookup-section {
+    color: #9db0c8;
+}
+
+@media (max-width: 1100px) {
+    .hip-metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .hip-metric-grid,
+    .hip-page-heading {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+    }
 }

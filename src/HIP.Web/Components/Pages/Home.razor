@@ -1,7 +1,113 @@
-﻿@page "/"
+@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>HIP Security Overview</PageTitle>
 
-<h1>Hello, world!</h1>
+<section class="hip-page-heading">
+    <div>
+        <h1>Security Overview</h1>
+        <p>Real-time trust, origin, reputation, and risk signals across HIP clients.</p>
+    </div>
+    <span class="live-status"><i></i> Live monitoring</span>
+</section>
 
-Welcome to your new app.
+<section class="hip-metric-grid">
+    <article class="hip-metric-card danger">
+        <span>Threat Score</span>
+        <strong>23/100</strong>
+        <small>8% better vs last 24h</small>
+    </article>
+    <article class="hip-metric-card hot">
+        <span>Threats Blocked</span>
+        <strong>312</strong>
+        <small>23% increase vs last 24h</small>
+    </article>
+    <article class="hip-metric-card good">
+        <span>Reputation Score</span>
+        <strong>94%</strong>
+        <small>2% better vs last 24h</small>
+    </article>
+    <article class="hip-metric-card">
+        <span>Identities Verified</span>
+        <strong>4,201</strong>
+        <small>5% better vs last 24h</small>
+    </article>
+    <article class="hip-metric-card wide">
+        <span>Messages Scanned</span>
+        <strong>14,829</strong>
+    </article>
+    <article class="hip-metric-card wide">
+        <span>Links Scanned</span>
+        <strong>8,734</strong>
+    </article>
+    <article class="hip-metric-card wide good">
+        <span>Active Monitors</span>
+        <strong>7</strong>
+    </article>
+</section>
+
+<section class="hip-panel">
+    <div class="hip-panel-heading">
+        <div>
+            <h2>Recent Threats</h2>
+            <p>Last 24 hours of privacy-safe detected threats.</p>
+        </div>
+        <a href="/admin/review">View all threats</a>
+    </div>
+
+    <div class="hip-table-wrap">
+        <table class="hip-data-table">
+            <thead>
+                <tr>
+                    <th>Threat Type</th>
+                    <th>Source</th>
+                    <th>Target</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Phishing</td>
+                    <td>Email</td>
+                    <td>alex@example.com</td>
+                    <td><span class="hip-pill danger">danger</span></td>
+                    <td><span class="hip-pill danger">Blocked</span></td>
+                    <td>2m ago</td>
+                </tr>
+                <tr>
+                    <td>Suspicious Link</td>
+                    <td>Chat</td>
+                    <td>bit.ly/3xAb...</td>
+                    <td><span class="hip-pill suspicious">suspicious</span></td>
+                    <td><span class="hip-pill suspicious">Flagged</span></td>
+                    <td>14m ago</td>
+                </tr>
+                <tr>
+                    <td>Identity Spoof</td>
+                    <td>Second Life</td>
+                    <td>AvatarX123</td>
+                    <td><span class="hip-pill caution">caution</span></td>
+                    <td><span class="hip-pill caution">Reviewing</span></td>
+                    <td>1h ago</td>
+                </tr>
+                <tr>
+                    <td>Malware URL</td>
+                    <td>Email</td>
+                    <td>free-gift.ru</td>
+                    <td><span class="hip-pill danger">danger</span></td>
+                    <td><span class="hip-pill danger">Blocked</span></td>
+                    <td>2h ago</td>
+                </tr>
+                <tr>
+                    <td>Social Engineering</td>
+                    <td>Discord</td>
+                    <td>User#4521</td>
+                    <td><span class="hip-pill suspicious">suspicious</span></td>
+                    <td><span class="hip-pill suspicious">Flagged</span></td>
+                    <td>3h ago</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>

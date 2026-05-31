@@ -1,30 +1,83 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">HIP.Web</a>
+<div class="hip-brand">
+    <div class="hip-mark" aria-hidden="true">H</div>
+    <div>
+        <strong>HIP</strong>
+        <span>Human Identity Protocol</span>
     </div>
 </div>
 
 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler')?.click()">
+    <nav class="hip-nav">
+        <NavLink class="hip-nav-link" href="" Match="NavLinkMatch.All">
+            <span class="hip-nav-icon">□</span>
+            <span>Dashboard</span>
+            <small>MVP</small>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="admin/review">
+            <span class="hip-nav-icon">!</span>
+            <span>Alert Center</span>
+            <em>5</em>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="admin/review">
+            <span class="hip-nav-icon">▣</span>
+            <span>Review Queue</span>
+            <em class="warning">4</em>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="admin/reputation-overrides">
+            <span class="hip-nav-icon">☆</span>
+            <span>Reputation</span>
+            <small>MVP</small>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="lookup">
+            <span class="hip-nav-icon">⌕</span>
+            <span>Identity Lookup</span>
+            <small>MVP</small>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="safety">
+            <span class="hip-nav-icon">↗</span>
+            <span>Link Scanner</span>
+            <em class="orange">1</em>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="admin/self-healing">
+            <span class="hip-nav-icon">⚡</span>
+            <span>Threats</span>
+            <em>12</em>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="consumer/devices">
+            <span class="hip-nav-icon">▱</span>
+            <span>Second Life HUD</span>
+            <small>MVP</small>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="admin/rules">
+            <span class="hip-nav-icon">≡</span>
+            <span>Rules Engine</span>
+            <small>MVP</small>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="consumer/reports">
+            <span class="hip-nav-icon">▥</span>
+            <span>Reports</span>
+            <small>MVP</small>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="consumer/reports">
+            <span class="hip-nav-icon">□</span>
+            <span>Feedback Loop</span>
+            <small>MVP</small>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="admin/audit">
+            <span class="hip-nav-icon">▤</span>
+            <span>Audit Log</span>
+            <small>MVP</small>
+        </NavLink>
+        <NavLink class="hip-nav-link" href="admin/roles">
+            <span class="hip-nav-icon">⚙</span>
+            <span>Settings</span>
+            <small>MVP</small>
+        </NavLink>
     </nav>
 </div>
 
+<div class="hip-sidebar-footer">
+    <button type="button">Collapse</button>
+</div>
