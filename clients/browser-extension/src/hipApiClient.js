@@ -100,9 +100,10 @@ export class HipApiClient {
   safetyPageUrl(originalUrl, sourceDomain, riskStatus) {
     const url = new URL("/safety", this.config.webBaseUrl);
     url.searchParams.set("url", originalUrl);
+    url.searchParams.set("source", "browser");
 
     if (sourceDomain) {
-      url.searchParams.set("source", sourceDomain);
+      url.searchParams.set("sourceDomain", sourceDomain);
     }
 
     if (riskStatus) {
@@ -144,6 +145,11 @@ export function statusNeedsAttention(status) {
 
 export function statusNeedsSafetyRoute(status) {
   return ["HighRisk", "Dangerous", "Critical"].includes(status);
+}
+
+export function safeBrowserSafetyPageUrl(webBaseUrl, originalUrl, sourceDomain, riskStatus) {
+  const client = new HipApiClient({ apiBaseUrl: HIP_CONFIG.apiBaseUrl, webBaseUrl });
+  return client.safetyPageUrl(originalUrl, sourceDomain, riskStatus);
 }
 
 export function isVerifiedStatus(lookup) {

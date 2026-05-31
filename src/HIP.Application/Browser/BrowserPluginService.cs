@@ -63,10 +63,11 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
                     RiskStatus.HighRisk.ToString(),
                     38,
                     ["Shortened link detected"],
-                    "ShowWarning",
+                    "RouteToSafetyPage",
                     true,
                     "Suspicious",
-                    $"/lookup/domain/{Uri.EscapeDataString(domain)}"));
+                    $"/lookup/domain/{Uri.EscapeDataString(domain)}",
+                    SafetyPageUrl(linkUri.ToString(), RiskStatus.HighRisk)));
                 continue;
             }
 
@@ -81,7 +82,8 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
                 RecommendedAction(lookup.Status),
                 requiresIcon,
                 LabelFor(lookup.Status, IsVerifiedTrusted(lookup)),
-                lookup.PublicLookupUrl));
+                lookup.PublicLookupUrl,
+                RequiresSafetyRoute(lookup.Status) ? SafetyPageUrl(linkUri.ToString(), lookup.Status) : null));
         }
 
         return new BrowserScanLinksResponse(pageUri.ToString(), results);
@@ -120,11 +122,17 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
 
     private static string RecommendedAction(RiskStatus status) => status switch
     {
-        RiskStatus.HighRisk => "ShowWarning",
+        RiskStatus.HighRisk => "RouteToSafetyPage",
         RiskStatus.Dangerous or RiskStatus.Critical => "RouteToSafetyPage",
         RiskStatus.Unknown or RiskStatus.Caution => "ShowLabel",
         _ => "Allow"
     };
+
+    private static bool RequiresSafetyRoute(RiskStatus status) =>
+        status is RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical;
+
+    private static string SafetyPageUrl(string originalUrl, RiskStatus status) =>
+        $"/safety?url={Uri.EscapeDataString(originalUrl)}&source=browser&risk={Uri.EscapeDataString(status.ToString())}";
 
     private static string? LabelFor(RiskStatus status, bool verifiedTrusted)
     {

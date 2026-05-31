@@ -28,7 +28,8 @@ public sealed record BrowserLinkRiskResult(
     string RecommendedAction,
     bool RequiresIcon,
     string? Label,
-    string PublicLookupUrl);
+    string PublicLookupUrl,
+    string? SafetyPageUrl);
 
 public sealed record BrowserScanLinksResponse(
     string PageUrl,

@@ -90,7 +90,46 @@ public sealed class BrowserPluginApiTests
         var result = json.RootElement.GetProperty("results")[0];
         Assert.That(result.GetProperty("requiresIcon").GetBoolean(), Is.True);
         Assert.That(result.GetProperty("label").GetString(), Is.EqualTo("Suspicious"));
+        Assert.That(result.GetProperty("recommendedAction").GetString(), Is.EqualTo("RouteToSafetyPage"));
+        Assert.That(result.GetProperty("safetyPageUrl").GetString(), Does.Contain("/safety?url="));
+        Assert.That(result.GetProperty("safetyPageUrl").GetString(), Does.Contain("source=browser"));
         Assert.That(result.GetProperty("reasons")[0].GetString(), Does.Contain("Shortened link"));
+    }
+
+    [Test]
+    public async Task Safe_link_has_no_safety_page_url()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(
+            "https://example.com",
+            ["https://example.com/about"]));
+
+        var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var result = json.RootElement.GetProperty("results")[0];
+        Assert.That(result.GetProperty("recommendedAction").GetString(), Is.EqualTo("Allow"));
+        Assert.That(result.GetProperty("safetyPageUrl").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    [Test]
+    public async Task Safety_page_url_encodes_original_url()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(
+            "https://example.com",
+            ["https://bit.ly/example?next=https%3A%2F%2Fdanger-example.com%2Fpay"]));
+
+        var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var safetyPageUrl = json.RootElement.GetProperty("results")[0].GetProperty("safetyPageUrl").GetString();
+        Assert.Multiple(() =>
+        {
+            Assert.That(safetyPageUrl, Does.StartWith("/safety?url="));
+            Assert.That(safetyPageUrl, Does.Contain("https%3A%2F%2Fbit.ly%2Fexample"));
+            Assert.That(safetyPageUrl, Does.Contain("source=browser"));
+        });
     }
 
     [Test]

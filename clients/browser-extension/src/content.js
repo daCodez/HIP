@@ -325,7 +325,8 @@
       signedIdentityStatus: "NoSignedIdentityFound",
       knownRisks: result.reasons || [],
       explanations: result.reasons || [],
-      publicLookupUrl: result.publicLookupUrl
+      publicLookupUrl: result.publicLookupUrl,
+      safetyPageUrl: result.safetyPageUrl
     };
   }
 
