@@ -1,6 +1,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using HIP.Application;
+using HIP.Application.Ai;
 using HIP.Application.Browser;
 using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
@@ -78,6 +79,7 @@ MapBadgeApis(app.MapGroup(ApiRoutes.Badge));
 MapBrowserApis(app.MapGroup(ApiRoutes.Browser));
 MapSafetyApis(app.MapGroup(ApiRoutes.Safety));
 Program.MapJsonRulesApis(app.MapGroup(ApiRoutes.Rules));
+MapAiApis(app.MapGroup(ApiRoutes.Ai).RequireAuthorization(AdminPolicies.CanManageRules));
 MapSecondLifeHudApis(app.MapGroup(ApiRoutes.SecondLifeHud));
 MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules").RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingApis(app.MapGroup($"{ApiRoutes.Admin}/self-healing").RequireAuthorization(AdminPolicies.CanManageRules));
@@ -328,6 +330,54 @@ static void MapSafetyApis(RouteGroupBuilder safetyApi)
 
     safetyApi.MapPost("/report-dangerous", (SafetyReportRequest request) =>
         Results.Ok(SafetyReportResponse.CreateAccepted(request.Url, request.Source, "Report as dangerous was accepted for MVP review.")));
+}
+
+static void MapAiApis(RouteGroupBuilder aiApi)
+{
+    aiApi.MapPost("/analyze-url", async (
+        HipAiUrlRiskAnalysisRequest request,
+        IHipAiRiskAnalyzer analyzer,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await analyzer.AnalyzeUrlRiskAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    aiApi.MapPost("/analyze-content", async (
+        HipAiContentRiskAnalysisRequest request,
+        IHipAiRiskAnalyzer analyzer,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await analyzer.AnalyzeContentRiskAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    aiApi.MapPost("/suggest-rule", async (
+        HipAiRuleSuggestionRequest request,
+        IHipAiRiskAnalyzer analyzer,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await analyzer.SuggestRuleAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
 }
 
 static void MapConsumerApis(RouteGroupBuilder consumerApi)

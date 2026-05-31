@@ -12,4 +12,5 @@ public static class ApiRoutes
     public const string Browser = $"{V1}/browser";
     public const string Safety = $"{V1}/safety";
     public const string Rules = $"{V1}/rules";
+    public const string Ai = $"{V1}/ai";
 }

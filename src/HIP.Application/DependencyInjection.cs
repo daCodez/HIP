@@ -1,4 +1,5 @@
 using FluentValidation;
+using HIP.Application.Ai;
 using HIP.Application.Browser;
 using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
@@ -33,6 +34,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<ReputationOverrideRequest>, ReputationOverrideRequestValidator>();
         services.AddSingleton<IValidator<PrivacySafeReport>, PrivacySafeReportValidator>();
         services.AddSingleton<IAiRiskAnalysisService, NoOpAiRiskAnalysisService>();
+        services.AddSingleton<IHipAiRiskAnalyzer, DevelopmentHipAiRiskAnalyzer>();
         services.AddSingleton<IRuleMatchingEngine, RuleMatchingEngine>();
         services.AddSingleton<IRuleActionApplier, RuleActionApplier>();
         services.AddSingleton<IRuleEvaluationService, RuleEvaluationService>();
