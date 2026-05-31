@@ -51,6 +51,19 @@ public sealed class RuleCandidateGenerator(
 
         var simulationRule = proposedRule with { Mode = RuleMode.Active };
         var simulation = simulationService.Simulate(simulationRule, BuildSimulationCases(cluster, domain, safeActionOnly));
+
+        if (safeActionOnly && !simulation.Passed)
+        {
+            requiresApproval = true;
+            recommendedMode = RuleMode.Watch;
+            proposedRule = proposedRule with
+            {
+                Mode = RuleMode.Watch,
+                RequiresApproval = true,
+                ApprovalStatus = ApprovalStatus.Pending
+            };
+        }
+
         proposedRule = proposedRule with { ConfidenceScore = simulation.ConfidenceScore * 100m };
         var status = ClassifyStatus(requiresApproval, recommendedMode);
         var rollback = rollbackService.CreatePlan(ruleId, "Disable generated self-healing rule and restore previous rule version if false positives or user harm are detected.");
@@ -78,6 +91,7 @@ public sealed class RuleCandidateGenerator(
             case FindingType.ShortenedUrlAbuse:
                 yield return new RuleCondition("url.usesShortener", RuleOperator.Equals, JsonSerializer.SerializeToElement(true));
                 break;
+            case FindingType.BrokenUpUrl:
             case FindingType.ObfuscatedUrl:
                 yield return new RuleCondition("url.isObfuscated", RuleOperator.Equals, JsonSerializer.SerializeToElement(true));
                 break;
@@ -90,9 +104,11 @@ public sealed class RuleCandidateGenerator(
             case FindingType.RepeatedSuspiciousSender:
                 yield return new RuleCondition("sender.reputationScore", RuleOperator.LessThanOrEqual, JsonSerializer.SerializeToElement(35));
                 break;
+            case FindingType.RewardBait:
             case FindingType.FinancialScamLanguage:
                 yield return new RuleCondition("content.containsFinancialPromise", RuleOperator.Equals, JsonSerializer.SerializeToElement(true));
                 break;
+            case FindingType.UrgencyScam:
             case FindingType.PhishingLanguage:
                 yield return new RuleCondition("content.containsUrgencyLanguage", RuleOperator.Equals, JsonSerializer.SerializeToElement(true));
                 break;
@@ -132,12 +148,12 @@ public sealed class RuleCandidateGenerator(
             ["domain.name"] = domain,
             ["domain.ageDays"] = 7,
             ["url.usesShortener"] = cluster.PatternType == FindingType.ShortenedUrlAbuse,
-            ["url.isObfuscated"] = cluster.PatternType == FindingType.ObfuscatedUrl,
+            ["url.isObfuscated"] = cluster.PatternType is FindingType.ObfuscatedUrl or FindingType.BrokenUpUrl,
             ["url.redirectCount"] = cluster.PatternType == FindingType.SuspiciousRedirectChain ? 4 : 0,
             ["url.hasKnownRisk"] = cluster.PatternType is FindingType.KnownBadDomain or FindingType.Unknown,
             ["sender.reputationScore"] = cluster.PatternType == FindingType.RepeatedSuspiciousSender ? 20 : 80,
-            ["content.containsUrgencyLanguage"] = cluster.PatternType == FindingType.PhishingLanguage,
-            ["content.containsFinancialPromise"] = cluster.PatternType == FindingType.FinancialScamLanguage,
+            ["content.containsUrgencyLanguage"] = cluster.PatternType is FindingType.PhishingLanguage or FindingType.UrgencyScam,
+            ["content.containsFinancialPromise"] = cluster.PatternType is FindingType.FinancialScamLanguage or FindingType.RewardBait,
             ["identity.signatureValid"] = false
         };
 

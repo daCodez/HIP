@@ -4,6 +4,21 @@ HIP self-healing is the foundation for turning repeated privacy-safe suspicious 
 
 The MVP does not use AI, private chat logs, or production persistence. It groups repeated findings, generates conservative JSON rules, runs simulation automatically, and classifies whether a candidate can be active or must remain in watch mode pending approval.
 
+## MVP Pattern Types
+
+The explicit pattern suggestion layer currently supports:
+
+- `RepeatedShortenerAbuse`
+- `BrokenUpUrlPattern`
+- `ObfuscatedUrlPattern`
+- `RewardBaitPattern`
+- `UrgencyScamPattern`
+- `NewDomainCluster`
+- `RepeatedSenderReports`
+- `SuspiciousRedirectPattern`
+
+Pattern suggestions return a pattern ID, confidence, evidence count, plain-English summary, suggested risk level, suggested rule JSON, simulation requirement, approval requirement, and recommended mode.
+
 ## Flow
 
 1. Privacy-safe suspicious findings are submitted.
@@ -50,6 +65,14 @@ Generated rules include:
 
 `createdBy` is set to `HIP Self-Healing Engine`. `simulationRequired` is always true.
 
+The pattern suggestion API wraps the generated rule JSON with:
+
+- `generatedBy = SelfHealingPatternDetector`
+- `evidenceSummary`
+- `rule`
+
+This keeps the generated JSON explicit about where it came from while preserving the existing HIP rule shape underneath.
+
 ## Approval Rules
 
 Low-risk candidates that only add a reason or mark for simulation may become Active.
@@ -74,6 +97,18 @@ The current MVP stores only metadata. Full rollback execution and UI review are 
 - Detect patterns: `POST /api/v1/admin/self-healing/detect-patterns`
 - Generate rule from cluster: `POST /api/v1/admin/self-healing/generate-rule`
 - Analyze findings end-to-end: `POST /api/v1/admin/self-healing/analyze-findings`
+
+## Pattern Suggestion Routes
+
+The v1 pattern suggestion routes are protected admin/internal endpoints:
+
+- Detect and generate suggestions: `POST /api/v1/self-healing/detect-patterns`
+- Generate one rule suggestion: `POST /api/v1/self-healing/generate-rule`
+- List stored suggestions: `GET /api/v1/self-healing/suggestions`
+- Approve suggestion: `POST /api/v1/self-healing/suggestions/{id}/approve`
+- Reject suggestion: `POST /api/v1/self-healing/suggestions/{id}/reject`
+
+These endpoints are separate from public reporting. They accept only privacy-safe finding data and do not accept full private chat logs or message bodies.
 
 ## Known Limitations
 

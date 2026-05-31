@@ -10,5 +10,8 @@ public enum FindingType
     SuspiciousRedirectChain = 5,
     FinancialScamLanguage = 6,
     PhishingLanguage = 7,
-    KnownBadDomain = 8
+    KnownBadDomain = 8,
+    BrokenUpUrl = 9,
+    RewardBait = 10,
+    UrgencyScam = 11
 }

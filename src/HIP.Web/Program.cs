@@ -80,6 +80,7 @@ MapBrowserApis(app.MapGroup(ApiRoutes.Browser));
 MapSafetyApis(app.MapGroup(ApiRoutes.Safety));
 Program.MapJsonRulesApis(app.MapGroup(ApiRoutes.Rules));
 MapAiApis(app.MapGroup(ApiRoutes.Ai).RequireAuthorization(AdminPolicies.CanManageRules));
+MapSelfHealingPatternApis(app.MapGroup(ApiRoutes.SelfHealing).RequireAuthorization(AdminPolicies.CanManageRules));
 MapSecondLifeHudApis(app.MapGroup(ApiRoutes.SecondLifeHud));
 MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules").RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingApis(app.MapGroup($"{ApiRoutes.Admin}/self-healing").RequireAuthorization(AdminPolicies.CanManageRules));
@@ -515,6 +516,62 @@ static void MapSelfHealingApis(RouteGroupBuilder selfHealingApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
+    });
+}
+
+static void MapSelfHealingPatternApis(RouteGroupBuilder selfHealingApi)
+{
+    selfHealingApi.MapPost("/detect-patterns", async (
+        IReadOnlyCollection<SuspiciousFinding> findings,
+        ISelfHealingPatternDetectionService selfHealingPatternDetectionService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await selfHealingPatternDetectionService.DetectAsync(findings, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    selfHealingApi.MapPost("/generate-rule", async (
+        PatternCluster cluster,
+        ISelfHealingPatternDetectionService selfHealingPatternDetectionService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await selfHealingPatternDetectionService.GenerateRuleAsync(cluster, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    selfHealingApi.MapGet("/suggestions", async (
+        ISelfHealingPatternDetectionService selfHealingPatternDetectionService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await selfHealingPatternDetectionService.ListSuggestionsAsync(cancellationToken)));
+
+    selfHealingApi.MapPost("/suggestions/{id}/approve", async (
+        string id,
+        ISelfHealingPatternDetectionService selfHealingPatternDetectionService,
+        CancellationToken cancellationToken) =>
+    {
+        var candidate = await selfHealingPatternDetectionService.ApproveSuggestionAsync(id, cancellationToken);
+        return candidate is null ? Results.NotFound() : Results.Ok(candidate);
+    });
+
+    selfHealingApi.MapPost("/suggestions/{id}/reject", async (
+        string id,
+        ISelfHealingPatternDetectionService selfHealingPatternDetectionService,
+        CancellationToken cancellationToken) =>
+    {
+        var candidate = await selfHealingPatternDetectionService.RejectSuggestionAsync(id, cancellationToken);
+        return candidate is null ? Results.NotFound() : Results.Ok(candidate);
     });
 }
 

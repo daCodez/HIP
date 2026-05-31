@@ -13,4 +13,5 @@ public static class ApiRoutes
     public const string Safety = $"{V1}/safety";
     public const string Rules = $"{V1}/rules";
     public const string Ai = $"{V1}/ai";
+    public const string SelfHealing = $"{V1}/self-healing";
 }
