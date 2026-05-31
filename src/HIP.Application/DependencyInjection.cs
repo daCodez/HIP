@@ -48,6 +48,7 @@ public static class DependencyInjection
         services.AddSingleton<IRuleRollbackService, RuleRollbackService>();
         services.AddSingleton<IRuleCandidateGenerator, RuleCandidateGenerator>();
         services.AddSingleton<ISelfHealingAnalysisService, SelfHealingAnalysisService>();
+        services.AddScoped<IGeneratedRuleCandidateRepository, InMemoryGeneratedRuleCandidateRepository>();
         services.AddScoped<IConsumerPortalService, ConsumerPortalService>();
         services.AddScoped<IAdminDashboardService, AdminDashboardService>();
         services.AddSingleton<IAuditLogService, AuditLogService>();
