@@ -1,0 +1,56 @@
+@page "/admin/privacy"
+
+<PageTitle>HIP Privacy & Safety</PageTitle>
+
+<section class="hip-page-heading compact">
+    <div>
+        <h1>Privacy & Safety</h1>
+        <p>How HIP handles data, and how users stay in control.</p>
+    </div>
+</section>
+
+<section class="hip-privacy-callout">
+    <strong>HIP is built privacy-first</strong>
+    <p>HIP scans metadata and risk patterns, not the contents of personal conversations. HIP must never train AI models on private messages by default.</p>
+</section>
+
+<section class="hip-two-column">
+    <article class="hip-panel padded">
+        <h2>What HIP Collects</h2>
+        <ul class="hip-check-list">
+            <li>Message risk scores, not full message text</li>
+            <li>Sender reputation signals</li>
+            <li>Link scan results</li>
+            <li>Platform connection metadata</li>
+            <li>Rule trigger counts</li>
+            <li>Privacy-safe scan history</li>
+        </ul>
+    </article>
+
+    <article class="hip-panel padded">
+        <h2>What HIP Never Collects</h2>
+        <ul class="hip-x-list">
+            <li>Full private message content</li>
+            <li>Contacts list</li>
+            <li>Login credentials</li>
+            <li>Payment information</li>
+            <li>Private keys or signatures</li>
+            <li>Location data</li>
+        </ul>
+    </article>
+</section>
+
+<section class="hip-panel padded narrow">
+    <div class="hip-panel-heading flush">
+        <div>
+            <h2>Local-Only Mode</h2>
+            <p>Process scans locally without sending data to HIP servers. Requires a future HIP desktop client.</p>
+        </div>
+        <span class="hip-toggle disabled"></span>
+    </div>
+</section>
+
+<section class="hip-panel padded narrow">
+    <h2>Data Retention</h2>
+    <p>Normal risky findings target roughly 90 days of retention. Confirmed dangerous patterns can be retained longer. User-linked or private data should use the shortest practical retention period.</p>
+</section>

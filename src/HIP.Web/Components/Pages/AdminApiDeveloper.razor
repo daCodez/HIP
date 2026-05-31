@@ -1,0 +1,77 @@
+@page "/admin/api"
+
+<PageTitle>HIP API & Developer</PageTitle>
+
+<section class="hip-page-heading compact">
+    <div>
+        <h1>API & Developer <span class="hip-pill info">Coming Soon</span></h1>
+        <p>Integrate HIP into your own tools and workflows.</p>
+    </div>
+    <button class="hip-primary-action" type="button">+ New API Key</button>
+</section>
+
+<section class="hip-two-column">
+    <article class="hip-panel padded">
+        <h2>API Usage — Last 7 Days</h2>
+        <p>Total calls per day</p>
+        <div class="hip-bars">
+            <span style="height: 44px"></span>
+            <span style="height: 60px"></span>
+            <span style="height: 50px"></span>
+            <span style="height: 66px"></span>
+            <span style="height: 82px"></span>
+            <span style="height: 40px"></span>
+            <span style="height: 34px"></span>
+        </div>
+        <div class="hip-stat-pair">
+            <strong>52,900<small>Total this week</small></strong>
+            <strong>7,557<small>Daily average</small></strong>
+        </div>
+    </article>
+
+    <article class="hip-panel padded">
+        <h2>Rate Limits</h2>
+        @foreach (var item in Limits)
+        {
+            <div class="hip-progress-row">
+                <span>@item.Label</span>
+                <strong>@item.Value</strong>
+                <i style="--value:@item.Percent%"></i>
+            </div>
+        }
+    </article>
+</section>
+
+<section class="hip-panel padded narrow">
+    <h2>API Keys</h2>
+    <p>Keep these private. They grant access to your HIP data.</p>
+    @foreach (var key in Keys)
+    {
+        <article class="hip-key-row">
+            <div>
+                <h3>@key.Name <span>@key.Calls calls</span></h3>
+                <code>@key.Token</code>
+                <small>Created: @key.Created · Last used: @key.LastUsed</small>
+            </div>
+            <button type="button">Regenerate</button>
+        </article>
+    }
+</section>
+
+@code {
+    private static readonly (string Label, string Value, int Percent)[] Limits =
+    [
+        ("Requests / min", "18 / 60", 30),
+        ("Requests / day", "3,241 / 10,000", 32),
+        ("Webhooks / hr", "44 / 500", 9)
+    ];
+
+    private static readonly ApiKeyRow[] Keys =
+    [
+        new("Production Read", "48,291", "hip_ro_prod_4f8a2c1e9b7d••••••••••••••••", "Mar 10, 2026", "2 min ago"),
+        new("Dashboard Integration", "12,044", "hip_rw_dash_9c3b7e1f4a8d••••••••••••••••", "Apr 1, 2026", "1 hr ago"),
+        new("Webhook Receiver", "0", "hip_wh_recv_2e5f8a1c4b7d••••••••••••••••", "Apr 18, 2026", "never")
+    ];
+
+    private sealed record ApiKeyRow(string Name, string Calls, string Token, string Created, string LastUsed);
+}

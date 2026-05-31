@@ -1,0 +1,51 @@
+@page "/admin/platforms"
+
+<PageTitle>HIP Platform Connections</PageTitle>
+
+<section class="hip-page-heading compact">
+    <div>
+        <h1>Platform Connections</h1>
+        <p>Manage platforms that HIP monitors for threats.</p>
+    </div>
+    <button class="hip-primary-action" type="button">+ Add Platform</button>
+</section>
+
+<section class="hip-card-row three">
+    <article class="hip-mini-stat good"><strong>4</strong><span>Connected</span></article>
+    <article class="hip-mini-stat"><strong>3</strong><span>Verified</span></article>
+    <article class="hip-mini-stat"><strong>2,909</strong><span>Messages Scanned</span></article>
+</section>
+
+<section class="hip-stack">
+    <h2>Connected (4)</h2>
+    @foreach (var platform in Platforms)
+    {
+        <article class="hip-platform-row">
+            <span class="platform-avatar">@platform.Initials</span>
+            <div>
+                <h3>@platform.Name <span class="hip-pill good">@platform.Verification</span> <span class="hip-pill good">active</span></h3>
+                <p>@platform.Scanned messages scanned · Last sync: @platform.Sync</p>
+                <div>
+                    @foreach (var permission in platform.Permissions)
+                    {
+                        <small>@permission</small>
+                    }
+                </div>
+            </div>
+            <button type="button">Sync</button>
+            <button class="danger" type="button">Disconnect</button>
+        </article>
+    }
+</section>
+
+@code {
+    private static readonly PlatformRow[] Platforms =
+    [
+        new("SL", "Second Life", "Verified", "432", "1 min ago", ["Read public chat", "Read group chat", "Read private IMs", "Send HUD warnings"]),
+        new("DC", "Discord", "Verified", "884", "3 hr ago", ["Read messages", "Read DMs", "Flag content"]),
+        new("TG", "Telegram", "Unverified", "1,204", "5 min ago", ["Read messages", "Block senders"]),
+        new("EM", "Email", "Verified", "389", "6 hr ago", ["Read headers", "Scan links", "Flag senders"])
+    ];
+
+    private sealed record PlatformRow(string Initials, string Name, string Verification, string Scanned, string Sync, string[] Permissions);
+}

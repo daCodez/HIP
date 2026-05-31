@@ -1,0 +1,76 @@
+@page "/admin/reports"
+
+<PageTitle>HIP Reports</PageTitle>
+
+<section class="hip-page-heading compact">
+    <div>
+        <h1>Reports</h1>
+        <p>Weekly trust and threat activity summary.</p>
+    </div>
+    <div class="hip-button-row end">
+        <button type="button">Export CSV</button>
+        <button type="button">Export PDF</button>
+    </div>
+</section>
+
+<div class="hip-report-tags">
+    <span>Apr 24 – Apr 30, 2026</span>
+    <span>Trust Score: 87/100</span>
+</div>
+
+<section class="hip-card-row four">
+    <article class="hip-mini-stat"><strong>4,328</strong><span>Messages Scanned</span></article>
+    <article class="hip-mini-stat hot"><strong>142</strong><span>Threats Blocked</span></article>
+    <article class="hip-mini-stat"><strong>891</strong><span>Links Checked</span></article>
+    <article class="hip-mini-stat good"><strong>3,904</strong><span>Safe Messages</span></article>
+</section>
+
+<section class="hip-two-column">
+    <article class="hip-panel padded">
+        <h2>Message Risk Breakdown</h2>
+        <div class="hip-risk-bars">
+            <label>Safe <strong>3,904 (90%)</strong><span><i style="--value:90%"></i></span></label>
+            <label>Suspicious <strong>282 (7%)</strong><span><i style="--value:7%"></i></span></label>
+            <label>Dangerous <strong>142 (3%)</strong><span><i style="--value:3%"></i></span></label>
+        </div>
+    </article>
+
+    <article class="hip-panel padded">
+        <h2>Daily Scan Activity</h2>
+        <p>Scanned vs. blocked</p>
+        <div class="hip-bars small">
+            <span style="height: 62px"></span>
+            <span style="height: 68px"></span>
+            <span style="height: 52px"></span>
+            <span style="height: 34px"></span>
+            <span style="height: 82px"></span>
+            <span style="height: 96px"></span>
+            <span style="height: 88px"></span>
+        </div>
+    </article>
+</section>
+
+<section class="hip-panel padded narrow">
+    <h2>Most Common Scam Patterns</h2>
+    @foreach (var pattern in Patterns)
+    {
+        <div class="hip-ranked-bar">
+            <span>@pattern.Rank</span>
+            <strong>@pattern.Name</strong>
+            <em>@pattern.Count</em>
+            <i style="--value:@pattern.Width%"></i>
+        </div>
+    }
+</section>
+
+@code {
+    private static readonly PatternRow[] Patterns =
+    [
+        new("#1", "Urgency language", 88, 88),
+        new("#2", "Reward scam wording", 41, 41),
+        new("#3", "Broken-up links", 23, 23),
+        new("#4", "Impersonation signals", 34, 34)
+    ];
+
+    private sealed record PatternRow(string Rank, string Name, int Count, int Width);
+}

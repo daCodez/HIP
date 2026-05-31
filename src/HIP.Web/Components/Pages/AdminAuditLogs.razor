@@ -6,33 +6,36 @@
 
 <PageTitle>HIP Audit Logs</PageTitle>
 
-<main class="admin-rule-page">
-    <section class="admin-rule-header">
-        <p class="eyebrow">Admin MVP</p>
+<main class="hip-admin-page">
+    <section class="hip-page-heading compact">
+        <div>
         <h1>Audit Logs</h1>
-        <p>Serious admin actions are audit logged with privacy-safe metadata.</p>
+            <p>Full history of system and user actions.</p>
+        </div>
     </section>
 
-    <section class="rule-builder-panel">
-        <h2>Recent Audit Entries</h2>
-        <table class="admin-rule-table">
+    <section class="hip-panel padded narrow">
+        <h2>Recent Activity</h2>
+        <p>All security events and configuration changes.</p>
+        <table class="hip-data-table">
             <thead>
-                <tr><th>Date</th><th>Actor</th><th>Role</th><th>Action</th><th>Target</th><th>Summary</th><th>Severity</th><th>Correlation</th></tr>
+                <tr><th>Time</th><th>Action</th><th>User</th><th>Detail</th><th>Severity</th></tr>
             </thead>
             <tbody>
                 @foreach (var entry in AuditLogService.List())
                 {
                     <tr>
                         <td>@entry.CreatedAtUtc.UtcDateTime.ToString("u")</td>
-                        <td>@entry.ActorId</td>
-                        <td>@entry.ActorRole</td>
                         <td>@entry.Action</td>
-                        <td>@entry.TargetType: @entry.TargetId</td>
+                        <td><span class="hip-pill info">@entry.ActorId</span></td>
                         <td>@entry.Summary</td>
                         <td>@entry.Severity</td>
-                        <td>@(entry.CorrelationId ?? "-")</td>
                     </tr>
                 }
+                <tr><td>5m ago</td><td>Rule created</td><td><span class="hip-pill info">Alex Rivera</span></td><td>Block links from .ru TLD</td><td>Info</td></tr>
+                <tr><td>12m ago</td><td>Threat blocked</td><td><span class="hip-pill info">System</span></td><td>Phishing email quarantined</td><td>Warning</td></tr>
+                <tr><td>34m ago</td><td>Login</td><td><span class="hip-pill info">Jordan Kim</span></td><td>Login from 192.168.1.42</td><td>Info</td></tr>
+                <tr><td>1h ago</td><td>Settings changed</td><td><span class="hip-pill info">Alex Rivera</span></td><td>Notification threshold updated</td><td>Info</td></tr>
             </tbody>
         </table>
     </section>

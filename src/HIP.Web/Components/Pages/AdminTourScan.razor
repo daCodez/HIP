@@ -1,0 +1,29 @@
+@page "/admin/tour-scan"
+
+<PageTitle>HIP Tour Scan</PageTitle>
+
+<section class="hip-tour-backdrop">
+    <div class="hip-tour-card">
+        <button type="button" aria-label="Close">x</button>
+        <h1>Sample Threat — Detected</h1>
+        <p>This is what HIP catches before it reaches users.</p>
+        <article class="hip-message-sample">
+            <strong>unknown_9821 · Telegram</strong>
+            <span>"You won a prize! Claim it now: htt ps://bit.ly/win-now"</span>
+        </article>
+        <article class="hip-danger-box">
+            <h2>HIP blocked this message <span class="hip-pill danger">Dangerous</span></h2>
+            <ul>
+                <li>Broken-up URL to avoid scanners</li>
+                <li>Domain resolves to scam-prize.xyz, a known phishing domain</li>
+                <li>New account created 2 days ago</li>
+                <li>No verified identity signature</li>
+            </ul>
+        </article>
+        <p>HIP never read private message text to make this decision. It analyzed URL structure, sender history, and domain reputation.</p>
+        <div class="hip-button-row">
+            <a href="/">Back to tour</a>
+            <a class="primary-button" href="/">Start using HIP</a>
+        </div>
+    </div>
+</section>

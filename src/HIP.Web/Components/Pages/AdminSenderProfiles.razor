@@ -1,0 +1,65 @@
+@page "/admin/reputation/senders"
+
+<PageTitle>HIP Sender Profiles</PageTitle>
+
+<section class="hip-page-heading compact">
+    <div>
+        <h1>Sender Profiles</h1>
+        <p>Detailed trust and risk history per sender.</p>
+    </div>
+</section>
+
+<section class="hip-profile-layout">
+    <aside class="hip-sender-list">
+        <h2>Known Senders</h2>
+        @foreach (var sender in Senders)
+        {
+            <button class="@(sender.Selected ? "selected" : null)" type="button">
+                <span>@sender.Initial</span>
+                <strong>@sender.Name<small>@sender.Platform</small></strong>
+                <em class="@sender.Tone">@sender.Score</em>
+            </button>
+        }
+    </aside>
+
+    <div class="hip-profile-main">
+        <article class="hip-panel padded sender-summary">
+            <div class="risk-ring danger"><strong>4</strong><span>/100</span></div>
+            <div>
+                <h2>unknown_9821 <span class="hip-pill danger">High Risk</span></h2>
+                <p>First seen: Apr 28, 2026</p>
+                <p>Links sent: 8 · Messages: 22 · Flags: <strong>22</strong></p>
+                <small>Known aliases: unknown9821, u_9821, anon_prize</small>
+            </div>
+        </article>
+
+        <article class="hip-panel padded">
+            <h2>Risk Reasons</h2>
+            <ul class="hip-x-list warning">
+                <li>All messages flagged as dangerous</li>
+                <li>Broken-up URLs detected</li>
+                <li>Phishing domain in redirect chain</li>
+                <li>No identity signature</li>
+                <li>New account pattern</li>
+            </ul>
+        </article>
+
+        <article class="hip-panel padded">
+            <h2>Trust Timeline</h2>
+            <div class="hip-timeline">
+                <span></span><span></span><span></span>
+            </div>
+        </article>
+    </div>
+</section>
+
+@code {
+    private static readonly SenderRow[] Senders =
+    [
+        new("U", "unknown_9821", "Telegram", 4, "danger", true),
+        new("D", "deals_hunter99", "Discord, Telegram", 28, "danger", false),
+        new("A", "alice_w", "Discord, Email", 91, "good", false)
+    ];
+
+    private sealed record SenderRow(string Initial, string Name, string Platform, int Score, string Tone, bool Selected);
+}

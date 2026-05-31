@@ -1,0 +1,47 @@
+@page "/admin/alerts"
+
+<PageTitle>HIP Alert Center</PageTitle>
+
+<section class="hip-page-heading compact">
+    <div>
+        <h1>Alert Center</h1>
+        <p>Unified inbox of all security alerts requiring attention.</p>
+    </div>
+    <span class="hip-pill danger">4 new</span>
+</section>
+
+<section class="hip-tabs">
+    <button class="active">All <span>7</span></button>
+    <button>New <span>4</span></button>
+    <button>Reviewing <span>1</span></button>
+    <button>Resolved <span>2</span></button>
+</section>
+
+<section class="hip-list-panel">
+    @foreach (var alert in Alerts)
+    {
+        <article class="hip-alert-row">
+            <span class="hip-alert-icon @alert.Tone">!</span>
+            <div>
+                <h2>@alert.Title <span class="hip-pill @alert.Tone">@alert.Severity</span> <span class="hip-pill info">@alert.Status</span></h2>
+                <p>@alert.Summary</p>
+                <small>@alert.Product · @alert.Platform · @alert.Age</small>
+            </div>
+            <button type="button" aria-label="Dismiss alert">x</button>
+        </article>
+    }
+</section>
+
+@code {
+    private static readonly AlertRow[] Alerts =
+    [
+        new("Phishing link detected in group chat", "critical", "New", "Sender unknown_9821 sent a broken-up URL resolving to scam-prize.xyz, a known phishing domain. Message was auto-blocked.", "Message Shield", "Telegram", "2m ago", "danger"),
+        new("Impersonation attempt: admin_support0x", "high", "New", "Account name matches impersonation pattern for platform admins. No verified identity signature found.", "Identity", "Telegram", "14m ago", "danger"),
+        new("Malware URL: free-gift.ru", "high", "Reviewing", "Domain free-gift.ru is on threat intelligence blocklists. Domain registered 5 days ago.", "Link Scanner", "Email", "1h ago", "danger"),
+        new("New sender with shortened URL", "medium", "New", "First-time sender deals_hunter99 sent a tinyurl.com link. Destination domain is 14 days old.", "Rules Engine", "Discord", "1h ago", "suspicious"),
+        new("Reward scam language in SL chat", "medium", "New", "SL_GiftBot sent a message matching the reward scam pattern.", "Second Life HUD", "Second Life", "2h ago", "suspicious"),
+        new("Domain mismatch on email sender", "low", "Resolved", "Sender header claimed technewsdaily.com but DKIM record points to a different domain.", "Message Shield", "Email", "3h ago", "caution")
+    ];
+
+    private sealed record AlertRow(string Title, string Severity, string Status, string Summary, string Product, string Platform, string Age, string Tone);
+}
