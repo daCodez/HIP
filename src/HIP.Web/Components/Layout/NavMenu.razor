@@ -1,5 +1,9 @@
 <div class="hip-brand">
-    <div class="hip-mark" aria-hidden="true">H</div>
+    <div class="hip-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="img" aria-label="HIP shield">
+            <path d="M12 3.5 18 6v5.2c0 4.2-2.5 7.4-6 8.8-3.5-1.4-6-4.6-6-8.8V6l6-2.5Z" />
+        </svg>
+    </div>
     <div>
         <strong>HIP</strong>
         <span>Human Identity Protocol</span>
@@ -8,96 +12,173 @@
 
 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler')?.click()">
-    <nav class="hip-nav">
+<div class="nav-scrollable">
+    <nav class="hip-nav" aria-label="HIP admin navigation">
         <NavLink class="hip-nav-link" href="" Match="NavLinkMatch.All">
-            <span class="hip-nav-icon">▦</span>
-            <span>Dashboard</span>
-            <small>MVP</small>
+            <span class="hip-nav-icon">@IconDashboard()</span>
+            <span class="hip-nav-text">Dashboard</span>
+            <span class="hip-status">MVP</span>
         </NavLink>
+
         <NavLink class="hip-nav-link" href="admin/alerts">
-            <span class="hip-nav-icon">⌂</span>
-            <span>Alert Center</span>
-            <em>5</em>
+            <span class="hip-nav-icon">@IconBell()</span>
+            <span class="hip-nav-text">Alert Center</span>
+            <span class="hip-count danger">5</span>
         </NavLink>
+
         <NavLink class="hip-nav-link" href="admin/message-shield">
-            <span class="hip-nav-icon">⬡</span>
-            <span>Message Shield</span>
-            <em>3</em>
+            <span class="hip-nav-icon">@IconShield()</span>
+            <span class="hip-nav-text">Message Shield</span>
+            <span class="hip-count danger">3</span>
+            <span class="hip-chevron">›</span>
         </NavLink>
+
         <NavLink class="hip-nav-link" href="admin/review">
-            <span class="hip-nav-icon">▣</span>
-            <span>Review Queue</span>
-            <em class="warning">4</em>
+            <span class="hip-nav-icon">@IconClipboard()</span>
+            <span class="hip-nav-text">Review Queue</span>
+            <span class="hip-count warning">4</span>
         </NavLink>
-        <NavLink class="hip-nav-link" href="admin/reputation/senders">
-            <span class="hip-nav-icon">☆</span>
-            <span>Reputation</span>
-            <small>MVP</small>
-        </NavLink>
-        <NavLink class="hip-nav-link" href="lookup">
-            <span class="hip-nav-icon">♙</span>
-            <span>Identity</span>
-            <small>MVP</small>
-        </NavLink>
+
+        <div class="hip-nav-group">
+            <NavLink class="hip-nav-link" href="admin/reputation/senders">
+                <span class="hip-nav-icon">@IconStar()</span>
+                <span class="hip-nav-text">Reputation</span>
+                <span class="hip-status">MVP</span>
+                <span class="hip-chevron">›</span>
+            </NavLink>
+            <div class="hip-subnav">
+                <NavLink href="admin/reputation" class="hip-subnav-link">Score Overview</NavLink>
+                <NavLink href="admin/reputation/signals" class="hip-subnav-link">Trust Signals</NavLink>
+                <NavLink href="admin/reputation/senders" class="hip-subnav-link">Sender Profiles</NavLink>
+            </div>
+        </div>
+
+        <div class="hip-nav-group">
+            <NavLink class="hip-nav-link" href="lookup">
+                <span class="hip-nav-icon">@IconIdentity()</span>
+                <span class="hip-nav-text">Identity</span>
+                <span class="hip-status">MVP</span>
+                <span class="hip-chevron">›</span>
+            </NavLink>
+            <div class="hip-subnav">
+                <NavLink href="lookup" class="hip-subnav-link">Profile</NavLink>
+                <NavLink href="lookup/domain/example.com" class="hip-subnav-link">Verification</NavLink>
+                <NavLink href="admin/platforms" class="hip-subnav-link">Connections</NavLink>
+            </div>
+        </div>
+
         <NavLink class="hip-nav-link" href="safety">
-            <span class="hip-nav-icon">↗</span>
-            <span>Link Scanner</span>
-            <em class="orange">1</em>
+            <span class="hip-nav-icon">@IconLink()</span>
+            <span class="hip-nav-text">Link Scanner</span>
+            <span class="hip-count orange">1</span>
         </NavLink>
-        <NavLink class="hip-nav-link" href="admin/self-healing">
-            <span class="hip-nav-icon">⚡</span>
-            <span>Threats</span>
-            <em>12</em>
-        </NavLink>
+
+        <div class="hip-nav-group">
+            <NavLink class="hip-nav-link" href="admin/self-healing">
+                <span class="hip-nav-icon">@IconZap()</span>
+                <span class="hip-nav-text">Threats</span>
+                <span class="hip-count danger">12</span>
+                <span class="hip-chevron">›</span>
+            </NavLink>
+            <div class="hip-subnav">
+                <NavLink href="admin/self-healing" class="hip-subnav-link">Active Threats</NavLink>
+                <NavLink href="admin/alerts" class="hip-subnav-link">Blocked</NavLink>
+                <NavLink href="admin/reports" class="hip-subnav-link">Intelligence</NavLink>
+            </div>
+        </div>
+
         <NavLink class="hip-nav-link" href="consumer/devices">
-            <span class="hip-nav-icon">▱</span>
-            <span>Second Life HUD</span>
-            <small>MVP</small>
+            <span class="hip-nav-icon">@IconMonitor()</span>
+            <span class="hip-nav-text">Second Life HUD</span>
+            <span class="hip-status">MVP</span>
+            <span class="hip-chevron">›</span>
         </NavLink>
+
         <NavLink class="hip-nav-link" href="admin/rules">
-            <span class="hip-nav-icon">≡</span>
-            <span>Rules Engine</span>
-            <small>MVP</small>
+            <span class="hip-nav-icon">@IconSliders()</span>
+            <span class="hip-nav-text">Rules Engine</span>
+            <span class="hip-status">MVP</span>
+            <span class="hip-chevron">›</span>
         </NavLink>
+
         <NavLink class="hip-nav-link" href="admin/platforms">
-            <span class="hip-nav-icon">↔</span>
-            <span>Platform Connections</span>
-            <small>MVP</small>
+            <span class="hip-nav-icon">@IconConnection()</span>
+            <span class="hip-nav-text">Platform Connections</span>
+            <span class="hip-status">MVP</span>
         </NavLink>
+
         <NavLink class="hip-nav-link" href="admin/reports">
-            <span class="hip-nav-icon">▥</span>
-            <span>Reports</span>
-            <small>MVP</small>
+            <span class="hip-nav-icon">@IconBars()</span>
+            <span class="hip-nav-text">Reports</span>
+            <span class="hip-status">MVP</span>
         </NavLink>
+
         <NavLink class="hip-nav-link" href="admin/feedback">
-            <span class="hip-nav-icon">□</span>
-            <span>Feedback Loop</span>
-            <small>MVP</small>
+            <span class="hip-nav-icon">@IconMessage()</span>
+            <span class="hip-nav-text">Feedback Loop</span>
+            <span class="hip-status">MVP</span>
         </NavLink>
+
         <NavLink class="hip-nav-link" href="admin/audit">
-            <span class="hip-nav-icon">▤</span>
-            <span>Audit Log</span>
-            <small>MVP</small>
+            <span class="hip-nav-icon">@IconFile()</span>
+            <span class="hip-nav-text">Audit Log</span>
+            <span class="hip-status">MVP</span>
         </NavLink>
+
         <NavLink class="hip-nav-link" href="admin/api">
-            <span class="hip-nav-icon">&lt;/&gt;</span>
-            <span>API & Developer</span>
-            <small class="soon">Soon</small>
+            <span class="hip-nav-icon">@IconCode()</span>
+            <span class="hip-nav-text">API & Developer</span>
+            <span class="hip-status soon">Soon</span>
         </NavLink>
+
         <NavLink class="hip-nav-link" href="admin/privacy">
-            <span class="hip-nav-icon">▢</span>
-            <span>Privacy & Safety</span>
-            <small>MVP</small>
+            <span class="hip-nav-icon">@IconLock()</span>
+            <span class="hip-nav-text">Privacy & Safety</span>
+            <span class="hip-status">MVP</span>
         </NavLink>
+
         <NavLink class="hip-nav-link" href="admin/roles">
-            <span class="hip-nav-icon">⚙</span>
-            <span>Settings</span>
-            <small>MVP</small>
+            <span class="hip-nav-icon">@IconSettings()</span>
+            <span class="hip-nav-text">Settings</span>
+            <span class="hip-status">MVP</span>
+            <span class="hip-chevron">›</span>
         </NavLink>
     </nav>
 </div>
 
 <div class="hip-sidebar-footer">
-    <button type="button">Collapse</button>
+    <button type="button">
+        <span class="hip-nav-icon">@IconCollapse()</span>
+        <span>Collapse</span>
+    </button>
 </div>
+
+@code {
+    private static RenderFragment Svg(string body) => builder =>
+    {
+        builder.OpenElement(0, "svg");
+        builder.AddAttribute(1, "viewBox", "0 0 24 24");
+        builder.AddAttribute(2, "aria-hidden", "true");
+        builder.AddMarkupContent(3, body);
+        builder.CloseElement();
+    };
+
+    private static RenderFragment IconDashboard() => Svg("<rect x=\"4\" y=\"4\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"14\" y=\"4\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"4\" y=\"14\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"6\" height=\"6\" rx=\"1\"/>");
+    private static RenderFragment IconBell() => Svg("<path d=\"M18 9a6 6 0 0 0-12 0c0 7-2 7-2 7h16s-2 0-2-7\"/><path d=\"M10 20h4\"/>");
+    private static RenderFragment IconShield() => Svg("<path d=\"M12 3.5 18 6v5.2c0 4.2-2.5 7.4-6 8.8-3.5-1.4-6-4.6-6-8.8V6l6-2.5Z\"/>");
+    private static RenderFragment IconClipboard() => Svg("<rect x=\"6\" y=\"5\" width=\"12\" height=\"15\" rx=\"2\"/><path d=\"M9 5a3 3 0 0 1 6 0\"/><path d=\"M9 11h6M9 15h4\"/>");
+    private static RenderFragment IconStar() => Svg("<path d=\"m12 4 2.3 4.7 5.2.8-3.8 3.7.9 5.2L12 16l-4.6 2.4.9-5.2-3.8-3.7 5.2-.8L12 4Z\"/>");
+    private static RenderFragment IconIdentity() => Svg("<circle cx=\"12\" cy=\"8\" r=\"3\"/><path d=\"M5 20a7 7 0 0 1 14 0\"/>");
+    private static RenderFragment IconLink() => Svg("<path d=\"M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1\"/><path d=\"M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1\"/>");
+    private static RenderFragment IconZap() => Svg("<path d=\"M13 2 4 14h7l-1 8 9-12h-7l1-8Z\"/>");
+    private static RenderFragment IconMonitor() => Svg("<rect x=\"4\" y=\"5\" width=\"16\" height=\"11\" rx=\"2\"/><path d=\"M8 20h8M12 16v4\"/>");
+    private static RenderFragment IconSliders() => Svg("<path d=\"M4 7h10M18 7h2M4 17h2M10 17h10\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"8\" cy=\"17\" r=\"2\"/>");
+    private static RenderFragment IconConnection() => Svg("<path d=\"M9 7H7a4 4 0 0 0 0 8h2M15 7h2a4 4 0 0 1 0 8h-2M8 12h8\"/>");
+    private static RenderFragment IconBars() => Svg("<path d=\"M5 19V9M12 19V5M19 19v-7\"/>");
+    private static RenderFragment IconMessage() => Svg("<path d=\"M5 6h14v10H8l-3 3V6Z\"/>");
+    private static RenderFragment IconFile() => Svg("<path d=\"M7 3h7l4 4v14H7V3Z\"/><path d=\"M14 3v5h5M10 13h5M10 17h5\"/>");
+    private static RenderFragment IconCode() => Svg("<path d=\"m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14\"/>");
+    private static RenderFragment IconLock() => Svg("<rect x=\"5\" y=\"10\" width=\"14\" height=\"10\" rx=\"2\"/><path d=\"M8 10V7a4 4 0 0 1 8 0v3\"/>");
+    private static RenderFragment IconSettings() => Svg("<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14.2 3h-4.4l-.4 2.7a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 2 1.2l.4 2.7h4.4l.4-2.7a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z\"/>");
+    private static RenderFragment IconCollapse() => Svg("<rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"2\"/><path d=\"M10 8v8M15 9l-3 3 3 3\"/>");
+}
