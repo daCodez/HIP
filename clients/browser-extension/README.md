@@ -51,6 +51,28 @@ webBaseUrl: "https://localhost:7053"
 
 Update these in settings if local launch profiles use different ports.
 
+## Safety Page Flow
+
+The content script scans anchor `href` values only. It sends the current page URL and discovered link URLs to `/api/v1/browser/scan-links`.
+
+When HIP returns a risky result:
+
+- `Safe` / `Trusted` / `ProbablySafe`: leave the link unchanged and do not add an icon.
+- `Unknown` / `Caution`: optionally show an attention label depending on scan mode.
+- `HighRisk` / `Suspicious`: show a suspicious label and route clicks through the HIP safety page.
+- `Dangerous`: show a dangerous label and route clicks through the HIP safety page.
+- `Critical`: route through the HIP safety page and rely on the safety page block/continue rules.
+
+Safety URLs use:
+
+```text
+/safety?url={encodedUrl}&source=browser&risk={riskStatus}
+```
+
+The extension stores the HIP Web base URL in settings and builds the final safety page URL from that value. The original target URL is passed through `URLSearchParams`, so it is encoded before routing.
+
+The extension does not permanently rewrite safe links. Risky click interception is attached only when the result is `HighRisk`, `Dangerous`, or `Critical` and safety routing is enabled.
+
 ## Privacy Promises
 
 The extension must not send:
@@ -96,6 +118,9 @@ Download detection only flags download-like links by URL extension. It does not 
 11. Confirm risky link badges appear.
 12. Confirm a warning banner appears for a high-risk site.
 13. Click a risky link and confirm safety page routing.
+    - The destination should be the configured HIP Web host.
+    - The query string should include `source=browser`.
+    - The original URL should be encoded in the `url` parameter.
 14. Open settings, change scan mode, save, close, reopen, and confirm settings reload.
 15. Add a download-like link such as `.exe`, `.zip`, `.msi`, `.dmg`, `.pdf`, `.docx`, or `.scr` and confirm it is flagged as a download risk candidate.
 16. Add a login form with a cross-domain action and confirm a caution indicator appears without entering or collecting values.

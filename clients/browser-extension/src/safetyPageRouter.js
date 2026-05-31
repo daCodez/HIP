@@ -11,6 +11,11 @@
     event.preventDefault();
     event.stopPropagation();
 
+    if (lookup?.safetyPageUrl && /^https?:\/\//i.test(lookup.safetyPageUrl)) {
+      window.location.assign(lookup.safetyPageUrl);
+      return;
+    }
+
     const response = await chrome.runtime.sendMessage({
       type: "HIP_SAFETY_URL",
       originalUrl: anchor.href,

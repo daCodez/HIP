@@ -8,6 +8,19 @@ The browser plugin uses versioned v1 endpoints:
 
 - `POST /api/v1/browser/score-site`
 - `POST /api/v1/browser/scan-links`
+
+## Safety Page Integration
+
+The browser plugin routes only risky links through HIP:
+
+- Safe/Trusted/ProbablySafe links are left unchanged and do not get icons.
+- Unknown/Caution links may show labels depending on scan mode.
+- HighRisk/Suspicious, Dangerous, and Critical links get attention badges and click interception.
+- Intercepted clicks go to `/safety?url={encodedUrl}&source=browser&risk={riskStatus}` on the configured HIP Web host.
+
+The plugin uses `URLSearchParams` to encode the original target URL before routing. If HIP is unavailable, the extension fails open and does not block links.
+
+The plugin does not send page text, form contents, field values, email body text, or private messages as part of safety routing.
 - `POST /api/v1/public/risk-findings`
 
 Normal safe links do not receive badges. HIP shows labels only when attention is useful: `Unknown`, `Caution`, `Suspicious`, `Dangerous`, or `Verified`.
