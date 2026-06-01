@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\src\HIP.Domain\HIP.Domain.csproj" />
     <ProjectReference Include="..\..\src\HIP.Application\HIP.Application.csproj" />
     <ProjectReference Include="..\..\src\HIP.Infrastructure\HIP.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\HIP.ApiService\HIP.ApiService.csproj" Aliases="ApiServiceAlias" />
     <ProjectReference Include="..\..\src\HIP.Web\HIP.Web.csproj" />
   </ItemGroup>
 
