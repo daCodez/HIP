@@ -436,6 +436,29 @@ static object ToSiteSafetyScanResponse(SiteSafetyScanResult result) => new
     result.PageTrustScore,
     result.ContentRiskScore,
     result.FinalHipScore,
+    ProviderEvidence = result.ProviderEvidence.Select(evidence => new
+    {
+        evidence.ProviderName,
+        ProviderType = evidence.ProviderType.ToString(),
+        TargetType = evidence.TargetType.ToString(),
+        evidence.Domain,
+        evidence.UrlHash,
+        evidence.Confidence,
+        evidence.CheckedAtUtc,
+        evidence.ExpiresAtUtc,
+        evidence.Errors,
+        evidence.IsAuthoritativeForRisk,
+        evidence.IsAuthoritativeForTrust,
+        EvidenceItems = evidence.EvidenceItems.Select(item => new
+        {
+            item.Category,
+            item.Value,
+            Status = item.Status.ToString(),
+            item.RiskImpact,
+            item.TrustImpact,
+            item.Summary
+        }).ToArray()
+    }).ToArray(),
     result.ScoreImpact
 };
 

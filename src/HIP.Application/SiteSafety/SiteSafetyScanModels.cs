@@ -115,8 +115,9 @@ public sealed record SiteSafetyObservedSignals(
 /// <param name="ConfidenceLevel">Low, Medium, or High confidence label.</param>
 /// <param name="DomainTrustScore">Domain trust score after safety reputation impact.</param>
 /// <param name="PageTrustScore">Page trust score after safety impact.</param>
-/// <param name="ContentRiskScore">Content score derived from malware, script, download, and phishing signals; lower means riskier content.</param>
+/// <param name="ContentRiskScore">Layered content trust score derived from malware, script, download, and phishing signals; lower means riskier content.</param>
 /// <param name="FinalHipScore">Safety-adjusted HIP score contribution.</param>
+/// <param name="ProviderEvidence">Normalized provider evidence used by the scan. Raw private page content is not included.</param>
 /// <param name="ScoreImpact">Detailed score impact for the larger HIP scoring model.</param>
 public sealed record SiteSafetyScanResult(
     string ScanId,
@@ -142,6 +143,7 @@ public sealed record SiteSafetyScanResult(
     int PageTrustScore,
     int ContentRiskScore,
     int FinalHipScore,
+    IReadOnlyCollection<SiteSafetyEvidence> ProviderEvidence,
     SiteSafetyScoreImpact ScoreImpact);
 
 /// <summary>
@@ -149,7 +151,7 @@ public sealed record SiteSafetyScanResult(
 /// </summary>
 /// <param name="DomainTrustScore">DomainTrustScore contribution after reputation risk.</param>
 /// <param name="PageTrustScore">PageTrustScore contribution after phishing, redirect, form, and reputation risk.</param>
-/// <param name="ContentRiskScore">ContentRiskScore contribution where lower values indicate riskier content.</param>
+/// <param name="ContentRiskScore">ContentRiskScore contribution where lower values indicate riskier content and higher values indicate safer content.</param>
 /// <param name="FinalHipScore">Final safety-adjusted HIP score contribution.</param>
 /// <param name="ScoreBreakdown">Standard HIP score breakdown components.</param>
 public sealed record SiteSafetyScoreImpact(

@@ -21,6 +21,7 @@ The MVP scan accepts a public HTTP or HTTPS URL plus optional privacy-safe obser
 - reasons, warnings, positive signals, and negative signals
 - confidence level
 - impact on `DomainTrustScore`, `PageTrustScore`, `ContentRiskScore`, and final HIP score
+- normalized provider evidence used by the scan
 
 ## Status Labels
 
@@ -69,6 +70,64 @@ The scanner must not receive or store:
 - full chat logs
 
 The browser plugin sends only structural facts such as counts, source URLs, download-link URLs for extension checks, and whether login fields exist.
+
+## Provider-Based Evidence
+
+Site Safety Scan is provider-based. Providers return normalized evidence; they do not directly decide the final HIP score.
+
+Current and planned provider types:
+
+- `BrowserObserved`: active in the MVP. Uses privacy-safe browser facts.
+- `HipHistory`: future HIP scan, report, and reputation history.
+- `UserFeedback`: future weighted user feedback.
+- `AdminReview`: future moderator/admin review signals.
+- `TlsScanner`: future TLS scanners such as SSL Labs.
+- `ThreatIntel`: future Google Web Risk or Safe Browsing style feeds.
+- `UrlReputation`: future URL reputation providers.
+- `DomainReputation`: future domain reputation providers.
+- `MalwareScanner`: future malware scanner providers.
+- `PhishingScanner`: future phishing scanner providers.
+
+Each provider returns:
+
+- provider name
+- provider type
+- target type
+- domain
+- URL hash when applicable
+- evidence items
+- confidence
+- checked time
+- expiry time
+- safe errors
+- whether it is authoritative for risk
+- whether it is authoritative for trust
+
+The scanner combines provider evidence with browser-observed facts. Provider failures and timeouts lower confidence but do not crash HIP scoring.
+
+## External Scanner Policy
+
+External evidence providers are disabled by default. HIP must not call SSL Labs, Google Web Risk, VirusTotal, Safe Browsing, or any other third-party scanner unless an operator explicitly configures that provider.
+
+External provider rules:
+
+- Prefer cached results when available.
+- Prefer domain-only checks.
+- Use URL hashes where supported.
+- Do not send private page content.
+- Do not send full URLs unless policy explicitly allows it.
+- Handle timeouts and failures safely.
+- Scanner failure must not crash HIP scoring.
+- Clean scanner results do not make unknown domains trusted.
+- No scanner result does not mean trusted.
+- Conflicting scanner results lower confidence and produce a review warning.
+
+Scoring impact rules:
+
+- Strong TLS evidence gives only a small trust boost.
+- Weak TLS lowers confidence.
+- Threat-intel malware or phishing hits can force `HighRisk` or `Dangerous`.
+- External evidence can affect `ReputationRiskScore`, `DomainTrustScore`, `PageTrustScore`, `ContentRiskScore`, and `ConfidenceLevel`.
 
 ## Security Rules
 

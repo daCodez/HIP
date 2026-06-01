@@ -15,7 +15,8 @@ namespace HIP.Application.SiteSafety;
 /// <param name="logger">Structured logger for safe scan telemetry.</param>
 public sealed class SiteSafetyScanner(
     IValidator<SiteSafetyScanRequest> validator,
-    ILogger<SiteSafetyScanner> logger) : ISiteSafetyScanner
+    ILogger<SiteSafetyScanner> logger,
+    IEnumerable<ISiteSafetyEvidenceProvider>? evidenceProviders = null) : ISiteSafetyScanner
 {
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
 
@@ -85,7 +86,8 @@ public sealed class SiteSafetyScanner(
 
             var uri = new Uri(request.Url, UriKind.Absolute);
             var domain = NormalizeHost(uri.Host);
-            var cacheKey = BuildCacheKey(request);
+            var providers = ActiveEvidenceProviders();
+            var cacheKey = BuildCacheKey(request, providers);
             if (TryGetCachedResult(cacheKey, out var cached))
             {
                 logger.LogInformation("Returned cached HIP Site Safety Scan for domain {Domain}.", domain);
@@ -93,7 +95,8 @@ public sealed class SiteSafetyScanner(
             }
 
             var signals = request.ObservedSignals ?? new SiteSafetyObservedSignals();
-            var context = Analyze(uri, domain, signals);
+            var evidence = await CollectEvidenceAsync(uri, domain, signals, providers, cancellationToken);
+            var context = Analyze(uri, domain, signals, evidence);
             var scores = BuildScoreImpact(context);
             var status = DetermineStatus(context);
             var summary = BuildSummary(status, context);
@@ -123,6 +126,7 @@ public sealed class SiteSafetyScanner(
                 scores.PageTrustScore,
                 scores.ContentRiskScore,
                 scores.FinalHipScore,
+                evidence,
                 scores);
             RecentScans[cacheKey] = new CachedSiteSafetyScan(result, DateTimeOffset.UtcNow.Add(CacheDuration));
             return result;
@@ -156,7 +160,7 @@ public sealed class SiteSafetyScanner(
     /// <param name="domain">Normalized domain.</param>
     /// <param name="signals">Privacy-safe observed scan facts.</param>
     /// <returns>Internal scan context used for status and score impact calculation.</returns>
-    private static SiteSafetyContext Analyze(Uri uri, string domain, SiteSafetyObservedSignals signals)
+    private static SiteSafetyContext Analyze(Uri uri, string domain, SiteSafetyObservedSignals signals, IReadOnlyCollection<SiteSafetyEvidence> evidence)
     {
         var reasons = new List<string>();
         var warnings = new List<string>();
@@ -170,6 +174,11 @@ public sealed class SiteSafetyScanner(
         var downloadRisk = DownloadRisk(signals, reasons, warnings, negative);
         var formRisk = FormRisk(signals, reasons, warnings, negative);
         var reputationRisk = ReputationRisk(domain, signals, reasons, negative);
+        var external = BuildExternalEvidenceImpact(evidence, reasons, warnings, positive, negative);
+
+        malwareRisk = Math.Max(malwareRisk, external.MalwareRisk);
+        phishingRisk = Math.Max(phishingRisk, external.PhishingRisk);
+        reputationRisk = Math.Max(reputationRisk, external.ReputationRisk);
 
         if (uri.Scheme == "https")
         {
@@ -241,10 +250,163 @@ public sealed class SiteSafetyScanner(
             reputationRisk,
             overallRisk,
             signals.TrustDataAvailable,
+            external.TrustBoost,
+            external.ConfidencePenalty,
+            external.HasAuthoritativeRiskHit,
+            external.HasConflictingEvidence,
             reasons.Distinct().ToArray(),
             warnings.Distinct().ToArray(),
             positive.Distinct().ToArray(),
             negative.Distinct().ToArray());
+    }
+
+    /// <summary>
+    /// Resolves the active evidence providers, falling back to browser-observed evidence when none are registered.
+    /// </summary>
+    /// <returns>Evidence providers to use for this scan.</returns>
+    private IReadOnlyCollection<ISiteSafetyEvidenceProvider> ActiveEvidenceProviders()
+    {
+        var providers = evidenceProviders?.ToArray() ?? [];
+        if (providers.Length == 0)
+        {
+            providers = [new BrowserObservedSignalProvider()];
+        }
+
+        return providers;
+    }
+
+    /// <summary>
+    /// Collects normalized provider evidence and converts provider failures into safe error evidence.
+    /// </summary>
+    /// <param name="uri">Validated scan URI.</param>
+    /// <param name="domain">Normalized domain.</param>
+    /// <param name="signals">Privacy-safe observed scan facts.</param>
+    /// <param name="providers">Evidence providers active for this scan.</param>
+    /// <param name="cancellationToken">Token used to cancel provider work.</param>
+    /// <returns>Normalized provider evidence records.</returns>
+    private async Task<IReadOnlyCollection<SiteSafetyEvidence>> CollectEvidenceAsync(Uri uri, string domain, SiteSafetyObservedSignals signals, IReadOnlyCollection<ISiteSafetyEvidenceProvider> providers, CancellationToken cancellationToken)
+    {
+        var checkedAt = DateTimeOffset.UtcNow;
+        var context = new SiteSafetyEvidenceContext(
+            uri,
+            domain,
+            SiteSafetyEvidenceHashing.HashUrl(SanitizeUrl(uri)),
+            signals,
+            checkedAt);
+
+        var evidence = new List<SiteSafetyEvidence>();
+        foreach (var provider in providers)
+        {
+            try
+            {
+                evidence.Add(await provider.CollectEvidenceAsync(context, cancellationToken));
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                evidence.Add(FailedProviderEvidence(provider, context, "Provider timed out."));
+            }
+            catch (TimeoutException)
+            {
+                evidence.Add(FailedProviderEvidence(provider, context, "Provider timed out."));
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "HIP Site Safety evidence provider {ProviderName} failed safely.", provider.ProviderName);
+                evidence.Add(FailedProviderEvidence(provider, context, "Provider failed safely."));
+            }
+        }
+
+        return evidence;
+    }
+
+    /// <summary>
+    /// Creates safe provider-failure evidence that lowers confidence without crashing the scan.
+    /// </summary>
+    private static SiteSafetyEvidence FailedProviderEvidence(ISiteSafetyEvidenceProvider provider, SiteSafetyEvidenceContext context, string error) =>
+        new(
+            provider.ProviderName,
+            provider.ProviderType,
+            SiteSafetyEvidenceTargetType.Domain,
+            context.Domain,
+            context.UrlHash,
+            [],
+            Confidence: 0,
+            context.CheckedAtUtc,
+            context.CheckedAtUtc.AddMinutes(10),
+            [error],
+            IsAuthoritativeForRisk: false,
+            IsAuthoritativeForTrust: false);
+
+    /// <summary>
+    /// Converts normalized provider evidence into risk, trust, and confidence adjustments.
+    /// </summary>
+    private static ExternalEvidenceImpact BuildExternalEvidenceImpact(
+        IReadOnlyCollection<SiteSafetyEvidence> evidence,
+        ICollection<string> reasons,
+        ICollection<string> warnings,
+        ICollection<string> positive,
+        ICollection<string> negative)
+    {
+        var malwareRisk = 0;
+        var phishingRisk = 0;
+        var reputationRisk = 0;
+        var trustBoost = 0;
+        var confidencePenalty = evidence.Any(item => item.Errors.Count > 0) ? 15 : 0;
+        var hasAuthoritativeRiskHit = false;
+        var hasCleanExternal = false;
+
+        foreach (var providerEvidence in evidence)
+        {
+            foreach (var item in providerEvidence.EvidenceItems)
+            {
+                if (item.Status is SiteSafetyEvidenceStatus.Clean or SiteSafetyEvidenceStatus.Positive)
+                {
+                    hasCleanExternal |= providerEvidence.ProviderType is not SiteSafetyEvidenceProviderType.BrowserObserved;
+                    if (providerEvidence.IsAuthoritativeForTrust)
+                    {
+                        trustBoost = Math.Max(trustBoost, Math.Min(5, item.TrustImpact));
+                        positive.Add(item.Summary);
+                    }
+
+                    continue;
+                }
+
+                if (item.Status is SiteSafetyEvidenceStatus.Weak)
+                {
+                    confidencePenalty = Math.Max(confidencePenalty, 20);
+                    warnings.Add(item.Summary);
+                    negative.Add(item.Summary);
+                    continue;
+                }
+
+                if (providerEvidence.ProviderType is SiteSafetyEvidenceProviderType.ThreatIntel or SiteSafetyEvidenceProviderType.PhishingScanner &&
+                    item.Category.Contains("phishing", StringComparison.OrdinalIgnoreCase))
+                {
+                    phishingRisk = Math.Max(phishingRisk, providerEvidence.IsAuthoritativeForRisk ? 90 : item.RiskImpact);
+                    hasAuthoritativeRiskHit |= providerEvidence.IsAuthoritativeForRisk;
+                }
+
+                if (providerEvidence.ProviderType is SiteSafetyEvidenceProviderType.ThreatIntel or SiteSafetyEvidenceProviderType.MalwareScanner &&
+                    item.Category.Contains("malware", StringComparison.OrdinalIgnoreCase))
+                {
+                    malwareRisk = Math.Max(malwareRisk, providerEvidence.IsAuthoritativeForRisk ? 95 : item.RiskImpact);
+                    hasAuthoritativeRiskHit |= providerEvidence.IsAuthoritativeForRisk;
+                }
+
+                reputationRisk = Math.Max(reputationRisk, item.RiskImpact);
+                reasons.Add(item.Summary);
+                negative.Add(item.Summary);
+            }
+        }
+
+        var hasConflictingEvidence = hasAuthoritativeRiskHit && hasCleanExternal;
+        if (hasConflictingEvidence)
+        {
+            confidencePenalty = Math.Max(confidencePenalty, 35);
+            warnings.Add("External scanner evidence conflicts; HIP lowered confidence and recommends review.");
+        }
+
+        return new ExternalEvidenceImpact(malwareRisk, phishingRisk, reputationRisk, trustBoost, confidencePenalty, hasAuthoritativeRiskHit, hasConflictingEvidence);
     }
 
     /// <summary>
@@ -399,7 +561,7 @@ public sealed class SiteSafetyScanner(
     /// <returns>Score impact used by the larger HIP scoring model.</returns>
     private static SiteSafetyScoreImpact BuildScoreImpact(SiteSafetyContext context)
     {
-        var domainTrust = Math.Clamp(80 - context.ReputationRiskScore, 0, 100);
+        var domainTrust = Math.Clamp(80 - context.ReputationRiskScore + context.ExternalTrustBoost, 0, 100);
         var pageTrust = Math.Clamp(82 - context.PhishingRiskScore / 2 - context.RedirectRiskScore / 3 - context.FormRiskScore / 3 - context.ReputationRiskScore / 4, 0, 100);
         var rawContentRisk = Math.Clamp(context.MalwareRiskScore / 2 + context.ScriptRiskScore / 3 + context.DownloadRiskScore / 3 + context.PhishingRiskScore / 3, 0, 100);
         var contentTrust = Math.Clamp(100 - rawContentRisk, 0, 100);
@@ -418,7 +580,7 @@ public sealed class SiteSafetyScanner(
 
         if (!context.TrustDataAvailable)
         {
-            domainTrust = Math.Min(domainTrust, 60);
+            domainTrust = Math.Min(domainTrust, 60 + Math.Min(context.ExternalTrustBoost, 3));
             pageTrust = Math.Min(pageTrust, 60);
             contentTrust = Math.Min(contentTrust, context.OverallSafetyRiskScore > 0 ? 70 : 60);
         }
@@ -428,8 +590,13 @@ public sealed class SiteSafetyScanner(
             new WeightedScore(new ScoreComponent(ScoreCategory.Website, ScoreValue.From(pageTrust), "PageTrustScore is affected by phishing, redirect, form, and reputation risk.", ["Page-level safety findings adjust page trust."]), 1.5m),
             new WeightedScore(new ScoreComponent(ScoreCategory.Content, ScoreValue.From(contentTrust), "ContentRiskScore is derived from malware, scripts, downloads, and phishing indicators.", ["Content risk lowers content trust but does not alone prove identity."]), 1.5m)
         ]);
+        var finalScore = final.FinalScore.Score.Value;
+        if (!context.TrustDataAvailable)
+        {
+            finalScore = Math.Min(finalScore, 60 + Math.Min(context.ExternalTrustBoost, 3));
+        }
 
-        return new SiteSafetyScoreImpact(domainTrust, pageTrust, contentTrust, final.FinalScore.Score.Value, final.ComponentScores);
+        return new SiteSafetyScoreImpact(domainTrust, pageTrust, contentTrust, finalScore, final.ComponentScores);
     }
 
     /// <summary>
@@ -442,6 +609,11 @@ public sealed class SiteSafetyScanner(
         if (context.MalwareRiskScore >= 90 || context.PhishingRiskScore >= 85)
         {
             return SiteSafetyScanStatus.Dangerous;
+        }
+
+        if (context.HasAuthoritativeRiskHit)
+        {
+            return SiteSafetyScanStatus.HighRisk;
         }
 
         if (context.DownloadRiskScore >= 45)
@@ -493,6 +665,16 @@ public sealed class SiteSafetyScanner(
     /// <returns>Low, Medium, or High confidence.</returns>
     private static string ConfidenceLevel(SiteSafetyContext context)
     {
+        if (context.HasConflictingEvidence || context.ExternalConfidencePenalty >= 35)
+        {
+            return "Low";
+        }
+
+        if (context.ExternalConfidencePenalty >= 20)
+        {
+            return "Medium";
+        }
+
         if (context.NegativeSignals.Count >= 3 || context.TrustDataAvailable)
         {
             return "High";
@@ -551,9 +733,13 @@ public sealed class SiteSafetyScanner(
     /// </summary>
     /// <param name="request">Validated scan request.</param>
     /// <returns>Cache key for the request shape.</returns>
-    private static string BuildCacheKey(SiteSafetyScanRequest request)
+    private static string BuildCacheKey(SiteSafetyScanRequest request, IReadOnlyCollection<ISiteSafetyEvidenceProvider> providers)
     {
-        var serialized = JsonSerializer.Serialize(request);
+        var serialized = JsonSerializer.Serialize(new
+        {
+            Request = request,
+            Providers = providers.Select(provider => provider.ProviderName).OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToArray()
+        });
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(serialized));
         return $"site-safety:{Convert.ToHexString(hash)}";
     }
@@ -614,6 +800,7 @@ public sealed class SiteSafetyScanner(
             impact.PageTrustScore,
             impact.ContentRiskScore,
             impact.FinalHipScore,
+            [],
             impact);
     }
 
@@ -630,10 +817,26 @@ public sealed class SiteSafetyScanner(
         int ReputationRiskScore,
         int OverallSafetyRiskScore,
         bool TrustDataAvailable,
+        int ExternalTrustBoost,
+        int ExternalConfidencePenalty,
+        bool HasAuthoritativeRiskHit,
+        bool HasConflictingEvidence,
         IReadOnlyCollection<string> Reasons,
         IReadOnlyCollection<string> Warnings,
         IReadOnlyCollection<string> PositiveSignals,
         IReadOnlyCollection<string> NegativeSignals);
+
+    /// <summary>
+    /// Risk and confidence adjustments derived from normalized provider evidence.
+    /// </summary>
+    private sealed record ExternalEvidenceImpact(
+        int MalwareRisk,
+        int PhishingRisk,
+        int ReputationRisk,
+        int TrustBoost,
+        int ConfidencePenalty,
+        bool HasAuthoritativeRiskHit,
+        bool HasConflictingEvidence);
 
     /// <summary>
     /// Cached scan result with expiration metadata; raw private page contents are never cached.

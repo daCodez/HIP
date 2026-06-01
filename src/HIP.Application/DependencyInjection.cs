@@ -81,6 +81,9 @@ public static class DependencyInjection
         services.AddScoped<IBrowserScanResultService, BrowserScanResultService>();
         services.AddScoped<ISiteSafetyScanner, SiteSafetyScanner>();
         services.AddScoped<IValidator<SiteSafetyScanRequest>, SiteSafetyScanValidator>();
+        services.AddSingleton<IExternalSiteEvidenceCache, InMemoryExternalSiteEvidenceCache>();
+        services.AddSingleton(new ExternalSiteEvidenceOptions());
+        services.AddScoped<ISiteSafetyEvidenceProvider, BrowserObservedSignalProvider>();
 
         return services;
     }
