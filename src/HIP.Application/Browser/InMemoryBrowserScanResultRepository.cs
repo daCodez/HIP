@@ -7,7 +7,7 @@ namespace HIP.Application.Browser;
 /// </summary>
 public sealed class InMemoryBrowserScanResultRepository : IBrowserScanResultRepository
 {
-    private readonly ConcurrentDictionary<string, BrowserScanResultRecord> resultsByDomain = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, BrowserScanResultRecord> resultsById = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Saves or replaces the latest scan result for the result domain.
@@ -17,7 +17,7 @@ public sealed class InMemoryBrowserScanResultRepository : IBrowserScanResultRepo
     /// <returns>A completed task once the in-memory store has been updated.</returns>
     public Task SaveAsync(BrowserScanResultRecord result, CancellationToken cancellationToken)
     {
-        resultsByDomain[result.Domain] = result;
+        resultsById[result.ScanResultId] = result;
         return Task.CompletedTask;
     }
 
@@ -29,7 +29,25 @@ public sealed class InMemoryBrowserScanResultRepository : IBrowserScanResultRepo
     /// <returns>The latest result, or null when none is stored.</returns>
     public Task<BrowserScanResultRecord?> GetLatestByDomainAsync(string domain, CancellationToken cancellationToken)
     {
-        resultsByDomain.TryGetValue(domain, out var result);
+        var result = resultsById.Values
+            .Where(item => item.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(item => item.LastCheckedUtc)
+            .FirstOrDefault();
+
         return Task.FromResult(result);
+    }
+
+    /// <summary>
+    /// Lists all stored scan results for aggregation tests and development dashboards.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>All stored scan results, newest first.</returns>
+    public Task<IReadOnlyCollection<BrowserScanResultRecord>> ListAsync(CancellationToken cancellationToken)
+    {
+        var results = resultsById.Values
+            .OrderByDescending(item => item.LastCheckedUtc)
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyCollection<BrowserScanResultRecord>>(results);
     }
 }

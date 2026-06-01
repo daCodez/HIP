@@ -20,4 +20,11 @@ public interface IBrowserScanResultRepository
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
     /// <returns>The latest result for the domain, or null when HIP has not seen it yet.</returns>
     Task<BrowserScanResultRecord?> GetLatestByDomainAsync(string domain, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists stored browser scan results for privacy-safe aggregation in admin dashboards.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>Stored scan results sorted by repository implementation preference.</returns>
+    Task<IReadOnlyCollection<BrowserScanResultRecord>> ListAsync(CancellationToken cancellationToken);
 }

@@ -237,12 +237,26 @@ static void MapReportApis(RouteGroupBuilder reportApi)
     });
 }
 
+/// <summary>
+/// Maps protected admin dashboard endpoints using privacy-safe aggregate data.
+/// </summary>
+/// <param name="dashboardApi">Versioned dashboard route group.</param>
 static void MapDashboardApis(RouteGroupBuilder dashboardApi)
 {
     dashboardApi.MapGet("/summary", async (
         IAdminDashboardService dashboardService,
         CancellationToken cancellationToken) =>
         Results.Ok(await dashboardService.GetSummaryAsync(cancellationToken)));
+
+    dashboardApi.MapGet("/risky-domains", async (
+        IAdminDashboardService dashboardService,
+        CancellationToken cancellationToken) =>
+        Results.Ok((await dashboardService.GetSummaryAsync(cancellationToken)).TopRiskyDomains));
+
+    dashboardApi.MapGet("/recent-scans", async (
+        IAdminDashboardService dashboardService,
+        CancellationToken cancellationToken) =>
+        Results.Ok((await dashboardService.GetSummaryAsync(cancellationToken)).RecentScans));
 }
 
 static void MapBadgeApis(RouteGroupBuilder badgeApi)

@@ -44,7 +44,7 @@ public sealed class BrowserScanResultService(
         var metadata = ValidateMetadata(request.PrivacySafeMetadata);
         var reasons = NormalizeReasons(request.Reasons);
         var record = new BrowserScanResultRecord(
-            $"browser-scan:{domain}",
+            $"browser-scan:{domain}:{Guid.NewGuid():N}",
             domain,
             hashingService.Hash(request.PageUrl),
             null,

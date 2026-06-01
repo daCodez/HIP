@@ -21,6 +21,27 @@
     }
     else
     {
+        @if (!_summary.HasScanData)
+        {
+            <section class="lookup-result">
+                <h2>No scan data yet.</h2>
+                <p>Run the browser plugin on a test page to generate real data.</p>
+                <p>Dashboard scan cards are sourced from @_summary.DataSource and do not use fake scan counts.</p>
+            </section>
+        }
+        else
+        {
+            <section class="lookup-result">
+                <div class="result-header">
+                    <div>
+                        <h2>Stored Browser Scan Data</h2>
+                        <p>Data source: @_summary.DataSource. Domain-level summaries only; HIP does not show page text, form values, tokens, private messages, or raw scan payloads here.</p>
+                    </div>
+                    <span>@_summary.GeneratedAtUtc.UtcDateTime.ToString("u")</span>
+                </div>
+            </section>
+        }
+
         <section class="score-grid dashboard-grid">
             @foreach (var card in _summary.Cards)
             {
@@ -34,6 +55,98 @@
                         <small>Placeholder</small>
                     }
                 </article>
+            }
+        </section>
+
+        <section class="lookup-result">
+            <div class="result-header">
+                <div>
+                    <h2>Top Risky Domains</h2>
+                    <p>Sorted by dangerous links first, then total risky links. Domain-level summaries only.</p>
+                </div>
+            </div>
+
+            @if (_summary.TopRiskyDomains.Count == 0)
+            {
+                <p>No risky domains from stored browser scans yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Risky</th>
+                                <th>Dangerous</th>
+                                <th>Average Score</th>
+                                <th>Latest Scan</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var domain in _summary.TopRiskyDomains)
+                            {
+                                <tr>
+                                    <td>@domain.Domain</td>
+                                    <td>@domain.RiskyLinksFound</td>
+                                    <td>@domain.DangerousLinksFound</td>
+                                    <td>@domain.AverageHipScore</td>
+                                    <td>@domain.LatestScanUtc.UtcDateTime.ToString("u")</td>
+                                    <td>@domain.ReasonSummary</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="lookup-result">
+            <div class="result-header">
+                <div>
+                    <h2>Recent Scans</h2>
+                    <p>Newest stored browser plugin scans, with privacy-safe summaries only.</p>
+                </div>
+            </div>
+
+            @if (_summary.RecentScans.Count == 0)
+            {
+                <p>No recent browser plugin scans yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Domain</th>
+                                <th>Score</th>
+                                <th>Risk</th>
+                                <th>Links</th>
+                                <th>Risky</th>
+                                <th>Dangerous</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var scan in _summary.RecentScans)
+                            {
+                                <tr>
+                                    <td>@scan.LastCheckedUtc.UtcDateTime.ToString("u")</td>
+                                    <td>@scan.Domain</td>
+                                    <td>@scan.Score</td>
+                                    <td>@scan.RiskLevel</td>
+                                    <td>@scan.LinksScanned</td>
+                                    <td>@scan.RiskyLinksFound</td>
+                                    <td>@scan.DangerousLinksFound</td>
+                                    <td>@scan.ReasonSummary</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
         </section>
 
