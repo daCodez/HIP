@@ -52,7 +52,7 @@ export function buildPublicLookupUrl(webBaseUrl, domain, publicLookupUrl) {
   }
 
   const safeDomain = encodeURIComponent(domain || "");
-  return new URL(`/lookup/domain/${safeDomain}`, webBaseUrl || "https://localhost:7053").toString();
+  return new URL(`/lookup/domain/${safeDomain}`, webBaseUrl || "http://localhost:5260").toString();
 }
 
 export function buildSafetyDetailsUrl(webBaseUrl, currentUrl, status) {
@@ -60,7 +60,7 @@ export function buildSafetyDetailsUrl(webBaseUrl, currentUrl, status) {
     return null;
   }
 
-  const url = new URL("/safety", webBaseUrl || "https://localhost:7053");
+  const url = new URL("/safety", webBaseUrl || "http://localhost:5260");
   url.searchParams.set("url", currentUrl);
   url.searchParams.set("source", "browser");
   url.searchParams.set("risk", status);

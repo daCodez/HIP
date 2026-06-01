@@ -60,11 +60,11 @@ Current setting keys:
 Default local endpoints:
 
 ```js
-apiBaseUrl: "https://localhost:7257"
-webBaseUrl: "https://localhost:7053"
+apiBaseUrl: "http://localhost:5099"
+webBaseUrl: "http://localhost:5260"
 ```
 
-Update these in settings if local launch profiles use different ports.
+These match the default HTTP launch profiles used by Aspire for `hip-api` and `hip-web`. Update these in settings if local launch profiles use different ports.
 
 ## Safety Page Flow
 

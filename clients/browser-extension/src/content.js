@@ -398,7 +398,7 @@
   function withLookupUrl(lookup) {
     return {
       ...lookup,
-      publicLookupUrl: lookup.publicLookupUrl || `https://localhost:7053/lookup/domain/${encodeURIComponent(lookup.domain)}`
+      publicLookupUrl: lookup.publicLookupUrl || `${settings.webBaseUrl}/lookup/domain/${encodeURIComponent(lookup.domain)}`
     };
   }
 
