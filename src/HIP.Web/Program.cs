@@ -446,6 +446,59 @@ static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
         return response.Activated ? Results.Ok(response) : Results.BadRequest(response);
     });
 
+    slHudApi.MapPost("/scan", (
+        SecondLifeHudScanRequest request,
+        ISecondLifeHudService hudService) =>
+    {
+        try
+        {
+            return Results.Ok(hudService.Scan(request));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    slHudApi.MapGet("/settings/{deviceId}", (
+        string deviceId,
+        ISecondLifeHudService hudService) =>
+    {
+        try
+        {
+            return Results.Ok(hudService.GetSettings(deviceId));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    slHudApi.MapPost("/settings/{deviceId}", (
+        string deviceId,
+        SecondLifeHudSettings settings,
+        ISecondLifeHudService hudService) =>
+    {
+        try
+        {
+            var response = hudService.SaveSettings(deviceId, settings);
+            return response.Saved ? Results.Ok(response) : Results.BadRequest(response);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    slHudApi.MapPost("/report", async (
+        SecondLifeHudFindingReport report,
+        ISecondLifeHudService hudService,
+        CancellationToken cancellationToken) =>
+    {
+        var response = await hudService.ReportFindingAsync(report, cancellationToken);
+        return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
+    });
+
     slHudApi.MapPost("/report-finding", async (
         SecondLifeHudFindingReport report,
         ISecondLifeHudService hudService,

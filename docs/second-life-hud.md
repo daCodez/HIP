@@ -17,13 +17,44 @@ The HUD MVP foundation supports:
 ## API Endpoints
 
 - `POST /api/v1/sl-hud/activate`
+- `POST /api/v1/sl-hud/scan`
+- `GET /api/v1/sl-hud/settings/{deviceId}`
+- `POST /api/v1/sl-hud/settings/{deviceId}`
+- `POST /api/v1/sl-hud/report`
 - `POST /api/v1/sl-hud/report-finding`
+
+`/report-finding` is kept as a compatibility alias. New HUD clients should use `/report`.
 
 Activation input:
 
 - setup code
-- HUD device ID
-- optional avatar hash
+- optional HUD device ID
+- optional avatar/avatar ID hash
+- HUD version
+
+Activation returns:
+
+- activated flag
+- license status
+- device ID
+- activation timestamp
+- client settings/config
+
+Scan input:
+
+- device ID
+- source such as `PublicChat`, `GroupChat`, or `PrivateIm`
+- limited suspicious snippet only when needed
+- detected risky URLs
+- optional sender hash
+
+Scan output:
+
+- risk level
+- score
+- plain-English reasons
+- recommended HUD action
+- safety page URL when the risk requires routing
 
 Report input:
 
@@ -44,6 +75,8 @@ Report input:
 - High risk: private owner chat warning and optional popup.
 - Critical risk: strong popup and safety page routing guidance.
 
+The HUD should warn only on suspicious links or suspicious patterns, not every unknown message.
+
 ## Modes
 
 - Quiet
@@ -54,6 +87,25 @@ Report input:
 ## Privacy
 
 The HUD must not collect or send full chat logs, full private IM logs, raw conversations, or real avatar names by default. It reports only privacy-safe risk signals.
+
+Allowed default scan/report fields:
+
+- detected risky URL or reconstructed suspicious URL
+- domain
+- URL hash
+- sender hash if needed
+- platform/source
+- risk reason
+- timestamp
+- limited suspicious snippet only when needed
+
+Not allowed by default:
+
+- full public chat logs
+- full private IM logs
+- harmless chat messages
+- real avatar names
+- private conversations
 
 ## LSL Limitations
 

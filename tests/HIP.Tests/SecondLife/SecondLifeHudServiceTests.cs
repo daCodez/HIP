@@ -82,7 +82,111 @@ public sealed class SecondLifeHudServiceTests
         var response = service.Activate(new SecondLifeHudActivationRequest("HIP-DEV-SETUP", "hud-1", null));
 
         Assert.That(response.LicenseStatus, Is.Not.Empty);
-        Assert.That(response.ClientConfig.ReportFindingUrl, Is.EqualTo("/api/v1/sl-hud/report-finding"));
+        Assert.That(response.ClientConfig.ReportFindingUrl, Is.EqualTo("/api/v1/sl-hud/report"));
+        Assert.That(response.DeviceId, Is.EqualTo("hud-1"));
+    }
+
+    [Test]
+    public void Activation_can_generate_device_id_without_web_login()
+    {
+        var service = Service();
+
+        var response = service.Activate(new SecondLifeHudActivationRequest("HIP-DEV-SETUP", null, "avatar-hash", "0.1.0"));
+
+        Assert.That(response.Activated, Is.True);
+        Assert.That(response.DeviceId, Does.StartWith("sl-hud-"));
+        Assert.That(response.HudVersion, Is.EqualTo("0.1.0"));
+    }
+
+    [Test]
+    public void Hud_scan_detects_suspicious_broken_up_url()
+    {
+        var service = Service();
+
+        var response = service.Scan(new SecondLifeHudScanRequest(
+            "hud-1",
+            "GroupChat",
+            "limited suspicious snippet only",
+            ["hxxps://scam-prize dot example"],
+            "sender-hash"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.RiskLevel, Is.EqualTo("High"));
+            Assert.That(response.Score, Is.EqualTo(32));
+            Assert.That(response.Reasons, Does.Contain("Broken-up URL detected"));
+            Assert.That(response.RecommendedHudAction, Is.EqualTo("PrivateWarningAndPopup"));
+            Assert.That(response.SafetyPageUrl, Does.Contain("source=sl-hud"));
+        });
+    }
+
+    [Test]
+    public void Critical_scan_includes_safety_page_block_flow()
+    {
+        var service = Service();
+
+        var response = service.Scan(new SecondLifeHudScanRequest(
+            "hud-1",
+            "PrivateIm",
+            "critical malware prize",
+            ["https://free-gift.ru/pay"],
+            "sender-hash"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.RiskLevel, Is.EqualTo("Critical"));
+            Assert.That(response.RecommendedHudAction, Is.EqualTo("StrongPopupAndSafetyBlock"));
+            Assert.That(response.SafetyPageUrl, Does.StartWith("/safety?url="));
+        });
+    }
+
+    [Test]
+    public void Hud_scan_does_not_require_full_chat_logs()
+    {
+        var properties = typeof(SecondLifeHudScanRequest).GetProperties().Select(property => property.Name).ToArray();
+
+        Assert.That(properties, Does.Not.Contain("ChatLog"));
+        Assert.That(properties, Does.Not.Contain("PrivateImLog"));
+        Assert.That(properties, Does.Not.Contain("FullMessageBody"));
+    }
+
+    [Test]
+    public void Hud_settings_can_enable_and_disable_popup_alerts()
+    {
+        var service = Service();
+
+        var response = service.SaveSettings("hud-1", new SecondLifeHudSettings("ignored", "Quiet", false, true, true));
+        var settings = service.GetSettings("hud-1");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Saved, Is.True);
+            Assert.That(settings.Mode, Is.EqualTo("Quiet"));
+            Assert.That(settings.PopupAlertsEnabled, Is.False);
+        });
+    }
+
+    [TestCase("Quiet")]
+    [TestCase("Normal")]
+    [TestCase("Strict")]
+    [TestCase("Paranoid")]
+    public void Hud_mode_can_be_supported_modes(string mode)
+    {
+        var service = Service();
+
+        var response = service.SaveSettings("hud-1", new SecondLifeHudSettings("hud-1", mode, true, true, true));
+
+        Assert.That(response.Saved, Is.True);
+    }
+
+    [Test]
+    public void Invalid_hud_mode_is_rejected()
+    {
+        var service = Service();
+
+        var response = service.SaveSettings("hud-1", new SecondLifeHudSettings("hud-1", "Aggressive", true, true, true));
+
+        Assert.That(response.Saved, Is.False);
     }
 
     private static SecondLifeHudService Service(IReviewQueueService? reviewQueueService = null)

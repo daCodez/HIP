@@ -5,20 +5,57 @@ namespace HIP.Application.SecondLife;
 
 public sealed record SecondLifeHudActivationRequest(
     string SetupCode,
-    string HudDeviceId,
-    string? AvatarHash);
+    string? HudDeviceId,
+    string? AvatarHash,
+    string? HudVersion = null)
+{
+    public string? AvatarIdHash { get; init; }
+
+    public string? EffectiveAvatarHash => string.IsNullOrWhiteSpace(AvatarHash) ? AvatarIdHash : AvatarHash;
+}
 
 public sealed record SecondLifeHudActivationResponse(
     bool Activated,
     string LicenseStatus,
     string Message,
-    SecondLifeHudClientConfig ClientConfig);
+    SecondLifeHudClientConfig ClientConfig,
+    string? DeviceId = null,
+    DateTimeOffset? ActivatedAtUtc = null,
+    string? HudVersion = null);
 
 public sealed record SecondLifeHudClientConfig(
     string Mode,
     bool PopupAlertsEnabled,
+    bool PrivateWarningsEnabled,
+    bool SafetyRoutingEnabled,
     string SafetyPageBaseUrl,
     string ReportFindingUrl);
+
+public sealed record SecondLifeHudSettings(
+    string DeviceId,
+    string Mode,
+    bool PopupAlertsEnabled,
+    bool PrivateWarningsEnabled,
+    bool SafetyRoutingEnabled);
+
+public sealed record SecondLifeHudSettingsResponse(
+    bool Saved,
+    string Message,
+    SecondLifeHudSettings Settings);
+
+public sealed record SecondLifeHudScanRequest(
+    string DeviceId,
+    string Source,
+    string? MessageText,
+    IReadOnlyCollection<string> DetectedUrls,
+    string? SenderHash);
+
+public sealed record SecondLifeHudScanResponse(
+    string RiskLevel,
+    int Score,
+    IReadOnlyCollection<string> Reasons,
+    string RecommendedHudAction,
+    string? SafetyPageUrl);
 
 public sealed record SecondLifeHudFindingReport(
     string HudDeviceId,
