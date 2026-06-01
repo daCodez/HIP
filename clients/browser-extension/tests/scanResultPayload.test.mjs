@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  browserScanAssessment,
   buildScanResultPayload,
   formatPluginVersion,
   HipApiClient,
@@ -38,6 +39,59 @@ test("plugin creates privacy-safe scan result payload", () => {
   assert.equal(payload.suspiciousLinksFound, 2);
   assert.equal(payload.dangerousLinksFound, 0);
   assert.equal(payload.privacySafeMetadata.scanTimestampUtc, "2026-06-01T00:00:00Z");
+});
+
+test("no-data lookup state persists actual browser scan result", () => {
+  const payload = buildScanResultPayload({
+    domain: "example.com",
+    pageUrl: "https://example.com/page",
+    lookup: {
+      finalHipScore: 0,
+      status: "Unknown",
+      dataSource: "NoStoredData",
+      explanations: ["HIP has not scanned this domain yet."]
+    },
+    summary: {
+      linksScanned: 0,
+      riskyLinks: 0,
+      suspiciousLinks: 0,
+      dangerousLinks: 0,
+      unknownLinks: 0,
+      downloadCandidates: 0,
+      apiStatus: "Available"
+    },
+    settings: {
+      scanMode: "Normal"
+    },
+    submittedAtUtc: "2026-06-01T00:00:00Z"
+  });
+
+  assert.equal(payload.score, 80);
+  assert.equal(payload.status, "ProbablySafe");
+  assert.equal(payload.recommendedAction, "Allow");
+  assert.equal(payload.reasons.some(reason => reason.includes("HIP has not scanned this domain yet")), false);
+  assert.equal(payload.reasons.some(reason => reason.includes("No risky external links")), true);
+});
+
+test("browser scan assessment penalizes suspicious and dangerous scan counts", () => {
+  const suspicious = browserScanAssessment({ dataSource: "NoStoredData" }, {
+    linksScanned: 4,
+    riskyLinks: 1,
+    suspiciousLinks: 1,
+    dangerousLinks: 0,
+    unknownLinks: 0
+  });
+  const dangerous = browserScanAssessment({ dataSource: "NoStoredData" }, {
+    linksScanned: 4,
+    riskyLinks: 1,
+    suspiciousLinks: 0,
+    dangerousLinks: 1,
+    unknownLinks: 0
+  });
+
+  assert.equal(suspicious.status, "HighRisk");
+  assert.equal(dangerous.status, "Dangerous");
+  assert.ok(dangerous.score < suspicious.score);
 });
 
 test("scan result payload excludes page text and form values", () => {
