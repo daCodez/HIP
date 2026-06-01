@@ -8,6 +8,7 @@
   const currentDomain = normalizeHost(window.location.hostname);
   let settings = null;
   let lastSummary = emptySummary();
+  let pluginVersion = "HIP Plugin vunknown-dev";
 
   if (!currentDomain) {
     return;
@@ -36,13 +37,14 @@
    */
   async function initialize() {
     settings = await loadSettings();
+    pluginVersion = await loadPluginVersion();
     lastSummary = emptySummary();
     const currentLookup = await scoreSite(currentDomain, window.location.href);
     lastSummary.website = compactLookup(currentLookup);
     lastSummary.apiStatus = currentLookup ? "Available" : "Unavailable";
 
     if (settings.enableWarningBanner && currentLookup?.status && riskyStatuses.has(currentLookup.status)) {
-      window.HipRiskBadgeRenderer.renderWarningBanner(withLookupUrl(currentLookup));
+      window.HipRiskBadgeRenderer.renderWarningBanner(withLookupUrl(currentLookup), pluginVersion);
     }
 
     if (settings.enableLinkScanning) {
@@ -321,6 +323,15 @@
       submitScanResults: true,
       scanMode: "Normal"
     };
+  }
+
+  /**
+   * Loads the dev/MVP extension version through the background worker.
+   * The background worker reads manifest.json, so content scripts do not hardcode version strings.
+   */
+  async function loadPluginVersion() {
+    const response = await chrome.runtime.sendMessage({ type: "HIP_GET_PLUGIN_VERSION" });
+    return response?.ok ? response.result : "HIP Plugin vunknown-dev";
   }
 
   function publishSummary() {

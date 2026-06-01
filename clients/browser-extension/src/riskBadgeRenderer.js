@@ -41,7 +41,11 @@
     anchor.dataset.hipBadgeRendered = "true";
   }
 
-  function renderWarningBanner(lookup) {
+  /**
+   * Renders the page-level warning banner for risky current websites.
+   * The banner includes the manifest-derived plugin version so dev testers can confirm Chrome loaded the latest unpacked build.
+   */
+  function renderWarningBanner(lookup, pluginVersion = "HIP Plugin vunknown-dev") {
     ensureStyles();
 
     if (document.getElementById("hip-warning-banner")) {
@@ -56,6 +60,7 @@
         <strong>HIP Warning: This website has a low trust score.</strong>
         <span>Score: ${lookup.finalHipScore}/100 · Status: ${lookup.status}</span>
         <span>${escapeHtml(reason)}</span>
+        <small class="hip-warning-version">${escapeHtml(pluginVersion)}</small>
       </div>
       <a class="hip-warning-link" href="${lookup.publicLookupUrl || "#"}" target="_blank" rel="noopener noreferrer">Lookup</a>
       <button class="hip-warning-dismiss" type="button" aria-label="Dismiss HIP warning">×</button>
@@ -130,6 +135,10 @@
         display: grid;
         gap: 2px;
         flex: 1;
+      }
+      #hip-warning-banner .hip-warning-version {
+        opacity: 0.82;
+        font-size: 12px;
       }
       #hip-warning-banner .hip-warning-link,
       #hip-warning-banner .hip-warning-dismiss {
