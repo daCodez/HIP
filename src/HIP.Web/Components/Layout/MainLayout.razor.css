@@ -2,23 +2,21 @@
     min-height: 100vh;
     display: grid;
     grid-template-columns: 288px minmax(0, 1fr);
-    color: #d8e4f7;
-    background: #050b16;
+    color: var(--text);
+    background: var(--bg);
 }
 
 .hip-sidebar {
     position: sticky;
     top: 0;
     height: 100vh;
-    border-right: 1px solid #17263d;
-    background: #091426;
+    border-right: 1px solid var(--border);
+    background: #0b1220;
 }
 
 .hip-main {
     min-width: 0;
-    background:
-        radial-gradient(circle at 25% 0%, rgba(0, 196, 220, 0.08), transparent 28rem),
-        #050b16;
+    background: var(--bg);
 }
 
 .hip-topbar {
@@ -31,8 +29,8 @@
     justify-content: space-between;
     gap: 24px;
     padding: 12px 28px;
-    border-bottom: 1px solid #17263d;
-    background: rgba(8, 17, 31, 0.96);
+    border-bottom: 1px solid var(--border);
+    background: rgba(10, 14, 20, 0.96);
     backdrop-filter: blur(12px);
 }
 
@@ -42,10 +40,10 @@
     align-items: center;
     gap: 10px;
     padding: 0 14px;
-    border: 1px solid #1c3555;
-    border-radius: 8px;
-    color: #6f829e;
-    background: #0c1a2e;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    background: #111827;
 }
 
 .hip-search input {
@@ -53,12 +51,12 @@
     height: 40px;
     border: 0;
     outline: 0;
-    color: #d8e4f7;
+    color: var(--text);
     background: transparent;
 }
 
 .hip-search input::placeholder {
-    color: #52627a;
+    color: var(--text-faint);
 }
 
 .hip-topbar-actions {
@@ -70,10 +68,10 @@
 .hip-env,
 .hip-icon-button {
     height: 38px;
-    border: 1px solid #1c3555;
-    border-radius: 8px;
-    color: #c6d3e6;
-    background: #0c1a2e;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    background: #111827;
 }
 
 .hip-env {
@@ -89,7 +87,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #14e19a;
+    background: var(--safe);
 }
 
 .hip-icon-button {
@@ -105,7 +103,7 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #ff5168;
+    background: var(--danger);
 }
 
 .hip-user {
@@ -120,8 +118,8 @@
     display: grid;
     place-items: center;
     border-radius: 50%;
-    color: #06101d;
-    background: #04c7df;
+    color: #001016;
+    background: var(--accent);
     font-weight: 800;
 }
 
@@ -132,7 +130,7 @@
 }
 
 .hip-user small {
-    color: #667892;
+    color: var(--text-dim);
 }
 
 .hip-content {

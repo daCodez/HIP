@@ -1,8 +1,88 @@
-html, body {
+/* ============================================================
+   HIP Admin Shell Design Tokens
+   Adapted from the supplied HIP prototype so the Blazor app uses
+   the same dark operational UI language instead of default Blazor.
+   ============================================================ */
+
+:root {
+    --bg: #0a0e14;
+    --bg-elev: #0f141c;
+    --surface: #131923;
+    --surface-2: #161d27;
+    --surface-hover: #1a2230;
+    --border: #1f2937;
+    --border-strong: #2a3645;
+    --border-soft: #161e28;
+    --text: #e6edf3;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+    --text-faint: #475569;
+    --accent: #22d3ee;
+    --accent-strong: #06b6d4;
+    --accent-soft: rgba(34, 211, 238, 0.12);
+    --accent-glow: rgba(34, 211, 238, 0.18);
+    --safe: #22c55e;
+    --safe-bg: rgba(34, 197, 94, 0.12);
+    --safe-border: rgba(34, 197, 94, 0.28);
+    --caution: #eab308;
+    --caution-bg: rgba(234, 179, 8, 0.12);
+    --caution-border: rgba(234, 179, 8, 0.28);
+    --suspicious: #f97316;
+    --suspicious-bg: rgba(249, 115, 22, 0.12);
+    --suspicious-border: rgba(249, 115, 22, 0.28);
+    --danger: #ef4444;
+    --danger-bg: rgba(239, 68, 68, 0.12);
+    --danger-border: rgba(239, 68, 68, 0.28);
+    --info: #60a5fa;
+    --info-bg: rgba(96, 165, 250, 0.12);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45);
+    --radius-sm: 6px;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    min-height: 100%;
     margin: 0;
-    color: #d8e4f7;
-    background: #050b16;
-    font-family: Inter, "Segoe UI", Arial, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.04) 1px, transparent 0);
+    background-size: 24px 24px;
+}
+
+body > * {
+    position: relative;
+    z-index: 1;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
 }
 
 a, .btn-link {

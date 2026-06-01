@@ -4,7 +4,7 @@
     align-items: center;
     gap: 14px;
     padding: 24px 18px;
-    border-bottom: 1px solid #14243a;
+    border-bottom: 1px solid var(--border);
 }
 
 .hip-mark {
@@ -14,9 +14,9 @@
     place-items: center;
     flex: 0 0 auto;
     border-radius: 10px;
-    color: #03111c;
-    background: #08c9df;
-    box-shadow: 0 0 22px rgba(8, 201, 223, 0.42);
+    color: #001016;
+    background: var(--accent);
+    box-shadow: 0 0 24px var(--accent-glow);
 }
 
 .hip-mark svg {
@@ -36,14 +36,14 @@
 }
 
 .hip-brand strong {
-    color: #f4f8ff;
+    color: var(--text);
     font-size: 1.05rem;
     font-weight: 900;
 }
 
 .hip-brand span {
     margin-top: 4px;
-    color: #62738d;
+    color: var(--text-dim);
     font-size: 0.86rem;
 }
 
@@ -55,13 +55,13 @@
     position: absolute;
     top: 26px;
     right: 18px;
-    border: 1px solid #203650;
-    border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
     background:
-        linear-gradient(#8da0ba, #8da0ba) center 10px / 18px 2px no-repeat,
-        linear-gradient(#8da0ba, #8da0ba) center 17px / 18px 2px no-repeat,
-        linear-gradient(#8da0ba, #8da0ba) center 24px / 18px 2px no-repeat,
-        #0b182a;
+        linear-gradient(var(--text-muted), var(--text-muted)) center 10px / 18px 2px no-repeat,
+        linear-gradient(var(--text-muted), var(--text-muted)) center 17px / 18px 2px no-repeat,
+        linear-gradient(var(--text-muted), var(--text-muted)) center 24px / 18px 2px no-repeat,
+        var(--surface);
 }
 
 .nav-scrollable {
@@ -69,7 +69,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding: 14px 8px 12px;
-    scrollbar-color: #263955 transparent;
+    scrollbar-color: var(--border-strong) transparent;
     scrollbar-width: thin;
 }
 
@@ -79,7 +79,7 @@
 
 .nav-scrollable::-webkit-scrollbar-thumb {
     border-radius: 999px;
-    background: #263955;
+    background: var(--border-strong);
 }
 
 .hip-nav {
@@ -96,21 +96,21 @@
     padding: 0 14px;
     border: 1px solid transparent;
     border-radius: 8px;
-    color: #8a9bb3;
+    color: var(--text-muted);
     text-decoration: none;
     font-size: 0.95rem;
     font-weight: 800;
 }
 
 .hip-nav-link:hover {
-    color: #d7e7fb;
-    background: rgba(12, 32, 54, 0.82);
+    color: var(--text);
+    background: var(--surface-2);
 }
 
 .hip-nav-link.active {
-    color: #06d8ec;
-    border-color: #0c566b;
-    background: #073247;
+    color: var(--accent);
+    border-color: rgba(34, 211, 238, 0.3);
+    background: var(--accent-soft);
 }
 
 .hip-nav-icon {
@@ -151,44 +151,44 @@
 }
 
 .hip-status {
-    color: #08ce9a;
-    background: rgba(8, 206, 154, 0.16);
-    border: 1px solid rgba(8, 206, 154, 0.2);
+    color: var(--safe);
+    background: var(--safe-bg);
+    border: 1px solid var(--safe-border);
 }
 
 .hip-status.soon {
-    color: #08c9df;
-    background: rgba(8, 201, 223, 0.15);
-    border-color: rgba(8, 201, 223, 0.22);
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-color: rgba(34, 211, 238, 0.3);
 }
 
 .hip-count {
-    color: #ff6276;
-    background: rgba(255, 81, 104, 0.16);
-    border: 1px solid rgba(255, 81, 104, 0.23);
+    color: var(--danger);
+    background: var(--danger-bg);
+    border: 1px solid var(--danger-border);
 }
 
 .hip-count.warning {
-    color: #ffd044;
-    background: rgba(255, 208, 68, 0.15);
-    border-color: rgba(255, 208, 68, 0.22);
+    color: var(--caution);
+    background: var(--caution-bg);
+    border-color: var(--caution-border);
 }
 
 .hip-count.orange {
-    color: #ff944d;
-    background: rgba(255, 148, 77, 0.15);
-    border-color: rgba(255, 148, 77, 0.22);
+    color: var(--suspicious);
+    background: var(--suspicious-bg);
+    border-color: var(--suspicious-border);
 }
 
 .hip-chevron {
-    color: #394d68;
+    color: var(--text-faint);
     font-size: 1.2rem;
     line-height: 1;
 }
 
 .hip-nav-link.active .hip-chevron,
 .hip-nav-link:hover .hip-chevron {
-    color: #06d8ec;
+    color: var(--accent);
 }
 
 .hip-nav-group {
@@ -201,7 +201,7 @@
     gap: 2px;
     margin: 0 0 4px 20px;
     padding: 3px 0 3px 18px;
-    border-left: 1px solid #14243a;
+    border-left: 1px solid var(--border);
 }
 
 .hip-subnav-link {
@@ -210,20 +210,20 @@
     align-items: center;
     border-radius: 7px;
     padding: 0 12px;
-    color: #7d8ea8;
+    color: var(--text-dim);
     text-decoration: none;
     font-size: 0.86rem;
     font-weight: 750;
 }
 
 .hip-subnav-link:hover {
-    color: #d7e7fb;
-    background: rgba(12, 32, 54, 0.65);
+    color: var(--text);
+    background: var(--surface-2);
 }
 
 .hip-subnav-link.active {
-    color: #06d8ec;
-    background: #073247;
+    color: var(--accent);
+    background: var(--accent-soft);
 }
 
 .hip-sidebar-footer {
@@ -231,7 +231,7 @@
     display: flex;
     align-items: center;
     padding: 0 18px;
-    border-top: 1px solid #14243a;
+    border-top: 1px solid var(--border);
 }
 
 .hip-sidebar-footer button {
@@ -240,7 +240,7 @@
     align-items: center;
     gap: 12px;
     border: 0;
-    color: #8a9bb3;
+    color: var(--text-muted);
     background: transparent;
     text-align: left;
     font-weight: 800;
