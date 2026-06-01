@@ -16,6 +16,8 @@ The HUD MVP foundation supports:
 
 The current LSL MVP script lives at `clients/second-life-hud/scripts/HIP_HUD_MVP.lsl`.
 
+The simulator/test harness lives at `/admin/sl-hud-simulator` and is documented in `docs/second-life-hud-simulator.md`.
+
 ## API Endpoints
 
 - `POST /api/v1/sl-hud/activate`

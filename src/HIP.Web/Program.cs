@@ -47,7 +47,6 @@ builder.Services.AddCors(options =>
             .WithMethods("GET", "POST")
             .AllowAnyHeader());
 });
-
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -454,6 +453,20 @@ static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
         try
         {
             return Results.Ok(hudService.Scan(request));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    slHudApi.MapPost("/simulate", (
+        SecondLifeHudSimulationApiRequest request,
+        ISecondLifeHudSimulationService simulationService) =>
+    {
+        try
+        {
+            return Results.Ok(SecondLifeHudSimulationApiResponse.From(simulationService.Simulate(request.ToApplicationRequest())));
         }
         catch (ArgumentException ex)
         {
@@ -1431,4 +1444,101 @@ public partial class Program
 })();
 """;
     }
+}
+
+/// <summary>
+/// API-facing simulator request that accepts source type as text for simple browser and cURL testing.
+/// </summary>
+/// <param name="Sender">Sender label or hash.</param>
+/// <param name="MessageText">Simulated message text.</param>
+/// <param name="SourceType">Source type name such as GroupChat or PrivateIM.</param>
+/// <param name="DetectedUrls">Optional detected URL list.</param>
+/// <param name="ScanMode">HUD scan mode.</param>
+/// <param name="PopupAlertsEnabled">Whether popup alerts are enabled.</param>
+/// <param name="PrivateWarningsEnabled">Whether private warnings are enabled.</param>
+/// <param name="SafetyPageRoutingEnabled">Whether safety routing is enabled.</param>
+sealed record SecondLifeHudSimulationApiRequest(
+    string? Sender,
+    string? MessageText,
+    string SourceType,
+    IReadOnlyCollection<string>? DetectedUrls,
+    string ScanMode,
+    bool PopupAlertsEnabled,
+    bool PrivateWarningsEnabled,
+    bool SafetyPageRoutingEnabled)
+{
+    /// <summary>
+    /// Converts the API request into the application request after validating the source type string.
+    /// </summary>
+    /// <returns>The application simulator request.</returns>
+    public SecondLifeHudSimulationRequest ToApplicationRequest()
+    {
+        if (!Enum.TryParse<SecondLifeHudSimulationSourceType>(SourceType, ignoreCase: true, out var sourceType))
+        {
+            throw new ArgumentException("Invalid SL HUD source type.");
+        }
+
+        return new SecondLifeHudSimulationRequest(
+            Sender,
+            MessageText,
+            sourceType,
+            DetectedUrls,
+            ScanMode,
+            PopupAlertsEnabled,
+            PrivateWarningsEnabled,
+            SafetyPageRoutingEnabled);
+    }
+}
+
+/// <summary>
+/// API-facing simulator response that serializes HUD action as text without changing global enum behavior.
+/// </summary>
+/// <param name="DetectedUrls">Detected URLs.</param>
+/// <param name="RiskLevel">Risk level.</param>
+/// <param name="Score">HIP score.</param>
+/// <param name="Reasons">Plain-English reasons.</param>
+/// <param name="RecommendedHudAction">Recommended HUD action name.</param>
+/// <param name="OwnerWarningWouldShow">Whether owner warning would show.</param>
+/// <param name="PopupWouldShow">Whether popup would show.</param>
+/// <param name="SafetyPageWouldBeUsed">Whether safety page would be used.</param>
+/// <param name="SafetyPageUrl">Safety page URL preview.</param>
+/// <param name="PrivacySafePayload">Privacy-safe payload preview.</param>
+/// <param name="RawPrivateTextExcluded">Whether raw private text is excluded.</param>
+/// <param name="OwnerWarningPreview">Owner warning preview.</param>
+/// <param name="PopupPreview">Popup preview.</param>
+sealed record SecondLifeHudSimulationApiResponse(
+    IReadOnlyCollection<string> DetectedUrls,
+    string RiskLevel,
+    int Score,
+    IReadOnlyCollection<string> Reasons,
+    string RecommendedHudAction,
+    bool OwnerWarningWouldShow,
+    bool PopupWouldShow,
+    bool SafetyPageWouldBeUsed,
+    string? SafetyPageUrl,
+    IReadOnlyDictionary<string, string> PrivacySafePayload,
+    bool RawPrivateTextExcluded,
+    string? OwnerWarningPreview,
+    string? PopupPreview)
+{
+    /// <summary>
+    /// Converts the application result to an API-safe response with string action values.
+    /// </summary>
+    /// <param name="result">Application simulator result.</param>
+    /// <returns>API response.</returns>
+    public static SecondLifeHudSimulationApiResponse From(SecondLifeHudSimulationResult result) =>
+        new(
+            result.DetectedUrls,
+            result.RiskLevel,
+            result.Score,
+            result.Reasons,
+            result.RecommendedHudAction.ToString(),
+            result.OwnerWarningWouldShow,
+            result.PopupWouldShow,
+            result.SafetyPageWouldBeUsed,
+            result.SafetyPageUrl,
+            result.PrivacySafePayload,
+            result.RawPrivateTextExcluded,
+            result.OwnerWarningPreview,
+            result.PopupPreview);
 }

@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddSingleton<IDomainVerificationService, InMemoryDomainVerificationService>();
         services.AddSingleton<ISetupCodeLicenseService, InMemorySetupCodeLicenseService>();
         services.AddScoped<ISecondLifeHudService, SecondLifeHudService>();
+        services.AddScoped<ISecondLifeHudSimulationService, SecondLifeHudSimulationService>();
         services.AddScoped<IBrowserPluginService, BrowserPluginService>();
 
         return services;

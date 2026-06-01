@@ -1,0 +1,181 @@
+@page "/admin/sl-hud-simulator"
+@attribute [Authorize(Policy = AdminPolicies.CanManageLicenses)]
+@rendermode InteractiveServer
+@inject ISecondLifeHudSimulationService Simulator
+
+<PageTitle>HIP SL HUD Simulator</PageTitle>
+
+<section class="hip-page-heading compact">
+    <div>
+        <h1>Second Life HUD Simulator <span class="hip-pill">Dev MVP</span></h1>
+        <p>Test HUD scanning, alert behavior, privacy payloads, and safety routing without launching Second Life.</p>
+    </div>
+</section>
+
+<section class="hip-two-column">
+    <article class="hip-panel padded">
+        <h2>Simulation Input</h2>
+        <label>
+            Sender
+            <InputText @bind-Value="Sender" />
+        </label>
+        <label>
+            Source type
+            <InputSelect @bind-Value="SourceType">
+                @foreach (var source in SourceTypes)
+                {
+                    <option value="@source">@source</option>
+                }
+            </InputSelect>
+        </label>
+        <label>
+            Scan mode
+            <InputSelect @bind-Value="ScanMode">
+                @foreach (var mode in ScanModes)
+                {
+                    <option value="@mode">@mode</option>
+                }
+            </InputSelect>
+        </label>
+        <label>
+            Message text
+            <textarea class="json-editor" @bind="MessageText"></textarea>
+        </label>
+        <label>
+            Detected URLs, one per line
+            <textarea class="json-editor compact-editor" @bind="DetectedUrlsText"></textarea>
+        </label>
+        <div class="hip-checks">
+            <label><InputCheckbox @bind-Value="PopupAlertsEnabled" /> Popup alerts</label>
+            <label><InputCheckbox @bind-Value="PrivateWarningsEnabled" /> Private warnings</label>
+            <label><InputCheckbox @bind-Value="SafetyPageRoutingEnabled" /> Safety routing</label>
+        </div>
+        <div class="button-row">
+            <button type="button" @onclick="RunSimulation">Run Simulation</button>
+            <button type="button" @onclick="LoadRewardBaitSample">Load Scam Sample</button>
+            <button type="button" @onclick="LoadSafeSample">Load Safe Sample</button>
+        </div>
+        @if (Error is not null)
+        {
+            <p class="lookup-error">@Error</p>
+        }
+    </article>
+
+    <article class="hip-panel padded">
+        <h2>Result Panel</h2>
+        @if (Result is null)
+        {
+            <p>No simulation has run yet.</p>
+        }
+        else
+        {
+            <div class="simulation-grid">
+                <span>Risk: <strong>@Result.RiskLevel</strong></span>
+                <span>Score: <strong>@Result.Score</strong></span>
+                <span>Action: <strong>@Result.RecommendedHudAction</strong></span>
+                <span>Owner warning: <strong>@YesNo(Result.OwnerWarningWouldShow)</strong></span>
+                <span>Popup: <strong>@YesNo(Result.PopupWouldShow)</strong></span>
+                <span>Safety page: <strong>@YesNo(Result.SafetyPageWouldBeUsed)</strong></span>
+            </div>
+            <h3>Reasons</h3>
+            <ul>
+                @foreach (var reason in Result.Reasons)
+                {
+                    <li>@reason</li>
+                }
+            </ul>
+            <h3>Warnings</h3>
+            <p>@(Result.OwnerWarningPreview ?? "No owner warning.")</p>
+            <p>@(Result.PopupPreview ?? "No popup.")</p>
+            <h3>Safety URL</h3>
+            <code>@(Result.SafetyPageUrl ?? "not used")</code>
+            <h3>Privacy-Safe Payload Preview</h3>
+            <pre class="json-preview">@JsonSerializer.Serialize(Result.PrivacySafePayload, JsonOptions)</pre>
+            <p>Raw private text excluded: <strong>@YesNo(Result.RawPrivateTextExcluded)</strong></p>
+        }
+    </article>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly string[] ScanModes = ["Quiet", "Normal", "Strict", "Paranoid"];
+    private static readonly string[] SourceTypes = Enum.GetNames<SecondLifeHudSimulationSourceType>();
+
+    private string Sender { get; set; } = "Example Resident";
+    private string SourceType { get; set; } = nameof(SecondLifeHudSimulationSourceType.GroupChat);
+    private string ScanMode { get; set; } = "Normal";
+    private string MessageText { get; set; } = "claim your prize now at hxxps://badsite dot com";
+    private string DetectedUrlsText { get; set; } = string.Empty;
+    private bool PopupAlertsEnabled { get; set; } = true;
+    private bool PrivateWarningsEnabled { get; set; } = true;
+    private bool SafetyPageRoutingEnabled { get; set; } = true;
+    private string? Error { get; set; }
+    private SecondLifeHudSimulationResult? Result { get; set; }
+
+    /// <summary>
+    /// Runs the simulation and displays alert, routing, and privacy payload behavior.
+    /// </summary>
+    private void RunSimulation()
+    {
+        try
+        {
+            var source = Enum.Parse<SecondLifeHudSimulationSourceType>(SourceType);
+            Result = Simulator.Simulate(new SecondLifeHudSimulationRequest(
+                Sender,
+                MessageText,
+                source,
+                ParseDetectedUrls(),
+                ScanMode,
+                PopupAlertsEnabled,
+                PrivateWarningsEnabled,
+                SafetyPageRoutingEnabled));
+            Error = null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            Error = ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Loads a suspicious sample that should produce a high-risk safety-page result.
+    /// </summary>
+    private void LoadRewardBaitSample()
+    {
+        Sender = "low-rep sender";
+        SourceType = nameof(SecondLifeHudSimulationSourceType.GroupChat);
+        ScanMode = "Normal";
+        MessageText = "Limited time prize! claim your reward now at hxxps://badsite dot com";
+        DetectedUrlsText = string.Empty;
+        Result = null;
+        Error = null;
+    }
+
+    /// <summary>
+    /// Loads a harmless sample that should avoid sending a HIP payload.
+    /// </summary>
+    private void LoadSafeSample()
+    {
+        Sender = "Example Resident";
+        SourceType = nameof(SecondLifeHudSimulationSourceType.LocalChat);
+        ScanMode = "Normal";
+        MessageText = "Hello, are you going to the meeting later?";
+        DetectedUrlsText = string.Empty;
+        Result = null;
+        Error = null;
+    }
+
+    /// <summary>
+    /// Parses manually entered URL lines into the simulator request.
+    /// </summary>
+    /// <returns>Detected URL list.</returns>
+    private IReadOnlyCollection<string> ParseDetectedUrls() =>
+        DetectedUrlsText.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>
+    /// Formats booleans as concise result text.
+    /// </summary>
+    /// <param name="value">Boolean value.</param>
+    /// <returns>Yes or no.</returns>
+    private static string YesNo(bool value) => value ? "Yes" : "No";
+}
