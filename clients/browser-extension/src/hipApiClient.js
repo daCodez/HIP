@@ -86,6 +86,50 @@ export class HipApiClient {
     return response.json();
   }
 
+  /**
+   * Runs HIP's Site Safety Scan for the current page URL.
+   * The request sends only the URL and optional privacy-safe observations; it never sends page text or form values.
+   */
+  async scanSiteSafety(request) {
+    const url = `${this.config.apiBaseUrl}/api/v1/site-safety/scan`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        url: request?.url || "",
+        observedSignals: request?.observedSignals || null
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HIP site safety scan failed with status ${response.status}.`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Builds a privacy-safe Site Safety Scan request from the popup and content-script summary.
+   * Only counts and URL lists needed for file-extension checks are included; page body text is excluded.
+   */
+  buildSiteSafetyRequest(pageUrl, summary = {}) {
+    return {
+      url: pageUrl,
+      observedSignals: {
+        downloadLinks: Array.isArray(summary.downloadLinks) ? summary.downloadLinks : [],
+        hasLoginForm: (summary.loginFormsDetected ?? 0) > 0,
+        hasPasswordField: (summary.loginFormsDetected ?? 0) > 0,
+        inlineScriptCount: summary.inlineScriptCount ?? 0,
+        externalScriptUrls: Array.isArray(summary.externalScriptUrls) ? summary.externalScriptUrls : [],
+        suspiciousScriptPatternCount: summary.suspiciousScriptPatternCount ?? 0,
+        trustDataAvailable: summary.scanResultDataSource === "BrowserPluginScan"
+      }
+    };
+  }
+
   async reportRiskFinding(report) {
     const url = `${this.config.apiBaseUrl}/api/v1/public/risk-findings`;
     const response = await fetch(url, {

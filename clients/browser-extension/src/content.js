@@ -52,6 +52,7 @@
     }
 
     await scanLoginForms();
+    collectScriptSignals();
     await persistScanResult(currentLookup).catch(error => console.warn("HIP scan result persistence failed safely.", error));
     publishSummary();
   }
@@ -73,6 +74,7 @@
       lastSummary.linksScanned++;
       if (target.isDownloadCandidate) {
         lastSummary.downloadCandidates++;
+        lastSummary.downloadLinks.push(target.url.href);
       }
       if (target.linkContext === "social-feed") {
         lastSummary.socialLinkCandidates++;
@@ -392,6 +394,20 @@
     }
   }
 
+  /**
+   * Collects script structure facts without reading or sending script contents.
+   * HIP uses these counts for Site Safety risk scoring while avoiding page text collection.
+   */
+  function collectScriptSignals() {
+    const scripts = Array.from(document.querySelectorAll("script"));
+    lastSummary.inlineScriptCount = scripts.filter(script => !script.src).length;
+    lastSummary.externalScriptUrls = scripts
+      .filter(script => Boolean(script.src))
+      .slice(0, 25)
+      .map(script => script.src);
+    lastSummary.suspiciousScriptPatternCount = 0;
+  }
+
   function normalizeHost(hostname) {
     return (hostname || "").replace(/^www\./i, "").toLowerCase();
   }
@@ -553,11 +569,15 @@
       dangerousLinks: 0,
       unknownLinks: 0,
       downloadCandidates: 0,
+      downloadLinks: [],
       formsDetected: 0,
       loginFormsDetected: 0,
       crossDomainLoginForms: 0,
       socialLinkCandidates: 0,
       webmailLinkCandidates: 0,
+      inlineScriptCount: 0,
+      externalScriptUrls: [],
+      suspiciousScriptPatternCount: 0,
       scanResultSubmission: "Pending",
       scanResultDataSource: "Pending",
       lastSubmittedUtc: null,

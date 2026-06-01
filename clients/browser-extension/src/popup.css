@@ -86,6 +86,20 @@ p {
   margin-top: 12px;
 }
 
+.site-safety-panel {
+  border-color: #0f4e67;
+  background: #0d243c;
+}
+
+.site-safety-summary {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #b7c4d8;
+  background: #081827;
+  line-height: 1.4;
+}
+
 .score-row,
 .status-row {
   display: flex;
@@ -145,9 +159,21 @@ p {
 }
 
 .status-badge.unknown,
-.status-row strong[data-status="Unknown"] {
+.status-row strong[data-status="Unknown"],
+.status-row strong[data-status="LimitedData"],
+.status-row strong[data-status="ScanFailed"] {
   color: #cbd5e1;
   background: rgba(148, 163, 184, 0.12);
+}
+
+.status-row strong[data-status="Clean"] {
+  color: #21e59f;
+  background: rgba(33, 229, 159, 0.1);
+}
+
+.status-row strong[data-status="Suspicious"] {
+  color: #fb923c;
+  background: rgba(251, 146, 60, 0.1);
 }
 
 .reasons-panel {
