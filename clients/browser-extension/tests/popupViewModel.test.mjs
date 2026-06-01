@@ -9,10 +9,12 @@ import {
 
 test("score band maps to correct status", () => {
   assert.equal(statusFromScore(91), "Trusted");
-  assert.equal(statusFromScore(75), "ProbablySafe");
-  assert.equal(statusFromScore(50), "Caution");
-  assert.equal(statusFromScore(30), "HighRisk");
-  assert.equal(statusFromScore(12), "Dangerous");
+  assert.equal(statusFromScore(75), "MostlyTrusted");
+  assert.equal(statusFromScore(50), "LimitedTrustData");
+  assert.equal(statusFromScore(45), "Unknown");
+  assert.equal(statusFromScore(30), "Suspicious");
+  assert.equal(statusFromScore(12), "HighRisk");
+  assert.equal(statusFromScore(5), "Dangerous");
   assert.equal(statusFromScore(undefined), "Unknown");
 });
 
@@ -39,6 +41,8 @@ test("popup view model renders score domain and reasons", () => {
   assert.equal(viewModel.domain, "example.com");
   assert.equal(viewModel.scoreText, "84/100");
   assert.equal(viewModel.statusLabel, "Trusted");
+  assert.equal(viewModel.domainTrustScoreText, "--/100");
+  assert.equal(viewModel.finalHipScoreExplanation, "Final HIP score is based on separate domain, page, and content scores.");
   assert.deepEqual(viewModel.reasons, ["No known scam reports", "No suspicious redirects found"]);
   assert.equal(viewModel.linksScanned, 42);
   assert.equal(viewModel.riskyLinks, 2);

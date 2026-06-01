@@ -4,6 +4,7 @@
 
   const badgeMap = {
     Unknown: { label: "Unknown", className: "unknown", icon: "?" },
+    LimitedTrustData: { label: "Limited data", className: "caution", icon: "?" },
     Caution: { label: "Caution", className: "caution", icon: "!" },
     Suspicious: { label: "Suspicious", className: "high-risk", icon: "!" },
     HighRisk: { label: "Suspicious", className: "high-risk", icon: "!" },
@@ -148,6 +149,7 @@
         box-shadow: 0 8px 22px rgba(15, 23, 42, 0.24);
         font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
+      #hip-trust-banner.hip-trust-banner-suspicious,
       #hip-trust-banner.hip-trust-banner-highrisk,
       #hip-trust-banner.hip-trust-banner-dangerous,
       #hip-trust-banner.hip-trust-banner-critical {
@@ -175,9 +177,12 @@
         font-weight: 700;
       }
       #hip-trust-banner .hip-trust-status-badge.trusted,
+      #hip-trust-banner .hip-trust-status-badge.mostlytrusted,
       #hip-trust-banner .hip-trust-status-badge.probablysafe { background: #86efac; }
+      #hip-trust-banner .hip-trust-status-badge.limitedtrustdata,
       #hip-trust-banner .hip-trust-status-badge.caution,
       #hip-trust-banner .hip-trust-status-badge.unknown { background: #fde68a; }
+      #hip-trust-banner .hip-trust-status-badge.suspicious,
       #hip-trust-banner .hip-trust-status-badge.highrisk,
       #hip-trust-banner .hip-trust-status-badge.dangerous,
       #hip-trust-banner .hip-trust-status-badge.critical { background: #fecaca; }
@@ -221,11 +226,11 @@
    * Selects a concise banner title that distinguishes normal trust checks from high-risk warnings.
    */
   function bannerTitle(status) {
-    if (status === "HighRisk" || status === "Dangerous" || status === "Critical") {
+    if (status === "Suspicious" || status === "HighRisk" || status === "Dangerous" || status === "Critical") {
       return "HIP Warning";
     }
 
-    if (status === "Unknown") {
+    if (status === "Unknown" || status === "LimitedTrustData") {
       return "HIP Trust Status Unknown";
     }
 

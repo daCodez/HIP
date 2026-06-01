@@ -88,8 +88,8 @@ Example response:
 
 The browser plugin routes only risky links through HIP:
 
-- Safe/Trusted/ProbablySafe links are left unchanged and do not get icons.
-- Unknown/Caution links may show labels depending on scan mode.
+- Safe/Trusted/MostlyTrusted links are left unchanged and do not get icons.
+- LimitedTrustData/Unknown links may show labels depending on scan mode.
 - HighRisk/Suspicious, Dangerous, and Critical links get attention badges and click interception.
 - Intercepted clicks go to `/safety?url={encodedUrl}&source=browser&risk={riskStatus}` on the configured HIP Web host.
 
@@ -103,15 +103,24 @@ The browser popup explains the core HIP relationship in plain language:
 
 > HTTPS secures the connection. HIP verifies the trust.
 
-The popup shows the active tab domain, HIP website score, status badge, plain-English reasons, links scanned, risky links, last scan time, public lookup link, and safety details link when the current site is risky.
+The popup shows the active tab domain, final HIP website score, status badge, plain-English reasons, links scanned, risky links, last scan time, public lookup link, and safety details link when the current site is risky.
+
+The popup also shows the layered score components:
+
+- `DomainTrustScore`: how trustworthy the root domain is overall.
+- `PageTrustScore`: how trustworthy the exact page or URL is.
+- `ContentRiskScore`: how safe the page content, links, forms, downloads, and behavior look.
+- `FinalHipScore`: the user-facing score derived from the separate scores.
 
 Status bands:
 
-- `0-20`: Dangerous
-- `21-40`: High Risk
-- `41-60`: Unknown / Caution
-- `61-80`: Probably Safe
-- `81-100`: Trusted
+- `0-9`: Dangerous
+- `10-24`: HighRisk
+- `25-39`: Suspicious
+- `40-49`: Unknown
+- `50-69`: LimitedTrustData
+- `70-84`: MostlyTrusted
+- `85-100`: Trusted
 
 Popup scoring sends only the current URL/domain. It does not send page text, form contents, credentials, tokens, private messages, or email content.
 - `POST /api/v1/public/risk-findings`

@@ -67,7 +67,7 @@ test("no-data lookup state persists actual browser scan result", () => {
   });
 
   assert.equal(payload.score, 80);
-  assert.equal(payload.status, "ProbablySafe");
+  assert.equal(payload.status, "MostlyTrusted");
   assert.equal(payload.recommendedAction, "Allow");
   assert.equal(payload.reasons.some(reason => reason.includes("HIP has not scanned this domain yet")), false);
   assert.equal(payload.reasons.some(reason => reason.includes("No risky external links")), true);
@@ -89,7 +89,7 @@ test("browser scan assessment penalizes suspicious and dangerous scan counts", (
     unknownLinks: 0
   });
 
-  assert.equal(suspicious.status, "HighRisk");
+  assert.equal(suspicious.status, "Suspicious");
   assert.equal(dangerous.status, "Dangerous");
   assert.ok(dangerous.score < suspicious.score);
 });

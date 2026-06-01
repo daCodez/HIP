@@ -100,6 +100,15 @@ p {
   line-height: 1.4;
 }
 
+.score-explanation {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #b7c4d8;
+  background: #081827;
+  line-height: 1.4;
+}
+
 .score-row,
 .status-row {
   display: flex;
@@ -135,22 +144,28 @@ p {
 }
 
 .status-badge.trusted,
+.status-badge.mostly-trusted,
 .status-badge.probably-safe,
 .status-row strong[data-status="Trusted"],
+.status-row strong[data-status="MostlyTrusted"],
 .status-row strong[data-status="ProbablySafe"] {
   color: #21e59f;
   background: rgba(33, 229, 159, 0.1);
 }
 
 .status-badge.caution,
-.status-row strong[data-status="Caution"] {
+.status-badge.limited-trust-data,
+.status-row strong[data-status="Caution"],
+.status-row strong[data-status="LimitedTrustData"] {
   color: #facc15;
   background: rgba(250, 204, 21, 0.1);
 }
 
 .status-badge.high-risk,
+.status-badge.suspicious,
 .status-badge.dangerous,
 .status-badge.critical,
+.status-row strong[data-status="Suspicious"],
 .status-row strong[data-status="HighRisk"],
 .status-row strong[data-status="Dangerous"],
 .status-row strong[data-status="Critical"] {

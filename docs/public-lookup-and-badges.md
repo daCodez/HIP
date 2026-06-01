@@ -27,14 +27,16 @@ Public lookup can show:
 - plain-English reasons
 - recommended action
 - last checked date
+- `DomainTrustScore`, `PageTrustScore`, `ContentRiskScore`, and `FinalHipScore`
+- final HIP score explanation
 - separate score breakdown
 - browser scan counts when available
 - data source
 - signed identity placeholders for future DNS TXT and `.well-known/hip.json` verification
 
-Public lookup now prefers stored browser plugin scan results. When HIP has a stored scan for a domain, lookup displays the score, status, reasons, link scan counts, last checked date, recommended action, and `dataSource = BrowserPluginScan`.
+Public lookup now prefers stored browser plugin scan results. When HIP has a stored scan for a domain, lookup displays layered HIP scoring, reasons, link scan counts, last checked date, recommended action, and `dataSource = BrowserPluginScan`.
 
-When HIP has not scanned a domain yet, lookup returns a no-data MVP state with `status = Unknown`, `recommendedAction = ShowCaution`, `dataSource = NoStoredData`, and the message `HIP has not scanned this domain yet`. This avoids pretending HIP has real threat intelligence for a domain before it has stored scan data.
+When HIP has not scanned a domain yet, lookup returns a no-data MVP state with `status = LimitedTrustData`, `recommendedAction = ShowCaution`, `dataSource = NoStoredData`, and the message `HIP has not scanned this domain yet`. This avoids pretending HIP has real threat intelligence for a domain before it has stored scan data.
 
 Public lookup must not expose private chat logs, private reports, user identities, private sender names, private scan history, raw user-submitted evidence, full page URLs from browser scans, page URL hashes, form contents, private messages, or raw scan payloads.
 
@@ -43,11 +45,17 @@ Stored browser scan response example:
 ```json
 {
   "domain": "example.com",
-  "score": 84,
-  "status": "Trusted",
-  "riskLevel": "Trusted",
+  "score": 76,
+  "status": "MostlyTrusted",
+  "riskLevel": "MostlyTrusted",
+  "domainTrustScore": 95,
+  "pageTrustScore": 70,
+  "contentRiskScore": 65,
+  "finalHipScore": 76,
+  "finalHipScoreExplanation": "GitHub has strong domain trust signals, but individual repositories, downloads, and user-generated content still need separate review.",
   "reasons": [
-    "Last browser scan found no dangerous links"
+    "Last browser scan found no dangerous links",
+    "This lookup is based on the latest privacy-safe browser plugin scan summary."
   ],
   "linksScanned": 42,
   "riskyLinksFound": 2,
@@ -64,8 +72,13 @@ No stored data response example:
 ```json
 {
   "domain": "newsite.com",
-  "score": 0,
-  "status": "Unknown",
+  "score": 56,
+  "status": "LimitedTrustData",
+  "domainTrustScore": 50,
+  "pageTrustScore": 55,
+  "contentRiskScore": 65,
+  "finalHipScore": 56,
+  "finalHipScoreExplanation": "HIP did not find strong trust signals for this website yet. No major risk signals were found, but the site has not earned a high trust score.",
   "reasons": [
     "HIP has not scanned this domain yet"
   ],
@@ -74,19 +87,29 @@ No stored data response example:
 }
 ```
 
-MVP limitation: response compatibility still includes numeric `score` and `finalHipScore`; no-data responses use `0` with `Unknown` status until clients can safely adopt nullable score fields.
+MVP limitation: response compatibility still includes numeric `score` and `finalHipScore`; no-data responses use a conservative limited-data score instead of a nullable score until clients can safely adopt nullable score fields.
 
 ## Website Scoring MVP
 
-HIP website scoring now uses stored browser plugin scan results when available. Domains without stored scans show an explicit Unknown/no-data state until HIP receives real scan data.
+HIP website scoring now uses stored browser plugin scan results when available. Domains without stored scans show an explicit `LimitedTrustData` no-data state until HIP receives real scan data.
 
 Current score bands:
 
-- `0-20` = Dangerous
-- `21-40` = High Risk
-- `41-60` = Unknown / Caution
-- `61-80` = Probably Safe
-- `81-100` = Trusted
+- `0-9` = Dangerous
+- `10-24` = HighRisk
+- `25-39` = Suspicious
+- `40-49` = Unknown
+- `50-69` = LimitedTrustData
+- `70-84` = MostlyTrusted
+- `85-100` = Trusted
+
+Layered scoring rules:
+
+- Domain trust does not automatically make every page safe.
+- Trusted domains can still host risky user-generated pages or downloads.
+- Clean page scans do not make an unknown domain trusted.
+- Downloads do not inherit full trust from their parent domain.
+- Page-level and content-level risks can lower the final user-facing HIP score.
 
 Current recommended actions:
 

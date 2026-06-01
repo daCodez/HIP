@@ -314,11 +314,11 @@ export function normalizeHost(hostname) {
 }
 
 export function statusNeedsAttention(status) {
-  return ["Unknown", "Caution", "HighRisk", "Dangerous", "Critical"].includes(status);
+  return ["Unknown", "LimitedTrustData", "Caution", "Suspicious", "HighRisk", "Dangerous", "Critical"].includes(status);
 }
 
 export function statusNeedsSafetyRoute(status) {
-  return ["HighRisk", "Dangerous", "Critical"].includes(status);
+  return ["Suspicious", "HighRisk", "Dangerous", "Critical"].includes(status);
 }
 
 export function safeBrowserSafetyPageUrl(webBaseUrl, originalUrl, sourceDomain, riskStatus) {
@@ -369,14 +369,14 @@ function browserScanStatus(score, dangerousLinks, suspiciousLinks, riskyLinks, u
   }
 
   if (suspiciousLinks > 0 || riskyLinks > 0) {
-    return "HighRisk";
+    return "Suspicious";
   }
 
   if (unknownLinks > 0 || score <= 60) {
-    return "Caution";
+    return "LimitedTrustData";
   }
 
-  return "ProbablySafe";
+  return "MostlyTrusted";
 }
 
 /**
@@ -416,7 +416,7 @@ function recommendedSiteAction(status) {
     return "RouteToSafetyPage";
   }
 
-  if (status === "Unknown" || status === "Caution") {
+  if (status === "Unknown" || status === "LimitedTrustData" || status === "Caution") {
     return "ShowCaution";
   }
 

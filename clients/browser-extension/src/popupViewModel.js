@@ -1,12 +1,14 @@
 export const SCORE_BANDS = Object.freeze([
-  { min: 81, max: 100, status: "Trusted", label: "Trusted" },
-  { min: 61, max: 80, status: "ProbablySafe", label: "Probably Safe" },
-  { min: 41, max: 60, status: "Caution", label: "Unknown / Caution" },
-  { min: 21, max: 40, status: "HighRisk", label: "High Risk" },
-  { min: 0, max: 20, status: "Dangerous", label: "Dangerous" }
+  { min: 85, max: 100, status: "Trusted", label: "Trusted" },
+  { min: 70, max: 84, status: "MostlyTrusted", label: "Mostly Trusted" },
+  { min: 50, max: 69, status: "LimitedTrustData", label: "Limited Trust Data" },
+  { min: 40, max: 49, status: "Unknown", label: "Unknown" },
+  { min: 25, max: 39, status: "Suspicious", label: "Suspicious" },
+  { min: 10, max: 24, status: "HighRisk", label: "High Risk" },
+  { min: 0, max: 9, status: "Dangerous", label: "Dangerous" }
 ]);
 
-const riskyStatuses = new Set(["HighRisk", "Dangerous", "Critical"]);
+const riskyStatuses = new Set(["Suspicious", "HighRisk", "Dangerous", "Critical"]);
 
 export function statusFromScore(score) {
   const numericScore = Number(score);
@@ -25,8 +27,11 @@ export function displayStatus(status, score) {
 export function statusLabel(status) {
   return {
     Trusted: "Trusted",
+    MostlyTrusted: "Mostly Trusted",
+    LimitedTrustData: "Limited Trust Data",
     ProbablySafe: "Probably Safe",
     Caution: "Caution",
+    Suspicious: "Suspicious",
     HighRisk: "High Risk",
     Dangerous: "Dangerous",
     Critical: "Critical",
@@ -37,8 +42,11 @@ export function statusLabel(status) {
 export function statusClass(status) {
   return {
     Trusted: "trusted",
+    MostlyTrusted: "mostly-trusted",
+    LimitedTrustData: "limited-trust-data",
     ProbablySafe: "probably-safe",
     Caution: "caution",
+    Suspicious: "suspicious",
     HighRisk: "high-risk",
     Dangerous: "dangerous",
     Critical: "critical",
@@ -82,6 +90,9 @@ export function reasonsFor(lookup) {
 export function buildPopupViewModel(lookup, summary, settings, currentUrl) {
   const score = lookup?.score ?? lookup?.finalHipScore ?? null;
   const status = displayStatus(lookup?.status, score);
+  const domainTrustScore = lookup?.domainTrustScore ?? componentScore(lookup, "DomainTrustScore");
+  const pageTrustScore = lookup?.pageTrustScore ?? componentScore(lookup, "PageTrustScore");
+  const contentRiskScore = lookup?.contentRiskScore ?? componentScore(lookup, "ContentRiskScore");
 
   return {
     domain: lookup?.domain || "Unknown domain",
@@ -89,6 +100,10 @@ export function buildPopupViewModel(lookup, summary, settings, currentUrl) {
     status,
     statusLabel: statusLabel(status),
     statusClass: statusClass(status),
+    domainTrustScoreText: scoreText(domainTrustScore),
+    pageTrustScoreText: scoreText(pageTrustScore),
+    contentRiskScoreText: scoreText(contentRiskScore),
+    finalHipScoreExplanation: lookup?.finalHipScoreExplanation || "Final HIP score is based on separate domain, page, and content scores.",
     verifiedText: lookup?.verificationStatus === "Verified" ? "Yes" : "No",
     identityText: lookup?.identityVerificationStatus || lookup?.signedIdentityStatus || "Unknown",
     lastCheckedText: formatDate(lookup?.lastCheckedUtc),
@@ -122,6 +137,20 @@ function formatDate(value) {
   }
 
   return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
+/**
+ * Formats optional layered scores for compact popup display.
+ */
+function scoreText(score) {
+  return score !== null && score !== undefined && Number.isFinite(Number(score)) ? `${score}/100` : "--/100";
+}
+
+/**
+ * Reads a named score component from API responses that only provide a breakdown array.
+ */
+function componentScore(lookup, category) {
+  return lookup?.scoreBreakdown?.find(item => item.category === category)?.score ?? null;
 }
 
 /**

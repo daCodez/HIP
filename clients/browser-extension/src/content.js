@@ -1,6 +1,6 @@
 (function runHipContentScript() {
-  const riskyStatuses = new Set(["HighRisk", "Dangerous", "Critical"]);
-  const attentionStatuses = new Set(["Unknown", "Caution", "HighRisk", "Dangerous", "Critical"]);
+  const riskyStatuses = new Set(["Suspicious", "HighRisk", "Dangerous", "Critical"]);
+  const attentionStatuses = new Set(["Unknown", "LimitedTrustData", "Caution", "Suspicious", "HighRisk", "Dangerous", "Critical"]);
   const ignoredProtocols = new Set(["javascript:", "mailto:", "tel:", "data:", "blob:"]);
   const downloadExtensions = new Set([".exe", ".zip", ".msi", ".dmg", ".pdf", ".docx", ".scr"]);
   const reportedDomains = new Set();
@@ -109,7 +109,7 @@
         if (lookup.status === "Unknown") {
           lastSummary.unknownLinks++;
         }
-        if (lookup.status === "HighRisk") {
+        if (lookup.status === "Suspicious" || lookup.status === "HighRisk") {
           lastSummary.suspiciousLinks++;
         }
         if (lookup.status === "Dangerous" || lookup.status === "Critical") {
@@ -153,7 +153,7 @@
     const shouldBadge = browserResult?.requiresIcon || shouldRenderBadge(status, verified, target.isDownloadCandidate);
 
     if (settings.showRiskyLinkIcons && shouldBadge) {
-      const badgeStatus = browserResult?.label || (target.isDownloadCandidate && !riskyStatuses.has(status) ? "Caution" : (verified && status === "Trusted" ? "Verified" : status));
+      const badgeStatus = browserResult?.label || (target.isDownloadCandidate && !riskyStatuses.has(status) ? "LimitedTrustData" : (verified && status === "Trusted" ? "Verified" : status));
       const badgeLookup = target.isDownloadCandidate
         ? { ...lookup, knownRisks: ["Download risk candidate"], finalHipScore: lookup.finalHipScore }
         : lookup;
@@ -505,14 +505,14 @@
     }
 
     if (suspiciousLinks > 0 || riskyLinks > 0) {
-      return "HighRisk";
+      return "Suspicious";
     }
 
     if (unknownLinks > 0 || score <= 60) {
-      return "Caution";
+      return "LimitedTrustData";
     }
 
-    return "ProbablySafe";
+    return "MostlyTrusted";
   }
 
   /**
@@ -552,7 +552,7 @@
       return "RouteToSafetyPage";
     }
 
-    if (status === "Unknown" || status === "Caution") {
+    if (status === "Unknown" || status === "LimitedTrustData" || status === "Caution") {
       return "ShowLabel";
     }
 
