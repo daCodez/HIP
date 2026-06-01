@@ -6,10 +6,12 @@ public static class RiskStatusMapper
 {
     public static RiskStatus FromScore(ScoreValue score) => score.Value switch
     {
-        <= 20 => RiskStatus.Dangerous,
-        <= 40 => RiskStatus.HighRisk,
-        <= 60 => RiskStatus.Caution,
-        <= 80 => RiskStatus.ProbablySafe,
+        <= 9 => RiskStatus.Dangerous,
+        <= 24 => RiskStatus.HighRisk,
+        <= 39 => RiskStatus.Suspicious,
+        <= 49 => RiskStatus.Unknown,
+        <= 69 => RiskStatus.LimitedTrustData,
+        <= 84 => RiskStatus.MostlyTrusted,
         _ => RiskStatus.Trusted
     };
 }

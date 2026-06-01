@@ -17,6 +17,10 @@ const elements = {
   score: document.getElementById("score"),
   status: document.getElementById("status"),
   statusBadge: document.getElementById("statusBadge"),
+  domainTrustScore: document.getElementById("domainTrustScore"),
+  pageTrustScore: document.getElementById("pageTrustScore"),
+  contentRiskScore: document.getElementById("contentRiskScore"),
+  finalHipScoreExplanation: document.getElementById("finalHipScoreExplanation"),
   verified: document.getElementById("verified"),
   identityStatus: document.getElementById("identityStatus"),
   lastChecked: document.getElementById("lastChecked"),
@@ -93,6 +97,10 @@ function renderLookup(lookup, summary = {}) {
   elements.status.dataset.status = viewModel.status;
   elements.statusBadge.textContent = viewModel.statusLabel;
   elements.statusBadge.className = `status-badge ${viewModel.statusClass}`;
+  elements.domainTrustScore.textContent = viewModel.domainTrustScoreText;
+  elements.pageTrustScore.textContent = viewModel.pageTrustScoreText;
+  elements.contentRiskScore.textContent = viewModel.contentRiskScoreText;
+  elements.finalHipScoreExplanation.textContent = viewModel.finalHipScoreExplanation;
   elements.verified.textContent = viewModel.verifiedText;
   elements.identityStatus.textContent = viewModel.identityText;
   elements.lastChecked.textContent = viewModel.lastCheckedText;

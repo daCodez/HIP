@@ -104,6 +104,8 @@ Site Safety affects:
 - `ContentRiskScore`
 - final HIP score
 
+The malware, phishing, redirect, script, download, form, and reputation fields are raw risk scores where higher means more risk. The layered `ContentRiskScore` is a trust component where higher means safer content. This distinction keeps internal risk detection explicit while keeping the user-facing layered HIP scores consistent.
+
 It does not replace domain reputation, identity verification, signed content verification, or rule-engine decisions.
 
 ## Browser Plugin Display

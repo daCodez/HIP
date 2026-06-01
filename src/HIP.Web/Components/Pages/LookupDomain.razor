@@ -43,6 +43,28 @@
                 <p>Last checked UTC: @_lookup.LastCheckedUtc.ToString("u")</p>
             </div>
 
+            <section class="lookup-section">
+                <h2>Layered HIP Score</h2>
+                <p>@_lookup.FinalHipScoreExplanation</p>
+                <div class="breakdown-grid">
+                    <article class="breakdown-card">
+                        <h3>DomainTrustScore</h3>
+                        <strong>@_lookup.DomainTrustScore/100</strong>
+                        <p>How trustworthy the root domain is overall. This does not automatically make every page safe.</p>
+                    </article>
+                    <article class="breakdown-card">
+                        <h3>PageTrustScore</h3>
+                        <strong>@_lookup.PageTrustScore/100</strong>
+                        <p>How trustworthy this exact page or URL context is.</p>
+                    </article>
+                    <article class="breakdown-card">
+                        <h3>ContentRiskScore</h3>
+                        <strong>@_lookup.ContentRiskScore/100</strong>
+                        <p>How safe the observed content signals are. Downloads, scripts, forms, and suspicious links are evaluated separately.</p>
+                    </article>
+                </div>
+            </section>
+
             @if (_lookup.DataSource == "BrowserPluginScan")
             {
                 <section class="lookup-section">
@@ -85,11 +107,13 @@
             <section class="lookup-section">
                 <h2>Score Ranges</h2>
                 <ul class="range-list">
-                    <li>0-20 = Dangerous</li>
-                    <li>21-40 = High Risk</li>
-                    <li>41-60 = Unknown / Caution</li>
-                    <li>61-80 = Probably Safe</li>
-                    <li>81-100 = Trusted</li>
+                    <li>0-9 = Dangerous</li>
+                    <li>10-24 = High Risk</li>
+                    <li>25-39 = Suspicious</li>
+                    <li>40-49 = Unknown</li>
+                    <li>50-69 = Limited Trust Data</li>
+                    <li>70-84 = Mostly Trusted</li>
+                    <li>85-100 = Trusted</li>
                 </ul>
             </section>
 

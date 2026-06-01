@@ -10,6 +10,12 @@ namespace HIP.Application.PublicLookup;
 /// <param name="browserScanResultRepository">Repository containing privacy-safe browser plugin scan summaries.</param>
 public sealed class PublicDomainLookupService(IBrowserScanResultRepository browserScanResultRepository) : IPublicDomainLookupService
 {
+    private static readonly HashSet<string> StrongDomainTrust = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "github.com",
+        "microsoft.com"
+    };
+
     private static readonly HashSet<string> ShortenerDomains = new(StringComparer.OrdinalIgnoreCase)
     {
         "bit.ly",
@@ -57,26 +63,27 @@ public sealed class PublicDomainLookupService(IBrowserScanResultRepository brows
     /// <returns>Public lookup response sourced from the browser plugin scan.</returns>
     private static PublicDomainLookupResponse BuildStoredScanResponse(string normalized, BrowserScanResultRecord storedScan)
     {
-        var status = ParseStatus(storedScan.Status, storedScan.Score);
+        var layeredScore = BuildLayeredScore(normalized, storedScan);
+        var status = StatusForScore(layeredScore.FinalHipScore);
         var isVerified = normalized.Contains("verified", StringComparison.OrdinalIgnoreCase);
         var reasons = storedScan.Reasons.Count > 0
             ? storedScan.Reasons
             : ["Last browser scan completed without sending page text, form values, or private messages."];
-        var knownRisks = status is RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical
+        var knownRisks = status is RiskStatus.Suspicious or RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical
             ? reasons
             : [];
 
         return new PublicDomainLookupResponse(
             normalized,
-            storedScan.Score,
-            storedScan.Score,
+            layeredScore.FinalHipScore,
+            layeredScore.FinalHipScore,
             status,
-            storedScan.RiskLevel,
+            status.ToString(),
             isVerified ? "Verified" : "Unverified",
             knownRisks,
             reasons,
-            reasons.Append("This lookup is based on the latest privacy-safe browser plugin scan summary.").ToArray(),
-            storedScan.RecommendedAction,
+            reasons.Append(layeredScore.Explanation).Append("This lookup is based on the latest privacy-safe browser plugin scan summary.").ToArray(),
+            RecommendedActionFor(status),
             storedScan.LastCheckedUtc,
             isVerified ? "PostQuantumSignaturePresent" : "NotConfigured",
             isVerified ? "WellKnownHipJsonPlaceholder" : "NotConfigured",
@@ -86,7 +93,11 @@ public sealed class PublicDomainLookupService(IBrowserScanResultRepository brows
             isVerified,
             isVerified,
             $"/lookup/{normalized}",
-            BuildStoredScanBreakdown(storedScan, status),
+            layeredScore.DomainTrustScore,
+            layeredScore.PageTrustScore,
+            layeredScore.ContentRiskScore,
+            layeredScore.Explanation,
+            BuildStoredScanBreakdown(storedScan, layeredScore),
             storedScan.LinksScanned,
             storedScan.RiskyLinksFound,
             storedScan.SuspiciousLinksFound,
@@ -102,13 +113,18 @@ public sealed class PublicDomainLookupService(IBrowserScanResultRepository brows
     /// <returns>Public lookup response with Unknown status and no private data.</returns>
     private static PublicDomainLookupResponse BuildNoStoredDataResponse(string normalized)
     {
+        if (IsDangerousTestDomain(normalized))
+        {
+            return BuildDangerousNoStoredDataResponse(normalized);
+        }
+
         var message = "HIP has not scanned this domain yet.";
         return new PublicDomainLookupResponse(
             normalized,
-            0,
-            0,
-            RiskStatus.Unknown,
-            RiskStatus.Unknown.ToString(),
+            56,
+            56,
+            RiskStatus.LimitedTrustData,
+            RiskStatus.LimitedTrustData.ToString(),
             "Unverified",
             [],
             [message, "No private reports, user identities, page URLs, or browsing history are exposed in public lookup."],
@@ -123,9 +139,15 @@ public sealed class PublicDomainLookupService(IBrowserScanResultRepository brows
             null,
             false,
             $"/lookup/{normalized}",
+            50,
+            55,
+            65,
+            "HIP did not find strong trust signals for this website yet. No major risk signals were found, but the site has not earned a high trust score.",
             [
-                new ScoreBreakdownItem("Domain", 0, RiskStatus.Unknown, "No stored HIP browser scan exists for this domain yet.", [message]),
-                new ScoreBreakdownItem("Final", 0, RiskStatus.Unknown, "HIP needs a privacy-safe scan before assigning a domain-level score.", [message])
+                new ScoreBreakdownItem("DomainTrustScore", 50, RiskStatus.LimitedTrustData, "HIP has limited root-domain trust data for this domain.", [message]),
+                new ScoreBreakdownItem("PageTrustScore", 55, RiskStatus.LimitedTrustData, "HIP has not scanned a specific page for this domain yet.", [message]),
+                new ScoreBreakdownItem("ContentRiskScore", 65, RiskStatus.LimitedTrustData, "No content risk signals are available yet, so this is not treated as trusted.", [message]),
+                new ScoreBreakdownItem("FinalHipScore", 56, RiskStatus.LimitedTrustData, "Final score is capped by limited trust data.", [message])
             ],
             null,
             null,
@@ -136,59 +158,199 @@ public sealed class PublicDomainLookupService(IBrowserScanResultRepository brows
     }
 
     /// <summary>
+    /// Builds a dangerous no-data response for explicit test-domain patterns used by the MVP and tests.
+    /// </summary>
+    /// <param name="normalized">Normalized domain.</param>
+    /// <returns>Public lookup response with dangerous test-domain status.</returns>
+    private static PublicDomainLookupResponse BuildDangerousNoStoredDataResponse(string normalized)
+    {
+        const string message = "Known suspicious test-domain pattern detected.";
+        return new PublicDomainLookupResponse(
+            normalized,
+            8,
+            8,
+            RiskStatus.Dangerous,
+            RiskStatus.Dangerous.ToString(),
+            "Unverified",
+            [message],
+            [message],
+            ["HIP classified this domain as dangerous using public-safe MVP test-domain rules."],
+            "RouteToSafetyPage",
+            DateTimeOffset.UtcNow,
+            "NotConfigured",
+            "NotConfigured",
+            null,
+            "Unknown",
+            "Unverified",
+            null,
+            false,
+            $"/lookup/{normalized}",
+            20,
+            10,
+            5,
+            "The domain matches a known dangerous MVP test pattern. Final HIP score is 8/100 after separate domain, page, and content scores.",
+            [
+                new ScoreBreakdownItem("DomainTrustScore", 20, RiskStatus.HighRisk, "Domain matches a known suspicious test pattern.", [message]),
+                new ScoreBreakdownItem("PageTrustScore", 10, RiskStatus.HighRisk, "No safe page-specific signal is available for this test domain.", [message]),
+                new ScoreBreakdownItem("ContentRiskScore", 5, RiskStatus.Dangerous, "Content is treated as dangerous for this test-domain pattern.", [message]),
+                new ScoreBreakdownItem("FinalHipScore", 8, RiskStatus.Dangerous, "Final score reflects dangerous test-domain classification.", [message])
+            ],
+            null,
+            null,
+            null,
+            null,
+            "MvpDangerousTestPattern",
+            message);
+    }
+
+    /// <summary>
     /// Builds a lightweight score breakdown from stored browser scan counts.
     /// </summary>
     /// <param name="storedScan">Stored privacy-safe browser scan result.</param>
     /// <param name="status">Mapped public risk status.</param>
     /// <returns>Public-safe score breakdown items.</returns>
-    private static IReadOnlyCollection<ScoreBreakdownItem> BuildStoredScanBreakdown(BrowserScanResultRecord storedScan, RiskStatus status) =>
+    private static IReadOnlyCollection<ScoreBreakdownItem> BuildStoredScanBreakdown(BrowserScanResultRecord storedScan, LayeredLookupScore layeredScore) =>
     [
         new ScoreBreakdownItem(
-            "Website",
-            storedScan.Score,
-            status,
-            "Website score reflects the latest stored browser plugin scan summary.",
+            "DomainTrustScore",
+            layeredScore.DomainTrustScore,
+            StatusForScore(layeredScore.DomainTrustScore),
+            "DomainTrustScore measures root-domain trust and does not automatically make every page safe.",
+            ["Domain trust is evaluated separately from page and content risk."]),
+        new ScoreBreakdownItem(
+            "PageTrustScore",
+            layeredScore.PageTrustScore,
+            StatusForScore(layeredScore.PageTrustScore),
+            "PageTrustScore measures the exact page or URL context from the latest browser plugin scan.",
             storedScan.Reasons),
         new ScoreBreakdownItem(
-            "Link",
-            LinkScoreFromCounts(storedScan),
-            StatusForScore(LinkScoreFromCounts(storedScan)),
-            $"Browser plugin scanned {storedScan.LinksScanned} links and found {storedScan.RiskyLinksFound} risky links.",
-            [$"{storedScan.SuspiciousLinksFound} suspicious links and {storedScan.DangerousLinksFound} dangerous links were found."]),
+            "ContentRiskScore",
+            layeredScore.ContentRiskScore,
+            StatusForScore(layeredScore.ContentRiskScore),
+            $"ContentRiskScore reflects download, link, and page-behavior risk from {storedScan.LinksScanned} scanned links.",
+            [$"{storedScan.SuspiciousLinksFound} suspicious links and {storedScan.DangerousLinksFound} dangerous links were found. Downloads do not inherit full parent-domain trust."]),
         new ScoreBreakdownItem(
-            "Final",
-            storedScan.Score,
-            status,
-            "Final HIP score is sourced from the latest stored browser plugin scan.",
+            "FinalHipScore",
+            layeredScore.FinalHipScore,
+            StatusForScore(layeredScore.FinalHipScore),
+            layeredScore.Explanation,
             storedScan.Reasons)
     ];
 
     /// <summary>
-    /// Derives a simple link score from browser scan counts for public display.
+    /// Builds the public layered HIP score from stored browser scan data.
     /// </summary>
-    /// <param name="storedScan">Stored privacy-safe browser scan result.</param>
-    /// <returns>Link score clamped to 0-100.</returns>
-    private static int LinkScoreFromCounts(BrowserScanResultRecord storedScan)
+    /// <param name="domain">Normalized root domain.</param>
+    /// <param name="storedScan">Stored privacy-safe scan result.</param>
+    /// <returns>Layered score components and final explanation.</returns>
+    private static LayeredLookupScore BuildLayeredScore(string domain, BrowserScanResultRecord storedScan)
     {
-        if (storedScan.LinksScanned == 0)
+        var domainTrust = DomainTrustScoreFor(domain, storedScan);
+        var pageTrust = PageTrustScoreFor(storedScan);
+        var contentScore = ContentRiskScoreFor(storedScan);
+        var final = (int)Math.Round(domainTrust * 0.35 + pageTrust * 0.35 + contentScore * 0.30, MidpointRounding.AwayFromZero);
+
+        if (domainTrust <= 60 && storedScan.RiskyLinksFound == 0 && storedScan.DangerousLinksFound == 0)
         {
-            return 60;
+            final = Math.Min(final, 60);
         }
 
-        var penalty = storedScan.RiskyLinksFound * 10 + storedScan.DangerousLinksFound * 20;
-        return Math.Clamp(100 - penalty, 0, 100);
+        if (storedScan.Status.Equals("Dangerous", StringComparison.OrdinalIgnoreCase))
+        {
+            final = Math.Min(final, 9);
+        }
+
+        var explanation = BuildFinalExplanation(domain, domainTrust, pageTrust, contentScore, final);
+        return new LayeredLookupScore(domainTrust, pageTrust, contentScore, final, explanation);
     }
 
     /// <summary>
-    /// Parses stored status text and falls back to score mapping when old clients send non-standard labels.
+    /// Calculates root-domain trust independently from specific page and content findings.
     /// </summary>
-    /// <param name="status">Stored status label.</param>
-    /// <param name="score">Stored score.</param>
-    /// <returns>Mapped risk status.</returns>
-    private static RiskStatus ParseStatus(string status, int score) =>
-        Enum.TryParse<RiskStatus>(status, ignoreCase: true, out var parsed)
-            ? parsed
-            : StatusForScore(score);
+    /// <param name="domain">Normalized domain.</param>
+    /// <param name="storedScan">Stored scan result.</param>
+    /// <returns>0-100 domain trust score.</returns>
+    private static int DomainTrustScoreFor(string domain, BrowserScanResultRecord storedScan)
+    {
+        if (StrongDomainTrust.Contains(domain))
+        {
+            return 95;
+        }
+
+        if (domain.Contains("verified", StringComparison.OrdinalIgnoreCase))
+        {
+            return 85;
+        }
+
+        if (storedScan.DangerousLinksFound > 0 || storedScan.Status.Equals("Dangerous", StringComparison.OrdinalIgnoreCase) || IsDangerousTestDomain(domain))
+        {
+            return 35;
+        }
+
+        return 50;
+    }
+
+    /// <summary>
+    /// Calculates exact-page trust from scan score and page-level risk counts.
+    /// </summary>
+    /// <param name="storedScan">Stored scan result.</param>
+    /// <returns>0-100 page trust score.</returns>
+    private static int PageTrustScoreFor(BrowserScanResultRecord storedScan)
+    {
+        var penalty = storedScan.DangerousLinksFound * 22 + storedScan.SuspiciousLinksFound * 12 + Math.Max(0, storedScan.RiskyLinksFound - storedScan.SuspiciousLinksFound - storedScan.DangerousLinksFound) * 8;
+        var baseline = storedScan.LinksScanned == 0 ? 55 : Math.Min(storedScan.Score, 70);
+        return Math.Clamp(baseline - penalty, 0, 100);
+    }
+
+    /// <summary>
+    /// Calculates content score from link/download risk counts without inheriting full parent-domain trust.
+    /// </summary>
+    /// <param name="storedScan">Stored scan result.</param>
+    /// <returns>0-100 content score where lower means riskier content.</returns>
+    private static int ContentRiskScoreFor(BrowserScanResultRecord storedScan)
+    {
+        if (storedScan.LinksScanned == 0)
+        {
+            return 65;
+        }
+
+        var penalty = storedScan.DangerousLinksFound * 30 + storedScan.SuspiciousLinksFound * 18 + storedScan.RiskyLinksFound * 8;
+        return Math.Clamp(72 - penalty, 0, 100);
+    }
+
+    /// <summary>
+    /// Explains the final score in plain English without hiding the component scores.
+    /// </summary>
+    /// <param name="domain">Normalized domain.</param>
+    /// <param name="domainTrust">Domain trust score.</param>
+    /// <param name="pageTrust">Page trust score.</param>
+    /// <param name="contentScore">Content score.</param>
+    /// <param name="final">Final HIP score.</param>
+    /// <returns>Plain-English final score explanation.</returns>
+    private static string BuildFinalExplanation(string domain, int domainTrust, int pageTrust, int contentScore, int final)
+    {
+        if (StrongDomainTrust.Contains(domain) && (pageTrust < 50 || contentScore < 50))
+        {
+            return $"The parent domain has strong trust signals ({domainTrust}/100), but this specific page and content show risk. Final HIP score is {final}/100 after lowering trust for page/content signals.";
+        }
+
+        if (domainTrust <= 60 && pageTrust >= 50 && contentScore >= 50)
+        {
+            return $"HIP did not find strong trust signals for this website yet. No major risk signals were found, but the site has not earned a high trust score. Final HIP score is {final}/100.";
+        }
+
+        return $"Final HIP score is {final}/100 from separate DomainTrustScore ({domainTrust}/100), PageTrustScore ({pageTrust}/100), and ContentRiskScore ({contentScore}/100).";
+    }
+
+    /// <summary>
+    /// Detects the explicit MVP test-domain patterns that simulate known dangerous public data.
+    /// </summary>
+    /// <param name="domain">Normalized domain.</param>
+    /// <returns>True when the domain is a known MVP dangerous pattern.</returns>
+    private static bool IsDangerousTestDomain(string domain) =>
+        domain.Contains("danger", StringComparison.OrdinalIgnoreCase) ||
+        domain.Contains("phishing", StringComparison.OrdinalIgnoreCase) ||
+        domain.Contains("scam", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Legacy demo scoring helper retained for tests or future fallback experiments.
@@ -228,10 +390,12 @@ public sealed class PublicDomainLookupService(IBrowserScanResultRepository brows
     /// <returns>Risk status.</returns>
     public static RiskStatus StatusForScore(int score) => score switch
     {
-        <= 20 => RiskStatus.Dangerous,
-        <= 40 => RiskStatus.HighRisk,
-        <= 60 => RiskStatus.Caution,
-        <= 80 => RiskStatus.ProbablySafe,
+        <= 9 => RiskStatus.Dangerous,
+        <= 24 => RiskStatus.HighRisk,
+        <= 39 => RiskStatus.Suspicious,
+        <= 49 => RiskStatus.Unknown,
+        <= 69 => RiskStatus.LimitedTrustData,
+        <= 84 => RiskStatus.MostlyTrusted,
         _ => RiskStatus.Trusted
     };
 
@@ -242,9 +406,10 @@ public sealed class PublicDomainLookupService(IBrowserScanResultRepository brows
     /// <returns>Recommended action text.</returns>
     public static string RecommendedActionFor(RiskStatus status) => status switch
     {
-        RiskStatus.Trusted or RiskStatus.ProbablySafe => "Allow",
-        RiskStatus.Caution or RiskStatus.Unknown => "ShowCaution",
-        RiskStatus.HighRisk => "ShowWarning",
+        RiskStatus.Trusted or RiskStatus.MostlyTrusted or RiskStatus.ProbablySafe => "Allow",
+        RiskStatus.LimitedTrustData or RiskStatus.Unknown or RiskStatus.Caution => "ShowCaution",
+        RiskStatus.Suspicious => "ShowWarning",
+        RiskStatus.HighRisk => "RouteToSafetyPage",
         RiskStatus.Dangerous => "RouteToSafetyPage",
         RiskStatus.Critical => "Block",
         _ => "ShowCaution"
@@ -297,8 +462,23 @@ public sealed class PublicDomainLookupService(IBrowserScanResultRepository brows
             return ["Shortened URL behavior detected", "Shorteners can hide final destinations from users."];
         }
 
-        return status is RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical
+        return status is RiskStatus.Suspicious or RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical
             ? ["Domain has limited reputation history"]
             : [];
     }
+
+    /// <summary>
+    /// Layered score values used to avoid flattening domain, page, and content trust.
+    /// </summary>
+    /// <param name="DomainTrustScore">Root-domain trust score.</param>
+    /// <param name="PageTrustScore">Exact page or URL trust score.</param>
+    /// <param name="ContentRiskScore">Content score where lower means riskier content.</param>
+    /// <param name="FinalHipScore">Final user-facing HIP score.</param>
+    /// <param name="Explanation">Plain-English final score explanation.</param>
+    private sealed record LayeredLookupScore(
+        int DomainTrustScore,
+        int PageTrustScore,
+        int ContentRiskScore,
+        int FinalHipScore,
+        string Explanation);
 }

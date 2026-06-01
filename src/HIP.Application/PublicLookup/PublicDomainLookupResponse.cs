@@ -24,6 +24,10 @@ namespace HIP.Application.PublicLookup;
 /// <param name="SignatureValid">Whether a signature was valid, unknown, or not configured.</param>
 /// <param name="PublicBadgeEligible">Whether a live public badge can be shown.</param>
 /// <param name="PublicLookupUrl">Shareable public lookup URL.</param>
+/// <param name="DomainTrustScore">Trust score for the root domain overall.</param>
+/// <param name="PageTrustScore">Trust score for the exact page or URL context when available.</param>
+/// <param name="ContentRiskScore">Content safety score for downloads, scripts, forms, and page behavior.</param>
+/// <param name="FinalHipScoreExplanation">Plain-English explanation of how the final score was calculated.</param>
 /// <param name="ScoreBreakdown">Public-safe score component breakdown.</param>
 /// <param name="LinksScanned">Number of links scanned in the latest browser plugin scan.</param>
 /// <param name="RiskyLinksFound">Number of risky links found in the latest browser plugin scan.</param>
@@ -51,6 +55,10 @@ public sealed record PublicDomainLookupResponse(
     bool? SignatureValid,
     bool PublicBadgeEligible,
     string PublicLookupUrl,
+    int DomainTrustScore,
+    int PageTrustScore,
+    int ContentRiskScore,
+    string FinalHipScoreExplanation,
     IReadOnlyCollection<ScoreBreakdownItem> ScoreBreakdown,
     int? LinksScanned,
     int? RiskyLinksFound,

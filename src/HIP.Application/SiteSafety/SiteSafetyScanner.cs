@@ -401,8 +401,8 @@ public sealed class SiteSafetyScanner(
     {
         var domainTrust = Math.Clamp(80 - context.ReputationRiskScore, 0, 100);
         var pageTrust = Math.Clamp(82 - context.PhishingRiskScore / 2 - context.RedirectRiskScore / 3 - context.FormRiskScore / 3 - context.ReputationRiskScore / 4, 0, 100);
-        var contentRisk = Math.Clamp(context.MalwareRiskScore / 2 + context.ScriptRiskScore / 3 + context.DownloadRiskScore / 3 + context.PhishingRiskScore / 3, 0, 100);
-        var contentTrust = Math.Clamp(100 - contentRisk, 0, 100);
+        var rawContentRisk = Math.Clamp(context.MalwareRiskScore / 2 + context.ScriptRiskScore / 3 + context.DownloadRiskScore / 3 + context.PhishingRiskScore / 3, 0, 100);
+        var contentTrust = Math.Clamp(100 - rawContentRisk, 0, 100);
 
         if (context.MalwareRiskScore >= 90)
         {
@@ -429,7 +429,7 @@ public sealed class SiteSafetyScanner(
             new WeightedScore(new ScoreComponent(ScoreCategory.Content, ScoreValue.From(contentTrust), "ContentRiskScore is derived from malware, scripts, downloads, and phishing indicators.", ["Content risk lowers content trust but does not alone prove identity."]), 1.5m)
         ]);
 
-        return new SiteSafetyScoreImpact(domainTrust, pageTrust, contentRisk, final.FinalScore.Score.Value, final.ComponentScores);
+        return new SiteSafetyScoreImpact(domainTrust, pageTrust, contentTrust, final.FinalScore.Score.Value, final.ComponentScores);
     }
 
     /// <summary>

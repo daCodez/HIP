@@ -34,7 +34,7 @@ public sealed class SafetyRoutingService : ISafetyRoutingService
         }
 
         var risk = RiskStatusMapper.FromScore(ScoreValue.From(domainScore));
-        var shouldRoute = risk is RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical;
+        var shouldRoute = risk is RiskStatus.Suspicious or RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical;
         var allowContinue = risk is not RiskStatus.Critical;
 
         return new SafetyResult(
@@ -89,8 +89,9 @@ public sealed class SafetyRoutingService : ISafetyRoutingService
 
     public static string RecommendedActionFor(RiskStatus risk) => risk switch
     {
-        RiskStatus.Trusted or RiskStatus.ProbablySafe => "Allow",
-        RiskStatus.Unknown or RiskStatus.Caution => "ShowCaution",
+        RiskStatus.Trusted or RiskStatus.MostlyTrusted or RiskStatus.ProbablySafe => "Allow",
+        RiskStatus.LimitedTrustData or RiskStatus.Unknown or RiskStatus.Caution => "ShowCaution",
+        RiskStatus.Suspicious => "RouteToSafetyPage",
         RiskStatus.HighRisk => "RouteToSafetyPage",
         RiskStatus.Dangerous => "RouteToSafetyPage",
         RiskStatus.Critical => "Block",

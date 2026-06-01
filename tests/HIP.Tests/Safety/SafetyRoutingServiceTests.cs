@@ -15,7 +15,7 @@ public sealed class SafetyRoutingServiceTests
             50,
             ["This link is risky because it uses a shortener and redirects to a new domain."]);
 
-        Assert.That(result.RiskLevel, Is.EqualTo(RiskStatus.HighRisk));
+        Assert.That(result.RiskLevel, Is.EqualTo(RiskStatus.Suspicious));
         Assert.That(result.ShouldRouteToSafetyPage, Is.True);
         Assert.That(result.AllowContinue, Is.True);
         Assert.That(result.RecommendedAction, Is.EqualTo("RouteToSafetyPage"));
@@ -29,7 +29,7 @@ public sealed class SafetyRoutingServiceTests
         var result = new SafetyRoutingService().CreateUrlSafetyResult(
             "https://danger.example/download",
             null,
-            12,
+            8,
             null,
             ["The destination has confirmed dangerous public risk signals."]);
 

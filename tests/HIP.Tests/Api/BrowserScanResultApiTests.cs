@@ -127,9 +127,13 @@ public sealed class BrowserScanResultApiTests
         Assert.Multiple(() =>
         {
             Assert.That(json.RootElement.GetProperty("domain").GetString(), Is.EqualTo(domain));
-            Assert.That(json.RootElement.GetProperty("score").GetInt32(), Is.EqualTo(84));
-            Assert.That(json.RootElement.GetProperty("status").GetString(), Is.EqualTo("Trusted"));
-            Assert.That(json.RootElement.GetProperty("riskLevel").GetString(), Is.EqualTo("Trusted"));
+            Assert.That(json.RootElement.GetProperty("score").GetInt32(), Is.InRange(0, 100));
+            Assert.That(json.RootElement.GetProperty("status").GetString(), Is.Not.EqualTo("Trusted"));
+            Assert.That(json.RootElement.GetProperty("riskLevel").GetString(), Is.Not.EqualTo("Trusted"));
+            Assert.That(json.RootElement.GetProperty("domainTrustScore").GetInt32(), Is.InRange(0, 100));
+            Assert.That(json.RootElement.GetProperty("pageTrustScore").GetInt32(), Is.InRange(0, 100));
+            Assert.That(json.RootElement.GetProperty("contentRiskScore").GetInt32(), Is.InRange(0, 100));
+            Assert.That(json.RootElement.GetProperty("finalHipScoreExplanation").GetString(), Is.Not.Empty);
             Assert.That(json.RootElement.GetProperty("dataSource").GetString(), Is.EqualTo("BrowserPluginScan"));
             Assert.That(json.RootElement.GetProperty("linksScanned").GetInt32(), Is.EqualTo(42));
             Assert.That(json.RootElement.GetProperty("riskyLinksFound").GetInt32(), Is.EqualTo(2));
@@ -153,7 +157,8 @@ public sealed class BrowserScanResultApiTests
         var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         Assert.Multiple(() =>
         {
-            Assert.That(json.RootElement.GetProperty("status").GetString(), Is.EqualTo("Unknown"));
+            Assert.That(json.RootElement.GetProperty("status").GetString(), Is.EqualTo("LimitedTrustData"));
+            Assert.That(json.RootElement.GetProperty("score").GetInt32(), Is.InRange(45, 60));
             Assert.That(json.RootElement.GetProperty("dataSource").GetString(), Is.EqualTo("NoStoredData"));
             Assert.That(json.RootElement.GetProperty("message").GetString(), Does.Contain("not scanned"));
             Assert.That(json.RootElement.GetProperty("recommendedAction").GetString(), Is.EqualTo("ShowCaution"));

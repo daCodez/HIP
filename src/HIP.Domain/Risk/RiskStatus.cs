@@ -4,6 +4,9 @@ public enum RiskStatus
 {
     Unknown,
     Trusted,
+    MostlyTrusted,
+    LimitedTrustData,
+    Suspicious,
     ProbablySafe,
     Caution,
     HighRisk,

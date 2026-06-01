@@ -18,7 +18,11 @@ public sealed class PublicLookupServiceTests
         Assert.That(result.FinalHipScore, Is.InRange(0, 100));
         Assert.That(result.Status, Is.Not.EqualTo(RiskStatus.Unknown));
         Assert.That(result.SignedIdentityStatus, Is.EqualTo("PostQuantumSignaturePresent"));
-        Assert.That(result.ScoreBreakdown.Select(item => item.Category), Does.Contain("Final"));
+        Assert.That(result.ScoreBreakdown.Select(item => item.Category), Does.Contain("FinalHipScore"));
+        Assert.That(result.DomainTrustScore, Is.InRange(0, 100));
+        Assert.That(result.PageTrustScore, Is.InRange(0, 100));
+        Assert.That(result.ContentRiskScore, Is.InRange(0, 100));
+        Assert.That(result.FinalHipScoreExplanation, Is.Not.Empty);
         Assert.That(result.PublicBadgeEligible, Is.True);
         Assert.That(result.PublicLookupUrl, Is.EqualTo("/lookup/verified-example.com"));
         Assert.That(result.RecommendedAction, Is.Not.Empty);
@@ -78,7 +82,7 @@ public sealed class PublicLookupServiceTests
         Assert.Multiple(() =>
         {
             Assert.That(result.Status, Is.EqualTo(RiskStatus.Dangerous));
-            Assert.That(result.Score, Is.EqualTo(18));
+            Assert.That(result.Score, Is.EqualTo(9));
             Assert.That(result.DataSource, Is.EqualTo("BrowserPluginScan"));
             Assert.That(result.RecommendedAction, Is.EqualTo("RouteToSafetyPage"));
         });
@@ -93,7 +97,8 @@ public sealed class PublicLookupServiceTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(result.Status, Is.EqualTo(RiskStatus.Unknown));
+            Assert.That(result.Status, Is.EqualTo(RiskStatus.LimitedTrustData));
+            Assert.That(result.FinalHipScore, Is.InRange(45, 60));
             Assert.That(result.DataSource, Is.EqualTo("NoStoredData"));
             Assert.That(result.Reasons, Has.Some.Contains("HIP has not scanned this domain yet"));
             Assert.That(result.RecommendedAction, Is.EqualTo("ShowCaution"));
@@ -127,23 +132,28 @@ public sealed class PublicLookupServiceTests
         Assert.That(result.DataSource, Is.EqualTo("BrowserPluginScan"));
     }
 
-    [TestCase(20, RiskStatus.Dangerous)]
-    [TestCase(21, RiskStatus.HighRisk)]
-    [TestCase(40, RiskStatus.HighRisk)]
-    [TestCase(41, RiskStatus.Caution)]
-    [TestCase(60, RiskStatus.Caution)]
-    [TestCase(61, RiskStatus.ProbablySafe)]
-    [TestCase(80, RiskStatus.ProbablySafe)]
-    [TestCase(81, RiskStatus.Trusted)]
+    [TestCase(9, RiskStatus.Dangerous)]
+    [TestCase(10, RiskStatus.HighRisk)]
+    [TestCase(24, RiskStatus.HighRisk)]
+    [TestCase(25, RiskStatus.Suspicious)]
+    [TestCase(39, RiskStatus.Suspicious)]
+    [TestCase(40, RiskStatus.Unknown)]
+    [TestCase(49, RiskStatus.Unknown)]
+    [TestCase(50, RiskStatus.LimitedTrustData)]
+    [TestCase(69, RiskStatus.LimitedTrustData)]
+    [TestCase(70, RiskStatus.MostlyTrusted)]
+    [TestCase(84, RiskStatus.MostlyTrusted)]
+    [TestCase(85, RiskStatus.Trusted)]
     public void Score_bands_map_to_statuses(int score, RiskStatus expected)
     {
         Assert.That(PublicDomainLookupService.StatusForScore(score), Is.EqualTo(expected));
     }
 
     [TestCase(RiskStatus.Trusted, "Allow")]
-    [TestCase(RiskStatus.ProbablySafe, "Allow")]
-    [TestCase(RiskStatus.Caution, "ShowCaution")]
-    [TestCase(RiskStatus.HighRisk, "ShowWarning")]
+    [TestCase(RiskStatus.MostlyTrusted, "Allow")]
+    [TestCase(RiskStatus.LimitedTrustData, "ShowCaution")]
+    [TestCase(RiskStatus.Suspicious, "ShowWarning")]
+    [TestCase(RiskStatus.HighRisk, "RouteToSafetyPage")]
     [TestCase(RiskStatus.Dangerous, "RouteToSafetyPage")]
     public void Recommended_action_maps_to_risk_status(RiskStatus status, string expected)
     {

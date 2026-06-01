@@ -41,6 +41,10 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
             lookup.Domain,
             lookup.FinalHipScore,
             lookup.FinalHipScore,
+            lookup.DomainTrustScore,
+            lookup.PageTrustScore,
+            lookup.ContentRiskScore,
+            lookup.FinalHipScoreExplanation,
             lookup.Status.ToString(),
             reasons,
             lookup.VerificationStatus,
@@ -167,8 +171,8 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
         new(
             linkUri.ToString(),
             domain,
-            RiskStatus.ProbablySafe.ToString(),
-            80,
+            RiskStatus.MostlyTrusted.ToString(),
+            70,
             ["Internal link on the current website; no external-domain risk signal was found."],
             "Allow",
             false,
@@ -199,7 +203,7 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
     /// cluttered with low-confidence labels. High-risk or worse statuses are always surfaced.
     /// </remarks>
     private static bool RequiresAttention(RiskStatus status) =>
-        status is RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical;
+        status is RiskStatus.Suspicious or RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical;
 
     /// <summary>
     /// Determines whether a trusted link should show a positive verified-content label.
@@ -216,9 +220,9 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
     /// <returns>The extension action name, such as Allow or RouteToSafetyPage.</returns>
     private static string RecommendedAction(RiskStatus status) => status switch
     {
-        RiskStatus.HighRisk => "RouteToSafetyPage",
+        RiskStatus.Suspicious or RiskStatus.HighRisk => "RouteToSafetyPage",
         RiskStatus.Dangerous or RiskStatus.Critical => "RouteToSafetyPage",
-        RiskStatus.Unknown or RiskStatus.Caution => "ShowLabel",
+        RiskStatus.LimitedTrustData or RiskStatus.Unknown or RiskStatus.Caution => "ShowLabel",
         _ => "Allow"
     };
 
@@ -228,7 +232,7 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
     /// <param name="status">The risk status for the target URL.</param>
     /// <returns>True for high-risk or worse statuses.</returns>
     private static bool RequiresSafetyRoute(RiskStatus status) =>
-        status is RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical;
+        status is RiskStatus.Suspicious or RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical;
 
     /// <summary>
     /// Builds a relative safety-page URL with the original target encoded to avoid unsafe HTML or URL injection.
@@ -255,8 +259,9 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
         return status switch
         {
             RiskStatus.Unknown => "Unknown",
+            RiskStatus.LimitedTrustData => "Unknown",
             RiskStatus.Caution => "Caution",
-            RiskStatus.HighRisk => "Suspicious",
+            RiskStatus.Suspicious or RiskStatus.HighRisk => "Suspicious",
             RiskStatus.Dangerous or RiskStatus.Critical => "Dangerous",
             _ => null
         };

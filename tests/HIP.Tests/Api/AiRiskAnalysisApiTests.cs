@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using HIP.Domain.Risk;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace HIP.Tests.Api;
@@ -79,7 +80,7 @@ public sealed class AiRiskAnalysisApiTests
             Platform = "Web",
             Analysis = new
             {
-                RiskLevel = 4,
+                RiskLevel = RiskStatus.HighRisk,
                 Confidence = 85,
                 Reasons = new[] { "Shortened link and credential request pattern." },
                 DetectedPatterns = new[] { "ShortenedUrl", "CredentialRequest" },

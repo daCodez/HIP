@@ -115,7 +115,7 @@ public sealed record SiteSafetyObservedSignals(
 /// <param name="ConfidenceLevel">Low, Medium, or High confidence label.</param>
 /// <param name="DomainTrustScore">Domain trust score after safety reputation impact.</param>
 /// <param name="PageTrustScore">Page trust score after safety impact.</param>
-/// <param name="ContentRiskScore">Content risk score derived from malware, script, download, and phishing signals.</param>
+/// <param name="ContentRiskScore">Content score derived from malware, script, download, and phishing signals; lower means riskier content.</param>
 /// <param name="FinalHipScore">Safety-adjusted HIP score contribution.</param>
 /// <param name="ScoreImpact">Detailed score impact for the larger HIP scoring model.</param>
 public sealed record SiteSafetyScanResult(
@@ -149,7 +149,7 @@ public sealed record SiteSafetyScanResult(
 /// </summary>
 /// <param name="DomainTrustScore">DomainTrustScore contribution after reputation risk.</param>
 /// <param name="PageTrustScore">PageTrustScore contribution after phishing, redirect, form, and reputation risk.</param>
-/// <param name="ContentRiskScore">ContentRiskScore contribution after malware, script, download, and phishing risk.</param>
+/// <param name="ContentRiskScore">ContentRiskScore contribution where lower values indicate riskier content.</param>
 /// <param name="FinalHipScore">Final safety-adjusted HIP score contribution.</param>
 /// <param name="ScoreBreakdown">Standard HIP score breakdown components.</param>
 public sealed record SiteSafetyScoreImpact(

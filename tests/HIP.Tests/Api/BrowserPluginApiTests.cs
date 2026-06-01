@@ -24,6 +24,10 @@ public sealed class BrowserPluginApiTests
         var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         Assert.That(json.RootElement.GetProperty("domain").GetString(), Is.EqualTo("example.com"));
         Assert.That(json.RootElement.GetProperty("score").GetInt32(), Is.InRange(0, 100));
+        Assert.That(json.RootElement.GetProperty("domainTrustScore").GetInt32(), Is.InRange(0, 100));
+        Assert.That(json.RootElement.GetProperty("pageTrustScore").GetInt32(), Is.InRange(0, 100));
+        Assert.That(json.RootElement.GetProperty("contentRiskScore").GetInt32(), Is.InRange(0, 100));
+        Assert.That(json.RootElement.GetProperty("finalHipScoreExplanation").GetString(), Is.Not.Empty);
         Assert.That(json.RootElement.GetProperty("status").GetString(), Is.Not.Empty);
         Assert.That(json.RootElement.GetProperty("reasons").GetArrayLength(), Is.GreaterThan(0));
     }
@@ -73,7 +77,7 @@ public sealed class BrowserPluginApiTests
         var result = json.RootElement.GetProperty("results")[0];
         Assert.Multiple(() =>
         {
-            Assert.That(result.GetProperty("riskLevel").GetString(), Is.EqualTo("Unknown"));
+            Assert.That(result.GetProperty("riskLevel").GetString(), Is.EqualTo("LimitedTrustData"));
             Assert.That(result.GetProperty("requiresIcon").GetBoolean(), Is.False);
             Assert.That(result.GetProperty("recommendedAction").GetString(), Is.EqualTo("ShowLabel"));
             Assert.That(result.GetProperty("safetyPageUrl").ValueKind, Is.EqualTo(JsonValueKind.Null));
