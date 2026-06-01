@@ -1,3 +1,4 @@
+using HIP.Application.Browser;
 using HIP.Application.Identity;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
@@ -33,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<IReputationOverrideRequestRepository, EfReputationOverrideRequestRepository>();
         services.AddScoped<IRuleSimulationResultRepository, EfRuleSimulationResultRepository>();
         services.AddScoped<IGeneratedRuleCandidateRepository, EfGeneratedRuleCandidateRepository>();
+        services.AddScoped<IBrowserScanResultRepository, EfBrowserScanResultRepository>();
 
         return services;
     }

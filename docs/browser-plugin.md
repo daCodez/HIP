@@ -8,6 +8,66 @@ The browser plugin uses versioned v1 endpoints:
 
 - `POST /api/v1/browser/score-site`
 - `POST /api/v1/browser/scan-links`
+- `POST /api/v1/browser/scan-results`
+- `GET /api/v1/browser/scan-results/{domain}`
+
+## Browser Scan Result Persistence
+
+After each successful scan, the extension sends a privacy-safe summary to HIP so later versions can show real data in the popup, public lookup, website scoring, and admin dashboard.
+
+Stored fields:
+
+- domain
+- hashed page URL
+- scan source (`BrowserPlugin`)
+- score, risk level, and status
+- plain-English reasons
+- links scanned count
+- risky, suspicious, and dangerous link counts
+- last checked UTC
+- recommended action
+- small privacy-safe metadata such as scan mode and candidate counts
+
+HIP does not store full page text, form values, passwords, tokens, usernames, email body text, private messages, or unrelated browsing history from this browser scan flow. The full page URL is hashed by default; raw URL storage is reserved for a future explicit safe-storage policy.
+
+Example save request:
+
+```http
+POST /api/v1/browser/scan-results
+Content-Type: application/json
+```
+
+```json
+{
+  "domain": "example.com",
+  "pageUrl": "https://example.com/page",
+  "score": 84,
+  "riskLevel": "Trusted",
+  "status": "Trusted",
+  "reasons": [
+    "No risky links found"
+  ],
+  "linksScanned": 42,
+  "riskyLinksFound": 2,
+  "suspiciousLinksFound": 2,
+  "dangerousLinksFound": 0,
+  "recommendedAction": "Allow",
+  "privacySafeMetadata": {
+    "scanMode": "Normal",
+    "apiStatus": "Available"
+  }
+}
+```
+
+Example response:
+
+```json
+{
+  "saved": true,
+  "domain": "example.com",
+  "lastCheckedUtc": "2026-06-01T00:00:00Z"
+}
+```
 
 ## Safety Page Integration
 

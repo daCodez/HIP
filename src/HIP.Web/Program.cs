@@ -277,6 +277,10 @@ static void MapBadgeApis(RouteGroupBuilder badgeApi)
     });
 }
 
+/// <summary>
+/// Maps browser plugin endpoints for site scoring, link scanning, and privacy-safe scan result persistence.
+/// </summary>
+/// <param name="browserApi">Versioned browser plugin route group.</param>
 static void MapBrowserApis(RouteGroupBuilder browserApi)
 {
     browserApi.MapPost("/score-site", async (
@@ -306,6 +310,37 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    browserApi.MapPost("/scan-results", async (
+        BrowserScanResultSaveRequest request,
+        IBrowserScanResultService scanResultService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await scanResultService.SaveAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new BrowserScanResultErrorResponse(ex.Message));
+        }
+    });
+
+    browserApi.MapGet("/scan-results/{domain}", async (
+        string domain,
+        IBrowserScanResultService scanResultService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var result = await scanResultService.GetLatestByDomainAsync(domain, cancellationToken);
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new BrowserScanResultErrorResponse(ex.Message));
         }
     });
 }

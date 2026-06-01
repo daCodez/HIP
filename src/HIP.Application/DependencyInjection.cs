@@ -76,6 +76,8 @@ public static class DependencyInjection
         services.AddScoped<ISecondLifeHudService, SecondLifeHudService>();
         services.AddScoped<ISecondLifeHudSimulationService, SecondLifeHudSimulationService>();
         services.AddScoped<IBrowserPluginService, BrowserPluginService>();
+        services.AddScoped<IBrowserScanResultRepository, InMemoryBrowserScanResultRepository>();
+        services.AddScoped<IBrowserScanResultService, BrowserScanResultService>();
 
         return services;
     }
