@@ -5,6 +5,9 @@ This Chromium Manifest V3 client helps users see HIP website trust, link risk, a
 ## Features
 
 - Current website HIP score and status in the popup.
+- A simple trust message: HTTPS secures the connection; HIP verifies trust.
+- Score band and status badge display.
+- Public lookup and safety details links.
 - Verified identity and signed identity status where available.
 - Page link scan summary.
 - Risky link badges.
@@ -113,7 +116,7 @@ Download detection only flags download-like links by URL extension. It does not 
 6. Choose `clients/browser-extension`.
 7. Visit a normal test page.
 8. Open the HIP popup and confirm the website score appears.
-9. Confirm the link scan count appears.
+9. Confirm the popup shows the current domain, status badge, reason summary, public lookup link, links scanned count, risky links count, and last scan time.
 10. Add or visit links containing test domains such as `danger-example.com`, `new-short-example.com`, or `verified-example.com`.
 11. Confirm risky link badges appear.
 12. Confirm a warning banner appears for a high-risk site.
@@ -125,6 +128,10 @@ Download detection only flags download-like links by URL extension. It does not 
 15. Add a download-like link such as `.exe`, `.zip`, `.msi`, `.dmg`, `.pdf`, `.docx`, or `.scr` and confirm it is flagged as a download risk candidate.
 16. Add a login form with a cross-domain action and confirm a caution indicator appears without entering or collecting values.
 17. Stop HIP locally and confirm the popup shows HIP unavailable while links continue to work.
+
+## Popup Privacy Behavior
+
+The popup scores only the active tab URL/domain. It does not read or send page text, form values, passwords, tokens, private messages, or email content.
 
 ## Known Limitations
 

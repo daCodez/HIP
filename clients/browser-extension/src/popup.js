@@ -1,8 +1,11 @@
 import { HipApiClient, DEFAULT_HIP_SETTINGS, loadHipSettings, normalizeHost } from "./hipApiClient.js";
+import { buildPopupViewModel, unavailableMessage } from "./popupViewModel.js";
 
 let settings = DEFAULT_HIP_SETTINGS;
 let client = new HipApiClient(settings);
 let activeTabId = null;
+let activeTabUrl = null;
+let activeLookup = null;
 
 const elements = {
   domain: document.getElementById("domain"),
@@ -11,6 +14,7 @@ const elements = {
   reasonsPanel: document.getElementById("reasonsPanel"),
   score: document.getElementById("score"),
   status: document.getElementById("status"),
+  statusBadge: document.getElementById("statusBadge"),
   verified: document.getElementById("verified"),
   identityStatus: document.getElementById("identityStatus"),
   lastChecked: document.getElementById("lastChecked"),
@@ -21,8 +25,10 @@ const elements = {
   unknownLinks: document.getElementById("unknownLinks"),
   downloadCandidates: document.getElementById("downloadCandidates"),
   loginForms: document.getElementById("loginForms"),
+  lastScan: document.getElementById("lastScan"),
   reasons: document.getElementById("reasons"),
   lookupLink: document.getElementById("lookupLink"),
+  safetyLink: document.getElementById("safetyLink"),
   refreshScan: document.getElementById("refreshScan"),
   settingsButton: document.getElementById("settingsButton")
 };
@@ -37,6 +43,7 @@ async function initialize() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   activeTabId = tab?.id ?? null;
   const currentUrl = tab?.url ? new URL(tab.url) : null;
+  activeTabUrl = currentUrl?.toString() || null;
 
   if (!currentUrl || !["http:", "https:"].includes(currentUrl.protocol)) {
     elements.domain.textContent = "No website tab selected";
@@ -49,49 +56,56 @@ async function initialize() {
   elements.domain.textContent = domain;
 
   const lookup = await client.scoreSite({ url: currentUrl.toString(), domain });
-  renderLookup(lookup);
-  await renderScanSummary();
+  activeLookup = lookup;
+  const summary = await renderScanSummary();
+  renderLookup(lookup, summary);
 }
 
-function renderLookup(lookup) {
+function renderLookup(lookup, summary = {}) {
+  const viewModel = buildPopupViewModel(lookup, summary, settings, activeTabUrl);
   elements.state.hidden = true;
   elements.scorePanel.hidden = false;
   elements.reasonsPanel.hidden = false;
 
-  elements.score.textContent = `${lookup.score ?? lookup.finalHipScore}/100`;
-  elements.status.textContent = lookup.status;
-  elements.status.dataset.status = lookup.status;
-  elements.verified.textContent = lookup.verificationStatus === "Verified" ? "Yes" : "No";
-  elements.identityStatus.textContent = lookup.identityVerificationStatus || lookup.signedIdentityStatus || "Unknown";
-  elements.lastChecked.textContent = new Date(lookup.lastCheckedUtc).toLocaleString();
+  elements.domain.textContent = viewModel.domain;
+  elements.score.textContent = viewModel.scoreText;
+  elements.status.textContent = viewModel.statusLabel;
+  elements.status.dataset.status = viewModel.status;
+  elements.statusBadge.textContent = viewModel.statusLabel;
+  elements.statusBadge.className = `status-badge ${viewModel.statusClass}`;
+  elements.verified.textContent = viewModel.verifiedText;
+  elements.identityStatus.textContent = viewModel.identityText;
+  elements.lastChecked.textContent = viewModel.lastCheckedText;
 
-  const reasons = lookup.reasons?.length ? lookup.reasons : lookup.knownRisks?.length ? lookup.knownRisks : lookup.explanations || [];
-  elements.reasons.replaceChildren(...reasons.slice(0, 5).map(reason => {
+  elements.reasons.replaceChildren(...viewModel.reasons.map(reason => {
     const item = document.createElement("li");
     item.textContent = reason;
     return item;
   }));
 
-  elements.lookupLink.href = lookup.publicLookupUrl?.startsWith("http")
-    ? lookup.publicLookupUrl
-    : `${settings.webBaseUrl}/lookup/domain/${encodeURIComponent(lookup.domain)}`;
+  elements.lookupLink.href = viewModel.lookupUrl;
   elements.lookupLink.hidden = false;
+  elements.safetyLink.href = viewModel.safetyDetailsUrl || "#";
+  elements.safetyLink.hidden = !viewModel.safetyDetailsUrl;
 }
 
 async function renderScanSummary() {
   if (!activeTabId) {
-    return;
+    return {};
   }
 
   const response = await chrome.runtime.sendMessage({ type: "HIP_GET_SCAN_SUMMARY", tabId: activeTabId });
   const summary = response?.result || {};
+  const viewModel = buildPopupViewModel(activeLookup, summary, settings, activeTabUrl);
   elements.scanPanel.hidden = false;
-  elements.apiStatus.textContent = summary.apiStatus || "Unknown";
-  elements.linksScanned.textContent = summary.linksScanned ?? 0;
-  elements.riskyLinks.textContent = summary.riskyLinks ?? 0;
-  elements.unknownLinks.textContent = summary.unknownLinks ?? 0;
-  elements.downloadCandidates.textContent = summary.downloadCandidates ?? 0;
-  elements.loginForms.textContent = summary.loginFormsDetected ?? 0;
+  elements.apiStatus.textContent = viewModel.apiStatus;
+  elements.linksScanned.textContent = viewModel.linksScanned;
+  elements.riskyLinks.textContent = viewModel.riskyLinks;
+  elements.unknownLinks.textContent = viewModel.unknownLinks;
+  elements.downloadCandidates.textContent = viewModel.downloadCandidates;
+  elements.loginForms.textContent = viewModel.loginFormsDetected;
+  elements.lastScan.textContent = viewModel.lastScanText;
+  return summary;
 }
 
 async function refreshScan() {
@@ -102,7 +116,10 @@ async function refreshScan() {
   elements.refreshScan.disabled = true;
   try {
     await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
-    await renderScanSummary();
+    const summary = await renderScanSummary();
+    if (activeLookup) {
+      renderLookup(activeLookup, summary);
+    }
   } catch (error) {
     console.warn("HIP scan refresh unavailable.", error);
   } finally {
@@ -112,6 +129,6 @@ async function refreshScan() {
 
 function showUnavailable(error) {
   console.warn("HIP popup unavailable.", error);
-  elements.state.textContent = "HIP unavailable";
+  elements.state.textContent = unavailableMessage();
   elements.state.className = "state unavailable";
 }

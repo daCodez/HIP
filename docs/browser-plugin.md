@@ -21,6 +21,24 @@ The browser plugin routes only risky links through HIP:
 The plugin uses `URLSearchParams` to encode the original target URL before routing. If HIP is unavailable, the extension fails open and does not block links.
 
 The plugin does not send page text, form contents, field values, email body text, or private messages as part of safety routing.
+
+## Popup Website Score UI
+
+The browser popup explains the core HIP relationship in plain language:
+
+> HTTPS secures the connection. HIP verifies the trust.
+
+The popup shows the active tab domain, HIP website score, status badge, plain-English reasons, links scanned, risky links, last scan time, public lookup link, and safety details link when the current site is risky.
+
+Status bands:
+
+- `0-20`: Dangerous
+- `21-40`: High Risk
+- `41-60`: Unknown / Caution
+- `61-80`: Probably Safe
+- `81-100`: Trusted
+
+Popup scoring sends only the current URL/domain. It does not send page text, form contents, credentials, tokens, private messages, or email content.
 - `POST /api/v1/public/risk-findings`
 
 Normal safe links do not receive badges. HIP shows labels only when attention is useful: `Unknown`, `Caution`, `Suspicious`, `Dangerous`, or `Verified`.
