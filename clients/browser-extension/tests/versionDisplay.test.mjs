@@ -6,11 +6,19 @@ import { fileURLToPath } from "node:url";
 
 const extensionRoot = fileURLToPath(new URL("../", import.meta.url));
 
-test("banner displays plugin version in dev MVP mode", () => {
+test("trust banner displays plugin version in dev MVP mode", () => {
   const renderer = read("src/riskBadgeRenderer.js");
 
-  assert.match(renderer, /hip-warning-version/);
+  assert.match(renderer, /renderTrustBanner/);
+  assert.match(renderer, /hip-trust-version/);
   assert.match(renderer, /pluginVersion/);
+});
+
+test("trust banner includes status badge and close control", () => {
+  const renderer = read("src/riskBadgeRenderer.js");
+
+  assert.match(renderer, /hip-trust-status-badge/);
+  assert.match(renderer, /hip-trust-close/);
 });
 
 test("popup displays plugin version in dev MVP mode", () => {

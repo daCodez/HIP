@@ -60,6 +60,27 @@ public sealed class BrowserPluginApiTests
     }
 
     [Test]
+    public async Task Unknown_external_links_do_not_force_icons()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(
+            "https://example.com",
+            ["https://unscanned-example-for-hip.com/path"]));
+
+        var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var result = json.RootElement.GetProperty("results")[0];
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.GetProperty("riskLevel").GetString(), Is.EqualTo("Unknown"));
+            Assert.That(result.GetProperty("requiresIcon").GetBoolean(), Is.False);
+            Assert.That(result.GetProperty("recommendedAction").GetString(), Is.EqualTo("ShowLabel"));
+            Assert.That(result.GetProperty("safetyPageUrl").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        });
+    }
+
+    [Test]
     public async Task Suspicious_links_require_labels_or_icons()
     {
         await using var factory = new WebApplicationFactory<Program>();
@@ -67,7 +88,7 @@ public sealed class BrowserPluginApiTests
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(
             "https://example.com",
-            ["https://danger-example.com/pay"]));
+            ["https://bit.ly/pay"]));
 
         var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         var result = json.RootElement.GetProperty("results")[0];

@@ -190,12 +190,16 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
     }
 
     /// <summary>
-    /// Determines whether a link status should be visible beside the page link.
+    /// Determines whether the API should force a link badge regardless of browser scan mode.
     /// </summary>
     /// <param name="status">The public lookup status for the target domain.</param>
-    /// <returns>True when the extension should render a warning or caution badge.</returns>
+    /// <returns>True when the link is high-risk enough that the extension should always show a badge.</returns>
+    /// <remarks>
+    /// Unknown and caution links are left to the extension's scan-mode settings so normal browsing is not
+    /// cluttered with low-confidence labels. High-risk or worse statuses are always surfaced.
+    /// </remarks>
     private static bool RequiresAttention(RiskStatus status) =>
-        status is RiskStatus.Unknown or RiskStatus.Caution or RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical;
+        status is RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical;
 
     /// <summary>
     /// Determines whether a trusted link should show a positive verified-content label.
