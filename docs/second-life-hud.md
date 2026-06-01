@@ -14,6 +14,8 @@ The HUD MVP foundation supports:
 - safety page routing guidance
 - privacy-safe reporting
 
+The current LSL MVP script lives at `clients/second-life-hud/scripts/HIP_HUD_MVP.lsl`.
+
 ## API Endpoints
 
 - `POST /api/v1/sl-hud/activate`
@@ -110,6 +112,8 @@ Not allowed by default:
 ## LSL Limitations
 
 Second Life does not provide browser-like link control. The HUD cannot guarantee true blocking. It provides warnings and routes users toward the HIP safety page.
+
+A normal LSL HUD can listen to local chat channels it registers for, but it cannot reliably inspect all group chat, private IM, or viewer-click flows without explicit user, viewer, relay, or platform support. Private IM support must be opt-in and must not upload full IM logs.
 
 ## Known Limitations
 
