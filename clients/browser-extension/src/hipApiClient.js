@@ -97,6 +97,28 @@ export class HipApiClient {
     return response.json();
   }
 
+  /**
+   * Saves the current scan summary without sending page text, form values, or private messages.
+   * The HIP API hashes the page URL and keeps only privacy-safe counts and reasons.
+   */
+  async saveScanResult(result) {
+    const url = `${this.config.apiBaseUrl}/api/v1/browser/scan-results`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(result)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HIP scan result persistence failed with status ${response.status}.`);
+    }
+
+    return response.json();
+  }
+
   safetyPageUrl(originalUrl, sourceDomain, riskStatus) {
     const url = new URL("/safety", this.config.webBaseUrl);
     url.searchParams.set("url", originalUrl);

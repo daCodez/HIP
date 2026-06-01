@@ -65,6 +65,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "HIP_SAVE_SCAN_RESULT") {
+    saveScanResult(message.result)
+      .then(result => sendResponse({ ok: true, result }))
+      .catch(error => {
+        console.warn("HIP scan result persistence unavailable.", error);
+        sendResponse({ ok: false, error: "HIP scan result persistence unavailable" });
+      });
+
+    return true;
+  }
+
   if (message?.type === "HIP_SCAN_SUMMARY") {
     const tabId = _sender?.tab?.id;
     if (typeof tabId === "number") {
@@ -133,4 +144,14 @@ async function reportRiskFinding(report) {
   const settings = await loadHipSettings();
   const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
   return client.reportRiskFinding(report);
+}
+
+/**
+ * Persists a privacy-safe scan summary through the configured HIP API.
+ * This keeps storage in the background script so content scripts never handle API secrets later.
+ */
+async function saveScanResult(result) {
+  const settings = await loadHipSettings();
+  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+  return client.saveScanResult(result);
 }

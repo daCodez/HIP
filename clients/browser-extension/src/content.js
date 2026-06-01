@@ -44,6 +44,7 @@
 
     await scanLinks();
     await scanLoginForms();
+    await persistScanResult(currentLookup).catch(error => console.warn("HIP scan result persistence failed safely.", error));
     publishSummary();
   }
 
@@ -94,6 +95,12 @@
         const lookup = browserResultToLookup(result);
         if (lookup.status === "Unknown") {
           lastSummary.unknownLinks++;
+        }
+        if (lookup.status === "HighRisk") {
+          lastSummary.suspiciousLinks++;
+        }
+        if (lookup.status === "Dangerous" || lookup.status === "Critical") {
+          lastSummary.dangerousLinks++;
         }
         if (riskyStatuses.has(lookup.status)) {
           lastSummary.riskyLinks++;
@@ -201,6 +208,45 @@
     };
 
     await chrome.runtime.sendMessage({ type: "HIP_REPORT_RISK_FINDING", report });
+  }
+
+  /**
+   * Saves only a privacy-safe browser scan summary for future HIP scoring and dashboard use.
+   * Page text, form values, email body text, and private messages are intentionally excluded.
+   */
+  async function persistScanResult(currentLookup) {
+    if (!currentLookup) {
+      return;
+    }
+
+    const payload = {
+      domain: currentDomain,
+      pageUrl: window.location.href,
+      score: currentLookup.finalHipScore ?? currentLookup.score ?? 0,
+      riskLevel: currentLookup.status || "Unknown",
+      status: currentLookup.status || "Unknown",
+      reasons: safeReasons(currentLookup),
+      linksScanned: lastSummary.linksScanned,
+      riskyLinksFound: lastSummary.riskyLinks,
+      suspiciousLinksFound: lastSummary.suspiciousLinks,
+      dangerousLinksFound: lastSummary.dangerousLinks,
+      recommendedAction: recommendedSiteAction(currentLookup.status),
+      privacySafeMetadata: {
+        scanMode: settings.scanMode,
+        apiStatus: lastSummary.apiStatus,
+        downloadCandidates: String(lastSummary.downloadCandidates),
+        formsDetected: String(lastSummary.formsDetected),
+        loginFormsDetected: String(lastSummary.loginFormsDetected),
+        crossDomainLoginForms: String(lastSummary.crossDomainLoginForms),
+        socialLinkCandidates: String(lastSummary.socialLinkCandidates),
+        webmailLinkCandidates: String(lastSummary.webmailLinkCandidates)
+      }
+    };
+
+    const response = await chrome.runtime.sendMessage({ type: "HIP_SAVE_SCAN_RESULT", result: payload });
+    if (!response?.ok) {
+      console.warn("HIP scan result was not persisted.", response?.error);
+    }
   }
 
   async function lookupDomain(domain) {
@@ -346,12 +392,37 @@
     };
   }
 
+  /**
+   * Picks display-safe reasons from HIP lookup data without reading page body text.
+   */
+  function safeReasons(lookup) {
+    const reasons = lookup?.knownRisks?.length ? lookup.knownRisks : lookup?.explanations || lookup?.reasons || [];
+    return reasons.length > 0 ? reasons : ["No risky links found by the browser plugin scan."];
+  }
+
+  /**
+   * Maps the current website status to a persisted action summary for later dashboards.
+   */
+  function recommendedSiteAction(status) {
+    if (riskyStatuses.has(status)) {
+      return "RouteToSafetyPage";
+    }
+
+    if (status === "Unknown" || status === "Caution") {
+      return "ShowLabel";
+    }
+
+    return "Allow";
+  }
+
   function emptySummary() {
     return {
       apiStatus: "Checking",
       website: null,
       linksScanned: 0,
       riskyLinks: 0,
+      suspiciousLinks: 0,
+      dangerousLinks: 0,
       unknownLinks: 0,
       downloadCandidates: 0,
       formsDetected: 0,
