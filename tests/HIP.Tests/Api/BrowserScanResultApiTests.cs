@@ -110,6 +110,80 @@ public sealed class BrowserScanResultApiTests
     }
 
     /// <summary>
+    /// Verifies public lookup uses the stored browser scan result and includes source and count fields.
+    /// </summary>
+    [Test]
+    public async Task Public_lookup_uses_stored_browser_scan_result_when_available()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        var domain = $"stored-scan-{Guid.NewGuid():N}.com";
+
+        await client.PostAsJsonAsync("/api/v1/browser/scan-results", ValidRequest() with { Domain = domain, PageUrl = $"https://{domain}/page?token=secret" });
+        var response = await client.GetAsync($"/api/v1/public/lookup/{domain}");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.Multiple(() =>
+        {
+            Assert.That(json.RootElement.GetProperty("domain").GetString(), Is.EqualTo(domain));
+            Assert.That(json.RootElement.GetProperty("score").GetInt32(), Is.EqualTo(84));
+            Assert.That(json.RootElement.GetProperty("status").GetString(), Is.EqualTo("Trusted"));
+            Assert.That(json.RootElement.GetProperty("riskLevel").GetString(), Is.EqualTo("Trusted"));
+            Assert.That(json.RootElement.GetProperty("dataSource").GetString(), Is.EqualTo("BrowserPluginScan"));
+            Assert.That(json.RootElement.GetProperty("linksScanned").GetInt32(), Is.EqualTo(42));
+            Assert.That(json.RootElement.GetProperty("riskyLinksFound").GetInt32(), Is.EqualTo(2));
+            Assert.That(json.RootElement.GetProperty("dangerousLinksFound").GetInt32(), Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    /// Verifies public lookup returns an explicit no-data state before HIP has scanned a domain.
+    /// </summary>
+    [Test]
+    public async Task Public_lookup_returns_unknown_when_no_stored_scan_exists()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        var domain = $"no-scan-{Guid.NewGuid():N}.com";
+
+        var response = await client.GetAsync($"/api/v1/public/lookup/{domain}");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.Multiple(() =>
+        {
+            Assert.That(json.RootElement.GetProperty("status").GetString(), Is.EqualTo("Unknown"));
+            Assert.That(json.RootElement.GetProperty("dataSource").GetString(), Is.EqualTo("NoStoredData"));
+            Assert.That(json.RootElement.GetProperty("message").GetString(), Does.Contain("not scanned"));
+            Assert.That(json.RootElement.GetProperty("recommendedAction").GetString(), Is.EqualTo("ShowCaution"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies public lookup does not expose hashed URLs, raw URLs, or identity fields from stored browser scans.
+    /// </summary>
+    [Test]
+    public async Task Public_lookup_does_not_expose_private_scan_fields()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        var domain = $"privacy-scan-{Guid.NewGuid():N}.com";
+
+        await client.PostAsJsonAsync("/api/v1/browser/scan-results", ValidRequest() with { Domain = domain, PageUrl = $"https://{domain}/page?token=secret" });
+        var response = await client.GetAsync($"/api/v1/public/lookup/{domain}");
+        var json = await response.Content.ReadAsStringAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(json, Does.Not.Contain("pageUrl"));
+            Assert.That(json, Does.Not.Contain("pageUrlHash"));
+            Assert.That(json, Does.Not.Contain("token=secret"));
+            Assert.That(json, Does.Not.Contain("userIdentity"));
+        });
+    }
+
+    /// <summary>
     /// Creates a valid browser scan result request for API tests.
     /// </summary>
     /// <returns>A valid privacy-safe scan result request.</returns>

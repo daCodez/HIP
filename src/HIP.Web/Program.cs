@@ -1271,6 +1271,7 @@ public sealed record PublicLookupApiResponse(
     int Score,
     int FinalHipScore,
     string Status,
+    string RiskLevel,
     string VerificationStatus,
     IReadOnlyCollection<string> KnownRisks,
     IReadOnlyCollection<string> Reasons,
@@ -1285,14 +1286,26 @@ public sealed record PublicLookupApiResponse(
     bool? SignatureValid,
     bool PublicBadgeEligible,
     string PublicLookupUrl,
-    IReadOnlyCollection<ScoreBreakdownApiItem> ScoreBreakdown)
+    IReadOnlyCollection<ScoreBreakdownApiItem> ScoreBreakdown,
+    int? LinksScanned,
+    int? RiskyLinksFound,
+    int? SuspiciousLinksFound,
+    int? DangerousLinksFound,
+    string DataSource,
+    string Message)
 {
+    /// <summary>
+    /// Converts the application lookup response into the API shape while preserving privacy-safe scan summary fields only.
+    /// </summary>
+    /// <param name="lookup">Application lookup response.</param>
+    /// <returns>API lookup response.</returns>
     public static PublicLookupApiResponse From(PublicDomainLookupResponse lookup) =>
         new(
             lookup.Domain,
             lookup.Score,
             lookup.FinalHipScore,
             lookup.Status.ToString(),
+            lookup.RiskLevel,
             lookup.VerificationStatus,
             lookup.KnownRisks,
             lookup.Reasons,
@@ -1307,7 +1320,13 @@ public sealed record PublicLookupApiResponse(
             lookup.SignatureValid,
             lookup.PublicBadgeEligible,
             lookup.PublicLookupUrl,
-            lookup.ScoreBreakdown.Select(ScoreBreakdownApiItem.From).ToArray());
+            lookup.ScoreBreakdown.Select(ScoreBreakdownApiItem.From).ToArray(),
+            lookup.LinksScanned,
+            lookup.RiskyLinksFound,
+            lookup.SuspiciousLinksFound,
+            lookup.DangerousLinksFound,
+            lookup.DataSource,
+            lookup.Message);
 }
 
 public sealed record ScoreBreakdownApiItem(

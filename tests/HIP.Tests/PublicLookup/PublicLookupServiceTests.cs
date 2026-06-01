@@ -1,4 +1,6 @@
+using HIP.Application.Browser;
 using HIP.Application.PublicLookup;
+using HIP.Application.Reporting;
 using HIP.Domain.Risk;
 
 namespace HIP.Tests.PublicLookup;
@@ -8,7 +10,7 @@ public sealed class PublicLookupServiceTests
     [Test]
     public async Task LookupDomainAsync_returns_privacy_safe_public_domain_output()
     {
-        var service = new PublicDomainLookupService();
+        var service = await CreateServiceWithStoredScanAsync("Verified-Example.com");
 
         var result = await service.LookupDomainAsync("Verified-Example.com", CancellationToken.None);
 
@@ -23,12 +25,13 @@ public sealed class PublicLookupServiceTests
         Assert.That(result.VerificationMethod, Is.EqualTo("WellKnownHipJsonPlaceholder"));
         Assert.That(result.Explanations.All(explanation => !string.IsNullOrWhiteSpace(explanation)), Is.True);
         Assert.That(result.Reasons.All(reason => !string.IsNullOrWhiteSpace(reason)), Is.True);
+        Assert.That(result.DataSource, Is.EqualTo("BrowserPluginScan"));
     }
 
     [Test]
     public async Task LookupDomainAsync_does_not_expose_private_fields()
     {
-        var service = new PublicDomainLookupService();
+        var service = await CreateServiceWithStoredScanAsync("example.com");
 
         var result = await service.LookupDomainAsync("example.com", CancellationToken.None);
         var propertyNames = result.GetType().GetProperties().Select(property => property.Name).ToArray();
@@ -37,6 +40,8 @@ public sealed class PublicLookupServiceTests
         Assert.That(propertyNames, Does.Not.Contain("PrivateReports"));
         Assert.That(propertyNames, Does.Not.Contain("UserIdentities"));
         Assert.That(propertyNames, Does.Not.Contain("RawUserSubmittedEvidence"));
+        Assert.That(propertyNames, Does.Not.Contain("PageUrl"));
+        Assert.That(propertyNames, Does.Not.Contain("PageUrlHash"));
     }
 
     [Test]
@@ -50,7 +55,8 @@ public sealed class PublicLookupServiceTests
     [Test]
     public async Task TrustBadgeService_always_includes_score_and_status()
     {
-        var service = new TrustBadgeService(new PublicDomainLookupService());
+        var lookupService = await CreateServiceWithStoredScanAsync("danger-example.com", 18, "Dangerous");
+        var service = new TrustBadgeService(lookupService);
 
         var result = await service.GetDomainBadgeAsync("danger-example.com", CancellationToken.None);
 
@@ -63,26 +69,62 @@ public sealed class PublicLookupServiceTests
     }
 
     [Test]
-    public async Task Known_suspicious_test_domain_returns_high_risk_or_dangerous()
+    public async Task Lookup_uses_stored_scan_result_when_available()
     {
-        var service = new PublicDomainLookupService();
+        var service = await CreateServiceWithStoredScanAsync("danger-example.com", 18, "Dangerous");
 
         var result = await service.LookupDomainAsync("danger-example.com", CancellationToken.None);
 
-        Assert.That(result.Status, Is.EqualTo(RiskStatus.Dangerous).Or.EqualTo(RiskStatus.HighRisk));
-        Assert.That(result.KnownRisks, Is.Not.Empty);
-        Assert.That(result.RecommendedAction, Is.EqualTo("RouteToSafetyPage").Or.EqualTo("ShowWarning"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(RiskStatus.Dangerous));
+            Assert.That(result.Score, Is.EqualTo(18));
+            Assert.That(result.DataSource, Is.EqualTo("BrowserPluginScan"));
+            Assert.That(result.RecommendedAction, Is.EqualTo("RouteToSafetyPage"));
+        });
     }
 
     [Test]
-    public async Task Unknown_normal_domain_returns_caution_or_safe_mvp_result()
+    public async Task Lookup_returns_unknown_when_no_stored_data_exists()
     {
         var service = new PublicDomainLookupService();
 
         var result = await service.LookupDomainAsync("zerotoherobudgeting.com", CancellationToken.None);
 
-        Assert.That(result.Status, Is.EqualTo(RiskStatus.Caution).Or.EqualTo(RiskStatus.ProbablySafe).Or.EqualTo(RiskStatus.Trusted));
-        Assert.That(result.Reasons, Has.Some.Contains("MVP"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(RiskStatus.Unknown));
+            Assert.That(result.DataSource, Is.EqualTo("NoStoredData"));
+            Assert.That(result.Reasons, Has.Some.Contains("HIP has not scanned this domain yet"));
+            Assert.That(result.RecommendedAction, Is.EqualTo("ShowCaution"));
+        });
+    }
+
+    [Test]
+    public async Task Lookup_shows_last_checked_date_and_scan_counts_from_stored_scan()
+    {
+        var service = await CreateServiceWithStoredScanAsync("example.com");
+
+        var result = await service.LookupDomainAsync("example.com", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.LastCheckedUtc, Is.Not.EqualTo(default(DateTimeOffset)));
+            Assert.That(result.LinksScanned, Is.EqualTo(42));
+            Assert.That(result.RiskyLinksFound, Is.EqualTo(2));
+            Assert.That(result.SuspiciousLinksFound, Is.EqualTo(2));
+            Assert.That(result.DangerousLinksFound, Is.EqualTo(0));
+        });
+    }
+
+    [Test]
+    public async Task Lookup_response_includes_data_source()
+    {
+        var service = await CreateServiceWithStoredScanAsync("example.com");
+
+        var result = await service.LookupDomainAsync("example.com", CancellationToken.None);
+
+        Assert.That(result.DataSource, Is.EqualTo("BrowserPluginScan"));
     }
 
     [TestCase(20, RiskStatus.Dangerous)]
@@ -114,5 +156,36 @@ public sealed class PublicLookupServiceTests
         var service = new TrustBadgeService(new PublicDomainLookupService());
 
         Assert.ThrowsAsync<ArgumentException>(() => service.GetDomainBadgeAsync("bad domain with spaces", CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Creates a public lookup service backed by an in-memory stored browser scan result.
+    /// </summary>
+    /// <param name="domain">Domain to seed.</param>
+    /// <param name="score">Stored HIP score.</param>
+    /// <param name="status">Stored risk status.</param>
+    /// <returns>A lookup service that will return stored scan data for the domain.</returns>
+    private static async Task<PublicDomainLookupService> CreateServiceWithStoredScanAsync(string domain, int score = 84, string status = "Trusted")
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        var scanResultService = new BrowserScanResultService(repository, new Sha256PrivacyHashingService());
+        await scanResultService.SaveAsync(new BrowserScanResultSaveRequest(
+            domain,
+            $"https://{domain.ToLowerInvariant()}/page?token=secret",
+            score,
+            status,
+            status,
+            ["Last browser scan found no dangerous links"],
+            42,
+            2,
+            2,
+            0,
+            status is "Dangerous" or "Critical" ? "RouteToSafetyPage" : "Allow",
+            new Dictionary<string, string>
+            {
+                ["scanMode"] = "Normal"
+            }), CancellationToken.None);
+
+        return new PublicDomainLookupService(repository);
     }
 }

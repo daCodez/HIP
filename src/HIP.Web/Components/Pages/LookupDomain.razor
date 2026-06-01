@@ -31,8 +31,10 @@
 
             <div class="score-card status-@_lookup.Status.ToString().ToLowerInvariant()">
                 <span>HIP Score</span>
-                <strong>@_lookup.FinalHipScore/100</strong>
+                <strong>@(_lookup.DataSource == "NoStoredData" ? "Not enough data yet" : $"{_lookup.FinalHipScore}/100")</strong>
                 <p>Status: @_lookup.Status</p>
+                <p>Risk Level: @_lookup.RiskLevel</p>
+                <p>Data source: @_lookup.DataSource</p>
                 <p>Verified: @_lookup.VerificationStatus</p>
                 <p>Signed Identity: @_lookup.SignedIdentityStatus</p>
                 <p>Signature Status: @_lookup.SignatureStatus</p>
@@ -40,6 +42,40 @@
                 <p>Recommended Action: @_lookup.RecommendedAction</p>
                 <p>Last checked UTC: @_lookup.LastCheckedUtc.ToString("u")</p>
             </div>
+
+            @if (_lookup.DataSource == "BrowserPluginScan")
+            {
+                <section class="lookup-section">
+                    <h2>Last HIP Scan</h2>
+                    <p>This is the latest public-safe browser plugin scan summary for this domain. HIP does not expose page URLs, page text, form contents, user identity, private messages, or raw scan payloads here.</p>
+                    <div class="breakdown-grid">
+                        <article class="breakdown-card">
+                            <h3>Links scanned</h3>
+                            <strong>@_lookup.LinksScanned</strong>
+                        </article>
+                        <article class="breakdown-card">
+                            <h3>Risky links found</h3>
+                            <strong>@_lookup.RiskyLinksFound</strong>
+                        </article>
+                        <article class="breakdown-card">
+                            <h3>Suspicious links</h3>
+                            <strong>@_lookup.SuspiciousLinksFound</strong>
+                        </article>
+                        <article class="breakdown-card">
+                            <h3>Dangerous links</h3>
+                            <strong>@_lookup.DangerousLinksFound</strong>
+                        </article>
+                    </div>
+                </section>
+            }
+            else
+            {
+                <section class="lookup-section">
+                    <h2>Not Enough Data Yet</h2>
+                    <p>@_lookup.Message</p>
+                    <p>HIP will show stored browser scan data here after a HIP client scans this domain.</p>
+                </section>
+            }
 
             <section class="lookup-section">
                 <h2>Important Context</h2>

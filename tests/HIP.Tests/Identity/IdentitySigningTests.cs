@@ -1,5 +1,7 @@
+using HIP.Application.Browser;
 using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
+using HIP.Application.Reporting;
 using HIP.Domain.Identity;
 
 namespace HIP.Tests.Identity;
@@ -160,7 +162,8 @@ public sealed class IdentitySigningTests
     [Test]
     public async Task Public_lookup_shows_signed_identity_status()
     {
-        var lookup = await new PublicDomainLookupService().LookupDomainAsync("verified-example.com", CancellationToken.None);
+        var repository = await SeedStoredBrowserScanAsync("verified-example.com");
+        var lookup = await new PublicDomainLookupService(repository).LookupDomainAsync("verified-example.com", CancellationToken.None);
 
         Assert.That(lookup.SignedIdentityStatus, Is.EqualTo("PostQuantumSignaturePresent"));
         Assert.That(lookup.IdentityVerificationStatus, Is.EqualTo("Verified"));
@@ -170,7 +173,8 @@ public sealed class IdentitySigningTests
     [Test]
     public async Task Badge_output_includes_verification_status()
     {
-        var badge = await new TrustBadgeService(new PublicDomainLookupService()).GetDomainBadgeAsync("verified-example.com", CancellationToken.None);
+        var repository = await SeedStoredBrowserScanAsync("verified-example.com");
+        var badge = await new TrustBadgeService(new PublicDomainLookupService(repository)).GetDomainBadgeAsync("verified-example.com", CancellationToken.None);
 
         Assert.That(badge.IdentityVerificationStatus, Is.EqualTo("Verified"));
         Assert.That(badge.SignatureValid, Is.True);
@@ -198,4 +202,33 @@ public sealed class IdentitySigningTests
 
     private static HipSignatureService SignatureService(DevelopmentHipCryptoProvider crypto) =>
         new(crypto, new InMemoryHipIdentityRepository());
+
+    /// <summary>
+    /// Seeds a privacy-safe browser scan so signed identity lookup tests exercise the real scan-data path.
+    /// </summary>
+    /// <param name="domain">Domain to seed.</param>
+    /// <returns>Repository containing the seeded scan result.</returns>
+    private static async Task<InMemoryBrowserScanResultRepository> SeedStoredBrowserScanAsync(string domain)
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        var service = new BrowserScanResultService(repository, new Sha256PrivacyHashingService());
+        await service.SaveAsync(new BrowserScanResultSaveRequest(
+            domain,
+            $"https://{domain}/",
+            91,
+            "Trusted",
+            "Trusted",
+            ["Stored browser scan found no dangerous links."],
+            8,
+            0,
+            0,
+            0,
+            "Allow",
+            new Dictionary<string, string>
+            {
+                ["scanMode"] = "Normal"
+            }), CancellationToken.None);
+
+        return repository;
+    }
 }

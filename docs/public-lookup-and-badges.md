@@ -20,6 +20,7 @@ Public lookup can show:
 - domain
 - HIP score
 - status
+- risk level
 - public verification state
 - signed identity status
 - known public risks
@@ -27,13 +28,57 @@ Public lookup can show:
 - recommended action
 - last checked date
 - separate score breakdown
+- browser scan counts when available
+- data source
 - signed identity placeholders for future DNS TXT and `.well-known/hip.json` verification
 
-Public lookup must not expose private chat logs, private reports, user identities, private sender names, private scan history, or raw user-submitted evidence.
+Public lookup now prefers stored browser plugin scan results. When HIP has a stored scan for a domain, lookup displays the score, status, reasons, link scan counts, last checked date, recommended action, and `dataSource = BrowserPluginScan`.
+
+When HIP has not scanned a domain yet, lookup returns a no-data MVP state with `status = Unknown`, `recommendedAction = ShowCaution`, `dataSource = NoStoredData`, and the message `HIP has not scanned this domain yet`. This avoids pretending HIP has real threat intelligence for a domain before it has stored scan data.
+
+Public lookup must not expose private chat logs, private reports, user identities, private sender names, private scan history, raw user-submitted evidence, full page URLs from browser scans, page URL hashes, form contents, private messages, or raw scan payloads.
+
+Stored browser scan response example:
+
+```json
+{
+  "domain": "example.com",
+  "score": 84,
+  "status": "Trusted",
+  "riskLevel": "Trusted",
+  "reasons": [
+    "Last browser scan found no dangerous links"
+  ],
+  "linksScanned": 42,
+  "riskyLinksFound": 2,
+  "suspiciousLinksFound": 2,
+  "dangerousLinksFound": 0,
+  "lastCheckedUtc": "2026-06-01T00:00:00Z",
+  "recommendedAction": "Allow",
+  "dataSource": "BrowserPluginScan"
+}
+```
+
+No stored data response example:
+
+```json
+{
+  "domain": "newsite.com",
+  "score": 0,
+  "status": "Unknown",
+  "reasons": [
+    "HIP has not scanned this domain yet"
+  ],
+  "recommendedAction": "ShowCaution",
+  "dataSource": "NoStoredData"
+}
+```
+
+MVP limitation: response compatibility still includes numeric `score` and `finalHipScore`; no-data responses use `0` with `Unknown` status until clients can safely adopt nullable score fields.
 
 ## Website Scoring MVP
 
-HIP website scoring currently uses MVP/demo logic until it is connected to real reputation, rules, AI-assisted analysis, and threat intelligence.
+HIP website scoring now uses stored browser plugin scan results when available. Domains without stored scans show an explicit Unknown/no-data state until HIP receives real scan data.
 
 Current score bands:
 
@@ -51,13 +96,12 @@ Current recommended actions:
 - `RouteToSafetyPage`
 - `Block`
 
-MVP placeholder signals include:
+MVP signals include:
 
 - malformed or missing domains are rejected
-- suspicious test domains such as `danger-example.com` are treated as dangerous
-- shortened domains are treated with caution
-- normal unknown domains return a cautious/probably-safe MVP result
-- `verified` test domains return placeholder signed identity fields
+- browser plugin scan summaries provide real stored link-count and score data
+- unknown domains without stored scans return a no-data caution state
+- `verified` test domains return placeholder signed identity fields only when lookup has stored scan data
 
 HIP must not claim real-world safety until live reputation, rule simulation, verified identity data, and threat feeds are connected.
 
@@ -134,7 +178,7 @@ The browser plugin is expected to later detect fake, hidden, or altered badges b
 
 - Badge responses are not cryptographically signed yet.
 - Domain matching is exact after removing a leading `www.`.
-- Badge data currently uses in-memory/mock scoring.
+- Badge data follows public lookup and may show Unknown when no stored browser scan exists.
 - A future browser plugin check should detect fake, hidden, or altered badges.
 
 ## Future Signed Badge Responses
