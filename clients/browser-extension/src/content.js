@@ -238,18 +238,19 @@
     }
 
     lastSummary.scanResultSubmission = "Pending";
+    const assessment = browserScanAssessment(currentLookup, lastSummary);
     const payload = {
       domain: currentDomain,
       pageUrl: window.location.href,
-      score: currentLookup.finalHipScore ?? currentLookup.score ?? 0,
-      riskLevel: currentLookup.status || "Unknown",
-      status: currentLookup.status || "Unknown",
-      reasons: safeReasons(currentLookup),
+      score: assessment.score,
+      riskLevel: assessment.status,
+      status: assessment.status,
+      reasons: assessment.reasons,
       linksScanned: lastSummary.linksScanned,
       riskyLinksFound: lastSummary.riskyLinks,
       suspiciousLinksFound: lastSummary.suspiciousLinks,
       dangerousLinksFound: lastSummary.dangerousLinks,
-      recommendedAction: recommendedSiteAction(currentLookup.status),
+      recommendedAction: recommendedSiteAction(assessment.status),
       privacySafeMetadata: {
         scanMode: settings.scanMode,
         apiStatus: lastSummary.apiStatus,
@@ -438,6 +439,93 @@
   function safeReasons(lookup) {
     const reasons = lookup?.knownRisks?.length ? lookup.knownRisks : lookup?.explanations || lookup?.reasons || [];
     return reasons.length > 0 ? reasons : ["No risky links found by the browser plugin scan."];
+  }
+
+  /**
+   * Uses actual browser scan counts when lookup is still HIP's bootstrap no-data state.
+   * This prevents the first successful content scan from persisting "not scanned yet" as a real result.
+   */
+  function browserScanAssessment(lookup, summary = {}) {
+    if (!isLookupNoDataState(lookup)) {
+      const status = lookup?.status || "Unknown";
+      return {
+        score: lookup?.finalHipScore ?? lookup?.score ?? 0,
+        status,
+        reasons: safeReasons(lookup)
+      };
+    }
+
+    const dangerousLinks = summary.dangerousLinks ?? 0;
+    const suspiciousLinks = summary.suspiciousLinks ?? 0;
+    const riskyLinks = summary.riskyLinks ?? 0;
+    const unknownLinks = summary.unknownLinks ?? 0;
+    const downloadCandidates = summary.downloadCandidates ?? 0;
+    const linksScanned = summary.linksScanned ?? 0;
+    const score = Math.max(0, Math.min(100, 80 - dangerousLinks * 30 - suspiciousLinks * 18 - Math.max(0, riskyLinks - suspiciousLinks - dangerousLinks) * 12 - unknownLinks * 6 - downloadCandidates * 4));
+
+    return {
+      score,
+      status: browserScanStatus(score, dangerousLinks, suspiciousLinks, riskyLinks, unknownLinks),
+      reasons: browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates })
+    };
+  }
+
+  /**
+   * Detects lookup responses that explicitly mean HIP has no stored scan yet.
+   */
+  function isLookupNoDataState(lookup) {
+    const reasons = [...(lookup?.knownRisks || []), ...(lookup?.explanations || []), ...(lookup?.reasons || [])];
+    return !lookup ||
+      lookup.dataSource === "NoStoredData" ||
+      reasons.some(reason => typeof reason === "string" && reason.includes("HIP has not scanned this domain yet"));
+  }
+
+  /**
+   * Maps privacy-safe browser scan counts to a status without claiming complete real-world trust.
+   */
+  function browserScanStatus(score, dangerousLinks, suspiciousLinks, riskyLinks, unknownLinks) {
+    if (dangerousLinks > 0) {
+      return "Dangerous";
+    }
+
+    if (suspiciousLinks > 0 || riskyLinks > 0) {
+      return "HighRisk";
+    }
+
+    if (unknownLinks > 0 || score <= 60) {
+      return "Caution";
+    }
+
+    return "ProbablySafe";
+  }
+
+  /**
+   * Builds plain-English reasons from scan counts without including page body text or form values.
+   */
+  function browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates }) {
+    const reasons = [`Browser plugin scanned ${linksScanned} external links on this page without sending page text or form values.`];
+
+    if (riskyLinks === 0 && suspiciousLinks === 0 && dangerousLinks === 0) {
+      reasons.push("No risky external links were found in this browser plugin scan.");
+    }
+
+    if (suspiciousLinks > 0) {
+      reasons.push(`${suspiciousLinks} suspicious external link${suspiciousLinks === 1 ? " was" : "s were"} found.`);
+    }
+
+    if (dangerousLinks > 0) {
+      reasons.push(`${dangerousLinks} dangerous external link${dangerousLinks === 1 ? " was" : "s were"} found.`);
+    }
+
+    if (unknownLinks > 0) {
+      reasons.push(`${unknownLinks} external link${unknownLinks === 1 ? " has" : "s have"} unknown HIP status.`);
+    }
+
+    if (downloadCandidates > 0) {
+      reasons.push(`${downloadCandidates} download-like link${downloadCandidates === 1 ? " was" : "s were"} detected for caution.`);
+    }
+
+    return reasons;
   }
 
   /**
