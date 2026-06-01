@@ -9,9 +9,13 @@ using HIP.Domain.SelfHealing;
 
 namespace HIP.Application.SecondLife;
 
-public sealed class SecondLifeHudService(IRiskFindingIngestionService ingestionService) : ISecondLifeHudService
+/// <summary>
+/// Coordinates Second Life HUD activation, privacy-safe scanning, settings, and finding reports.
+/// </summary>
+public sealed class SecondLifeHudService : ISecondLifeHudService
 {
-    private const string ValidDevelopmentSetupCode = "HIP-DEV-SETUP";
+    private readonly IRiskFindingIngestionService ingestionService;
+    private readonly ISetupCodeLicenseService licenseService;
     private static readonly ConcurrentDictionary<string, SecondLifeHudSettings> Settings = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> ValidModes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -32,39 +36,43 @@ public sealed class SecondLifeHudService(IRiskFindingIngestionService ingestionS
         "ow.ly"
     };
 
+    /// <summary>
+    /// Creates the HUD service with an in-memory license manager for direct unit tests and development wiring.
+    /// </summary>
+    /// <param name="ingestionService">Privacy-safe finding ingestion service.</param>
+    public SecondLifeHudService(IRiskFindingIngestionService ingestionService)
+        : this(ingestionService, new InMemorySetupCodeLicenseService())
+    {
+    }
+
+    /// <summary>
+    /// Creates the HUD service with the configured license manager.
+    /// </summary>
+    /// <param name="ingestionService">Privacy-safe finding ingestion service.</param>
+    /// <param name="licenseService">Setup code license service used for HUD activation and settings.</param>
+    public SecondLifeHudService(IRiskFindingIngestionService ingestionService, ISetupCodeLicenseService licenseService)
+    {
+        this.ingestionService = ingestionService;
+        this.licenseService = licenseService;
+    }
+
+    /// <inheritdoc />
     public SecondLifeHudActivationResponse Activate(SecondLifeHudActivationRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.SetupCode))
-        {
-            return Inactive("Setup code is required.");
-        }
-
-        if (!string.Equals(request.SetupCode.Trim(), ValidDevelopmentSetupCode, StringComparison.Ordinal))
-        {
-            return Inactive("Setup code was not accepted.");
-        }
-
-        var deviceId = string.IsNullOrWhiteSpace(request.HudDeviceId)
-            ? $"sl-hud-{Sha256($"{request.SetupCode}:{request.EffectiveAvatarHash}:{request.HudVersion}")[..18].Replace(":", string.Empty, StringComparison.Ordinal)}"
-            : request.HudDeviceId.Trim();
-        var config = DefaultConfig();
-        Settings.TryAdd(deviceId, new SecondLifeHudSettings(
-            deviceId,
-            config.Mode,
-            config.PopupAlertsEnabled,
-            config.PrivateWarningsEnabled,
-            config.SafetyRoutingEnabled));
+        var activation = licenseService.ActivateHud(request.SetupCode, request.HudDeviceId, request.EffectiveAvatarHash, request.HudVersion);
+        var config = ToClientConfig(activation.Settings);
 
         return new SecondLifeHudActivationResponse(
-            true,
-            "DevelopmentActive",
-            "HIP SL HUD activated for development use.",
+            activation.Activated,
+            activation.LicenseStatus.ToString(),
+            activation.Message,
             config,
-            deviceId,
-            DateTimeOffset.UtcNow,
+            activation.DeviceId,
+            activation.ActivatedAtUtc,
             request.HudVersion);
     }
 
+    /// <inheritdoc />
     public SecondLifeHudScanResponse Scan(SecondLifeHudScanRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.DeviceId))
@@ -138,12 +146,15 @@ public sealed class SecondLifeHudService(IRiskFindingIngestionService ingestionS
         return new SecondLifeHudScanResponse(riskLevel, score, reasons, action, safetyUrl);
     }
 
+    /// <inheritdoc />
     public SecondLifeHudSettings GetSettings(string deviceId)
     {
         var normalizedDeviceId = NormalizeDeviceId(deviceId);
-        return Settings.GetOrAdd(normalizedDeviceId, id => new SecondLifeHudSettings(id, "Normal", true, true, true));
+        var licenseSettings = licenseService.GetSettingsForDevice(normalizedDeviceId);
+        return Settings.GetOrAdd(normalizedDeviceId, id => ToHudSettings(id, licenseSettings));
     }
 
+    /// <inheritdoc />
     public SecondLifeHudSettingsResponse SaveSettings(string deviceId, SecondLifeHudSettings settings)
     {
         var normalizedDeviceId = NormalizeDeviceId(deviceId);
@@ -153,10 +164,17 @@ public sealed class SecondLifeHudService(IRiskFindingIngestionService ingestionS
         }
 
         var saved = settings with { DeviceId = normalizedDeviceId };
+        var licenseSave = licenseService.SaveSettingsForDevice(normalizedDeviceId, ToLicenseSettings(saved));
+        if (!licenseSave.Saved)
+        {
+            return new SecondLifeHudSettingsResponse(false, licenseSave.Message, ToHudSettings(normalizedDeviceId, licenseSave.Settings));
+        }
+
         Settings[normalizedDeviceId] = saved;
-        return new SecondLifeHudSettingsResponse(true, "HUD settings saved.", saved);
+        return new SecondLifeHudSettingsResponse(true, licenseSave.Message, saved);
     }
 
+    /// <inheritdoc />
     public async Task<SecondLifeHudFindingResponse> ReportFindingAsync(SecondLifeHudFindingReport report, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(report.Domain) && string.IsNullOrWhiteSpace(report.RiskyUrl))
@@ -197,18 +215,57 @@ public sealed class SecondLifeHudService(IRiskFindingIngestionService ingestionS
         return SecondLifeHudFindingResponse.FromIngestion(response, SafetyPageUrl(report.RiskyUrl, domain, report.Reason));
     }
 
-    private static SecondLifeHudActivationResponse Inactive(string message) =>
-        new(false, "Inactive", message, DefaultConfig(), null, null, null);
-
+    /// <summary>
+    /// Builds the default client config used when no license-specific settings exist.
+    /// </summary>
+    /// <returns>Default HUD client config.</returns>
     private static SecondLifeHudClientConfig DefaultConfig() =>
         new("Normal", true, true, true, "/safety", "/api/v1/sl-hud/report");
 
+    /// <summary>
+    /// Converts license-level settings into the client config returned to LSL scripts.
+    /// </summary>
+    /// <param name="settings">License settings.</param>
+    /// <returns>Client config for the HUD.</returns>
+    private static SecondLifeHudClientConfig ToClientConfig(LicenseHudSettings settings) =>
+        new(settings.ScanMode, settings.PopupAlertsEnabled, settings.PrivateWarningsEnabled, settings.SafetyPageRoutingEnabled, "/safety", "/api/v1/sl-hud/report");
+
+    /// <summary>
+    /// Converts license-level settings into the existing SL HUD settings DTO.
+    /// </summary>
+    /// <param name="deviceId">HUD device ID.</param>
+    /// <param name="settings">License settings.</param>
+    /// <returns>HUD settings DTO.</returns>
+    private static SecondLifeHudSettings ToHudSettings(string deviceId, LicenseHudSettings settings) =>
+        new(deviceId, settings.ScanMode, settings.PopupAlertsEnabled, settings.PrivateWarningsEnabled, settings.SafetyPageRoutingEnabled);
+
+    /// <summary>
+    /// Converts the existing SL HUD settings DTO into license-level settings.
+    /// </summary>
+    /// <param name="settings">HUD settings DTO.</param>
+    /// <returns>License settings.</returns>
+    private static LicenseHudSettings ToLicenseSettings(SecondLifeHudSettings settings) =>
+        new(settings.Mode, settings.PopupAlertsEnabled, settings.PrivateWarningsEnabled, settings.SafetyRoutingEnabled);
+
+    /// <summary>
+    /// Creates a HIP safety page URL for risky Second Life links without directly redirecting users.
+    /// </summary>
+    /// <param name="riskyUrl">Risky URL, when available.</param>
+    /// <param name="domain">Detected domain fallback.</param>
+    /// <param name="reason">Risk reason to preserve in the safety-page context.</param>
+    /// <returns>A relative HIP safety page URL.</returns>
     private static string SafetyPageUrl(string? riskyUrl, string domain, string reason)
     {
         var value = string.IsNullOrWhiteSpace(riskyUrl) ? $"https://{domain}/" : riskyUrl;
         return $"/safety?url={Uri.EscapeDataString(value)}&source=sl-hud&risk={Uri.EscapeDataString(reason)}";
     }
 
+    /// <summary>
+    /// Normalizes the domain used in privacy-safe reports.
+    /// </summary>
+    /// <param name="domain">Domain supplied by the HUD.</param>
+    /// <param name="riskyUrl">Risky URL fallback.</param>
+    /// <returns>Lowercase normalized domain, or an empty string when unavailable.</returns>
     private static string NormalizeDomain(string domain, string? riskyUrl)
     {
         if (!string.IsNullOrWhiteSpace(domain))
@@ -224,6 +281,11 @@ public sealed class SecondLifeHudService(IRiskFindingIngestionService ingestionS
         return string.Empty;
     }
 
+    /// <summary>
+    /// Validates and trims a HUD device ID before using it as a settings key.
+    /// </summary>
+    /// <param name="deviceId">HUD device ID.</param>
+    /// <returns>Normalized device ID.</returns>
     private static string NormalizeDeviceId(string deviceId)
     {
         if (string.IsNullOrWhiteSpace(deviceId))
@@ -234,12 +296,22 @@ public sealed class SecondLifeHudService(IRiskFindingIngestionService ingestionS
         return deviceId.Trim();
     }
 
+    /// <summary>
+    /// Rejects likely full chat/IM logs so the HUD API only accepts limited suspicious snippets.
+    /// </summary>
+    /// <param name="text">Snippet submitted by the HUD.</param>
+    /// <returns>True when the text appears unsafe to ingest.</returns>
     private static bool ContainsPrivateLogMarker(string? text) =>
         !string.IsNullOrWhiteSpace(text) &&
         (text.Contains("private chat log", StringComparison.OrdinalIgnoreCase) ||
          text.Contains("full chat log", StringComparison.OrdinalIgnoreCase) ||
          text.Length > 280);
 
+    /// <summary>
+    /// Detects broken-up URL markers commonly used to evade link scanners.
+    /// </summary>
+    /// <param name="text">Privacy-safe scan text.</param>
+    /// <returns>True when a broken-up URL marker is present.</returns>
     private static bool ContainsBrokenUpUrl(string text) =>
         text.Contains(" dot ", StringComparison.OrdinalIgnoreCase) ||
         text.Contains("[dot]", StringComparison.OrdinalIgnoreCase) ||
@@ -247,24 +319,49 @@ public sealed class SecondLifeHudService(IRiskFindingIngestionService ingestionS
         text.Contains("hxxps", StringComparison.OrdinalIgnoreCase) ||
         text.Contains("hxxp", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Detects simple URL obfuscation patterns from HUD inputs.
+    /// </summary>
+    /// <param name="text">Privacy-safe scan text.</param>
+    /// <returns>True when obfuscation is present.</returns>
     private static bool ContainsObfuscatedUrl(string text) =>
         text.Contains("[.]", StringComparison.OrdinalIgnoreCase) ||
         text.Contains("://", StringComparison.OrdinalIgnoreCase) && text.Contains(" ", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Checks detected URLs against the local shortener list.
+    /// </summary>
+    /// <param name="urls">Detected URLs from the HUD.</param>
+    /// <returns>True when a known shortener domain is present.</returns>
     private static bool ContainsShortener(IEnumerable<string> urls) =>
         urls.Select(ExtractDomain).Any(domain => domain is not null && ShortenerDomains.Contains(domain));
 
+    /// <summary>
+    /// Detects reward/prize wording that often appears in Second Life scam links.
+    /// </summary>
+    /// <param name="text">Privacy-safe scan text.</param>
+    /// <returns>True when reward bait wording is present.</returns>
     private static bool ContainsRewardBait(string text) =>
         text.Contains("reward", StringComparison.OrdinalIgnoreCase) ||
         text.Contains("prize", StringComparison.OrdinalIgnoreCase) ||
         text.Contains("gift", StringComparison.OrdinalIgnoreCase) ||
         text.Contains("claim", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Detects urgency wording used in social engineering messages.
+    /// </summary>
+    /// <param name="text">Privacy-safe scan text.</param>
+    /// <returns>True when urgency wording is present.</returns>
     private static bool ContainsUrgency(string text) =>
         text.Contains("limited", StringComparison.OrdinalIgnoreCase) ||
         text.Contains("urgent", StringComparison.OrdinalIgnoreCase) ||
         text.Contains("now", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Extracts a normalized domain from a direct or lightly obfuscated URL.
+    /// </summary>
+    /// <param name="value">URL-like value.</param>
+    /// <returns>Normalized domain, or null when parsing fails.</returns>
     private static string? ExtractDomain(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -284,6 +381,11 @@ public sealed class SecondLifeHudService(IRiskFindingIngestionService ingestionS
             : null;
     }
 
+    /// <summary>
+    /// Hashes privacy-sensitive values before storage or reporting.
+    /// </summary>
+    /// <param name="value">Value to hash.</param>
+    /// <returns>SHA-256 hash with an algorithm prefix.</returns>
     private static string Sha256(string value)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));

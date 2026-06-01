@@ -82,6 +82,7 @@ Program.MapJsonRulesApis(app.MapGroup(ApiRoutes.Rules));
 MapAiApis(app.MapGroup(ApiRoutes.Ai).RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingPatternApis(app.MapGroup(ApiRoutes.SelfHealing).RequireAuthorization(AdminPolicies.CanManageRules));
 MapSecondLifeHudApis(app.MapGroup(ApiRoutes.SecondLifeHud));
+MapLicenseApis(app.MapGroup(ApiRoutes.Licenses).RequireAuthorization(AdminPolicies.CanManageLicenses));
 MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules").RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingApis(app.MapGroup($"{ApiRoutes.Admin}/self-healing").RequireAuthorization(AdminPolicies.CanManageRules));
 MapReviewApis(app.MapGroup($"{ApiRoutes.Admin}/review").RequireAuthorization(AdminPolicies.CanReviewReports));
@@ -507,6 +508,56 @@ static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
         var response = await hudService.ReportFindingAsync(report, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
     });
+}
+
+/// <summary>
+/// Maps protected setup code and license support endpoints for the Second Life HUD marketplace flow.
+/// </summary>
+/// <param name="licenseApi">The protected license route group.</param>
+static void MapLicenseApis(RouteGroupBuilder licenseApi)
+{
+    licenseApi.MapPost("/setup-codes", (
+        CreateSetupCodeRequest request,
+        ISetupCodeLicenseService licenseService) =>
+        Results.Ok(licenseService.CreateSetupCode(request)));
+
+    licenseApi.MapGet("/", (ISetupCodeLicenseService licenseService) =>
+        Results.Ok(licenseService.ListLicenses()));
+
+    licenseApi.MapGet("/{licenseId}", (
+        string licenseId,
+        ISetupCodeLicenseService licenseService) =>
+        licenseService.GetLicense(licenseId) is { } license
+            ? Results.Ok(license)
+            : Results.NotFound(new { error = "License was not found." }));
+
+    licenseApi.MapPost("/{licenseId}/reset", (
+        string licenseId,
+        ISetupCodeLicenseService licenseService) =>
+        licenseService.ResetActivation(licenseId) is { } license
+            ? Results.Ok(license)
+            : Results.NotFound(new { error = "License was not found." }));
+
+    licenseApi.MapPost("/{licenseId}/revoke", (
+        string licenseId,
+        ISetupCodeLicenseService licenseService) =>
+        licenseService.SetStatus(licenseId, LicenseStatus.Revoked) is { } license
+            ? Results.Ok(license)
+            : Results.NotFound(new { error = "License was not found." }));
+
+    licenseApi.MapPost("/{licenseId}/suspend", (
+        string licenseId,
+        ISetupCodeLicenseService licenseService) =>
+        licenseService.SetStatus(licenseId, LicenseStatus.Suspended) is { } license
+            ? Results.Ok(license)
+            : Results.NotFound(new { error = "License was not found." }));
+
+    licenseApi.MapPost("/{licenseId}/reactivate", (
+        string licenseId,
+        ISetupCodeLicenseService licenseService) =>
+        licenseService.SetStatus(licenseId, LicenseStatus.Active) is { } license
+            ? Results.Ok(license)
+            : Results.NotFound(new { error = "License was not found." }));
 }
 
 static void MapRulesApis(RouteGroupBuilder adminApi)

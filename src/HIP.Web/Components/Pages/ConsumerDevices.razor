@@ -1,6 +1,7 @@
 @page "/consumer/devices"
 @attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
 @rendermode InteractiveServer
+@inject ISetupCodeLicenseService LicenseService
 
 <PageTitle>HIP Consumer Devices</PageTitle>
 
@@ -16,15 +17,61 @@
     <section class="dashboard-grid">
         <article class="score-card">
             <span>Second Life HUD</span>
-            <strong>Ready</strong>
+            <strong>@(HudLicense?.Status.ToString() ?? "Ready")</strong>
             <h3>Login Optional</h3>
-            <p>The HUD can activate with setup code/license flow and does not require web login.</p>
+            <p>The HUD activates with setup code/license flow and does not require web login.</p>
         </article>
         <article class="score-card">
-            <span>Browser Plugin</span>
-            <strong>MVP</strong>
-            <h3>Connected Client</h3>
-            <p>Browser plugin can use HIP APIs and privacy-safe reporting.</p>
+            <span>HUD Version</span>
+            <strong>@(HudLicense?.HudVersion ?? "Not activated")</strong>
+            <h3>Last Seen</h3>
+            <p>@FormatDate(HudLicense?.LastSeenAtUtc)</p>
         </article>
     </section>
+
+    <section class="hip-panel padded narrow">
+        <h2>Second Life HUD Settings</h2>
+        <p>Device ID: @MaskDeviceId(HudLicense?.DeviceIds.FirstOrDefault())</p>
+        <p>Activation date: @FormatDate(HudLicense?.ActivatedAtUtc)</p>
+        <p>Scan mode: @(HudLicense?.Settings.ScanMode ?? "Normal")</p>
+        <p>Popup alerts: @Enabled(HudLicense?.Settings.PopupAlertsEnabled ?? true)</p>
+        <p>Private warnings: @Enabled(HudLicense?.Settings.PrivateWarningsEnabled ?? true)</p>
+        <p>Safety page routing: @Enabled(HudLicense?.Settings.SafetyPageRoutingEnabled ?? true)</p>
+    </section>
 </main>
+
+@code {
+    private LicenseSummary? HudLicense { get; set; }
+
+    /// <summary>
+    /// Loads the first available license summary for the MVP device page without requiring HUD web login.
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        HudLicense = LicenseService.ListLicenses().FirstOrDefault(license => license.ActivationCount > 0)
+            ?? LicenseService.ListLicenses().FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Masks device IDs in the consumer portal to avoid exposing support identifiers unnecessarily.
+    /// </summary>
+    /// <param name="deviceId">Device ID to mask.</param>
+    /// <returns>Masked device ID or not linked text.</returns>
+    private static string MaskDeviceId(string? deviceId) =>
+        string.IsNullOrWhiteSpace(deviceId) ? "Not linked" : $"{deviceId[..Math.Min(6, deviceId.Length)]}••••";
+
+    /// <summary>
+    /// Formats nullable UTC dates for the consumer device view.
+    /// </summary>
+    /// <param name="value">Date to format.</param>
+    /// <returns>Formatted date or a safe placeholder.</returns>
+    private static string FormatDate(DateTimeOffset? value) =>
+        value is null ? "Not available" : value.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'");
+
+    /// <summary>
+    /// Converts boolean settings to short display labels.
+    /// </summary>
+    /// <param name="value">Setting value.</param>
+    /// <returns>Enabled or disabled text.</returns>
+    private static string Enabled(bool value) => value ? "Enabled" : "Disabled";
+}

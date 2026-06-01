@@ -1,0 +1,95 @@
+@page "/admin/licenses/{LicenseId}"
+@attribute [Authorize(Policy = AdminPolicies.CanManageLicenses)]
+@inject ISetupCodeLicenseService LicenseService
+
+<PageTitle>HIP License Detail</PageTitle>
+
+<section class="hip-page-heading compact">
+    <div>
+        <h1>License Detail</h1>
+        <p>Support view for status, activation, and linked HUD device information.</p>
+    </div>
+    <a class="hip-primary-action" href="admin/licenses">Back to Licenses</a>
+</section>
+
+@if (License is null)
+{
+    <section class="hip-panel padded narrow">
+        <h2>License not found</h2>
+        <p>The requested setup code license does not exist in the MVP in-memory store.</p>
+    </section>
+}
+else
+{
+    <section class="hip-two-column">
+        <article class="hip-panel padded">
+            <h2>@License.MaskedSetupCode</h2>
+            <p>Status: <span class="hip-pill">@License.Status</span></p>
+            <p>Devices: @License.ActivationCount / @License.AllowedDeviceCount</p>
+            <p>Activated: @FormatDate(License.ActivatedAtUtc)</p>
+            <p>Last seen: @FormatDate(License.LastSeenAtUtc)</p>
+            <p>HUD version: @(License.HudVersion ?? "not activated")</p>
+        </article>
+
+        <article class="hip-panel padded">
+            <h2>HUD Settings</h2>
+            <p>Scan mode: @License.Settings.ScanMode</p>
+            <p>Popup alerts: @Enabled(License.Settings.PopupAlertsEnabled)</p>
+            <p>Private warnings: @Enabled(License.Settings.PrivateWarningsEnabled)</p>
+            <p>Safety routing: @Enabled(License.Settings.SafetyPageRoutingEnabled)</p>
+        </article>
+    </section>
+
+    <section class="hip-panel padded narrow">
+        <h2>Linked Devices</h2>
+        @if (License.DeviceIds.Count == 0)
+        {
+            <p>No HUD devices are linked yet.</p>
+        }
+        else
+        {
+            @foreach (var deviceId in License.DeviceIds)
+            {
+                <code>@MaskDeviceId(deviceId)</code>
+            }
+        }
+    </section>
+}
+
+@code {
+    [Parameter]
+    public string LicenseId { get; set; } = string.Empty;
+
+    private LicenseSummary? License { get; set; }
+
+    /// <summary>
+    /// Loads one masked license summary for support/admin review.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        License = LicenseService.GetLicense(LicenseId);
+    }
+
+    /// <summary>
+    /// Formats nullable dates for display without adding local timezone assumptions.
+    /// </summary>
+    /// <param name="value">Date to format.</param>
+    /// <returns>Formatted UTC date or a safe placeholder.</returns>
+    private static string FormatDate(DateTimeOffset? value) =>
+        value is null ? "not available" : value.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'");
+
+    /// <summary>
+    /// Masks HUD device IDs in the UI because device IDs can become support identifiers.
+    /// </summary>
+    /// <param name="deviceId">Raw device ID.</param>
+    /// <returns>Masked device ID.</returns>
+    private static string MaskDeviceId(string deviceId) =>
+        deviceId.Length <= 8 ? "••••" : $"{deviceId[..6]}••••{deviceId[^4..]}";
+
+    /// <summary>
+    /// Converts boolean settings to short status text.
+    /// </summary>
+    /// <param name="value">Setting value.</param>
+    /// <returns>Enabled or disabled text.</returns>
+    private static string Enabled(bool value) => value ? "Enabled" : "Disabled";
+}

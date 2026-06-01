@@ -8,6 +8,9 @@ using HIP.Domain.SelfHealing;
 
 namespace HIP.Tests.Reporting;
 
+/// <summary>
+/// Verifies privacy-safe risk finding ingestion and related client payload contracts.
+/// </summary>
 public sealed class RiskFindingIngestionTests
 {
     [Test]
@@ -114,7 +117,7 @@ public sealed class RiskFindingIngestionTests
     [Test]
     public void Browser_plugin_report_payload_avoids_page_body_text()
     {
-        var contentScript = File.ReadAllText(Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "clients", "browser-extension", "src", "content.js"));
+        var contentScript = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "clients", "browser-extension", "src", "content.js"));
 
         Assert.That(contentScript, Does.Contain("HIP_REPORT_RISK_FINDING"));
         Assert.That(contentScript, Does.Not.Contain("document.body"));
@@ -156,4 +159,25 @@ public sealed class RiskFindingIngestionTests
                 ["sourceDomain"] = "source.example",
                 ["targetDomain"] = "example.com"
             });
+
+    /// <summary>
+    /// Finds the repository root from any test output folder so privacy contract tests can read client scripts.
+    /// </summary>
+    /// <returns>The absolute repository root.</returns>
+    private static string FindRepositoryRoot()
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "HIP.slnx")))
+            {
+                return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate HIP.slnx from the test output directory.");
+    }
 }

@@ -1,0 +1,81 @@
+@page "/admin/licenses"
+@attribute [Authorize(Policy = AdminPolicies.CanManageLicenses)]
+@inject ISetupCodeLicenseService LicenseService
+
+<PageTitle>HIP Licenses</PageTitle>
+
+<section class="hip-page-heading compact">
+    <div>
+        <h1>License / Setup Codes <span class="hip-pill">MVP</span></h1>
+        <p>Support setup-code activation for Second Life HUD marketplace buyers without requiring web login.</p>
+    </div>
+    <a class="hip-primary-action" href="admin/licenses/new">+ Create Setup Code</a>
+</section>
+
+<section class="dashboard-grid">
+    <article class="score-card">
+        <span>Active Licenses</span>
+        <strong>@Licenses.Count(license => license.Status == LicenseStatus.Active)</strong>
+        <h3>HUD access</h3>
+        <p>Activated setup codes linked to one or more HUD devices.</p>
+    </article>
+    <article class="score-card">
+        <span>Pending Codes</span>
+        <strong>@Licenses.Count(license => license.Status == LicenseStatus.Pending)</strong>
+        <h3>Ready to activate</h3>
+        <p>Codes created for delivery but not yet linked to a HUD.</p>
+    </article>
+    <article class="score-card">
+        <span>Suspended / Revoked</span>
+        <strong>@Licenses.Count(license => license.Status is LicenseStatus.Suspended or LicenseStatus.Revoked)</strong>
+        <h3>Support action</h3>
+        <p>Codes that cannot activate until reviewed or reactivated.</p>
+    </article>
+</section>
+
+<section class="hip-panel padded narrow">
+    <h2>Setup Code List</h2>
+    <p>Setup codes are masked in list views. Show the raw setup code only immediately after creation.</p>
+
+    <div class="hip-table">
+        <div class="hip-table-row header">
+            <span>Setup Code</span>
+            <span>Status</span>
+            <span>Devices</span>
+            <span>HUD Version</span>
+            <span>Last Seen</span>
+            <span>Actions</span>
+        </div>
+        @foreach (var license in Licenses)
+        {
+            <div class="hip-table-row">
+                <span><code>@license.MaskedSetupCode</code></span>
+                <span><span class="hip-pill">@license.Status</span></span>
+                <span>@license.ActivationCount / @license.AllowedDeviceCount</span>
+                <span>@(license.HudVersion ?? "not activated")</span>
+                <span>@FormatDate(license.LastSeenAtUtc)</span>
+                <span><a href="@($"admin/licenses/{license.LicenseId}")">View</a></span>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private IReadOnlyCollection<LicenseSummary> Licenses { get; set; } = [];
+
+    /// <summary>
+    /// Loads masked license summaries for the admin list.
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        Licenses = LicenseService.ListLicenses();
+    }
+
+    /// <summary>
+    /// Formats nullable license dates without exposing private device details.
+    /// </summary>
+    /// <param name="value">Date to format.</param>
+    /// <returns>Formatted UTC date or a safe placeholder.</returns>
+    private static string FormatDate(DateTimeOffset? value) =>
+        value is null ? "never" : value.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'");
+}

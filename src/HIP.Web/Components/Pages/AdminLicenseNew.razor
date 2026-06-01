@@ -1,0 +1,61 @@
+@page "/admin/licenses/new"
+@attribute [Authorize(Policy = AdminPolicies.CanManageLicenses)]
+@inject ISetupCodeLicenseService LicenseService
+
+<PageTitle>Create HIP Setup Code</PageTitle>
+
+<section class="hip-page-heading compact">
+    <div>
+        <h1>Create Setup Code</h1>
+        <p>Generate a hard-to-guess setup code for a Second Life HUD buyer.</p>
+    </div>
+    <a class="hip-primary-action" href="admin/licenses">Back to Licenses</a>
+</section>
+
+<section class="hip-two-column">
+    <article class="hip-panel padded">
+        <h2>Setup Code Options</h2>
+        <label>
+            Allowed device count
+            <InputNumber @bind-Value="AllowedDeviceCount" />
+        </label>
+        <label>
+            Initial scan mode
+            <InputSelect @bind-Value="InitialScanMode">
+                <option>Quiet</option>
+                <option>Normal</option>
+                <option>Strict</option>
+                <option>Paranoid</option>
+            </InputSelect>
+        </label>
+        <button class="hip-primary-action" type="button" @onclick="CreateCode">Create Setup Code</button>
+    </article>
+
+    <article class="hip-panel padded">
+        <h2>Created Code</h2>
+        @if (CreatedCode is null)
+        {
+            <p>The raw setup code will appear here once. Store it outside HIP before leaving this page.</p>
+        }
+        else
+        {
+            <p>Give this setup code to the HUD owner:</p>
+            <code>@CreatedCode.SetupCode</code>
+            <p>Masked list value: @CreatedCode.MaskedSetupCode</p>
+        }
+    </article>
+</section>
+
+@code {
+    private int AllowedDeviceCount { get; set; } = 1;
+    private string InitialScanMode { get; set; } = "Normal";
+    private CreateSetupCodeResponse? CreatedCode { get; set; }
+
+    /// <summary>
+    /// Creates a setup code and intentionally displays the raw value only on this creation screen.
+    /// </summary>
+    private void CreateCode()
+    {
+        CreatedCode = LicenseService.CreateSetupCode(new CreateSetupCodeRequest(AllowedDeviceCount, "admin-ui", InitialScanMode));
+    }
+}

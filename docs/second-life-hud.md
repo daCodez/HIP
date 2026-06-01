@@ -42,6 +42,8 @@ Activation returns:
 - activation timestamp
 - client settings/config
 
+The setup-code/license manager is documented in `docs/license-setup-codes.md`. HUD activation does not require web login.
+
 Scan input:
 
 - device ID

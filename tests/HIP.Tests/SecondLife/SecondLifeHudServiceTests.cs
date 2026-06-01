@@ -16,7 +16,7 @@ public sealed class SecondLifeHudServiceTests
         var response = service.Activate(new SecondLifeHudActivationRequest("HIP-DEV-SETUP", "hud-1", "avatar-hash"));
 
         Assert.That(response.Activated, Is.True);
-        Assert.That(response.LicenseStatus, Is.EqualTo("DevelopmentActive"));
+        Assert.That(response.LicenseStatus, Is.EqualTo("Active"));
     }
 
     [Test]
@@ -27,7 +27,7 @@ public sealed class SecondLifeHudServiceTests
         var response = service.Activate(new SecondLifeHudActivationRequest("bad-code", "hud-1", null));
 
         Assert.That(response.Activated, Is.False);
-        Assert.That(response.LicenseStatus, Is.EqualTo("Inactive"));
+        Assert.That(response.LicenseStatus, Is.EqualTo("Pending"));
     }
 
     [Test]
