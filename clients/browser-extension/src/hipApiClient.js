@@ -4,8 +4,13 @@ export const HIP_CONFIG = Object.freeze({
 });
 
 export const DEFAULT_HIP_SETTINGS = Object.freeze({
+  hipApiBaseUrl: HIP_CONFIG.apiBaseUrl,
   apiBaseUrl: HIP_CONFIG.apiBaseUrl,
   webBaseUrl: HIP_CONFIG.webBaseUrl,
+  submitScanResults: true,
+  enableLinkScanning: true,
+  showRiskyLinkIcons: true,
+  enableSafetyPageRouting: true,
   enableLinkBadges: true,
   enableWarningBanner: true,
   enableSafetyRouting: true,
@@ -14,7 +19,7 @@ export const DEFAULT_HIP_SETTINGS = Object.freeze({
 
 export class HipApiClient {
   constructor(config = HIP_CONFIG) {
-    this.config = config;
+    this.config = normalizeHipSettings(config);
   }
 
   async lookupDomain(domain) {
@@ -102,6 +107,10 @@ export class HipApiClient {
    * The HIP API hashes the page URL and keeps only privacy-safe counts and reasons.
    */
   async saveScanResult(result) {
+    if (!isValidBaseUrl(this.config.apiBaseUrl)) {
+      throw new Error("Invalid HIP API base URL.");
+    }
+
     const url = `${this.config.apiBaseUrl}/api/v1/browser/scan-results`;
     const response = await fetch(url, {
       method: "POST",
@@ -138,23 +147,80 @@ export class HipApiClient {
 
 export async function loadHipSettings() {
   if (!globalThis.chrome?.storage?.sync) {
-    return { ...DEFAULT_HIP_SETTINGS };
+    return normalizeHipSettings(DEFAULT_HIP_SETTINGS);
   }
 
   const stored = await chrome.storage.sync.get(DEFAULT_HIP_SETTINGS);
-  return {
+  return normalizeHipSettings({
     ...DEFAULT_HIP_SETTINGS,
     ...stored
-  };
+  });
 }
 
 export async function saveHipSettings(settings) {
-  const normalized = {
+  const normalized = normalizeHipSettings({
     ...DEFAULT_HIP_SETTINGS,
     ...settings
-  };
+  });
   await chrome.storage.sync.set(normalized);
   return normalized;
+}
+
+/**
+ * Normalizes legacy and current settings names so older installed extensions keep working.
+ * `hipApiBaseUrl` is the explicit setting name, while `apiBaseUrl` remains as compatibility alias.
+ */
+export function normalizeHipSettings(settings = {}) {
+  const apiBaseUrl = settings.hipApiBaseUrl || settings.apiBaseUrl || HIP_CONFIG.apiBaseUrl;
+  const enableSafetyPageRouting = settings.enableSafetyPageRouting ?? settings.enableSafetyRouting ?? true;
+  const showRiskyLinkIcons = settings.showRiskyLinkIcons ?? settings.enableLinkBadges ?? true;
+
+  return {
+    ...settings,
+    hipApiBaseUrl: apiBaseUrl,
+    apiBaseUrl,
+    webBaseUrl: settings.webBaseUrl || HIP_CONFIG.webBaseUrl,
+    submitScanResults: settings.submitScanResults ?? true,
+    enableLinkScanning: settings.enableLinkScanning ?? true,
+    showRiskyLinkIcons,
+    enableLinkBadges: showRiskyLinkIcons,
+    enableSafetyPageRouting,
+    enableSafetyRouting: enableSafetyPageRouting,
+    enableWarningBanner: settings.enableWarningBanner ?? true,
+    scanMode: settings.scanMode || "Normal"
+  };
+}
+
+/**
+ * Builds the privacy-safe scan result payload submitted after a content scan.
+ * The payload intentionally excludes page text, form values, passwords, tokens, and private messages.
+ */
+export function buildScanResultPayload({ domain, pageUrl, lookup, summary = {}, settings = {}, submittedAtUtc = new Date().toISOString() }) {
+  const status = lookup?.status || "Unknown";
+  return {
+    domain,
+    pageUrl,
+    score: lookup?.finalHipScore ?? lookup?.score ?? 0,
+    riskLevel: status,
+    status,
+    reasons: safeReasons(lookup),
+    linksScanned: summary.linksScanned ?? 0,
+    riskyLinksFound: summary.riskyLinks ?? 0,
+    suspiciousLinksFound: summary.suspiciousLinks ?? 0,
+    dangerousLinksFound: summary.dangerousLinks ?? 0,
+    recommendedAction: recommendedSiteAction(status),
+    privacySafeMetadata: {
+      scanMode: settings.scanMode || "Normal",
+      apiStatus: summary.apiStatus || "Unknown",
+      scanTimestampUtc: submittedAtUtc,
+      downloadCandidates: String(summary.downloadCandidates ?? 0),
+      formsDetected: String(summary.formsDetected ?? 0),
+      loginFormsDetected: String(summary.loginFormsDetected ?? 0),
+      crossDomainLoginForms: String(summary.crossDomainLoginForms ?? 0),
+      socialLinkCandidates: String(summary.socialLinkCandidates ?? 0),
+      webmailLinkCandidates: String(summary.webmailLinkCandidates ?? 0)
+    }
+  };
 }
 
 export function normalizeHost(hostname) {
@@ -176,4 +242,39 @@ export function safeBrowserSafetyPageUrl(webBaseUrl, originalUrl, sourceDomain, 
 
 export function isVerifiedStatus(lookup) {
   return lookup?.verificationStatus === "Verified" || lookup?.signedIdentityStatus === "PostQuantumSignaturePresent";
+}
+
+/**
+ * Validates a configured HIP base URL without throwing during normal settings loading.
+ */
+export function isValidBaseUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Selects display-safe reasons without reading or packaging page body text.
+ */
+function safeReasons(lookup) {
+  const reasons = lookup?.knownRisks?.length ? lookup.knownRisks : lookup?.explanations || lookup?.reasons || [];
+  return reasons.length > 0 ? reasons : ["No risky links found by the browser plugin scan."];
+}
+
+/**
+ * Maps website status to the persisted action summary used by HIP lookup and dashboards.
+ */
+function recommendedSiteAction(status) {
+  if (statusNeedsSafetyRoute(status)) {
+    return "RouteToSafetyPage";
+  }
+
+  if (status === "Unknown" || status === "Caution") {
+    return "ShowCaution";
+  }
+
+  return "Allow";
 }

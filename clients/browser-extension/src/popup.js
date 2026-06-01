@@ -26,6 +26,8 @@ const elements = {
   downloadCandidates: document.getElementById("downloadCandidates"),
   loginForms: document.getElementById("loginForms"),
   lastScan: document.getElementById("lastScan"),
+  lastSubmitted: document.getElementById("lastSubmitted"),
+  dataSource: document.getElementById("dataSource"),
   reasons: document.getElementById("reasons"),
   lookupLink: document.getElementById("lookupLink"),
   safetyLink: document.getElementById("safetyLink"),
@@ -37,6 +39,9 @@ elements.refreshScan.addEventListener("click", refreshScan);
 elements.settingsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
 initialize().catch(error => showUnavailable(error));
 
+/**
+ * Initializes the popup with the active tab URL and current HIP score.
+ */
 async function initialize() {
   settings = await loadHipSettings();
   client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
@@ -61,6 +66,9 @@ async function initialize() {
   renderLookup(lookup, summary);
 }
 
+/**
+ * Renders the website score and lookup links from public-safe HIP response data.
+ */
 function renderLookup(lookup, summary = {}) {
   const viewModel = buildPopupViewModel(lookup, summary, settings, activeTabUrl);
   elements.state.hidden = true;
@@ -89,6 +97,9 @@ function renderLookup(lookup, summary = {}) {
   elements.safetyLink.hidden = !viewModel.safetyDetailsUrl;
 }
 
+/**
+ * Renders the content-script scan summary, including scan-result submission state.
+ */
 async function renderScanSummary() {
   if (!activeTabId) {
     return {};
@@ -105,9 +116,14 @@ async function renderScanSummary() {
   elements.downloadCandidates.textContent = viewModel.downloadCandidates;
   elements.loginForms.textContent = viewModel.loginFormsDetected;
   elements.lastScan.textContent = viewModel.lastScanText;
+  elements.lastSubmitted.textContent = viewModel.lastSubmittedText;
+  elements.dataSource.textContent = viewModel.dataSourceText;
   return summary;
 }
 
+/**
+ * Requests a fresh content-script scan without disrupting normal page behavior on failure.
+ */
 async function refreshScan() {
   if (!activeTabId) {
     return;
@@ -127,6 +143,9 @@ async function refreshScan() {
   }
 }
 
+/**
+ * Displays a safe unavailable state when the HIP API or extension messaging fails.
+ */
 function showUnavailable(error) {
   console.warn("HIP popup unavailable.", error);
   elements.state.textContent = unavailableMessage();

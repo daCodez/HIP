@@ -7,8 +7,10 @@ const fields = {
   webBaseUrl: document.getElementById("webBaseUrl"),
   scanMode: document.getElementById("scanMode"),
   enableLinkBadges: document.getElementById("enableLinkBadges"),
+  enableLinkScanning: document.getElementById("enableLinkScanning"),
   enableWarningBanner: document.getElementById("enableWarningBanner"),
-  enableSafetyRouting: document.getElementById("enableSafetyRouting")
+  enableSafetyRouting: document.getElementById("enableSafetyRouting"),
+  submitScanResults: document.getElementById("submitScanResults")
 };
 
 document.getElementById("restoreDefaults").addEventListener("click", async () => {
@@ -28,26 +30,42 @@ initialize().catch(error => {
   status.textContent = `Settings unavailable: ${error.message}`;
 });
 
+/**
+ * Loads persisted settings and renders the options form without sending any scan data.
+ */
 async function initialize() {
   render(await loadHipSettings());
 }
 
+/**
+ * Renders both current and compatibility settings names so older installs upgrade safely.
+ */
 function render(settings) {
-  fields.apiBaseUrl.value = settings.apiBaseUrl;
+  fields.apiBaseUrl.value = settings.hipApiBaseUrl || settings.apiBaseUrl;
   fields.webBaseUrl.value = settings.webBaseUrl;
   fields.scanMode.value = settings.scanMode;
-  fields.enableLinkBadges.checked = settings.enableLinkBadges;
+  fields.enableLinkBadges.checked = settings.showRiskyLinkIcons ?? settings.enableLinkBadges;
+  fields.enableLinkScanning.checked = settings.enableLinkScanning;
   fields.enableWarningBanner.checked = settings.enableWarningBanner;
-  fields.enableSafetyRouting.checked = settings.enableSafetyRouting;
+  fields.enableSafetyRouting.checked = settings.enableSafetyPageRouting ?? settings.enableSafetyRouting;
+  fields.submitScanResults.checked = settings.submitScanResults;
 }
 
+/**
+ * Reads the options form into the settings object consumed by content and background scripts.
+ */
 function readForm() {
   return {
+    hipApiBaseUrl: fields.apiBaseUrl.value.trim(),
     apiBaseUrl: fields.apiBaseUrl.value.trim(),
     webBaseUrl: fields.webBaseUrl.value.trim(),
     scanMode: fields.scanMode.value,
+    showRiskyLinkIcons: fields.enableLinkBadges.checked,
     enableLinkBadges: fields.enableLinkBadges.checked,
+    enableLinkScanning: fields.enableLinkScanning.checked,
     enableWarningBanner: fields.enableWarningBanner.checked,
-    enableSafetyRouting: fields.enableSafetyRouting.checked
+    enableSafetyPageRouting: fields.enableSafetyRouting.checked,
+    enableSafetyRouting: fields.enableSafetyRouting.checked,
+    submitScanResults: fields.submitScanResults.checked
   };
 }

@@ -28,6 +28,9 @@ test("popup view model renders score domain and reasons", () => {
   }, {
     linksScanned: 42,
     riskyLinks: 2,
+    scanResultSubmission: "Success",
+    scanResultDataSource: "BrowserPluginScan",
+    lastSubmittedUtc: "2026-05-30T10:17:00Z",
     updatedAt: "2026-05-30T10:16:00Z"
   }, {
     webBaseUrl: "https://hip.local"
@@ -39,6 +42,8 @@ test("popup view model renders score domain and reasons", () => {
   assert.deepEqual(viewModel.reasons, ["No known scam reports", "No suspicious redirects found"]);
   assert.equal(viewModel.linksScanned, 42);
   assert.equal(viewModel.riskyLinks, 2);
+  assert.equal(viewModel.dataSourceText, "BrowserPluginScan");
+  assert.equal(viewModel.lastSubmittedText, "Success (2026-05-30 10:17 UTC)");
 });
 
 test("api unavailable state uses clear MVP message", () => {

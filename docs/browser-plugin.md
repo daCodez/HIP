@@ -11,6 +11,19 @@ The browser plugin uses versioned v1 endpoints:
 - `POST /api/v1/browser/scan-results`
 - `GET /api/v1/browser/scan-results/{domain}`
 
+## Plugin Configuration
+
+The extension settings include:
+
+- `hipApiBaseUrl`: HIP API host used for `/api/v1/...` requests.
+- `submitScanResults`: submits privacy-safe page scan summaries after scanning. Enabled by default for the dev/MVP path.
+- `enableLinkScanning`: scans page anchor href values when enabled.
+- `enableSafetyPageRouting`: routes high-risk links through `/safety`.
+- `showRiskyLinkIcons`: shows attention badges beside risky links.
+- `scanMode`: `Quiet`, `Normal`, `Strict`, or `Paranoid`.
+
+Legacy setting names such as `apiBaseUrl`, `enableLinkBadges`, and `enableSafetyRouting` are still normalized for installed MVP builds.
+
 ## Browser Scan Result Persistence
 
 After each successful scan, the extension sends a privacy-safe summary to HIP so later versions can show real data in the popup, public lookup, website scoring, and admin dashboard.
@@ -29,6 +42,8 @@ Stored fields:
 - small privacy-safe metadata such as scan mode and candidate counts
 
 HIP does not store full page text, form values, passwords, tokens, usernames, email body text, private messages, or unrelated browsing history from this browser scan flow. The full page URL is hashed by default; raw URL storage is reserved for a future explicit safe-storage policy.
+
+If scan-result submission fails, link scanning and the popup continue to work. The extension records a small `Failure` state in the popup summary and logs only a safe development warning. It does not retry aggressively.
 
 Example save request:
 

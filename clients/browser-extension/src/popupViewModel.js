@@ -100,6 +100,8 @@ export function buildPopupViewModel(lookup, summary, settings, currentUrl) {
     downloadCandidates: summary?.downloadCandidates ?? 0,
     loginFormsDetected: summary?.loginFormsDetected ?? 0,
     lastScanText: formatDate(summary?.updatedAt),
+    lastSubmittedText: submissionText(summary),
+    dataSourceText: summary?.scanResultDataSource || lookup?.dataSource || "Pending",
     lookupUrl: buildPublicLookupUrl(settings?.webBaseUrl, lookup?.domain, lookup?.publicLookupUrl),
     safetyDetailsUrl: buildSafetyDetailsUrl(settings?.webBaseUrl, currentUrl, status)
   };
@@ -120,4 +122,16 @@ function formatDate(value) {
   }
 
   return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
+/**
+ * Formats scan-result submission state for the popup without exposing request payload details.
+ */
+function submissionText(summary) {
+  const status = summary?.scanResultSubmission || "Pending";
+  if (status === "Success" && summary?.lastSubmittedUtc) {
+    return `Success (${formatDate(summary.lastSubmittedUtc)})`;
+  }
+
+  return status;
 }
