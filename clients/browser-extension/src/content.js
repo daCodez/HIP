@@ -31,6 +31,9 @@
 
   initialize().catch(error => console.warn("HIP content script failed safely.", error));
 
+  /**
+   * Runs the privacy-safe page scan and publishes a summary for the popup.
+   */
   async function initialize() {
     settings = await loadSettings();
     lastSummary = emptySummary();
@@ -42,12 +45,18 @@
       window.HipRiskBadgeRenderer.renderWarningBanner(withLookupUrl(currentLookup));
     }
 
-    await scanLinks();
+    if (settings.enableLinkScanning) {
+      await scanLinks();
+    }
+
     await scanLoginForms();
     await persistScanResult(currentLookup).catch(error => console.warn("HIP scan result persistence failed safely.", error));
     publishSummary();
   }
 
+  /**
+   * Scans page anchor href values only; page body text and form values are not read or submitted.
+   */
   async function scanLinks() {
     const anchorsByDomain = new Map();
 
@@ -139,7 +148,7 @@
     const verified = lookup.verificationStatus === "Verified" || lookup.signedIdentityStatus === "PostQuantumSignaturePresent";
     const shouldBadge = browserResult?.requiresIcon || shouldRenderBadge(status, verified, target.isDownloadCandidate);
 
-    if (settings.enableLinkBadges && shouldBadge) {
+    if (settings.showRiskyLinkIcons && shouldBadge) {
       const badgeStatus = browserResult?.label || (target.isDownloadCandidate && !riskyStatuses.has(status) ? "Caution" : (verified && status === "Trusted" ? "Verified" : status));
       const badgeLookup = target.isDownloadCandidate
         ? { ...lookup, knownRisks: ["Download risk candidate"], finalHipScore: lookup.finalHipScore }
@@ -147,7 +156,7 @@
       window.HipRiskBadgeRenderer.renderLinkBadge(anchor, badgeStatus, badgeLookup);
     }
 
-    if (settings.enableSafetyRouting && riskyStatuses.has(status) && anchor.dataset.hipSafetyBound !== "true") {
+    if (settings.enableSafetyPageRouting && riskyStatuses.has(status) && anchor.dataset.hipSafetyBound !== "true") {
       anchor.addEventListener("click", event =>
         window.HipSafetyPageRouter.routeClick(event, anchor, lookup, currentDomain), true);
       anchor.dataset.hipSafetyBound = "true";
@@ -215,10 +224,18 @@
    * Page text, form values, email body text, and private messages are intentionally excluded.
    */
   async function persistScanResult(currentLookup) {
-    if (!currentLookup) {
+    if (!settings.submitScanResults) {
+      lastSummary.scanResultSubmission = "Disabled";
+      lastSummary.scanResultDataSource = "NotSubmitted";
       return;
     }
 
+    if (!currentLookup) {
+      lastSummary.scanResultSubmission = "Skipped";
+      return;
+    }
+
+    lastSummary.scanResultSubmission = "Pending";
     const payload = {
       domain: currentDomain,
       pageUrl: window.location.href,
@@ -234,6 +251,7 @@
       privacySafeMetadata: {
         scanMode: settings.scanMode,
         apiStatus: lastSummary.apiStatus,
+        scanTimestampUtc: new Date().toISOString(),
         downloadCandidates: String(lastSummary.downloadCandidates),
         formsDetected: String(lastSummary.formsDetected),
         loginFormsDetected: String(lastSummary.loginFormsDetected),
@@ -245,8 +263,15 @@
 
     const response = await chrome.runtime.sendMessage({ type: "HIP_SAVE_SCAN_RESULT", result: payload });
     if (!response?.ok) {
+      lastSummary.scanResultSubmission = "Failure";
+      lastSummary.scanResultError = response?.error || "Submission failed";
       console.warn("HIP scan result was not persisted.", response?.error);
+      return;
     }
+
+    lastSummary.scanResultSubmission = "Success";
+    lastSummary.scanResultDataSource = "BrowserPluginScan";
+    lastSummary.lastSubmittedUtc = response.result?.lastCheckedUtc || new Date().toISOString();
   }
 
   async function lookupDomain(domain) {
@@ -288,8 +313,12 @@
     const response = await chrome.runtime.sendMessage({ type: "HIP_GET_SETTINGS" });
     return response?.ok ? response.result : {
       enableLinkBadges: true,
+      showRiskyLinkIcons: true,
+      enableLinkScanning: true,
       enableWarningBanner: true,
       enableSafetyRouting: true,
+      enableSafetyPageRouting: true,
+      submitScanResults: true,
       scanMode: "Normal"
     };
   }
@@ -429,7 +458,11 @@
       loginFormsDetected: 0,
       crossDomainLoginForms: 0,
       socialLinkCandidates: 0,
-      webmailLinkCandidates: 0
+      webmailLinkCandidates: 0,
+      scanResultSubmission: "Pending",
+      scanResultDataSource: "Pending",
+      lastSubmittedUtc: null,
+      scanResultError: null
     };
   }
 

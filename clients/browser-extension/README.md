@@ -13,6 +13,7 @@ This Chromium Manifest V3 client helps users see HIP website trust, link risk, a
 - Risky link badges.
 - High-risk website warning banner.
 - Safety page routing for HighRisk, Dangerous, and Critical links.
+- Privacy-safe browser scan result submission.
 - Privacy-safe risk finding reports for risky links.
 - Download-like link detection foundation.
 - Login/form risk indicator foundation.
@@ -29,6 +30,8 @@ Settings:
 
 - HIP API base URL
 - HIP Web base URL
+- Submit scan results
+- Enable link scanning
 - Enable link badges
 - Enable warning banner
 - Enable safety routing
@@ -42,6 +45,15 @@ Scan modes:
 - Paranoid: all non-trusted signals.
 
 Settings are stored with `chrome.storage.sync`.
+
+Current setting keys:
+
+- `hipApiBaseUrl`
+- `submitScanResults`
+- `enableLinkScanning`
+- `enableSafetyPageRouting`
+- `showRiskyLinkIcons`
+- `scanMode`
 
 ## Configuration
 
@@ -76,6 +88,18 @@ The extension stores the HIP Web base URL in settings and builds the final safet
 
 The extension does not permanently rewrite safe links. Risky click interception is attached only when the result is `HighRisk`, `Dangerous`, or `Critical` and safety routing is enabled.
 
+## Scan Result Submission
+
+After a page scan completes, the extension submits a privacy-safe summary to:
+
+```text
+POST /api/v1/browser/scan-results
+```
+
+The payload includes domain, current page URL for backend hashing, score, status, reasons, link counts, recommended action, scan timestamp metadata, and scan mode. The backend hashes the page URL by default and stores only public-safe summary fields.
+
+If submission fails, the popup and link scanning keep working. The extension records `Failure` in the popup summary and logs only a safe development warning. It does not retry aggressively.
+
 ## Privacy Promises
 
 The extension must not send:
@@ -96,6 +120,7 @@ The extension may send:
 - risk reason
 - scan mode
 - source client
+- privacy-safe scan counts
 
 Login detection only checks whether a form and password field exist and whether the form action points to a different domain. It does not read field values.
 
@@ -128,6 +153,7 @@ Download detection only flags download-like links by URL extension. It does not 
 15. Add a download-like link such as `.exe`, `.zip`, `.msi`, `.dmg`, `.pdf`, `.docx`, or `.scr` and confirm it is flagged as a download risk candidate.
 16. Add a login form with a cross-domain action and confirm a caution indicator appears without entering or collecting values.
 17. Stop HIP locally and confirm the popup shows HIP unavailable while links continue to work.
+18. Open `/api/v1/browser/scan-results/{domain}` on the API host and confirm the latest scan summary was stored.
 
 ## Popup Privacy Behavior
 
