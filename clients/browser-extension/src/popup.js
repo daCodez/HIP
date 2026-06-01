@@ -6,6 +6,7 @@ let client = new HipApiClient(settings);
 let activeTabId = null;
 let activeTabUrl = null;
 let activeLookup = null;
+let activeSiteSafety = null;
 
 const elements = {
   domain: document.getElementById("domain"),
@@ -29,6 +30,14 @@ const elements = {
   lastScan: document.getElementById("lastScan"),
   lastSubmitted: document.getElementById("lastSubmitted"),
   dataSource: document.getElementById("dataSource"),
+  siteSafetyPanel: document.getElementById("siteSafetyPanel"),
+  siteSafetyStatus: document.getElementById("siteSafetyStatus"),
+  siteSafetySummary: document.getElementById("siteSafetySummary"),
+  malwareRisk: document.getElementById("malwareRisk"),
+  phishingRisk: document.getElementById("phishingRisk"),
+  redirectRisk: document.getElementById("redirectRisk"),
+  downloadRisk: document.getElementById("downloadRisk"),
+  scriptRisk: document.getElementById("scriptRisk"),
   reasons: document.getElementById("reasons"),
   lookupLink: document.getElementById("lookupLink"),
   safetyLink: document.getElementById("safetyLink"),
@@ -65,6 +74,7 @@ async function initialize() {
   const lookup = await client.scoreSite({ url: currentUrl.toString(), domain });
   activeLookup = lookup;
   const summary = await renderScanSummary();
+  await renderSiteSafety(summary).catch(error => console.warn("HIP Site Safety Scan unavailable.", error));
   renderLookup(lookup, summary);
 }
 
@@ -124,6 +134,30 @@ async function renderScanSummary() {
 }
 
 /**
+ * Runs HIP Site Safety Scan for the active tab using only privacy-safe content-script facts.
+ * The scan never receives page text, script contents, form values, passwords, or private messages.
+ */
+async function renderSiteSafety(summary = {}) {
+  if (!activeTabUrl) {
+    return null;
+  }
+
+  const request = client.buildSiteSafetyRequest(activeTabUrl, summary);
+  const result = await client.scanSiteSafety(request);
+  activeSiteSafety = result;
+  elements.siteSafetyPanel.hidden = false;
+  elements.siteSafetyStatus.textContent = result.status || "Unknown";
+  elements.siteSafetyStatus.dataset.status = result.status || "Unknown";
+  elements.siteSafetySummary.textContent = result.summary || "HIP has limited site safety data for this page.";
+  elements.malwareRisk.textContent = riskLabel(result.malwareRiskScore);
+  elements.phishingRisk.textContent = riskLabel(result.phishingRiskScore);
+  elements.redirectRisk.textContent = riskLabel(result.redirectRiskScore);
+  elements.downloadRisk.textContent = riskLabel(result.downloadRiskScore);
+  elements.scriptRisk.textContent = riskLabel(result.scriptRiskScore);
+  return result;
+}
+
+/**
  * Requests a fresh content-script scan without disrupting normal page behavior on failure.
  */
 async function refreshScan() {
@@ -135,6 +169,7 @@ async function refreshScan() {
   try {
     await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
     const summary = await renderScanSummary();
+    await renderSiteSafety(summary).catch(error => console.warn("HIP Site Safety Scan unavailable after refresh.", error));
     if (activeLookup) {
       renderLookup(activeLookup, summary);
     }
@@ -160,4 +195,32 @@ function showUnavailable(error) {
 async function loadPluginVersion() {
   const response = await chrome.runtime.sendMessage({ type: "HIP_GET_PLUGIN_VERSION" });
   return response?.ok ? response.result : "HIP Plugin vunknown-dev";
+}
+
+/**
+ * Converts a numeric risk score into a compact popup label.
+ * Labels intentionally describe safety risk, not overall HIP trust.
+ */
+function riskLabel(score) {
+  if (typeof score !== "number") {
+    return "Unknown";
+  }
+
+  if (score <= 0) {
+    return "None found";
+  }
+
+  if (score <= 20) {
+    return "Low";
+  }
+
+  if (score <= 40) {
+    return "Medium";
+  }
+
+  if (score <= 65) {
+    return "Elevated";
+  }
+
+  return "High";
 }

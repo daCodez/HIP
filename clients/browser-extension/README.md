@@ -14,6 +14,7 @@ This Chromium Manifest V3 client helps users see HIP website trust, link risk, a
 - High-risk website warning banner.
 - Safety page routing for HighRisk, Dangerous, and Critical links.
 - Privacy-safe browser scan result submission.
+- HIP Site Safety Scan popup panel for malware, phishing, redirect, download, and script risk.
 - Privacy-safe risk finding reports for risky links.
 - Download-like link detection foundation.
 - Login/form risk indicator foundation.
@@ -100,6 +101,26 @@ The payload includes domain, current page URL for backend hashing, score, status
 
 If submission fails, the popup and link scanning keep working. The extension records `Failure` in the popup summary and logs only a safe development warning. It does not retry aggressively.
 
+## Site Safety Scan
+
+The popup also calls:
+
+```text
+POST /api/v1/site-safety/scan
+```
+
+The request includes the active tab URL plus privacy-safe observations from the content script:
+
+- download-like link URLs for extension checks
+- login/password form presence
+- inline script count
+- external script source URLs
+- suspicious script pattern count placeholder
+
+The request does not include page body text, script contents, form values, passwords, tokens, private messages, or email contents.
+
+The popup displays Site Safety status and compact malware, phishing, redirect, download, and script risk labels. These labels describe page safety risk only; they do not replace the overall HIP trust score.
+
 ## Privacy Promises
 
 The extension must not send:
@@ -154,6 +175,8 @@ Download detection only flags download-like links by URL extension. It does not 
 16. Add a login form with a cross-domain action and confirm a caution indicator appears without entering or collecting values.
 17. Stop HIP locally and confirm the popup shows HIP unavailable while links continue to work.
 18. Open `/api/v1/browser/scan-results/{domain}` on the API host and confirm the latest scan summary was stored.
+19. Confirm the popup Site Safety panel shows a status plus malware, phishing, redirect, download, and script risk labels.
+20. Add a link to an executable such as `https://example.com/setup.exe` and confirm the Site Safety download risk changes after refresh.
 
 ## Popup Privacy Behavior
 

@@ -13,6 +13,7 @@ using HIP.Application.Safety;
 using HIP.Application.Scoring;
 using HIP.Application.SecondLife;
 using HIP.Application.SelfHealing;
+using HIP.Application.SiteSafety;
 using HIP.Application.Simulation;
 using HIP.Domain.Reporting;
 using HIP.Domain.Review;
@@ -78,6 +79,8 @@ public static class DependencyInjection
         services.AddScoped<IBrowserPluginService, BrowserPluginService>();
         services.AddScoped<IBrowserScanResultRepository, InMemoryBrowserScanResultRepository>();
         services.AddScoped<IBrowserScanResultService, BrowserScanResultService>();
+        services.AddScoped<ISiteSafetyScanner, SiteSafetyScanner>();
+        services.AddScoped<IValidator<SiteSafetyScanRequest>, SiteSafetyScanValidator>();
 
         return services;
     }

@@ -14,6 +14,7 @@ using HIP.Application.Rules;
 using HIP.Application.Safety;
 using HIP.Application.SelfHealing;
 using HIP.Application.SecondLife;
+using HIP.Application.SiteSafety;
 using HIP.Application.Simulation;
 using HIP.Domain.Audit;
 using HIP.Domain.Review;
@@ -77,6 +78,7 @@ MapReportApis(app.MapGroup($"{ApiRoutes.V1}/reports"));
 MapBadgeApis(app.MapGroup(ApiRoutes.Badge));
 MapBrowserApis(app.MapGroup(ApiRoutes.Browser));
 MapSafetyApis(app.MapGroup(ApiRoutes.Safety));
+MapSiteSafetyApis(app.MapGroup(ApiRoutes.SiteSafety));
 Program.MapJsonRulesApis(app.MapGroup(ApiRoutes.Rules));
 MapAiApis(app.MapGroup(ApiRoutes.Ai).RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingPatternApis(app.MapGroup(ApiRoutes.SelfHealing).RequireAuthorization(AdminPolicies.CanManageRules));
@@ -381,6 +383,61 @@ static void MapSafetyApis(RouteGroupBuilder safetyApi)
     safetyApi.MapPost("/report-dangerous", (SafetyReportRequest request) =>
         Results.Ok(SafetyReportResponse.CreateAccepted(request.Url, request.Source, "Report as dangerous was accepted for MVP review.")));
 }
+
+/// <summary>
+/// Maps the versioned Site Safety Scan endpoint used by HIP clients and public tools.
+/// </summary>
+/// <param name="siteSafetyApi">Versioned site safety route group.</param>
+static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
+{
+    siteSafetyApi.MapPost("/scan", async (
+        SiteSafetyScanRequest request,
+        ISiteSafetyScanner scanner,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(ToSiteSafetyScanResponse(await scanner.ScanAsync(request, cancellationToken)));
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+}
+
+/// <summary>
+/// Converts the domain scan result into an API response with readable enum labels.
+/// </summary>
+/// <param name="result">Application-layer scan result.</param>
+/// <returns>Public-safe Site Safety API response.</returns>
+static object ToSiteSafetyScanResponse(SiteSafetyScanResult result) => new
+{
+    result.ScanId,
+    result.Url,
+    result.Domain,
+    result.ScannedAtUtc,
+    result.MalwareRiskScore,
+    result.PhishingRiskScore,
+    result.RedirectRiskScore,
+    result.ScriptRiskScore,
+    result.DownloadRiskScore,
+    result.FormRiskScore,
+    result.ReputationRiskScore,
+    result.OverallSafetyRiskScore,
+    Status = result.Status.ToString(),
+    result.Summary,
+    result.Reasons,
+    result.Warnings,
+    result.PositiveSignals,
+    result.NegativeSignals,
+    result.ConfidenceLevel,
+    result.DomainTrustScore,
+    result.PageTrustScore,
+    result.ContentRiskScore,
+    result.FinalHipScore,
+    result.ScoreImpact
+};
 
 static void MapAiApis(RouteGroupBuilder aiApi)
 {
