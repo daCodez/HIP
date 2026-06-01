@@ -9,6 +9,7 @@ let activeLookup = null;
 
 const elements = {
   domain: document.getElementById("domain"),
+  pluginVersion: document.getElementById("pluginVersion"),
   state: document.getElementById("state"),
   scorePanel: document.getElementById("scorePanel"),
   reasonsPanel: document.getElementById("reasonsPanel"),
@@ -44,6 +45,7 @@ initialize().catch(error => showUnavailable(error));
  */
 async function initialize() {
   settings = await loadHipSettings();
+  elements.pluginVersion.textContent = await loadPluginVersion();
   client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   activeTabId = tab?.id ?? null;
@@ -150,4 +152,12 @@ function showUnavailable(error) {
   console.warn("HIP popup unavailable.", error);
   elements.state.textContent = unavailableMessage();
   elements.state.className = "state unavailable";
+}
+
+/**
+ * Loads the extension version from the background worker so the popup reflects manifest.json.
+ */
+async function loadPluginVersion() {
+  const response = await chrome.runtime.sendMessage({ type: "HIP_GET_PLUGIN_VERSION" });
+  return response?.ok ? response.result : "HIP Plugin vunknown-dev";
 }

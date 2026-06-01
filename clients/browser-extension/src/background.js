@@ -1,10 +1,15 @@
-import { HipApiClient, loadHipSettings, normalizeHost } from "./hipApiClient.js";
+import { formatPluginVersion, HipApiClient, loadHipSettings, normalizeHost } from "./hipApiClient.js";
 
 const lookupCache = new Map();
 const scanSummaries = new Map();
 const cacheTtlMs = 5 * 60 * 1000;
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "HIP_GET_PLUGIN_VERSION") {
+    sendResponse({ ok: true, result: getPluginVersion() });
+    return false;
+  }
+
   if (message?.type === "HIP_GET_SETTINGS") {
     loadHipSettings()
       .then(settings => sendResponse({ ok: true, result: settings }))
@@ -154,4 +159,12 @@ async function saveScanResult(result) {
   const settings = await loadHipSettings();
   const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
   return client.saveScanResult(result);
+}
+
+/**
+ * Reads the extension manifest version once through the browser runtime API.
+ * This avoids hardcoding dev/MVP version strings in popup, content, and settings UI files.
+ */
+function getPluginVersion() {
+  return formatPluginVersion(chrome.runtime.getManifest().version);
 }

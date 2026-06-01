@@ -3,6 +3,8 @@ export const HIP_CONFIG = Object.freeze({
   webBaseUrl: "https://localhost:7053"
 });
 
+export const HIP_EXTENSION_CHANNEL = "dev";
+
 export const DEFAULT_HIP_SETTINGS = Object.freeze({
   hipApiBaseUrl: HIP_CONFIG.apiBaseUrl,
   apiBaseUrl: HIP_CONFIG.apiBaseUrl,
@@ -189,6 +191,15 @@ export function normalizeHipSettings(settings = {}) {
     enableWarningBanner: settings.enableWarningBanner ?? true,
     scanMode: settings.scanMode || "Normal"
   };
+}
+
+/**
+ * Formats the extension version shown in dev/MVP surfaces.
+ * The raw version should come from manifest.json through chrome.runtime.getManifest().
+ */
+export function formatPluginVersion(manifestVersion, channel = HIP_EXTENSION_CHANNEL) {
+  const version = manifestVersion || "unknown";
+  return `HIP Plugin v${version}-${channel}`;
 }
 
 /**

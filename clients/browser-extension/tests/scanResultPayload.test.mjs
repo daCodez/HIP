@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildScanResultPayload,
+  formatPluginVersion,
   HipApiClient,
   normalizeHipSettings
 } from "../src/hipApiClient.js";
@@ -128,4 +129,8 @@ test("invalid API base URL is handled safely", async () => {
     })),
     /Invalid HIP API base URL/
   );
+});
+
+test("plugin version is formatted from manifest version", () => {
+  assert.equal(formatPluginVersion("0.1.0"), "HIP Plugin v0.1.0-dev");
 });

@@ -2,6 +2,7 @@ import { DEFAULT_HIP_SETTINGS, loadHipSettings, saveHipSettings } from "./hipApi
 
 const form = document.getElementById("settingsForm");
 const status = document.getElementById("status");
+const pluginVersion = document.getElementById("pluginVersion");
 const fields = {
   apiBaseUrl: document.getElementById("apiBaseUrl"),
   webBaseUrl: document.getElementById("webBaseUrl"),
@@ -34,6 +35,7 @@ initialize().catch(error => {
  * Loads persisted settings and renders the options form without sending any scan data.
  */
 async function initialize() {
+  pluginVersion.textContent = await loadPluginVersion();
   render(await loadHipSettings());
 }
 
@@ -68,4 +70,12 @@ function readForm() {
     enableSafetyRouting: fields.enableSafetyRouting.checked,
     submitScanResults: fields.submitScanResults.checked
   };
+}
+
+/**
+ * Loads the extension version from the background worker for settings/debug confirmation.
+ */
+async function loadPluginVersion() {
+  const response = await chrome.runtime.sendMessage({ type: "HIP_GET_PLUGIN_VERSION" });
+  return response?.ok ? response.result : "HIP Plugin vunknown-dev";
 }
