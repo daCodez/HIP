@@ -15,6 +15,7 @@
   window.HipRiskBadgeRenderer = {
     ensureStyles,
     renderLinkBadge,
+    renderTrustBanner,
     renderWarningBanner,
     renderFormIndicator
   };
@@ -42,32 +43,47 @@
   }
 
   /**
-   * Renders the page-level warning banner for risky current websites.
-   * The banner includes the manifest-derived plugin version so dev testers can confirm Chrome loaded the latest unpacked build.
+   * Renders the page-level HIP trust banner for the current website.
+   * The banner is intentionally site-level, not per-link, and includes the manifest-derived plugin version
+   * so dev testers can confirm Chrome loaded the latest unpacked build.
    */
-  function renderWarningBanner(lookup, pluginVersion = "HIP Plugin vunknown-dev") {
+  function renderTrustBanner(lookup, pluginVersion = "HIP Plugin vunknown-dev") {
     ensureStyles();
 
-    if (document.getElementById("hip-warning-banner")) {
+    if (document.getElementById("hip-trust-banner")) {
       return;
     }
 
-    const reason = lookup?.knownRisks?.[0] || lookup?.explanations?.[0] || "HIP found public risk signals for this website.";
+    const status = lookup?.status || "Unknown";
+    const statusClass = status.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const score = lookup?.finalHipScore ?? lookup?.score ?? "Unknown";
+    const title = bannerTitle(status);
+    const reason = lookup?.knownRisks?.[0] || lookup?.explanations?.[0] || "HIP has not found a stronger public trust signal for this website yet.";
+    const lookupUrl = safeHref(lookup?.publicLookupUrl);
     const banner = document.createElement("div");
-    banner.id = "hip-warning-banner";
+    banner.id = "hip-trust-banner";
+    banner.className = `hip-trust-banner-${statusClass}`;
     banner.innerHTML = `
-      <div class="hip-warning-main">
-        <strong>HIP Warning: This website has a low trust score.</strong>
-        <span>Score: ${lookup.finalHipScore}/100 · Status: ${lookup.status}</span>
+      <div class="hip-trust-main">
+        <strong>${escapeHtml(title)}</strong>
+        <span><span class="hip-trust-status-badge ${statusClass}">${escapeHtml(status)}</span> Score: ${escapeHtml(score)}/100</span>
         <span>${escapeHtml(reason)}</span>
-        <small class="hip-warning-version">${escapeHtml(pluginVersion)}</small>
+        <small class="hip-trust-version">${escapeHtml(pluginVersion)}</small>
       </div>
-      <a class="hip-warning-link" href="${lookup.publicLookupUrl || "#"}" target="_blank" rel="noopener noreferrer">Lookup</a>
-      <button class="hip-warning-dismiss" type="button" aria-label="Dismiss HIP warning">×</button>
+      <a class="hip-trust-link" href="${lookupUrl}" target="_blank" rel="noopener noreferrer">Lookup</a>
+      <button class="hip-trust-close" type="button" aria-label="Dismiss HIP trust banner">×</button>
     `;
 
-    banner.querySelector(".hip-warning-dismiss").addEventListener("click", () => banner.remove());
+    banner.querySelector(".hip-trust-close").addEventListener("click", () => banner.remove());
     document.documentElement.prepend(banner);
+  }
+
+  /**
+   * Backwards-compatible wrapper used by older content scripts.
+   * It now renders the same site-level trust banner instead of a risk-only warning.
+   */
+  function renderWarningBanner(lookup, pluginVersion = "HIP Plugin vunknown-dev") {
+    renderTrustBanner(lookup, pluginVersion);
   }
 
   function renderFormIndicator(form, lookup, reason) {
@@ -118,7 +134,7 @@
       .${badgeClass}.dangerous,
       .${badgeClass}.critical { color: #7f1d1d; background: #fecaca; }
       .${badgeClass}.verified { color: #075985; background: #bae6fd; }
-      #hip-warning-banner {
+      #hip-trust-banner {
         position: sticky;
         top: 0;
         z-index: 2147483647;
@@ -126,31 +142,56 @@
         align-items: center;
         gap: 14px;
         padding: 12px 16px;
-        color: #fff;
-        background: #991b1b;
-        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.28);
+        color: #dbeafe;
+        background: #0f172a;
+        border-bottom: 1px solid rgba(14, 165, 233, 0.42);
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.24);
         font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
-      #hip-warning-banner .hip-warning-main {
+      #hip-trust-banner.hip-trust-banner-highrisk,
+      #hip-trust-banner.hip-trust-banner-dangerous,
+      #hip-trust-banner.hip-trust-banner-critical {
+        color: #fee2e2;
+        background: #450a0a;
+        border-bottom-color: rgba(248, 113, 113, 0.6);
+      }
+      #hip-trust-banner .hip-trust-main {
         display: grid;
         gap: 2px;
         flex: 1;
       }
-      #hip-warning-banner .hip-warning-version {
+      #hip-trust-banner .hip-trust-version {
         opacity: 0.82;
         font-size: 12px;
       }
-      #hip-warning-banner .hip-warning-link,
-      #hip-warning-banner .hip-warning-dismiss {
-        color: #fff;
-        border: 1px solid rgba(255, 255, 255, 0.7);
-        background: rgba(255, 255, 255, 0.12);
+      #hip-trust-banner .hip-trust-status-badge {
+        display: inline-flex;
+        align-items: center;
+        margin-right: 8px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        color: #0f172a;
+        background: #e2e8f0;
+        font-weight: 700;
+      }
+      #hip-trust-banner .hip-trust-status-badge.trusted,
+      #hip-trust-banner .hip-trust-status-badge.probablysafe { background: #86efac; }
+      #hip-trust-banner .hip-trust-status-badge.caution,
+      #hip-trust-banner .hip-trust-status-badge.unknown { background: #fde68a; }
+      #hip-trust-banner .hip-trust-status-badge.highrisk,
+      #hip-trust-banner .hip-trust-status-badge.dangerous,
+      #hip-trust-banner .hip-trust-status-badge.critical { background: #fecaca; }
+      #hip-trust-banner .hip-trust-link,
+      #hip-trust-banner .hip-trust-close {
+        color: inherit;
+        border: 1px solid rgba(255, 255, 255, 0.46);
+        background: rgba(255, 255, 255, 0.10);
         border-radius: 6px;
         padding: 6px 10px;
         text-decoration: none;
         cursor: pointer;
       }
-      #hip-warning-banner .hip-warning-dismiss {
+      #hip-trust-banner .hip-trust-close {
         font-size: 18px;
         line-height: 1;
       }
@@ -174,5 +215,36 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  /**
+   * Selects a concise banner title that distinguishes normal trust checks from high-risk warnings.
+   */
+  function bannerTitle(status) {
+    if (status === "HighRisk" || status === "Dangerous" || status === "Critical") {
+      return "HIP Warning";
+    }
+
+    if (status === "Unknown") {
+      return "HIP Trust Status Unknown";
+    }
+
+    return "HIP Trust Check";
+  }
+
+  /**
+   * Allows only HTTP(S) lookup links so injected markup cannot create script or data URL navigation.
+   */
+  function safeHref(value) {
+    if (!value) {
+      return "#";
+    }
+
+    try {
+      const url = new URL(value, window.location.origin);
+      return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "#";
+    } catch {
+      return "#";
+    }
   }
 })();

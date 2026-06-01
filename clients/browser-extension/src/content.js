@@ -43,8 +43,8 @@
     lastSummary.website = compactLookup(currentLookup);
     lastSummary.apiStatus = currentLookup ? "Available" : "Unavailable";
 
-    if (settings.enableWarningBanner && currentLookup?.status && riskyStatuses.has(currentLookup.status)) {
-      window.HipRiskBadgeRenderer.renderWarningBanner(withLookupUrl(currentLookup), pluginVersion);
+    if (settings.enableWarningBanner && currentLookup?.status) {
+      window.HipRiskBadgeRenderer.renderTrustBanner(withLookupUrl(currentLookup), pluginVersion);
     }
 
     if (settings.enableLinkScanning) {
