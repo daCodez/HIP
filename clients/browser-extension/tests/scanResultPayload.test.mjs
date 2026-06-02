@@ -212,6 +212,10 @@ test("banner display handles trusted domain with risky page content", () => {
   assert.equal(shouldShowTrustBanner({ status: "MostlyTrusted" }, { executableDownloadCandidates: 1 }, {}), true);
 });
 
+test("banner display does not interrupt for mostly trusted pages with broad attention counts only", () => {
+  assert.equal(shouldShowTrustBanner({ status: "MostlyTrusted" }, { riskyLinks: 4, unknownLinks: 4 }, {}), false);
+});
+
 test("banner display modes are respected", () => {
   assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, { bannerDisplayMode: "NeverShow" }), false);
   assert.equal(shouldShowTrustBanner({ status: "Trusted" }, {}, { bannerDisplayMode: "AlwaysShow" }), true);

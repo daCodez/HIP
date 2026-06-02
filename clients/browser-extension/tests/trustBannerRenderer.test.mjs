@@ -25,6 +25,12 @@ test("trust banner labels feedback instead of voting", () => {
   assert.equal(rendererSource.toLowerCase().includes("vote"), false);
 });
 
+test("trust banner renders readable status labels and plain-English fallback reason", () => {
+  assert.equal(rendererSource.includes("Mostly Trusted"), true);
+  assert.equal(rendererSource.includes("HIP does not have enough verified trust history for this website yet."), true);
+  assert.equal(rendererSource.includes("HIP has not found a stronger public trust signal"), false);
+});
+
 test("options page exposes banner display mode foundation", () => {
   assert.equal(optionsSource.includes("bannerDisplayMode"), true);
   assert.equal(optionsSource.includes("WarningsOnly"), true);
