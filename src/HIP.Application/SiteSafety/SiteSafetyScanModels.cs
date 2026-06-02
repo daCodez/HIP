@@ -72,6 +72,9 @@ public sealed record SiteSafetyScanRequest(
 /// <param name="DomainReputationScore">Optional 0-100 domain reputation score where lower is riskier.</param>
 /// <param name="PageReputationScore">Optional 0-100 page reputation score where lower is riskier.</param>
 /// <param name="TrustDataAvailable">Whether HIP has enough non-safety trust data to make a stronger safety statement.</param>
+/// <param name="ShortenedLinkCount">Count of locally detected shortened links. No page text is sent.</param>
+/// <param name="ObfuscatedLinkCount">Count of locally detected obfuscated links. No private message text is sent.</param>
+/// <param name="MatchedRiskTerms">Privacy-safe risk term labels, not raw page content.</param>
 public sealed record SiteSafetyObservedSignals(
     IReadOnlyCollection<string>? RedirectChain = null,
     IReadOnlyCollection<string>? ExternalScriptUrls = null,
@@ -89,7 +92,10 @@ public sealed record SiteSafetyObservedSignals(
     int KnownAbuseReports = 0,
     int? DomainReputationScore = null,
     int? PageReputationScore = null,
-    bool TrustDataAvailable = false);
+    bool TrustDataAvailable = false,
+    int ShortenedLinkCount = 0,
+    int ObfuscatedLinkCount = 0,
+    IReadOnlyCollection<string>? MatchedRiskTerms = null);
 
 /// <summary>
 /// Result produced by HIP's Site Safety Scan layer.
@@ -119,6 +125,7 @@ public sealed record SiteSafetyObservedSignals(
 /// <param name="FinalHipScore">Safety-adjusted HIP score contribution.</param>
 /// <param name="ProviderEvidence">Normalized provider evidence used by the scan. Raw private page content is not included.</param>
 /// <param name="ScoreImpact">Detailed score impact for the larger HIP scoring model.</param>
+/// <param name="MatchedRules">Built-in and admin rule results that contributed to the scan. Raw private evidence is not included.</param>
 public sealed record SiteSafetyScanResult(
     string ScanId,
     string Url,
@@ -144,7 +151,8 @@ public sealed record SiteSafetyScanResult(
     int ContentRiskScore,
     int FinalHipScore,
     IReadOnlyCollection<SiteSafetyEvidence> ProviderEvidence,
-    SiteSafetyScoreImpact ScoreImpact);
+    SiteSafetyScoreImpact ScoreImpact,
+    IReadOnlyCollection<SiteSafetyRuleResult>? MatchedRules = null);
 
 /// <summary>
 /// Explains how the Site Safety Scan contributes to HIP's larger scoring categories.

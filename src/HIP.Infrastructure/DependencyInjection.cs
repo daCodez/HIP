@@ -5,6 +5,7 @@ using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.SelfHealing;
+using HIP.Application.SiteSafety;
 using HIP.Application.Simulation;
 using HIP.Infrastructure.Persistence;
 using HIP.Infrastructure.Persistence.Repositories;
@@ -35,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IRuleSimulationResultRepository, EfRuleSimulationResultRepository>();
         services.AddScoped<IGeneratedRuleCandidateRepository, EfGeneratedRuleCandidateRepository>();
         services.AddScoped<IBrowserScanResultRepository, EfBrowserScanResultRepository>();
+        services.AddScoped<IAdminSiteSafetyRuleRepository, EfAdminSiteSafetyRuleRepository>();
 
         return services;
     }

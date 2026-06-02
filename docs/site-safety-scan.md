@@ -105,6 +105,47 @@ Each provider returns:
 
 The scanner combines provider evidence with browser-observed facts. Provider failures and timeouts lower confidence but do not crash HIP scoring.
 
+## Rule-Based Scoring
+
+Site Safety scoring now evaluates small strongly typed rule objects instead of one long conditional chain. The scanner builds a privacy-safe rule input, evaluates matched rules, then calculates risk scores from the matched rule results.
+
+Built-in code rule collections:
+
+- `StatusRules`
+- `OverrideRules`
+- `DownloadRiskRules`
+- `FormRiskRules`
+- `RedirectRiskRules`
+- `ScriptRiskRules`
+- `ReputationRiskRules`
+- `ExternalEvidenceRules`
+
+Each built-in rule includes a stable rule ID, description, typed condition, risk or trust impact, reason, optional warning, severity, and evidence quality. Built-in rule tuning is exposed through `SiteSafetyRuleOptions` so MVP thresholds and risk impacts can be configured without scattering constants through the scanner.
+
+## Admin-Managed Site Safety Rules
+
+HIP supports a foundation for database-backed admin Site Safety rules. Admin rules are structured data, not executable code. They can be stored, validated, simulated, approved, activated, disabled, versioned, and rolled back without redeploying HIP.
+
+Admin rules support:
+
+- statuses: `Draft`, `PendingApproval`, `Approved`, `Active`, `Disabled`, `Archived`
+- modes: `Simulation`, `WatchOnly`, `Enforced`
+- safe operators: `Equals`, `NotEquals`, `GreaterThan`, `GreaterThanOrEqual`, `LessThan`, `LessThanOrEqual`, `Contains`, `ContainsAny`, `StartsWith`, `EndsWith`, `InList`
+- allow-listed fields such as `Domain`, `Tld`, `RedirectCount`, `ExecutableDownloadCount`, `HasLoginForm`, `DomainReputationScore`, `MatchedRiskTerms`, and provider evidence labels
+- structured effects such as increasing specific risk categories, adding reasons or warnings, lowering confidence, status overrides, and sending a result to admin review
+
+Guardrails:
+
+- Admin rules cannot execute C#, JavaScript, expressions, dynamic eval, or external API calls.
+- Admin rules cannot access raw page text, passwords, tokens, cookies, form values, private messages, or chat logs.
+- Simulation and watch-only rules can match but do not enforce score changes.
+- Enforced rules must be approved or active.
+- Admin rules cannot mark an unknown clean site trusted by themselves.
+- Dangerous overrides require high/critical severity plus explicit approval metadata.
+- Rule updates store previous versions so rollback can restore the prior rule.
+
+The current EF implementation stores admin rules in HIP's SQLite-backed JSON record store. This keeps the repository boundary clean while leaving room for a more normalized production schema later.
+
 ## External Scanner Policy
 
 External evidence providers are disabled by default. HIP must not call SSL Labs, Google Web Risk, VirusTotal, Safe Browsing, or any other third-party scanner unless an operator explicitly configures that provider.

@@ -81,6 +81,10 @@ public static class DependencyInjection
         services.AddScoped<IBrowserScanResultService, BrowserScanResultService>();
         services.AddScoped<ISiteSafetyScanner, SiteSafetyScanner>();
         services.AddScoped<IValidator<SiteSafetyScanRequest>, SiteSafetyScanValidator>();
+        services.AddSingleton<IValidator<AdminSiteSafetyRule>, AdminSiteSafetyRuleValidator>();
+        services.AddScoped<IAdminSiteSafetyRuleRepository, InMemoryAdminSiteSafetyRuleRepository>();
+        services.AddScoped<AdminSiteSafetyRuleService>();
+        services.AddSingleton(new SiteSafetyRuleOptions());
         services.AddSingleton<IExternalSiteEvidenceCache, InMemoryExternalSiteEvidenceCache>();
         services.AddSingleton(new ExternalSiteEvidenceOptions());
         services.AddScoped<ISiteSafetyEvidenceProvider, BrowserObservedSignalProvider>();

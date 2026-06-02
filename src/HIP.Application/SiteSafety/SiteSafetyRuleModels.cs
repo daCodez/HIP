@@ -1,0 +1,380 @@
+namespace HIP.Application.SiteSafety;
+
+/// <summary>
+/// Severity for built-in and admin-managed Site Safety rules.
+/// </summary>
+public enum SiteSafetyRuleSeverity
+{
+    Low,
+    Medium,
+    High,
+    Critical
+}
+
+/// <summary>
+/// Evidence quality for a rule match.
+/// </summary>
+public enum SiteSafetyEvidenceQuality
+{
+    Weak,
+    Medium,
+    Strong,
+    Confirmed
+}
+
+/// <summary>
+/// Site Safety rule collection buckets used by built-in rule definitions.
+/// </summary>
+public enum SiteSafetyRuleCollectionType
+{
+    StatusRules,
+    OverrideRules,
+    DownloadRiskRules,
+    FormRiskRules,
+    RedirectRiskRules,
+    ScriptRiskRules,
+    ReputationRiskRules,
+    ExternalEvidenceRules
+}
+
+/// <summary>
+/// Risk score bucket affected by a Site Safety rule.
+/// </summary>
+public enum SiteSafetyRiskCategory
+{
+    Malware,
+    Phishing,
+    Redirect,
+    Script,
+    Download,
+    Form,
+    Reputation,
+    Confidence
+}
+
+/// <summary>
+/// Options used by built-in Site Safety rules.
+/// </summary>
+public sealed class SiteSafetyRuleOptions
+{
+    /// <summary>
+    /// Gets or sets how long recent scan results are cached.
+    /// </summary>
+    public TimeSpan ScanCacheDuration { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Gets or sets the executable download risk impact.
+    /// </summary>
+    public int ExecutableDownloadRiskImpact { get; set; } = 45;
+
+    /// <summary>
+    /// Gets or sets the archive download risk impact.
+    /// </summary>
+    public int ArchiveDownloadRiskImpact { get; set; } = 18;
+
+    /// <summary>
+    /// Gets or sets the login form risk impact when trust data is limited.
+    /// </summary>
+    public int LoginFormLimitedDataRiskImpact { get; set; } = 45;
+
+    /// <summary>
+    /// Gets or sets the login form risk impact when trust data is available.
+    /// </summary>
+    public int LoginFormTrustedContextRiskImpact { get; set; } = 18;
+
+    /// <summary>
+    /// Gets or sets the payment form risk impact when trust data is limited.
+    /// </summary>
+    public int PaymentFormLimitedDataRiskImpact { get; set; } = 50;
+
+    /// <summary>
+    /// Gets or sets the payment form risk impact when trust data is available.
+    /// </summary>
+    public int PaymentFormTrustedContextRiskImpact { get; set; } = 20;
+
+    /// <summary>
+    /// Gets or sets the suspicious redirect risk impact.
+    /// </summary>
+    public int SuspiciousRedirectRiskImpact { get; set; } = 60;
+
+    /// <summary>
+    /// Gets or sets the long redirect chain risk impact.
+    /// </summary>
+    public int LongRedirectChainRiskImpact { get; set; } = 45;
+
+    /// <summary>
+    /// Gets or sets the known phishing pattern risk impact.
+    /// </summary>
+    public int KnownPhishingRiskImpact { get; set; } = 85;
+
+    /// <summary>
+    /// Gets or sets the known malware indicator risk impact.
+    /// </summary>
+    public int KnownMalwareRiskImpact { get; set; } = 95;
+
+    /// <summary>
+    /// Gets or sets the suspicious wording phishing risk impact.
+    /// </summary>
+    public int SuspiciousWordingRiskImpact { get; set; } = 55;
+
+    /// <summary>
+    /// Gets or sets the maximum positive trust boost external TLS evidence may provide.
+    /// </summary>
+    public int MaxExternalTrustBoost { get; set; } = 5;
+}
+
+/// <summary>
+/// Code-based built-in Site Safety rule.
+/// </summary>
+public sealed class BuiltInSiteSafetyRule
+{
+    /// <summary>
+    /// Initializes a built-in Site Safety rule.
+    /// </summary>
+    public BuiltInSiteSafetyRule(
+        string ruleId,
+        string description,
+        SiteSafetyRuleCollectionType collectionType,
+        SiteSafetyRiskCategory riskCategory,
+        Func<SiteSafetyRuleInput, bool> condition,
+        int riskImpact,
+        int trustImpact,
+        string reason,
+        string? warning,
+        SiteSafetyRuleSeverity severity,
+        SiteSafetyEvidenceQuality evidenceQuality,
+        SiteSafetyScanStatus? statusOverride = null,
+        int confidencePenalty = 0,
+        bool sendToAdminReview = false)
+    {
+        RuleId = ruleId;
+        Description = description;
+        CollectionType = collectionType;
+        RiskCategory = riskCategory;
+        Condition = condition;
+        RiskImpact = _ => riskImpact;
+        TrustImpact = trustImpact;
+        Reason = reason;
+        Warning = warning;
+        Severity = severity;
+        EvidenceQuality = evidenceQuality;
+        StatusOverride = statusOverride;
+        ConfidencePenalty = confidencePenalty;
+        SendToAdminReview = sendToAdminReview;
+    }
+
+    /// <summary>
+    /// Initializes a built-in Site Safety rule with an input-dependent risk impact.
+    /// </summary>
+    public BuiltInSiteSafetyRule(
+        string ruleId,
+        string description,
+        SiteSafetyRuleCollectionType collectionType,
+        SiteSafetyRiskCategory riskCategory,
+        Func<SiteSafetyRuleInput, bool> condition,
+        Func<SiteSafetyRuleInput, int> riskImpact,
+        int trustImpact,
+        string reason,
+        string? warning,
+        SiteSafetyRuleSeverity severity,
+        SiteSafetyEvidenceQuality evidenceQuality,
+        SiteSafetyScanStatus? statusOverride = null,
+        int confidencePenalty = 0,
+        bool sendToAdminReview = false)
+    {
+        RuleId = ruleId;
+        Description = description;
+        CollectionType = collectionType;
+        RiskCategory = riskCategory;
+        Condition = condition;
+        RiskImpact = riskImpact;
+        TrustImpact = trustImpact;
+        Reason = reason;
+        Warning = warning;
+        Severity = severity;
+        EvidenceQuality = evidenceQuality;
+        StatusOverride = statusOverride;
+        ConfidencePenalty = confidencePenalty;
+        SendToAdminReview = sendToAdminReview;
+    }
+
+    /// <summary>Gets the stable rule ID.</summary>
+    public string RuleId { get; }
+
+    /// <summary>Gets the rule description.</summary>
+    public string Description { get; }
+
+    /// <summary>Gets the rule collection bucket.</summary>
+    public SiteSafetyRuleCollectionType CollectionType { get; }
+
+    /// <summary>Gets the risk category affected by this rule.</summary>
+    public SiteSafetyRiskCategory RiskCategory { get; }
+
+    /// <summary>Gets the strongly typed condition used by built-in code rules.</summary>
+    public Func<SiteSafetyRuleInput, bool> Condition { get; }
+
+    /// <summary>Gets the risk impact.</summary>
+    public Func<SiteSafetyRuleInput, int> RiskImpact { get; }
+
+    /// <summary>Gets the trust impact.</summary>
+    public int TrustImpact { get; }
+
+    /// <summary>Gets the plain-English reason.</summary>
+    public string Reason { get; }
+
+    /// <summary>Gets the optional warning.</summary>
+    public string? Warning { get; }
+
+    /// <summary>Gets the severity.</summary>
+    public SiteSafetyRuleSeverity Severity { get; }
+
+    /// <summary>Gets the evidence quality.</summary>
+    public SiteSafetyEvidenceQuality EvidenceQuality { get; }
+
+    /// <summary>Gets an optional status override.</summary>
+    public SiteSafetyScanStatus? StatusOverride { get; }
+
+    /// <summary>Gets the confidence penalty.</summary>
+    public int ConfidencePenalty { get; }
+
+    /// <summary>Gets whether the result should be sent to admin review.</summary>
+    public bool SendToAdminReview { get; }
+
+    /// <summary>
+    /// Evaluates this rule against a privacy-safe input model.
+    /// </summary>
+    /// <param name="input">Rule input.</param>
+    /// <returns>Matched result when the condition is true.</returns>
+    public SiteSafetyRuleResult? Evaluate(SiteSafetyRuleInput input) =>
+        Condition(input)
+            ? new SiteSafetyRuleResult(RuleId, Description, CollectionType, RiskCategory, RiskImpact(input), TrustImpact, Reason, Warning, Severity, EvidenceQuality, StatusOverride, ConfidencePenalty, SendToAdminReview, IsSimulationOnly: false)
+            : null;
+}
+
+/// <summary>
+/// Privacy-safe input available to built-in and admin Site Safety rules.
+/// </summary>
+public sealed record SiteSafetyRuleInput(
+    Uri Url,
+    string Domain,
+    string Tld,
+    bool HasHttps,
+    int RedirectCount,
+    int ShortenedLinkCount,
+    int ObfuscatedLinkCount,
+    int ExternalScriptCount,
+    int InlineScriptCount,
+    int SuspiciousScriptPatternCount,
+    int ExecutableDownloadCount,
+    int ArchiveDownloadCount,
+    bool HasLoginForm,
+    bool HasPasswordField,
+    bool HasPaymentField,
+    int KnownAbuseReports,
+    int? DomainReputationScore,
+    int? PageReputationScore,
+    IReadOnlyCollection<string> MatchedRiskTerms,
+    IReadOnlyCollection<SiteSafetyEvidence> ProviderEvidence,
+    bool TrustDataAvailable);
+
+/// <summary>
+/// Result created when a Site Safety rule matches.
+/// </summary>
+public sealed record SiteSafetyRuleResult(
+    string RuleId,
+    string Description,
+    SiteSafetyRuleCollectionType CollectionType,
+    SiteSafetyRiskCategory RiskCategory,
+    int RiskImpact,
+    int TrustImpact,
+    string Reason,
+    string? Warning,
+    SiteSafetyRuleSeverity Severity,
+    SiteSafetyEvidenceQuality EvidenceQuality,
+    SiteSafetyScanStatus? StatusOverride,
+    int ConfidencePenalty,
+    bool SendToAdminReview,
+    bool IsSimulationOnly);
+
+/// <summary>
+/// Builds the HIP built-in Site Safety rule collections.
+/// </summary>
+public static class BuiltInSiteSafetyRules
+{
+    /// <summary>
+    /// Creates all built-in rules from configurable options.
+    /// </summary>
+    /// <param name="options">Rule options.</param>
+    /// <returns>Built-in rule collection.</returns>
+    public static IReadOnlyCollection<BuiltInSiteSafetyRule> Create(SiteSafetyRuleOptions options) =>
+    [
+        new("download-executable", "Executable download links increase content risk.", SiteSafetyRuleCollectionType.DownloadRiskRules, SiteSafetyRiskCategory.Download, input => input.ExecutableDownloadCount > 0, options.ExecutableDownloadRiskImpact, 0, "This page links to executable files that should be reviewed before downloading.", "This page links to executable files that should not be downloaded unless the source is trusted.", SiteSafetyRuleSeverity.High, SiteSafetyEvidenceQuality.Strong),
+        new("download-archive", "Archive download links require review.", SiteSafetyRuleCollectionType.DownloadRiskRules, SiteSafetyRiskCategory.Download, input => input.ArchiveDownloadCount > 0, options.ArchiveDownloadRiskImpact, 0, "This page links to compressed files that should be reviewed before downloading.", "This page links to compressed or disk image files that need review.", SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
+        new("form-login-limited-data", "Login forms on limited-data sites increase risk.", SiteSafetyRuleCollectionType.FormRiskRules, SiteSafetyRiskCategory.Form, input => (input.HasLoginForm || input.HasPasswordField) && !input.TrustDataAvailable, options.LoginFormLimitedDataRiskImpact, 0, "This page contains login fields, but HIP has limited trust data for the domain.", "This page contains login fields; verify the domain before entering credentials.", SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
+        new("form-login-trusted-context", "Login forms still require light review even with trust data.", SiteSafetyRuleCollectionType.FormRiskRules, SiteSafetyRiskCategory.Form, input => (input.HasLoginForm || input.HasPasswordField) && input.TrustDataAvailable, options.LoginFormTrustedContextRiskImpact, 0, "This page contains login fields.", "This page contains login fields; verify the domain before entering credentials.", SiteSafetyRuleSeverity.Low, SiteSafetyEvidenceQuality.Medium),
+        new("form-payment-limited-data", "Payment fields on limited-data sites increase risk.", SiteSafetyRuleCollectionType.FormRiskRules, SiteSafetyRiskCategory.Form, input => input.HasPaymentField && !input.TrustDataAvailable, options.PaymentFormLimitedDataRiskImpact, 0, "Payment fields require domain and identity review.", "This page contains payment fields; review the domain and identity before entering payment details.", SiteSafetyRuleSeverity.High, SiteSafetyEvidenceQuality.Medium),
+        new("form-payment-trusted-context", "Payment fields still require review with trust data.", SiteSafetyRuleCollectionType.FormRiskRules, SiteSafetyRiskCategory.Form, input => input.HasPaymentField && input.TrustDataAvailable, options.PaymentFormTrustedContextRiskImpact, 0, "Payment fields require review.", "This page contains payment fields; review the domain and identity before entering payment details.", SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
+        new("redirect-long-chain", "Long redirect chains increase redirect risk.", SiteSafetyRuleCollectionType.RedirectRiskRules, SiteSafetyRiskCategory.Redirect, input => input.RedirectCount > 3, options.LongRedirectChainRiskImpact, 0, "This page uses a long redirect chain.", null, SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
+        new("redirect-shortener", "Shorteners can hide the destination.", SiteSafetyRuleCollectionType.RedirectRiskRules, SiteSafetyRiskCategory.Redirect, input => input.ShortenedLinkCount > 0, options.SuspiciousRedirectRiskImpact, 0, "Shortened or suspicious link patterns can hide the final destination.", null, SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
+        new("redirect-obfuscated", "Obfuscated links increase redirect risk.", SiteSafetyRuleCollectionType.RedirectRiskRules, SiteSafetyRiskCategory.Redirect, input => input.ObfuscatedLinkCount > 0, options.SuspiciousRedirectRiskImpact, 0, "Obfuscated links were detected by a privacy-safe client scan.", null, SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
+        new("script-suspicious-patterns", "Suspicious script structure increases script risk.", SiteSafetyRuleCollectionType.ScriptRiskRules, SiteSafetyRiskCategory.Script, input => input.SuspiciousScriptPatternCount > 0, 25, 0, "HIP saw script signals that increase content risk without executing scripts.", "Script structure should be reviewed before trusting this page.", SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
+        new("script-high-volume", "Large script volume increases script risk.", SiteSafetyRuleCollectionType.ScriptRiskRules, SiteSafetyRiskCategory.Script, input => input.InlineScriptCount > 8 || input.ExternalScriptCount > 12, input => Math.Min(70, Math.Max(0, input.InlineScriptCount - 8) * 3 + Math.Max(0, input.ExternalScriptCount - 12) * 2), 0, "External or inline JavaScript volume increased script risk.", "Script structure should be reviewed before trusting this page.", SiteSafetyRuleSeverity.Low, SiteSafetyEvidenceQuality.Weak),
+        new("reputation-risky-tld", "Some TLDs require extra early review.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, input => SiteSafetyRuleHelpers.RiskyTlds.Contains(input.Tld), 25, 0, "The domain uses a TLD that can require extra review in early HIP scoring.", null, SiteSafetyRuleSeverity.Low, SiteSafetyEvidenceQuality.Weak),
+        new("reputation-abuse-reports", "Known abuse reports increase reputation risk.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, input => input.KnownAbuseReports > 0, input => Math.Min(85, 30 + input.KnownAbuseReports * 10), 0, "Known abuse reports are present for this page or domain.", null, SiteSafetyRuleSeverity.High, SiteSafetyEvidenceQuality.Strong),
+        new("reputation-domain-score", "Weak domain reputation increases reputation risk.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, input => input.DomainReputationScore is < 50, 55, 0, "Domain reputation is weak.", null, SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
+        new("reputation-page-score", "Weak page reputation increases reputation risk.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, input => input.PageReputationScore is < 50, 55, 0, "Page reputation is weak.", null, SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
+        new("override-known-malware", "Known malware indicators force a dangerous status.", SiteSafetyRuleCollectionType.OverrideRules, SiteSafetyRiskCategory.Malware, input => input.MatchedRiskTerms.Contains("KnownMalwareIndicator", StringComparer.OrdinalIgnoreCase), options.KnownMalwareRiskImpact, 0, "HIP found strong malware or phishing indicators. Avoid this page.", "HIP found a strong malware indicator.", SiteSafetyRuleSeverity.Critical, SiteSafetyEvidenceQuality.Confirmed, SiteSafetyScanStatus.Dangerous, sendToAdminReview: true),
+        new("override-known-phishing", "Known phishing indicators force a dangerous status.", SiteSafetyRuleCollectionType.OverrideRules, SiteSafetyRiskCategory.Phishing, input => input.MatchedRiskTerms.Contains("KnownPhishingPattern", StringComparer.OrdinalIgnoreCase), options.KnownPhishingRiskImpact, 0, "HIP found a known phishing pattern.", "HIP found a known phishing pattern.", SiteSafetyRuleSeverity.Critical, SiteSafetyEvidenceQuality.Confirmed, SiteSafetyScanStatus.Dangerous, sendToAdminReview: true),
+        new("phishing-risk-terms", "Scam, urgency, or impersonation terms increase phishing risk.", SiteSafetyRuleCollectionType.StatusRules, SiteSafetyRiskCategory.Phishing, input => input.MatchedRiskTerms.Any(term => term is "ScamWording" or "UrgencyWording" or "ImpersonationWording" or "CrackedSoftware" or "DisableAntivirus"), options.SuspiciousWordingRiskImpact, 0, "Risk wording labels were observed without sending page text.", null, SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
+        new("external-weak", "Weak external evidence lowers confidence.", SiteSafetyRuleCollectionType.ExternalEvidenceRules, SiteSafetyRiskCategory.Confidence, input => input.ProviderEvidence.SelectMany(evidence => evidence.EvidenceItems).Any(item => item.Status == SiteSafetyEvidenceStatus.Weak), 0, 0, "External TLS or provider evidence is weak and lowers confidence.", "External TLS or provider evidence is weak and lowers confidence.", SiteSafetyRuleSeverity.Low, SiteSafetyEvidenceQuality.Weak, confidencePenalty: 20),
+        new("external-conflict", "Conflicting external evidence lowers confidence and creates review warning.", SiteSafetyRuleCollectionType.ExternalEvidenceRules, SiteSafetyRiskCategory.Confidence, SiteSafetyRuleHelpers.HasConflictingExternalEvidence, 0, 0, "External scanner evidence conflicts; HIP lowered confidence and recommends review.", "External scanner evidence conflicts; HIP lowered confidence and recommends review.", SiteSafetyRuleSeverity.High, SiteSafetyEvidenceQuality.Medium, confidencePenalty: 35, sendToAdminReview: true),
+        new("external-threat-intel-phishing", "Authoritative phishing evidence raises phishing risk.", SiteSafetyRuleCollectionType.ExternalEvidenceRules, SiteSafetyRiskCategory.Phishing, input => SiteSafetyRuleHelpers.HasAuthoritativeExternalHit(input, "phishing"), 90, 0, "Threat-intel provider matched a phishing indicator.", null, SiteSafetyRuleSeverity.Critical, SiteSafetyEvidenceQuality.Confirmed, SiteSafetyScanStatus.HighRisk, sendToAdminReview: true),
+        new("external-threat-intel-malware", "Authoritative malware evidence raises malware risk.", SiteSafetyRuleCollectionType.ExternalEvidenceRules, SiteSafetyRiskCategory.Malware, input => SiteSafetyRuleHelpers.HasAuthoritativeExternalHit(input, "malware"), 95, 0, "Threat-intel provider matched a malware indicator.", null, SiteSafetyRuleSeverity.Critical, SiteSafetyEvidenceQuality.Confirmed, SiteSafetyScanStatus.Dangerous, sendToAdminReview: true),
+        new("external-positive-tls", "Strong TLS evidence gives a small trust boost only.", SiteSafetyRuleCollectionType.ExternalEvidenceRules, SiteSafetyRiskCategory.Reputation, input => SiteSafetyRuleHelpers.HasPositiveTlsEvidence(input), 0, options.MaxExternalTrustBoost, "TLS scanner reported strong TLS configuration.", null, SiteSafetyRuleSeverity.Low, SiteSafetyEvidenceQuality.Medium)
+    ];
+
+}
+
+/// <summary>
+/// Helper methods shared by built-in Site Safety rules.
+/// </summary>
+public static class SiteSafetyRuleHelpers
+{
+    /// <summary>
+    /// Gets TLDs that require extra review during early HIP scoring.
+    /// </summary>
+    public static readonly HashSet<string> RiskyTlds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "zip",
+        "mov",
+        "top",
+        "xyz",
+        "ru",
+        "tk"
+    };
+
+    /// <summary>
+    /// Detects conflicting external evidence.
+    /// </summary>
+    public static bool HasConflictingExternalEvidence(SiteSafetyRuleInput input) =>
+        input.ProviderEvidence.Any(evidence => evidence.ProviderType is not SiteSafetyEvidenceProviderType.BrowserObserved &&
+                                                evidence.EvidenceItems.Any(item => item.Status is SiteSafetyEvidenceStatus.Clean or SiteSafetyEvidenceStatus.Positive)) &&
+        input.ProviderEvidence.Any(evidence => evidence.IsAuthoritativeForRisk &&
+                                                evidence.EvidenceItems.Any(item => item.Status is SiteSafetyEvidenceStatus.HighRisk or SiteSafetyEvidenceStatus.Dangerous));
+
+    /// <summary>
+    /// Detects authoritative external malware or phishing hits.
+    /// </summary>
+    public static bool HasAuthoritativeExternalHit(SiteSafetyRuleInput input, string category) =>
+        input.ProviderEvidence.Any(evidence => evidence.IsAuthoritativeForRisk &&
+                                                evidence.EvidenceItems.Any(item => item.Category.Contains(category, StringComparison.OrdinalIgnoreCase) &&
+                                                                                   item.Status is SiteSafetyEvidenceStatus.HighRisk or SiteSafetyEvidenceStatus.Dangerous));
+
+    /// <summary>
+    /// Detects positive TLS evidence that can provide only a small security boost.
+    /// </summary>
+    public static bool HasPositiveTlsEvidence(SiteSafetyRuleInput input) =>
+        input.ProviderEvidence.Any(evidence => evidence.ProviderType == SiteSafetyEvidenceProviderType.TlsScanner &&
+                                                evidence.IsAuthoritativeForTrust &&
+                                                evidence.EvidenceItems.Any(item => item.Status is SiteSafetyEvidenceStatus.Clean or SiteSafetyEvidenceStatus.Positive));
+}

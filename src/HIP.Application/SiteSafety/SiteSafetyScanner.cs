@@ -16,10 +16,10 @@ namespace HIP.Application.SiteSafety;
 public sealed class SiteSafetyScanner(
     IValidator<SiteSafetyScanRequest> validator,
     ILogger<SiteSafetyScanner> logger,
-    IEnumerable<ISiteSafetyEvidenceProvider>? evidenceProviders = null) : ISiteSafetyScanner
+    IEnumerable<ISiteSafetyEvidenceProvider>? evidenceProviders = null,
+    SiteSafetyRuleOptions? ruleOptions = null,
+    IAdminSiteSafetyRuleRepository? adminRuleRepository = null) : ISiteSafetyScanner
 {
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
-
     private static readonly ConcurrentDictionary<string, CachedSiteSafetyScan> RecentScans = new();
 
     private static readonly HashSet<string> ShortenerDomains = new(StringComparer.OrdinalIgnoreCase)
@@ -96,7 +96,10 @@ public sealed class SiteSafetyScanner(
 
             var signals = request.ObservedSignals ?? new SiteSafetyObservedSignals();
             var evidence = await CollectEvidenceAsync(uri, domain, signals, providers, cancellationToken);
-            var context = Analyze(uri, domain, signals, evidence);
+            var options = ruleOptions ?? new SiteSafetyRuleOptions();
+            var ruleInput = BuildRuleInput(uri, domain, signals, evidence);
+            var matchedRules = await EvaluateRulesAsync(ruleInput, cancellationToken);
+            var context = Analyze(uri, domain, signals, evidence, matchedRules, options);
             var scores = BuildScoreImpact(context);
             var status = DetermineStatus(context);
             var summary = BuildSummary(status, context);
@@ -127,8 +130,9 @@ public sealed class SiteSafetyScanner(
                 scores.ContentRiskScore,
                 scores.FinalHipScore,
                 evidence,
-                scores);
-            RecentScans[cacheKey] = new CachedSiteSafetyScan(result, DateTimeOffset.UtcNow.Add(CacheDuration));
+                scores,
+                matchedRules);
+            RecentScans[cacheKey] = new CachedSiteSafetyScan(result, DateTimeOffset.UtcNow.Add(options.ScanCacheDuration));
             return result;
         }
         catch (ValidationException)
@@ -160,25 +164,45 @@ public sealed class SiteSafetyScanner(
     /// <param name="domain">Normalized domain.</param>
     /// <param name="signals">Privacy-safe observed scan facts.</param>
     /// <returns>Internal scan context used for status and score impact calculation.</returns>
-    private static SiteSafetyContext Analyze(Uri uri, string domain, SiteSafetyObservedSignals signals, IReadOnlyCollection<SiteSafetyEvidence> evidence)
+    private static SiteSafetyContext Analyze(Uri uri, string domain, SiteSafetyObservedSignals signals, IReadOnlyCollection<SiteSafetyEvidence> evidence, IReadOnlyCollection<SiteSafetyRuleResult> matchedRules, SiteSafetyRuleOptions options)
     {
         var reasons = new List<string>();
         var warnings = new List<string>();
         var positive = new List<string>();
         var negative = new List<string>();
 
-        var malwareRisk = signals.KnownMalwareIndicator ? 95 : 0;
-        var phishingRisk = signals.KnownPhishingPattern ? 85 : 0;
-        var redirectRisk = RedirectRisk(uri, signals, reasons, negative);
-        var scriptRisk = ScriptRisk(signals, reasons, warnings, negative);
-        var downloadRisk = DownloadRisk(signals, reasons, warnings, negative);
-        var formRisk = FormRisk(signals, reasons, warnings, negative);
-        var reputationRisk = ReputationRisk(domain, signals, reasons, negative);
-        var external = BuildExternalEvidenceImpact(evidence, reasons, warnings, positive, negative);
+        var enforcedRules = matchedRules.Where(rule => !rule.IsSimulationOnly).ToArray();
+        var malwareRisk = MaxRisk(enforcedRules, SiteSafetyRiskCategory.Malware);
+        var phishingRisk = MaxRisk(enforcedRules, SiteSafetyRiskCategory.Phishing);
+        var redirectRisk = MaxRisk(enforcedRules, SiteSafetyRiskCategory.Redirect);
+        var scriptRisk = MaxRisk(enforcedRules, SiteSafetyRiskCategory.Script);
+        var downloadRisk = MaxRisk(enforcedRules, SiteSafetyRiskCategory.Download);
+        var formRisk = MaxRisk(enforcedRules, SiteSafetyRiskCategory.Form);
+        var reputationRisk = MaxRisk(enforcedRules, SiteSafetyRiskCategory.Reputation);
+        var externalTrustBoost = Math.Clamp(enforcedRules.Where(rule => rule.CollectionType == SiteSafetyRuleCollectionType.ExternalEvidenceRules).Sum(rule => rule.TrustImpact), 0, Math.Max(0, options.MaxExternalTrustBoost));
+        var confidencePenalty = enforcedRules.Select(rule => rule.ConfidencePenalty).DefaultIfEmpty(0).Max();
+        var hasAuthoritativeRiskHit = enforcedRules.Any(rule => rule.CollectionType == SiteSafetyRuleCollectionType.ExternalEvidenceRules && rule.Severity == SiteSafetyRuleSeverity.Critical);
+        var hasConflictingEvidence = enforcedRules.Any(rule => rule.RuleId.Equals("external-conflict", StringComparison.OrdinalIgnoreCase));
+        var statusOverride = StrongestStatusOverride(enforcedRules);
 
-        malwareRisk = Math.Max(malwareRisk, external.MalwareRisk);
-        phishingRisk = Math.Max(phishingRisk, external.PhishingRisk);
-        reputationRisk = Math.Max(reputationRisk, external.ReputationRisk);
+        foreach (var rule in matchedRules)
+        {
+            reasons.Add(rule.Reason);
+            if (!string.IsNullOrWhiteSpace(rule.Warning))
+            {
+                warnings.Add(rule.Warning);
+            }
+
+            if (!rule.IsSimulationOnly && rule.RiskImpact > 0)
+            {
+                negative.Add(rule.Reason);
+            }
+
+            if (!rule.IsSimulationOnly && rule.TrustImpact > 0)
+            {
+                positive.Add(rule.Reason);
+            }
+        }
 
         if (uri.Scheme == "https")
         {
@@ -250,14 +274,119 @@ public sealed class SiteSafetyScanner(
             reputationRisk,
             overallRisk,
             signals.TrustDataAvailable,
-            external.TrustBoost,
-            external.ConfidencePenalty,
-            external.HasAuthoritativeRiskHit,
-            external.HasConflictingEvidence,
+            externalTrustBoost,
+            confidencePenalty,
+            hasAuthoritativeRiskHit,
+            hasConflictingEvidence,
+            statusOverride,
             reasons.Distinct().ToArray(),
             warnings.Distinct().ToArray(),
             positive.Distinct().ToArray(),
             negative.Distinct().ToArray());
+    }
+
+    /// <summary>
+    /// Builds the privacy-safe rule input used by built-in and admin-managed Site Safety rules.
+    /// </summary>
+    private static SiteSafetyRuleInput BuildRuleInput(Uri uri, string domain, SiteSafetyObservedSignals signals, IReadOnlyCollection<SiteSafetyEvidence> evidence)
+    {
+        var downloads = signals.DownloadLinks ?? [];
+        var matchedTerms = new List<string>(signals.MatchedRiskTerms ?? []);
+        AddTerm(matchedTerms, signals.ContainsScamWording, "ScamWording");
+        AddTerm(matchedTerms, signals.ContainsUrgencyWording, "UrgencyWording");
+        AddTerm(matchedTerms, signals.ContainsImpersonationWording, "ImpersonationWording");
+        AddTerm(matchedTerms, signals.KnownPhishingPattern, "KnownPhishingPattern");
+        AddTerm(matchedTerms, signals.KnownMalwareIndicator, "KnownMalwareIndicator");
+
+        var shortenerRedirectCount = signals.RedirectChain?
+            .Count(link => Uri.TryCreate(link, UriKind.Absolute, out var redirectUri) && ShortenerDomains.Contains(NormalizeHost(redirectUri.Host))) ?? 0;
+
+        return new SiteSafetyRuleInput(
+            uri,
+            domain,
+            domain.Split('.').LastOrDefault() ?? string.Empty,
+            uri.Scheme == "https",
+            signals.RedirectChain?.Count ?? 0,
+            signals.ShortenedLinkCount + shortenerRedirectCount + (ShortenerDomains.Contains(domain) ? 1 : 0),
+            signals.ObfuscatedLinkCount,
+            signals.ExternalScriptUrls?.Count ?? 0,
+            signals.InlineScriptCount,
+            signals.SuspiciousScriptPatternCount,
+            downloads.Count(link => ExecutableExtensions.Contains(Path.GetExtension(SafePath(link)))),
+            downloads.Count(link => ArchiveExtensions.Contains(Path.GetExtension(SafePath(link)))),
+            signals.HasLoginForm,
+            signals.HasPasswordField,
+            signals.HasPaymentField,
+            signals.KnownAbuseReports,
+            signals.DomainReputationScore,
+            signals.PageReputationScore,
+            matchedTerms.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            evidence,
+            signals.TrustDataAvailable);
+    }
+
+    /// <summary>
+    /// Evaluates built-in code rules and admin-managed structured rules.
+    /// </summary>
+    private async Task<IReadOnlyCollection<SiteSafetyRuleResult>> EvaluateRulesAsync(SiteSafetyRuleInput input, CancellationToken cancellationToken)
+    {
+        var options = ruleOptions ?? new SiteSafetyRuleOptions();
+        var results = BuiltInSiteSafetyRules.Create(options)
+            .Select(rule => rule.Evaluate(input))
+            .OfType<SiteSafetyRuleResult>()
+            .ToList();
+
+        if (adminRuleRepository is not null)
+        {
+            var adminRules = await adminRuleRepository.ListAsync(cancellationToken);
+            foreach (var rule in adminRules)
+            {
+                results.AddRange(AdminSiteSafetyRuleEvaluator.Evaluate(rule, input));
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Adds a privacy-safe matched-risk label when the corresponding signal exists.
+    /// </summary>
+    private static void AddTerm(ICollection<string> terms, bool condition, string term)
+    {
+        if (condition)
+        {
+            terms.Add(term);
+        }
+    }
+
+    /// <summary>
+    /// Gets the maximum enforced risk impact for one risk category.
+    /// </summary>
+    private static int MaxRisk(IEnumerable<SiteSafetyRuleResult> results, SiteSafetyRiskCategory category) =>
+        Math.Clamp(results.Where(result => result.RiskCategory == category).Select(result => result.RiskImpact).DefaultIfEmpty(0).Max(), 0, 100);
+
+    /// <summary>
+    /// Selects the strongest safe status override from matched enforced rules.
+    /// </summary>
+    private static SiteSafetyScanStatus? StrongestStatusOverride(IEnumerable<SiteSafetyRuleResult> results)
+    {
+        var overrides = results.Select(result => result.StatusOverride).OfType<SiteSafetyScanStatus>().ToArray();
+        if (overrides.Contains(SiteSafetyScanStatus.Dangerous))
+        {
+            return SiteSafetyScanStatus.Dangerous;
+        }
+
+        if (overrides.Contains(SiteSafetyScanStatus.HighRisk))
+        {
+            return SiteSafetyScanStatus.HighRisk;
+        }
+
+        if (overrides.Contains(SiteSafetyScanStatus.Suspicious))
+        {
+            return SiteSafetyScanStatus.Suspicious;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -606,6 +735,11 @@ public sealed class SiteSafetyScanner(
     /// <returns>Scan status.</returns>
     private static SiteSafetyScanStatus DetermineStatus(SiteSafetyContext context)
     {
+        if (context.StatusOverride is not null)
+        {
+            return context.StatusOverride.Value;
+        }
+
         if (context.MalwareRiskScore >= 90 || context.PhishingRiskScore >= 85)
         {
             return SiteSafetyScanStatus.Dangerous;
@@ -821,6 +955,7 @@ public sealed class SiteSafetyScanner(
         int ExternalConfidencePenalty,
         bool HasAuthoritativeRiskHit,
         bool HasConflictingEvidence,
+        SiteSafetyScanStatus? StatusOverride,
         IReadOnlyCollection<string> Reasons,
         IReadOnlyCollection<string> Warnings,
         IReadOnlyCollection<string> PositiveSignals,
