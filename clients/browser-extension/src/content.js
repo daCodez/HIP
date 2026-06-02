@@ -3,6 +3,7 @@
   const attentionStatuses = new Set(["Unknown", "LimitedTrustData", "Caution", "Suspicious", "HighRisk", "Dangerous", "Critical"]);
   const ignoredProtocols = new Set(["javascript:", "mailto:", "tel:", "data:", "blob:"]);
   const downloadExtensions = new Set([".exe", ".zip", ".msi", ".dmg", ".pdf", ".docx", ".scr"]);
+  const executableDownloadExtensions = new Set([".exe", ".msi", ".dmg", ".scr"]);
   const reportedDomains = new Set();
 
   const currentDomain = normalizeHost(window.location.hostname);
@@ -43,18 +44,13 @@
     lastSummary.website = compactLookup(currentLookup);
     lastSummary.apiStatus = currentLookup ? "Available" : "Unavailable";
 
-    if (settings.enableWarningBanner && currentLookup?.status) {
-      window.HipRiskBadgeRenderer.renderTrustBanner(withLookupUrl(currentLookup), pluginVersion, {
-        onFeedback: submitBannerFeedback
-      });
-    }
-
     if (settings.enableLinkScanning) {
       await scanLinks();
     }
 
     await scanLoginForms();
     collectScriptSignals();
+    await renderPageBannerIfNeeded(currentLookup);
     await persistScanResult(currentLookup).catch(error => console.warn("HIP scan result persistence failed safely.", error));
     publishSummary();
   }
@@ -77,6 +73,9 @@
       if (target.isDownloadCandidate) {
         lastSummary.downloadCandidates++;
         lastSummary.downloadLinks.push(target.url.href);
+      }
+      if (isExecutableDownloadLike(target.url)) {
+        lastSummary.executableDownloadCandidates++;
       }
       if (target.linkContext === "social-feed") {
         lastSummary.socialLinkCandidates++;
@@ -130,6 +129,7 @@
     const forms = Array.from(document.querySelectorAll("form"));
     lastSummary.formsDetected = forms.length;
     lastSummary.loginFormsDetected = forms.filter(form => form.querySelector('input[type="password"]')).length;
+    lastSummary.paymentFieldsDetected = forms.filter(hasPaymentField).length;
 
     for (const form of forms) {
       if (!form.querySelector('input[type="password"]')) {
@@ -147,6 +147,29 @@
         window.HipRiskBadgeRenderer.renderFormIndicator(form, lookup, "Login form submits to a different domain. HIP checked the action domain only; no form values were read.");
       }
     }
+  }
+
+  /**
+   * Renders the injected banner only when settings and page risk justify interrupting the user.
+   * The popup remains the default place for normal HIP details.
+   */
+  async function renderPageBannerIfNeeded(currentLookup) {
+    if (!settings.enableWarningBanner || !currentLookup?.status || !shouldShowTrustBanner(currentLookup, lastSummary, settings)) {
+      return;
+    }
+
+    const dismissedResponse = await chrome.runtime.sendMessage({
+      type: "HIP_GET_BANNER_DISMISSED",
+      domain: currentLookup.domain || currentDomain
+    });
+    if (dismissedResponse?.ok && dismissedResponse.result === true) {
+      return;
+    }
+
+    window.HipRiskBadgeRenderer.renderTrustBanner(withLookupUrl(currentLookup), pluginVersion, {
+      onFeedback: submitBannerFeedback,
+      onDismiss: dismissTrustBanner
+    });
   }
 
   function applyLinkProtection(anchor, target, lookup, browserResult = null) {
@@ -371,6 +394,7 @@
       enableSafetyRouting: true,
       enableSafetyPageRouting: true,
       submitScanResults: true,
+      bannerDisplayMode: "WarningsOnly",
       scanMode: "Normal"
     };
   }
@@ -416,6 +440,14 @@
     return downloadExtensions.has(pathname.slice(pathname.lastIndexOf("."))) || url.searchParams.has("download");
   }
 
+  /**
+   * Detects executable download candidates without downloading or inspecting file contents.
+   */
+  function isExecutableDownloadLike(url) {
+    const pathname = url.pathname.toLowerCase();
+    return executableDownloadExtensions.has(pathname.slice(pathname.lastIndexOf(".")));
+  }
+
   function detectLinkContext(anchor) {
     if (anchor.closest('[role="feed"], [data-testid*="tweet"], article, .feed, .post, .timeline')) {
       return "social-feed";
@@ -439,6 +471,13 @@
     } catch {
       return currentDomain;
     }
+  }
+
+  /**
+   * Detects payment field presence without reading values, names beyond labels, or typed content.
+   */
+  function hasPaymentField(form) {
+    return Boolean(form.querySelector('input[autocomplete*="cc-" i], input[name*="card" i], input[id*="card" i], input[name*="payment" i], input[id*="payment" i]'));
   }
 
   /**
@@ -606,6 +645,56 @@
     return "Allow";
   }
 
+  /**
+   * Decides whether the page-level banner should interrupt the user.
+   */
+  function shouldShowTrustBanner(lookup, summary, currentSettings) {
+    const mode = currentSettings.bannerDisplayMode || "WarningsOnly";
+    if (mode === "NeverShow" || currentSettings.enableWarningBanner === false) {
+      return false;
+    }
+
+    if (mode === "AlwaysShow") {
+      return true;
+    }
+
+    const status = lookup?.status || "Unknown";
+    const dangerousPageRisk = status === "Dangerous" || status === "Critical" || summary.dangerousLinks > 0;
+    if (mode === "DangerousOnly") {
+      return dangerousPageRisk;
+    }
+
+    if (status === "Suspicious" || status === "HighRisk" || dangerousPageRisk) {
+      return true;
+    }
+
+    if (status === "LimitedTrustData") {
+      return summary.loginFormsDetected > 0 ||
+        summary.paymentFieldsDetected > 0 ||
+        summary.executableDownloadCandidates > 0;
+    }
+
+    if (status === "Trusted" || status === "MostlyTrusted" || status === "ProbablySafe") {
+      return summary.riskyLinks > 0 ||
+        summary.suspiciousLinks > 0 ||
+        summary.dangerousLinks > 0 ||
+        summary.executableDownloadCandidates > 0 ||
+        summary.paymentFieldsDetected > 0;
+    }
+
+    return false;
+  }
+
+  /**
+   * Saves banner dismissal in extension-owned storage so websites cannot forge HIP trust decisions.
+   */
+  async function dismissTrustBanner(lookup) {
+    await chrome.runtime.sendMessage({
+      type: "HIP_SET_BANNER_DISMISSED",
+      domain: lookup?.domain || currentDomain
+    });
+  }
+
   function emptySummary() {
     return {
       apiStatus: "Checking",
@@ -616,9 +705,11 @@
       dangerousLinks: 0,
       unknownLinks: 0,
       downloadCandidates: 0,
+      executableDownloadCandidates: 0,
       downloadLinks: [],
       formsDetected: 0,
       loginFormsDetected: 0,
+      paymentFieldsDetected: 0,
       crossDomainLoginForms: 0,
       socialLinkCandidates: 0,
       webmailLinkCandidates: 0,

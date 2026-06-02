@@ -36,6 +36,7 @@ Settings:
 - Enable link scanning
 - Enable link badges
 - Enable warning banner
+- Banner display mode
 - Enable safety routing
 - Scan mode
 
@@ -56,6 +57,26 @@ Current setting keys:
 - `enableSafetyPageRouting`
 - `showRiskyLinkIcons`
 - `scanMode`
+- `bannerDisplayMode`
+
+Banner display modes:
+
+- `WarningsOnly`: default. Show the banner only for meaningful risk.
+- `DangerousOnly`: show only for dangerous or critical page risk.
+- `AlwaysShow`: show on every page unless dismissed.
+- `NeverShow`: never inject the page banner.
+
+Default banner behavior:
+
+- `Trusted`: no banner
+- `MostlyTrusted`: no banner
+- `LimitedTrustData`: no banner unless the page has login, password, payment, or executable download risk
+- `Unknown`: no banner
+- `Suspicious`: soft warning banner
+- `HighRisk`: warning banner
+- `Dangerous` / `Critical`: strong warning banner
+
+The popup remains the default place to view full HIP details. The banner is for protecting users when page risk is meaningful, not for forcing users to close a banner on normal pages.
 
 ## Trust Banner Feedback
 
@@ -83,7 +104,7 @@ The extension submits only privacy-safe evidence:
 
 It does not submit page text, form values, passwords, tokens, private messages, or email content.
 
-When the user closes the banner, the extension stores a per-domain dismissal flag in page `localStorage`. This is only a local display preference. HIP must not treat localStorage as trustworthy security state because a website can clear or interfere with it.
+When the user closes the banner, the extension stores a per-domain dismissal flag in `chrome.storage.local`. This is only a local display preference and does not affect HIP scoring, reputation, safety routing, or trust decisions.
 
 ## Configuration
 

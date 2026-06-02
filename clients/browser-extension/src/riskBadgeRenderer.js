@@ -47,7 +47,7 @@
    * Renders the page-level HIP trust banner for the current website.
    * The banner is intentionally site-level, not per-link, and includes the manifest-derived plugin version
    * so dev testers can confirm Chrome loaded the latest unpacked build.
-   * Dismissal is stored in page localStorage only as a local user preference; it is not a trust signal.
+   * Dismissal is delegated to the content script so it can be stored in extension-owned storage.
    */
   function renderTrustBanner(lookup, pluginVersion = "HIP Plugin vunknown-dev", options = {}) {
     ensureStyles();
@@ -57,12 +57,6 @@
     }
 
     const status = lookup?.status || "Unknown";
-    const domain = lookup?.domain || window.location.hostname || "unknown";
-    const dismissedKey = bannerDismissedKey(domain);
-    if (isBannerDismissed(dismissedKey)) {
-      return;
-    }
-
     const statusClass = status.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     const score = lookup?.finalHipScore ?? lookup?.score ?? "Unknown";
     const title = bannerTitle(status);
@@ -87,7 +81,7 @@
     `;
 
     banner.querySelector(".hip-trust-close").addEventListener("click", () => {
-      saveBannerDismissed(dismissedKey);
+      options.onDismiss?.(lookup).catch?.(error => console.warn("HIP banner dismissal failed safely.", error));
       banner.remove();
     });
     for (const button of banner.querySelectorAll("[data-hip-feedback]")) {
@@ -298,36 +292,6 @@
       return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "#";
     } catch {
       return "#";
-    }
-  }
-
-  /**
-   * Builds the localStorage key for banner dismissal.
-   * This is intentionally per-domain so closing HIP on one site does not hide warnings everywhere.
-   */
-  function bannerDismissedKey(domain) {
-    return `hip:trust-banner-dismissed:${String(domain).toLowerCase()}`;
-  }
-
-  /**
-   * Checks local banner dismissal without treating localStorage as trusted security state.
-   */
-  function isBannerDismissed(key) {
-    try {
-      return window.localStorage.getItem(key) === "true";
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Saves the local-only banner dismissal preference.
-   */
-  function saveBannerDismissed(key) {
-    try {
-      window.localStorage.setItem(key, "true");
-    } catch {
-      // Some pages block localStorage; banner dismissal should fail safely.
     }
   }
 })();

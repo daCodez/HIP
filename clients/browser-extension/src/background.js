@@ -18,6 +18,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "HIP_GET_BANNER_DISMISSED") {
+    isBannerDismissed(message.domain)
+      .then(result => sendResponse({ ok: true, result }))
+      .catch(error => sendResponse({ ok: false, error: error.message }));
+
+    return true;
+  }
+
+  if (message?.type === "HIP_SET_BANNER_DISMISSED") {
+    setBannerDismissed(message.domain)
+      .then(() => sendResponse({ ok: true }))
+      .catch(error => sendResponse({ ok: false, error: error.message }));
+
+    return true;
+  }
+
   if (message?.type === "HIP_LOOKUP_DOMAIN") {
     lookupDomain(message.domain)
       .then(result => sendResponse({ ok: true, result }))
@@ -167,4 +183,28 @@ async function saveScanResult(result) {
  */
 function getPluginVersion() {
   return formatPluginVersion(chrome.runtime.getManifest().version);
+}
+
+/**
+ * Reads the per-domain banner dismissal flag from extension-owned storage.
+ * Websites cannot tamper with chrome.storage.local, unlike page localStorage.
+ */
+async function isBannerDismissed(domain) {
+  const key = bannerDismissalKey(domain);
+  const stored = await chrome.storage.local.get({ [key]: false });
+  return stored[key] === true;
+}
+
+/**
+ * Saves a per-domain banner dismissal flag in extension-owned storage.
+ */
+async function setBannerDismissed(domain) {
+  await chrome.storage.local.set({ [bannerDismissalKey(domain)]: true });
+}
+
+/**
+ * Builds a stable storage key for local banner dismissal state.
+ */
+function bannerDismissalKey(domain) {
+  return `hip.bannerDismissed.${normalizeHost(domain)}`;
 }

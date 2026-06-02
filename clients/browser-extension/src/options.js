@@ -7,6 +7,7 @@ const fields = {
   apiBaseUrl: document.getElementById("apiBaseUrl"),
   webBaseUrl: document.getElementById("webBaseUrl"),
   scanMode: document.getElementById("scanMode"),
+  bannerDisplayMode: document.getElementById("bannerDisplayMode"),
   enableLinkBadges: document.getElementById("enableLinkBadges"),
   enableLinkScanning: document.getElementById("enableLinkScanning"),
   enableWarningBanner: document.getElementById("enableWarningBanner"),
@@ -46,6 +47,7 @@ function render(settings) {
   fields.apiBaseUrl.value = settings.hipApiBaseUrl || settings.apiBaseUrl;
   fields.webBaseUrl.value = settings.webBaseUrl;
   fields.scanMode.value = settings.scanMode;
+  fields.bannerDisplayMode.value = settings.bannerDisplayMode || "WarningsOnly";
   fields.enableLinkBadges.checked = settings.showRiskyLinkIcons ?? settings.enableLinkBadges;
   fields.enableLinkScanning.checked = settings.enableLinkScanning;
   fields.enableWarningBanner.checked = settings.enableWarningBanner;
@@ -62,6 +64,7 @@ function readForm() {
     apiBaseUrl: fields.apiBaseUrl.value.trim(),
     webBaseUrl: fields.webBaseUrl.value.trim(),
     scanMode: fields.scanMode.value,
+    bannerDisplayMode: fields.bannerDisplayMode.value,
     showRiskyLinkIcons: fields.enableLinkBadges.checked,
     enableLinkBadges: fields.enableLinkBadges.checked,
     enableLinkScanning: fields.enableLinkScanning.checked,

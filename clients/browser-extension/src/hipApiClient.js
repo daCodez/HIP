@@ -16,7 +16,8 @@ export const DEFAULT_HIP_SETTINGS = Object.freeze({
   enableLinkBadges: true,
   enableWarningBanner: true,
   enableSafetyRouting: true,
-  scanMode: "Normal"
+  scanMode: "Normal",
+  bannerDisplayMode: "WarningsOnly"
 });
 
 export class HipApiClient {
@@ -233,8 +234,59 @@ export function normalizeHipSettings(settings = {}) {
     enableSafetyPageRouting,
     enableSafetyRouting: enableSafetyPageRouting,
     enableWarningBanner: settings.enableWarningBanner ?? true,
-    scanMode: settings.scanMode || "Normal"
+    scanMode: settings.scanMode || "Normal",
+    bannerDisplayMode: normalizeBannerDisplayMode(settings.bannerDisplayMode)
   };
+}
+
+/**
+ * Decides whether the page-level HIP banner should show.
+ * The popup remains the default details surface; banners are reserved for meaningful user-facing risk.
+ */
+export function shouldShowTrustBanner(lookup, summary = {}, settings = {}) {
+  const mode = normalizeBannerDisplayMode(settings.bannerDisplayMode);
+  if (mode === "NeverShow" || settings.enableWarningBanner === false) {
+    return false;
+  }
+
+  if (mode === "AlwaysShow") {
+    return true;
+  }
+
+  const status = lookup?.status || "Unknown";
+  const hasDangerousPageRisk = status === "Dangerous" || status === "Critical" || (summary.dangerousLinks ?? 0) > 0;
+  if (mode === "DangerousOnly") {
+    return hasDangerousPageRisk;
+  }
+
+  if (status === "Suspicious" || status === "HighRisk" || hasDangerousPageRisk) {
+    return true;
+  }
+
+  if (status === "LimitedTrustData") {
+    return (summary.loginFormsDetected ?? 0) > 0 ||
+      (summary.paymentFieldsDetected ?? 0) > 0 ||
+      (summary.executableDownloadCandidates ?? 0) > 0;
+  }
+
+  if (status === "Trusted" || status === "MostlyTrusted" || status === "ProbablySafe") {
+    return (summary.riskyLinks ?? 0) > 0 ||
+      (summary.suspiciousLinks ?? 0) > 0 ||
+      (summary.dangerousLinks ?? 0) > 0 ||
+      (summary.executableDownloadCandidates ?? 0) > 0 ||
+      (summary.paymentFieldsDetected ?? 0) > 0;
+  }
+
+  return false;
+}
+
+/**
+ * Normalizes future banner display settings so older extension installs default to warnings only.
+ */
+export function normalizeBannerDisplayMode(value) {
+  return ["WarningsOnly", "DangerousOnly", "AlwaysShow", "NeverShow"].includes(value)
+    ? value
+    : "WarningsOnly";
 }
 
 /**
