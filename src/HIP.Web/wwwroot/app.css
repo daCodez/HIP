@@ -1606,13 +1606,16 @@ h1:focus {
     color: #9db0c8;
 }
 
-.hip-login-form button {
+.hip-login-form button,
+.hip-login-button {
     border: 0;
     border-radius: 8px;
     padding: 14px;
     color: #06101d;
     background: #04c7df;
     font-weight: 900;
+    text-align: center;
+    text-decoration: none;
 }
 
 .hip-login-form small {

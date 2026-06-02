@@ -129,6 +129,29 @@ public sealed class AdminAuthorizationTests
         });
     }
 
+    /// <summary>
+    /// Confirms local development browser login issues a dev-only admin cookie and redirects to settings.
+    /// </summary>
+    [Test]
+    public async Task Development_admin_login_sets_browser_cookie()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var response = await client.GetAsync("/dev/admin-login/Admin");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
+            Assert.That(response.Headers.Location?.ToString(), Is.EqualTo("/admin/settings"));
+            Assert.That(response.Headers.TryGetValues("Set-Cookie", out var cookies), Is.True);
+            Assert.That(cookies!, Has.Some.Contains("HIP_DEV_ADMIN_ROLE"));
+        });
+    }
+
     [Test]
     public async Task Admin_can_enable_external_provider_settings()
     {

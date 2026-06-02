@@ -74,6 +74,8 @@ app.UseAuthorization();
 
 app.UseAntiforgery();
 
+MapDevelopmentAuthEndpoints(app);
+
 MapPublicApis(app.MapGroup(ApiRoutes.Public));
 MapReportApis(app.MapGroup($"{ApiRoutes.V1}/reports"));
 MapBadgeApis(app.MapGroup(ApiRoutes.Badge));
@@ -148,6 +150,46 @@ static ExternalSiteEvidenceOptions BindExternalSiteEvidenceOptions(IConfiguratio
     var options = new ExternalSiteEvidenceOptions();
     configuration.GetSection("ExternalSiteEvidence").Bind(options);
     return options;
+}
+
+/// <summary>
+/// Maps development-only browser login helpers for manually testing protected admin pages.
+/// </summary>
+/// <param name="app">Web application route builder.</param>
+static void MapDevelopmentAuthEndpoints(WebApplication app)
+{
+    if (!app.Environment.IsDevelopment())
+    {
+        return;
+    }
+
+    app.MapGet("/dev/admin-login/{role}", (string role, HttpContext httpContext) =>
+    {
+        if (!AdminRoles.All.Contains(role))
+        {
+            return Results.BadRequest("Unsupported HIP admin role.");
+        }
+
+        var options = new CookieOptions
+        {
+            HttpOnly = true,
+            SameSite = SameSiteMode.Lax,
+            Secure = httpContext.Request.IsHttps,
+            Expires = DateTimeOffset.UtcNow.AddHours(8)
+        };
+
+        httpContext.Response.Cookies.Append(HipDevHeaderAuthenticationHandler.DevAdminRoleCookieName, role, options);
+        httpContext.Response.Cookies.Append(HipDevHeaderAuthenticationHandler.DevAdminUserCookieName, "hip-dev-browser-admin", options);
+
+        return Results.Redirect("/admin/settings");
+    }).AllowAnonymous();
+
+    app.MapGet("/dev/logout", (HttpContext httpContext) =>
+    {
+        httpContext.Response.Cookies.Delete(HipDevHeaderAuthenticationHandler.DevAdminRoleCookieName);
+        httpContext.Response.Cookies.Delete(HipDevHeaderAuthenticationHandler.DevAdminUserCookieName);
+        return Results.Redirect("/login");
+    }).AllowAnonymous();
 }
 
 /// <summary>
