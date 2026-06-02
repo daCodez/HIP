@@ -152,6 +152,126 @@ public sealed class SiteSafetyEvidenceProviderTests
     }
 
     /// <summary>
+    /// Verifies the concrete third-party providers exist but stay disabled until explicitly configured.
+    /// </summary>
+    [Test]
+    public async Task Concrete_external_providers_are_disabled_by_default()
+    {
+        var options = new ExternalSiteEvidenceOptions();
+        var cache = new InMemoryExternalSiteEvidenceCache();
+        ISiteSafetyEvidenceProvider[] providers =
+        [
+            new SslLabsSiteEvidenceProvider(cache, options),
+            new GoogleWebRiskSiteEvidenceProvider(cache, options),
+            new VirusTotalSiteEvidenceProvider(cache, options)
+        ];
+
+        var evidence = new List<SiteSafetyEvidence>();
+        foreach (var provider in providers)
+        {
+            evidence.Add(await provider.CollectEvidenceAsync(Context(), CancellationToken.None));
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("SSL Labs / Qualys TLS"));
+            Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("Google Web Risk / Safe Browsing"));
+            Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("VirusTotal"));
+            Assert.That(evidence.SelectMany(item => item.Errors), Has.All.Contains("disabled"));
+            Assert.That(evidence.SelectMany(item => item.EvidenceItems), Is.Empty);
+        });
+    }
+
+    /// <summary>
+    /// Verifies provider-specific enablement does not leak private content when a concrete adapter is not configured.
+    /// </summary>
+    [Test]
+    public async Task Enabled_external_provider_without_adapter_returns_safe_configuration_error()
+    {
+        var options = new ExternalSiteEvidenceOptions
+        {
+            ExternalProvidersEnabled = true,
+            SslLabs = new ExternalProviderOptions { Enabled = true }
+        };
+        var provider = new SslLabsSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), options);
+
+        var evidence = await provider.CollectEvidenceAsync(Context("https://example.com/login?password=secret"), CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(evidence.Errors, Has.Some.Contains("adapter is configured"));
+            Assert.That(evidence.EvidenceItems, Is.Empty);
+            Assert.That(evidence.ToString(), Does.Not.Contain("password=secret"));
+            Assert.That(evidence.ToString(), Does.Not.Contain("page body"));
+            Assert.That(evidence.ToString(), Does.Not.Contain("form values"));
+            Assert.That(evidence.ToString(), Does.Not.Contain("email content"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies SSL Labs-style normalized TLS grades only create a small trust signal.
+    /// </summary>
+    [Test]
+    public void Ssl_labs_provider_normalizes_tls_grade_as_small_trust_signal()
+    {
+        var provider = new SslLabsSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), new ExternalSiteEvidenceOptions());
+
+        var evidence = provider.CreateTlsGradeEvidence(Context(), "A", "TLS scanner reported strong TLS configuration.");
+
+        var item = evidence.EvidenceItems.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(item.Category, Is.EqualTo("TlsGrade"));
+            Assert.That(item.Status, Is.EqualTo(SiteSafetyEvidenceStatus.Positive));
+            Assert.That(item.TrustImpact, Is.EqualTo(5));
+            Assert.That(evidence.IsAuthoritativeForTrust, Is.True);
+            Assert.That(evidence.IsAuthoritativeForRisk, Is.False);
+        });
+    }
+
+    /// <summary>
+    /// Verifies Google Web Risk-style threat matches normalize to authoritative risk evidence.
+    /// </summary>
+    [Test]
+    public void Google_web_risk_provider_normalizes_phishing_match()
+    {
+        var provider = new GoogleWebRiskSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), new ExternalSiteEvidenceOptions());
+
+        var evidence = provider.CreateThreatMatchEvidence(Context(), "SOCIAL_ENGINEERING");
+
+        var item = evidence.EvidenceItems.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(item.Category, Is.EqualTo("PhishingMatch"));
+            Assert.That(item.Status, Is.EqualTo(SiteSafetyEvidenceStatus.Dangerous));
+            Assert.That(item.RiskImpact, Is.EqualTo(95));
+            Assert.That(evidence.IsAuthoritativeForRisk, Is.True);
+            Assert.That(evidence.IsAuthoritativeForTrust, Is.False);
+        });
+    }
+
+    /// <summary>
+    /// Verifies VirusTotal-style malware matches normalize to authoritative risk evidence.
+    /// </summary>
+    [Test]
+    public void VirusTotal_provider_normalizes_malware_match()
+    {
+        var provider = new VirusTotalSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), new ExternalSiteEvidenceOptions());
+
+        var evidence = provider.CreateMalwareMatchEvidence(Context(), "malicious");
+
+        var item = evidence.EvidenceItems.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(item.Category, Is.EqualTo("MalwareMatch"));
+            Assert.That(item.Status, Is.EqualTo(SiteSafetyEvidenceStatus.Dangerous));
+            Assert.That(item.RiskImpact, Is.EqualTo(95));
+            Assert.That(evidence.IsAuthoritativeForRisk, Is.True);
+            Assert.That(evidence.IsAuthoritativeForTrust, Is.False);
+        });
+    }
+
+    /// <summary>
     /// Creates a scanner with production validation and test evidence providers.
     /// </summary>
     private static SiteSafetyScanner CreateScanner(params ISiteSafetyEvidenceProvider[] providers) =>
@@ -160,8 +280,8 @@ public sealed class SiteSafetyEvidenceProviderTests
     /// <summary>
     /// Creates a privacy-safe provider context for direct provider tests.
     /// </summary>
-    private static SiteSafetyEvidenceContext Context() =>
-        new(new Uri("https://example.com"), "example.com", "hash", new SiteSafetyObservedSignals(), DateTimeOffset.UtcNow);
+    private static SiteSafetyEvidenceContext Context(string url = "https://example.com") =>
+        new(new Uri(url), "example.com", "hash", new SiteSafetyObservedSignals(), DateTimeOffset.UtcNow);
 
     /// <summary>
     /// Creates normalized SSL Labs-style evidence without calling SSL Labs.

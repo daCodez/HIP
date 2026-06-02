@@ -38,6 +38,7 @@ builder.Logging.AddDebug();
 
 builder.AddServiceDefaults();
 builder.Services.AddHipApplication();
+builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration);
 builder.Services.AddHipAdminAuthorization();
 builder.Services.AddCascadingAuthenticationState();
@@ -125,6 +126,18 @@ app.MapRazorComponents<App>()
 app.MapDefaultEndpoints();
 
 app.Run();
+
+/// <summary>
+/// Binds external evidence provider options from configuration without requiring providers to be enabled.
+/// </summary>
+/// <param name="configuration">Application configuration.</param>
+/// <returns>Configured external evidence options.</returns>
+static ExternalSiteEvidenceOptions BindExternalSiteEvidenceOptions(IConfiguration configuration)
+{
+    var options = new ExternalSiteEvidenceOptions();
+    configuration.GetSection("ExternalSiteEvidence").Bind(options);
+    return options;
+}
 
 static void MapPublicApis(RouteGroupBuilder publicApi)
 {

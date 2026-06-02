@@ -243,6 +243,52 @@ public sealed class ExternalSiteEvidenceOptions
     /// Gets or sets the default evidence cache duration.
     /// </summary>
     public TimeSpan DefaultCacheDuration { get; set; } = TimeSpan.FromHours(6);
+
+    /// <summary>
+    /// Gets or sets SSL Labs/Qualys-style TLS provider configuration.
+    /// </summary>
+    public ExternalProviderOptions SslLabs { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets Google Web Risk or Safe Browsing-style provider configuration.
+    /// </summary>
+    public ExternalProviderOptions GoogleWebRisk { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets VirusTotal provider configuration.
+    /// </summary>
+    public ExternalProviderOptions VirusTotal { get; set; } = new();
+}
+
+/// <summary>
+/// Configuration for one named third-party evidence provider.
+/// </summary>
+public sealed class ExternalProviderOptions
+{
+    /// <summary>
+    /// Gets or sets whether this specific provider may run when the global external provider switch is enabled.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets the provider endpoint. This is optional for MVP and must not include secrets.
+    /// </summary>
+    public string? Endpoint { get; set; }
+
+    /// <summary>
+    /// Gets or sets the secret name or API key placeholder used by the provider.
+    /// </summary>
+    public string? ApiKey { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether this provider may receive a full URL. Domain-only or hash-based checks remain preferred.
+    /// </summary>
+    public bool AllowFullUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the cache duration for this provider.
+    /// </summary>
+    public TimeSpan? CacheDuration { get; set; }
 }
 
 /// <summary>
@@ -395,11 +441,21 @@ public abstract class ExternalSiteEvidenceProviderBase(
     IExternalSiteEvidenceCache cache,
     ExternalSiteEvidenceOptions options) : IExternalSiteEvidenceProvider
 {
+    /// <summary>
+    /// Gets external provider options shared by concrete providers.
+    /// </summary>
+    protected ExternalSiteEvidenceOptions Options => options;
+
     /// <inheritdoc />
     public abstract string ProviderName { get; }
 
     /// <inheritdoc />
     public abstract SiteSafetyEvidenceProviderType ProviderType { get; }
+
+    /// <summary>
+    /// Gets the provider-specific options used by the concrete provider.
+    /// </summary>
+    protected virtual ExternalProviderOptions ProviderOptions => new();
 
     /// <inheritdoc />
     public async Task<SiteSafetyEvidence> CollectEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken)
@@ -413,6 +469,11 @@ public abstract class ExternalSiteEvidenceProviderBase(
         if (!options.ExternalProvidersEnabled)
         {
             return EmptyDisabledEvidence(context);
+        }
+
+        if (!ProviderOptions.Enabled)
+        {
+            return EmptyProviderDisabledEvidence(context);
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -444,6 +505,249 @@ public abstract class ExternalSiteEvidenceProviderBase(
             context.CheckedAtUtc.Add(options.DefaultCacheDuration),
             ["External provider disabled by configuration."],
             IsAuthoritativeForRisk: false,
+            IsAuthoritativeForTrust: false);
+
+    /// <summary>
+    /// Returns an empty evidence record explaining that this named provider is disabled.
+    /// </summary>
+    private SiteSafetyEvidence EmptyProviderDisabledEvidence(SiteSafetyEvidenceContext context) =>
+        new(
+            ProviderName,
+            ProviderType,
+            SiteSafetyEvidenceTargetType.Domain,
+            context.Domain,
+            context.UrlHash,
+            [],
+            Confidence: 0,
+            context.CheckedAtUtc,
+            context.CheckedAtUtc.Add(ProviderOptions.CacheDuration ?? options.DefaultCacheDuration),
+            [$"{ProviderName} disabled by provider configuration."],
+            IsAuthoritativeForRisk: false,
+            IsAuthoritativeForTrust: false);
+}
+
+/// <summary>
+/// SSL Labs/Qualys-style TLS evidence provider.
+/// </summary>
+/// <remarks>
+/// MVP behavior is intentionally conservative: the provider is disabled by default and returns a safe
+/// configuration error until an operator configures a real adapter. It prefers domain-only checks and never
+/// needs page text, form values, passwords, email content, cookies, or tokens.
+/// </remarks>
+public sealed class SslLabsSiteEvidenceProvider(
+    IExternalSiteEvidenceCache cache,
+    ExternalSiteEvidenceOptions options) : ExternalSiteEvidenceProviderBase(cache, options)
+{
+    /// <inheritdoc />
+    public override string ProviderName => "SSL Labs / Qualys TLS";
+
+    /// <inheritdoc />
+    public override SiteSafetyEvidenceProviderType ProviderType => SiteSafetyEvidenceProviderType.TlsScanner;
+
+    /// <inheritdoc />
+    protected override ExternalProviderOptions ProviderOptions => Options.SslLabs;
+
+    /// <inheritdoc />
+    protected override Task<SiteSafetyEvidence> CollectExternalEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(ExternalSiteEvidenceProviderHelpers.ConfigurationRequiredEvidence(
+            context,
+            "TLS provider is enabled, but no production SSL Labs/Qualys adapter is configured yet.",
+            SiteSafetyEvidenceTargetType.Domain,
+            ProviderName,
+            ProviderType,
+            authoritativeRisk: false,
+            authoritativeTrust: false));
+    }
+
+    /// <summary>
+    /// Creates a normalized TLS grade item for future concrete SSL Labs or Qualys API adapters.
+    /// </summary>
+    /// <param name="context">Privacy-safe scan context.</param>
+    /// <param name="grade">Provider grade such as A, B, C, or F.</param>
+    /// <param name="summary">Plain-English summary safe for users and admins.</param>
+    /// <returns>Normalized TLS evidence.</returns>
+    public SiteSafetyEvidence CreateTlsGradeEvidence(SiteSafetyEvidenceContext context, string grade, string summary)
+    {
+        var normalizedGrade = string.IsNullOrWhiteSpace(grade) ? "Unknown" : grade.Trim().ToUpperInvariant();
+        var isStrong = normalizedGrade is "A+" or "A" or "A-";
+        var isWeak = normalizedGrade is "C" or "D" or "E" or "F" or "T" or "M";
+        var status = isStrong ? SiteSafetyEvidenceStatus.Positive : isWeak ? SiteSafetyEvidenceStatus.Weak : SiteSafetyEvidenceStatus.Clean;
+        var riskImpact = isWeak ? 25 : 0;
+        var trustImpact = isStrong ? 5 : 0;
+
+        return new SiteSafetyEvidence(
+            ProviderName,
+            ProviderType,
+            SiteSafetyEvidenceTargetType.Domain,
+            context.Domain,
+            context.UrlHash,
+            [new SiteSafetyEvidenceItem("TlsGrade", normalizedGrade, status, riskImpact, trustImpact, summary)],
+            Confidence: isStrong || isWeak ? 80 : 50,
+            context.CheckedAtUtc,
+            context.CheckedAtUtc.Add(ProviderOptions.CacheDuration ?? TimeSpan.FromHours(6)),
+            [],
+            IsAuthoritativeForRisk: false,
+            IsAuthoritativeForTrust: true);
+    }
+}
+
+/// <summary>
+/// Google Web Risk / Safe Browsing-style threat-intelligence evidence provider.
+/// </summary>
+/// <remarks>
+/// This provider is disabled by default. Future concrete adapters should use hash-prefix or domain checks where
+/// possible and must not send page body text, form values, passwords, email content, cookies, or tokens.
+/// </remarks>
+public sealed class GoogleWebRiskSiteEvidenceProvider(
+    IExternalSiteEvidenceCache cache,
+    ExternalSiteEvidenceOptions options) : ExternalSiteEvidenceProviderBase(cache, options)
+{
+    /// <inheritdoc />
+    public override string ProviderName => "Google Web Risk / Safe Browsing";
+
+    /// <inheritdoc />
+    public override SiteSafetyEvidenceProviderType ProviderType => SiteSafetyEvidenceProviderType.ThreatIntel;
+
+    /// <inheritdoc />
+    protected override ExternalProviderOptions ProviderOptions => Options.GoogleWebRisk;
+
+    /// <inheritdoc />
+    protected override Task<SiteSafetyEvidence> CollectExternalEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(ExternalSiteEvidenceProviderHelpers.ConfigurationRequiredEvidence(
+            context,
+            "Google Web Risk provider is enabled, but API credentials and adapter implementation are not configured yet.",
+            SiteSafetyEvidenceTargetType.Url,
+            ProviderName,
+            ProviderType,
+            authoritativeRisk: false,
+            authoritativeTrust: false));
+    }
+
+    /// <summary>
+    /// Creates normalized phishing evidence for future Google Web Risk or Safe Browsing API adapters.
+    /// </summary>
+    /// <param name="context">Privacy-safe scan context.</param>
+    /// <param name="matchedThreatType">Matched provider threat label.</param>
+    /// <returns>Authoritative risk evidence.</returns>
+    public SiteSafetyEvidence CreateThreatMatchEvidence(SiteSafetyEvidenceContext context, string matchedThreatType) =>
+        ExternalSiteEvidenceProviderHelpers.CreateThreatEvidence(context, ProviderName, ProviderType, "PhishingMatch", matchedThreatType, "Google threat-intelligence provider matched a phishing indicator.");
+}
+
+/// <summary>
+/// VirusTotal URL/domain reputation evidence provider.
+/// </summary>
+/// <remarks>
+/// This provider is disabled by default. Future concrete adapters should prefer domain checks or URL hashes and
+/// must not send page body text, form values, passwords, email content, cookies, or tokens.
+/// </remarks>
+public sealed class VirusTotalSiteEvidenceProvider(
+    IExternalSiteEvidenceCache cache,
+    ExternalSiteEvidenceOptions options) : ExternalSiteEvidenceProviderBase(cache, options)
+{
+    /// <inheritdoc />
+    public override string ProviderName => "VirusTotal";
+
+    /// <inheritdoc />
+    public override SiteSafetyEvidenceProviderType ProviderType => SiteSafetyEvidenceProviderType.UrlReputation;
+
+    /// <inheritdoc />
+    protected override ExternalProviderOptions ProviderOptions => Options.VirusTotal;
+
+    /// <inheritdoc />
+    protected override Task<SiteSafetyEvidence> CollectExternalEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(ExternalSiteEvidenceProviderHelpers.ConfigurationRequiredEvidence(
+            context,
+            "VirusTotal provider is enabled, but API credentials and adapter implementation are not configured yet.",
+            SiteSafetyEvidenceTargetType.Url,
+            ProviderName,
+            ProviderType,
+            authoritativeRisk: false,
+            authoritativeTrust: false));
+    }
+
+    /// <summary>
+    /// Creates normalized malware evidence for future VirusTotal API adapters.
+    /// </summary>
+    /// <param name="context">Privacy-safe scan context.</param>
+    /// <param name="matchLabel">Provider match label.</param>
+    /// <returns>Authoritative risk evidence.</returns>
+    public SiteSafetyEvidence CreateMalwareMatchEvidence(SiteSafetyEvidenceContext context, string matchLabel) =>
+        ExternalSiteEvidenceProviderHelpers.CreateThreatEvidence(context, ProviderName, ProviderType, "MalwareMatch", matchLabel, "VirusTotal matched a malware or malicious URL indicator.");
+}
+
+/// <summary>
+/// Shared helpers for concrete external provider adapters.
+/// </summary>
+internal static class ExternalSiteEvidenceProviderHelpers
+{
+    /// <summary>
+    /// Creates a safe configuration-required record without exposing secrets or private content.
+    /// </summary>
+    /// <param name="context">Privacy-safe scan context.</param>
+    /// <param name="message">Safe operator-facing message.</param>
+    /// <param name="targetType">Evidence target type.</param>
+    /// <param name="providerName">Provider name.</param>
+    /// <param name="providerType">Provider type.</param>
+    /// <param name="authoritativeRisk">Whether this provider can be authoritative for risk.</param>
+    /// <param name="authoritativeTrust">Whether this provider can be authoritative for trust.</param>
+    /// <returns>Provider evidence with no score impact.</returns>
+    public static SiteSafetyEvidence ConfigurationRequiredEvidence(
+        SiteSafetyEvidenceContext context,
+        string message,
+        SiteSafetyEvidenceTargetType targetType,
+        string providerName,
+        SiteSafetyEvidenceProviderType providerType,
+        bool authoritativeRisk,
+        bool authoritativeTrust) =>
+        new(
+            providerName,
+            providerType,
+            targetType,
+            context.Domain,
+            context.UrlHash,
+            [],
+            Confidence: 0,
+            context.CheckedAtUtc,
+            context.CheckedAtUtc.AddMinutes(5),
+            [message],
+            IsAuthoritativeForRisk: authoritativeRisk,
+            IsAuthoritativeForTrust: authoritativeTrust);
+
+    /// <summary>
+    /// Creates normalized authoritative threat evidence without storing provider-specific raw response bodies.
+    /// </summary>
+    /// <param name="context">Privacy-safe scan context.</param>
+    /// <param name="providerName">Provider name.</param>
+    /// <param name="providerType">Provider type.</param>
+    /// <param name="category">Provider-neutral category.</param>
+    /// <param name="value">Provider-neutral value.</param>
+    /// <param name="summary">Plain-English summary.</param>
+    /// <returns>Authoritative risk evidence.</returns>
+    public static SiteSafetyEvidence CreateThreatEvidence(
+        SiteSafetyEvidenceContext context,
+        string providerName,
+        SiteSafetyEvidenceProviderType providerType,
+        string category,
+        string value,
+        string summary) =>
+        new(
+            providerName,
+            providerType,
+            SiteSafetyEvidenceTargetType.Url,
+            context.Domain,
+            context.UrlHash,
+            [new SiteSafetyEvidenceItem(category, value, SiteSafetyEvidenceStatus.Dangerous, 95, 0, summary)],
+            Confidence: 90,
+            context.CheckedAtUtc,
+            context.CheckedAtUtc.AddHours(6),
+            [],
+            IsAuthoritativeForRisk: true,
             IsAuthoritativeForTrust: false);
 }
 

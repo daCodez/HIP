@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.Services.AddHipApplication();
+builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration);
 builder.Services.AddCors(options =>
 {
@@ -72,6 +73,18 @@ MapBrowserApis(browserApi);
 MapSiteSafetyApis(siteSafetyApi);
 
 app.Run();
+
+/// <summary>
+/// Binds external evidence provider options from configuration without enabling providers by default.
+/// </summary>
+/// <param name="configuration">Application configuration.</param>
+/// <returns>Configured external evidence options.</returns>
+static ExternalSiteEvidenceOptions BindExternalSiteEvidenceOptions(IConfiguration configuration)
+{
+    var options = new ExternalSiteEvidenceOptions();
+    configuration.GetSection("ExternalSiteEvidence").Bind(options);
+    return options;
+}
 
 /// <summary>
 /// Maps browser-extension endpoints on the standalone API service.

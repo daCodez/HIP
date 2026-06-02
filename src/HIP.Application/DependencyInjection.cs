@@ -88,6 +88,9 @@ public static class DependencyInjection
         services.AddSingleton<IExternalSiteEvidenceCache, InMemoryExternalSiteEvidenceCache>();
         services.AddSingleton(new ExternalSiteEvidenceOptions());
         services.AddScoped<ISiteSafetyEvidenceProvider, BrowserObservedSignalProvider>();
+        services.AddScoped<ISiteSafetyEvidenceProvider, SslLabsSiteEvidenceProvider>();
+        services.AddScoped<ISiteSafetyEvidenceProvider, GoogleWebRiskSiteEvidenceProvider>();
+        services.AddScoped<ISiteSafetyEvidenceProvider, VirusTotalSiteEvidenceProvider>();
 
         return services;
     }

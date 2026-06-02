@@ -75,15 +75,18 @@ The browser plugin sends only structural facts such as counts, source URLs, down
 
 Site Safety Scan is provider-based. Providers return normalized evidence; they do not directly decide the final HIP score.
 
-Current and planned provider types:
+Current provider types:
 
 - `BrowserObserved`: active in the MVP. Uses privacy-safe browser facts.
+- `TlsScanner`: SSL Labs / Qualys-style TLS provider foundation. Disabled by default.
+- `ThreatIntel`: Google Web Risk / Safe Browsing-style provider foundation. Disabled by default.
+- `UrlReputation`: VirusTotal-style URL/domain reputation provider foundation. Disabled by default.
+
+Planned provider types:
+
 - `HipHistory`: future HIP scan, report, and reputation history.
 - `UserFeedback`: future weighted user feedback.
 - `AdminReview`: future moderator/admin review signals.
-- `TlsScanner`: future TLS scanners such as SSL Labs.
-- `ThreatIntel`: future Google Web Risk or Safe Browsing style feeds.
-- `UrlReputation`: future URL reputation providers.
 - `DomainReputation`: future domain reputation providers.
 - `MalwareScanner`: future malware scanner providers.
 - `PhishingScanner`: future phishing scanner providers.
@@ -150,12 +153,47 @@ The current EF implementation stores admin rules in HIP's SQLite-backed JSON rec
 
 External evidence providers are disabled by default. HIP must not call SSL Labs, Google Web Risk, VirusTotal, Safe Browsing, or any other third-party scanner unless an operator explicitly configures that provider.
 
+Current MVP provider foundations:
+
+- `SSL Labs / Qualys TLS`: normalizes future TLS grades. Strong TLS gives only a small trust boost; weak TLS lowers confidence.
+- `Google Web Risk / Safe Browsing`: normalizes future phishing/social-engineering matches as authoritative risk evidence.
+- `VirusTotal`: normalizes future malware or malicious URL/domain matches as authoritative risk evidence.
+
+Configuration section:
+
+```json
+{
+  "ExternalSiteEvidence": {
+    "ExternalProvidersEnabled": false,
+    "AllowFullUrlChecks": false,
+    "ProviderTimeout": "00:00:02",
+    "DefaultCacheDuration": "06:00:00",
+    "SslLabs": {
+      "Enabled": false
+    },
+    "GoogleWebRisk": {
+      "Enabled": false,
+      "Endpoint": null,
+      "ApiKey": null
+    },
+    "VirusTotal": {
+      "Enabled": false,
+      "Endpoint": null,
+      "ApiKey": null
+    }
+  }
+}
+```
+
 External provider rules:
 
 - Prefer cached results when available.
 - Prefer domain-only checks.
 - Use URL hashes where supported.
 - Do not send private page content.
+- Do not send page body text.
+- Do not send form values.
+- Do not send passwords, tokens, cookies, or email content.
 - Do not send full URLs unless policy explicitly allows it.
 - Handle timeouts and failures safely.
 - Scanner failure must not crash HIP scoring.
