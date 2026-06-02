@@ -280,6 +280,44 @@ export function buildScanResultPayload({ domain, pageUrl, lookup, summary = {}, 
 }
 
 /**
+ * Builds the privacy-safe feedback report submitted by the injected trust banner.
+ * Feedback is trust evidence, not a raw vote; HIP should weight it by reporter trust server-side.
+ */
+export async function buildBannerFeedbackReport({ feedbackType, domain, pageUrl, lookup = {}, settings = {}, reportedAtUtc = new Date().toISOString(), hashUrl = defaultSha256 }) {
+  const looksSafe = feedbackType === "LooksSafe";
+  return {
+    reportId: "",
+    sourceClient: "BrowserPlugin",
+    platform: "Web",
+    targetType: "Website",
+    domain,
+    urlHash: await hashUrl(pageUrl),
+    originalUrl: null,
+    senderHash: null,
+    riskLevel: looksSafe ? "ProbablySafe" : "Suspicious",
+    reason: looksSafe
+      ? "Browser plugin banner feedback: user reported the site looks safe."
+      : "Browser plugin banner feedback: user reported the site looks suspicious.",
+    detectedAtUtc: reportedAtUtc,
+    reporterTrustLevel: "Medium",
+    privacySafeEvidence: {
+      evidenceType: "browser-banner-feedback",
+      summary: "Browser plugin banner feedback submitted without page text, form values, or private content.",
+      facts: {
+        source: "BrowserPluginBanner",
+        feedbackType,
+        domain,
+        displayedStatus: lookup?.status || "Unknown",
+        displayedScore: String(lookup?.finalHipScore ?? lookup?.score ?? "Unknown"),
+        scanMode: settings.scanMode || "Normal"
+      },
+      containsPrivateContent: false
+    },
+    hipSignature: "browser-plugin-banner-feedback-placeholder"
+  };
+}
+
+/**
  * Converts scan counts into a useful browser-plugin score when public lookup has no prior stored data.
  * This prevents the first successful scan from persisting HIP's bootstrap "not scanned yet" state as real data.
  */
@@ -421,4 +459,13 @@ function recommendedSiteAction(status) {
   }
 
   return "Allow";
+}
+
+/**
+ * Hashes URLs before report submission so full browsing paths are not required in feedback payloads.
+ */
+async function defaultSha256(value) {
+  const encoded = new TextEncoder().encode(value || "");
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
+  return `sha256:${Array.from(new Uint8Array(hashBuffer)).map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
 }

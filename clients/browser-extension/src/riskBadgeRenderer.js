@@ -47,8 +47,9 @@
    * Renders the page-level HIP trust banner for the current website.
    * The banner is intentionally site-level, not per-link, and includes the manifest-derived plugin version
    * so dev testers can confirm Chrome loaded the latest unpacked build.
+   * Dismissal is stored in page localStorage only as a local user preference; it is not a trust signal.
    */
-  function renderTrustBanner(lookup, pluginVersion = "HIP Plugin vunknown-dev") {
+  function renderTrustBanner(lookup, pluginVersion = "HIP Plugin vunknown-dev", options = {}) {
     ensureStyles();
 
     if (document.getElementById("hip-trust-banner")) {
@@ -56,6 +57,12 @@
     }
 
     const status = lookup?.status || "Unknown";
+    const domain = lookup?.domain || window.location.hostname || "unknown";
+    const dismissedKey = bannerDismissedKey(domain);
+    if (isBannerDismissed(dismissedKey)) {
+      return;
+    }
+
     const statusClass = status.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     const score = lookup?.finalHipScore ?? lookup?.score ?? "Unknown";
     const title = bannerTitle(status);
@@ -67,15 +74,30 @@
     banner.innerHTML = `
       <div class="hip-trust-main">
         <strong>${escapeHtml(title)}</strong>
-        <span><span class="hip-trust-status-badge ${statusClass}">${escapeHtml(status)}</span> Score: ${escapeHtml(score)}/100</span>
+        <span><span class="hip-trust-status-badge ${statusClass}">${escapeHtml(status)}</span> HIP Trust Score: ${escapeHtml(score)}/100</span>
         <span>${escapeHtml(reason)}</span>
         <small class="hip-trust-version">${escapeHtml(pluginVersion)}</small>
       </div>
-      <a class="hip-trust-link" href="${lookupUrl}" target="_blank" rel="noopener noreferrer">Lookup</a>
+      <div class="hip-trust-actions" aria-label="HIP trust feedback">
+        <button class="hip-trust-feedback hip-trust-safe" type="button" data-hip-feedback="LooksSafe">Looks Safe</button>
+        <button class="hip-trust-feedback hip-trust-suspicious" type="button" data-hip-feedback="LooksSuspicious">Looks Suspicious</button>
+        <a class="hip-trust-link" href="${lookupUrl}" target="_blank" rel="noopener noreferrer">Details</a>
+      </div>
       <button class="hip-trust-close" type="button" aria-label="Dismiss HIP trust banner">×</button>
     `;
 
-    banner.querySelector(".hip-trust-close").addEventListener("click", () => banner.remove());
+    banner.querySelector(".hip-trust-close").addEventListener("click", () => {
+      saveBannerDismissed(dismissedKey);
+      banner.remove();
+    });
+    for (const button of banner.querySelectorAll("[data-hip-feedback]")) {
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        button.textContent = "Sent";
+        await options.onFeedback?.(button.dataset.hipFeedback, lookup).catch(error => console.warn("HIP banner feedback failed safely.", error));
+      });
+    }
+
     document.documentElement.prepend(banner);
   }
 
@@ -187,6 +209,7 @@
       #hip-trust-banner .hip-trust-status-badge.dangerous,
       #hip-trust-banner .hip-trust-status-badge.critical { background: #fecaca; }
       #hip-trust-banner .hip-trust-link,
+      #hip-trust-banner .hip-trust-feedback,
       #hip-trust-banner .hip-trust-close {
         color: inherit;
         border: 1px solid rgba(255, 255, 255, 0.46);
@@ -196,9 +219,34 @@
         text-decoration: none;
         cursor: pointer;
       }
+      #hip-trust-banner .hip-trust-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      #hip-trust-banner .hip-trust-feedback:disabled {
+        cursor: default;
+        opacity: 0.72;
+      }
+      #hip-trust-banner .hip-trust-safe {
+        border-color: rgba(52, 211, 153, 0.72);
+      }
+      #hip-trust-banner .hip-trust-suspicious {
+        border-color: rgba(251, 113, 133, 0.72);
+      }
       #hip-trust-banner .hip-trust-close {
         font-size: 18px;
         line-height: 1;
+      }
+      @media (max-width: 720px) {
+        #hip-trust-banner {
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+        #hip-trust-banner .hip-trust-actions {
+          width: 100%;
+        }
       }
       .hip-form-risk-indicator {
         margin: 8px 0;
@@ -250,6 +298,36 @@
       return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "#";
     } catch {
       return "#";
+    }
+  }
+
+  /**
+   * Builds the localStorage key for banner dismissal.
+   * This is intentionally per-domain so closing HIP on one site does not hide warnings everywhere.
+   */
+  function bannerDismissedKey(domain) {
+    return `hip:trust-banner-dismissed:${String(domain).toLowerCase()}`;
+  }
+
+  /**
+   * Checks local banner dismissal without treating localStorage as trusted security state.
+   */
+  function isBannerDismissed(key) {
+    try {
+      return window.localStorage.getItem(key) === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Saves the local-only banner dismissal preference.
+   */
+  function saveBannerDismissed(key) {
+    try {
+      window.localStorage.setItem(key, "true");
+    } catch {
+      // Some pages block localStorage; banner dismissal should fail safely.
     }
   }
 })();

@@ -16,6 +16,7 @@ This Chromium Manifest V3 client helps users see HIP website trust, link risk, a
 - Privacy-safe browser scan result submission.
 - HIP Site Safety Scan popup panel for malware, phishing, redirect, download, and script risk.
 - Privacy-safe risk finding reports for risky links.
+- Injected HIP trust banner with score/status, Details, Looks Safe, Looks Suspicious, and dismiss controls.
 - Download-like link detection foundation.
 - Login/form risk indicator foundation.
 - Social feed and webmail link detection hooks.
@@ -55,6 +56,34 @@ Current setting keys:
 - `enableSafetyPageRouting`
 - `showRiskyLinkIcons`
 - `scanMode`
+
+## Trust Banner Feedback
+
+The injected page banner shows the current HIP Trust Score, status, Details link, and simple feedback buttons:
+
+- `Looks Safe`
+- `Looks Suspicious`
+
+This is feedback, not voting. HIP should treat it as weighted trust evidence:
+
+- anonymous or unauthenticated browser feedback has low weight
+- verified HIP users can receive medium weight later
+- trusted users and admin-confirmed findings can receive stronger weight
+- suspicious reporter behavior should lower reporter trust over time
+
+The extension submits only privacy-safe evidence:
+
+- domain
+- URL hash
+- displayed score/status
+- feedback type
+- source = `BrowserPluginBanner`
+- timestamp
+- scan mode
+
+It does not submit page text, form values, passwords, tokens, private messages, or email content.
+
+When the user closes the banner, the extension stores a per-domain dismissal flag in page `localStorage`. This is only a local display preference. HIP must not treat localStorage as trustworthy security state because a website can clear or interfere with it.
 
 ## Configuration
 

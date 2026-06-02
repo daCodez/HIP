@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   browserScanAssessment,
+  buildBannerFeedbackReport,
   buildScanResultPayload,
   formatPluginVersion,
   HipApiClient,
@@ -187,4 +188,54 @@ test("invalid API base URL is handled safely", async () => {
 
 test("plugin version is formatted from manifest version", () => {
   assert.equal(formatPluginVersion("0.1.0"), "HIP Plugin v0.1.0-dev");
+});
+
+test("banner feedback creates privacy-safe suspicious evidence", async () => {
+  const payload = await buildBannerFeedbackReport({
+    feedbackType: "LooksSuspicious",
+    domain: "example.com",
+    pageUrl: "https://example.com/private?token=secret",
+    lookup: { status: "LimitedTrustData", finalHipScore: 56 },
+    settings: { scanMode: "Normal" },
+    reportedAtUtc: "2026-06-01T00:00:00Z",
+    hashUrl: async () => "sha256:test-hash"
+  });
+
+  assert.equal(payload.sourceClient, "BrowserPlugin");
+  assert.equal(payload.riskLevel, "Suspicious");
+  assert.equal(payload.urlHash, "sha256:test-hash");
+  assert.equal(payload.originalUrl, null);
+  assert.equal(payload.privacySafeEvidence.evidenceType, "browser-banner-feedback");
+  assert.equal(payload.privacySafeEvidence.containsPrivateContent, false);
+  assert.equal(payload.privacySafeEvidence.facts.source, "BrowserPluginBanner");
+  assert.equal(JSON.stringify(payload).includes("token=secret"), false);
+});
+
+test("banner looks safe feedback is evidence not raw voting", async () => {
+  const payload = await buildBannerFeedbackReport({
+    feedbackType: "LooksSafe",
+    domain: "example.com",
+    pageUrl: "https://example.com/",
+    lookup: { status: "MostlyTrusted", finalHipScore: 72 },
+    hashUrl: async () => "sha256:test-hash"
+  });
+
+  assert.equal(payload.riskLevel, "ProbablySafe");
+  assert.equal(payload.reporterTrustLevel, "Medium");
+  assert.equal(payload.reason.includes("looks safe"), true);
+  assert.equal("vote" in payload.privacySafeEvidence.facts, false);
+});
+
+test("banner feedback excludes page text and form values", async () => {
+  const payload = await buildBannerFeedbackReport({
+    feedbackType: "LooksSuspicious",
+    domain: "example.com",
+    pageUrl: "https://example.com/",
+    lookup: { pageText: "private page body", formValues: "password=secret" },
+    hashUrl: async () => "sha256:test-hash"
+  });
+
+  assert.equal("pageText" in payload, false);
+  assert.equal("formValues" in payload, false);
+  assert.equal(JSON.stringify(payload).includes("password=secret"), false);
 });
