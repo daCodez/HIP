@@ -60,15 +60,16 @@
     const statusClass = status.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     const score = lookup?.finalHipScore ?? lookup?.score ?? "Unknown";
     const title = bannerTitle(status);
-    const reason = lookup?.knownRisks?.[0] || lookup?.explanations?.[0] || "HIP has not found a stronger public trust signal for this website yet.";
+    const reason = lookup?.knownRisks?.[0] || lookup?.explanations?.[0] || "HIP does not have enough verified trust history for this website yet.";
     const lookupUrl = safeHref(lookup?.publicLookupUrl);
+    const statusLabel = displayStatusLabel(status);
     const banner = document.createElement("div");
     banner.id = "hip-trust-banner";
     banner.className = `hip-trust-banner-${statusClass}`;
     banner.innerHTML = `
       <div class="hip-trust-main">
         <strong>${escapeHtml(title)}</strong>
-        <span><span class="hip-trust-status-badge ${statusClass}">${escapeHtml(status)}</span> HIP Trust Score: ${escapeHtml(score)}/100</span>
+        <span><span class="hip-trust-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span> HIP Trust Score: ${escapeHtml(score)}/100</span>
         <span>${escapeHtml(reason)}</span>
         <small class="hip-trust-version">${escapeHtml(pluginVersion)}</small>
       </div>
@@ -101,6 +102,19 @@
    */
   function renderWarningBanner(lookup, pluginVersion = "HIP Plugin vunknown-dev") {
     renderTrustBanner(lookup, pluginVersion);
+  }
+
+  /**
+   * Converts internal HIP status identifiers into readable labels for injected UI.
+   * The API keeps compact enum-style values, but browser chrome should use plain English.
+   */
+  function displayStatusLabel(status) {
+    return {
+      MostlyTrusted: "Mostly Trusted",
+      LimitedTrustData: "Limited Trust Data",
+      ProbablySafe: "Probably Safe",
+      HighRisk: "High Risk"
+    }[status] || status || "Unknown";
   }
 
   function renderFormIndicator(form, lookup, reason) {

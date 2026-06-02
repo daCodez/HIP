@@ -270,8 +270,7 @@ export function shouldShowTrustBanner(lookup, summary = {}, settings = {}) {
   }
 
   if (status === "Trusted" || status === "MostlyTrusted" || status === "ProbablySafe") {
-    return (summary.riskyLinks ?? 0) > 0 ||
-      (summary.suspiciousLinks ?? 0) > 0 ||
+    return (summary.suspiciousLinks ?? 0) > 0 ||
       (summary.dangerousLinks ?? 0) > 0 ||
       (summary.executableDownloadCandidates ?? 0) > 0 ||
       (summary.paymentFieldsDetected ?? 0) > 0;
