@@ -120,7 +120,13 @@ public sealed class AdminAuthorizationTests
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-        Assert.That(json.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(json.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.True);
+            Assert.That(json.RootElement.GetProperty("sslLabs").GetProperty("enabled").GetBoolean(), Is.True);
+            Assert.That(json.RootElement.GetProperty("googleWebRisk").GetProperty("enabled").GetBoolean(), Is.False);
+            Assert.That(json.RootElement.GetProperty("virusTotal").GetProperty("enabled").GetBoolean(), Is.False);
+        });
     }
 
     [Test]

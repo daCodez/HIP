@@ -78,7 +78,7 @@ Site Safety Scan is provider-based. Providers return normalized evidence; they d
 Current provider types:
 
 - `BrowserObserved`: active in the MVP. Uses privacy-safe browser facts.
-- `TlsScanner`: SSL Labs / Qualys-style TLS provider foundation. Disabled by default.
+- `TlsScanner`: SSL Labs / Qualys-style TLS provider. Enabled in development/MVP config and configurable at runtime.
 - `ThreatIntel`: Google Web Risk / Safe Browsing-style provider foundation. Disabled by default.
 - `UrlReputation`: VirusTotal-style URL/domain reputation provider foundation. Disabled by default.
 
@@ -151,11 +151,11 @@ The current EF implementation stores admin rules in HIP's SQLite-backed JSON rec
 
 ## External Scanner Policy
 
-External evidence providers are disabled by default. HIP must not call SSL Labs, Google Web Risk, VirusTotal, Safe Browsing, or any other third-party scanner unless an operator explicitly configures that provider.
+External evidence providers are configurable. HIP development settings currently enable the SSL Labs / Qualys-style TLS provider so local MVP scans can collect real TLS evidence. Google Web Risk, VirusTotal, Safe Browsing, and any other third-party scanner remain disabled until an operator explicitly configures them.
 
 Current MVP provider foundations:
 
-- `SSL Labs / Qualys TLS`: normalizes future TLS grades. Strong TLS gives only a small trust boost; weak TLS lowers confidence.
+- `SSL Labs / Qualys TLS`: calls the SSL Labs domain assessment endpoint with only the normalized domain. Strong TLS gives only a small trust boost; weak TLS lowers confidence. Pending or failed TLS checks do not make a site trusted.
 - `Google Web Risk / Safe Browsing`: normalizes future phishing/social-engineering matches as authoritative risk evidence.
 - `VirusTotal`: normalizes future malware or malicious URL/domain matches as authoritative risk evidence.
 
@@ -164,12 +164,13 @@ Configuration section:
 ```json
 {
   "ExternalSiteEvidence": {
-    "ExternalProvidersEnabled": false,
+    "ExternalProvidersEnabled": true,
     "AllowFullUrlChecks": false,
     "ProviderTimeout": "00:00:02",
     "DefaultCacheDuration": "06:00:00",
     "SslLabs": {
-      "Enabled": false
+      "Enabled": true,
+      "Endpoint": "https://api.ssllabs.com/api/v3/analyze"
     },
     "GoogleWebRisk": {
       "Enabled": false,
@@ -193,6 +194,13 @@ Runtime MVP controls:
 
 These runtime controls update the current running HIP process. Production deployments should persist the same values in configuration or a secure settings store and keep API keys in secret storage.
 
+To disable the live TLS provider during development, turn off either:
+
+- `ExternalSiteEvidence:ExternalProvidersEnabled`
+- `ExternalSiteEvidence:SslLabs:Enabled`
+
+The same switches are available in `/admin/settings` while the app is running.
+
 External provider rules:
 
 - Prefer cached results when available.
@@ -205,6 +213,7 @@ External provider rules:
 - Do not send full URLs unless policy explicitly allows it.
 - Handle timeouts and failures safely.
 - Scanner failure must not crash HIP scoring.
+- Pending SSL Labs scans are treated as limited evidence and do not create a trust boost.
 - Clean scanner results do not make unknown domains trusted.
 - No scanner result does not mean trusted.
 - Conflicting scanner results lower confidence and produce a review warning.
@@ -271,7 +280,8 @@ The plugin still avoids collecting page text and form contents.
 ## Known MVP Limits
 
 - No real malware sandboxing is performed.
-- No external threat-intelligence feeds are connected yet.
+- SSL Labs TLS checks can take time; the first response may be pending and should be refreshed later.
+- Google Web Risk and VirusTotal adapters are still disabled foundations, not live threat-intelligence integrations.
 - Redirects are scored from observed client facts, not crawled server-side.
 - Recent scan caching is short-lived and in-process only.
 - Site Safety is one signal in the final HIP decision, not the whole decision.

@@ -85,6 +85,7 @@ public static class DependencyInjection
         services.AddScoped<IAdminSiteSafetyRuleRepository, InMemoryAdminSiteSafetyRuleRepository>();
         services.AddScoped<AdminSiteSafetyRuleService>();
         services.AddSingleton(new SiteSafetyRuleOptions());
+        services.AddSingleton(_ => new HttpClient());
         services.AddSingleton<IExternalSiteEvidenceCache, InMemoryExternalSiteEvidenceCache>();
         services.AddSingleton(new ExternalSiteEvidenceOptions());
         services.AddScoped<ISiteSafetyEvidenceProvider, BrowserObservedSignalProvider>();

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace HIP.Application.SiteSafety;
 
@@ -527,17 +528,33 @@ public abstract class ExternalSiteEvidenceProviderBase(
 }
 
 /// <summary>
-/// SSL Labs/Qualys-style TLS evidence provider.
+/// SSL Labs/Qualys-style TLS evidence provider that performs domain-only TLS assessments.
 /// </summary>
 /// <remarks>
-/// MVP behavior is intentionally conservative: the provider is disabled by default and returns a safe
-/// configuration error until an operator configures a real adapter. It prefers domain-only checks and never
-/// needs page text, form values, passwords, email content, cookies, or tokens.
+/// The adapter intentionally sends only the normalized domain to SSL Labs. It never sends page body text,
+/// form values, passwords, tokens, cookies, email content, or raw private messages. Strong TLS creates only a
+/// small trust boost because TLS quality is not proof that the website is safe.
 /// </remarks>
-public sealed class SslLabsSiteEvidenceProvider(
-    IExternalSiteEvidenceCache cache,
-    ExternalSiteEvidenceOptions options) : ExternalSiteEvidenceProviderBase(cache, options)
+public sealed class SslLabsSiteEvidenceProvider : ExternalSiteEvidenceProviderBase
 {
+    private const string DefaultEndpoint = "https://api.ssllabs.com/api/v3/analyze";
+    private readonly HttpClient httpClient;
+
+    /// <summary>
+    /// Creates a TLS evidence provider with a cache, options, and optional HTTP client for tests.
+    /// </summary>
+    /// <param name="cache">Evidence cache used to avoid repeated third-party scanner calls.</param>
+    /// <param name="options">External provider options controlling whether this provider may run.</param>
+    /// <param name="httpClient">Optional HTTP client. Tests pass a stub client; production DI supplies one.</param>
+    public SslLabsSiteEvidenceProvider(
+        IExternalSiteEvidenceCache cache,
+        ExternalSiteEvidenceOptions options,
+        HttpClient? httpClient = null)
+        : base(cache, options)
+    {
+        this.httpClient = httpClient ?? new HttpClient();
+    }
+
     /// <inheritdoc />
     public override string ProviderName => "SSL Labs / Qualys TLS";
 
@@ -548,17 +565,39 @@ public sealed class SslLabsSiteEvidenceProvider(
     protected override ExternalProviderOptions ProviderOptions => Options.SslLabs;
 
     /// <inheritdoc />
-    protected override Task<SiteSafetyEvidence> CollectExternalEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken)
+    protected override async Task<SiteSafetyEvidence> CollectExternalEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(ExternalSiteEvidenceProviderHelpers.ConfigurationRequiredEvidence(
-            context,
-            "TLS provider is enabled, but no production SSL Labs/Qualys adapter is configured yet.",
-            SiteSafetyEvidenceTargetType.Domain,
-            ProviderName,
-            ProviderType,
-            authoritativeRisk: false,
-            authoritativeTrust: false));
+        var requestUri = BuildSslLabsUri(context.Domain);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        request.Headers.UserAgent.ParseAdd("HIP-Dev/0.1");
+        request.Headers.Accept.ParseAdd("application/json");
+
+        try
+        {
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return CreateProviderErrorEvidence(context, $"SSL Labs TLS check returned HTTP {(int)response.StatusCode}.");
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            return ParseSslLabsEvidence(context, document.RootElement);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return CreateProviderErrorEvidence(context, "SSL Labs TLS check timed out.");
+        }
+        catch (HttpRequestException)
+        {
+            return CreateProviderErrorEvidence(context, "SSL Labs TLS check could not be reached.");
+        }
+        catch (JsonException)
+        {
+            return CreateProviderErrorEvidence(context, "SSL Labs TLS check returned an unreadable response.");
+        }
     }
 
     /// <summary>
@@ -591,6 +630,138 @@ public sealed class SslLabsSiteEvidenceProvider(
             IsAuthoritativeForRisk: false,
             IsAuthoritativeForTrust: true);
     }
+
+    /// <summary>
+    /// Builds the SSL Labs API request using only the domain, never the full page URL.
+    /// </summary>
+    /// <param name="domain">Normalized domain to check.</param>
+    /// <returns>SSL Labs API URI.</returns>
+    private Uri BuildSslLabsUri(string domain)
+    {
+        var endpoint = string.IsNullOrWhiteSpace(ProviderOptions.Endpoint) ? DefaultEndpoint : ProviderOptions.Endpoint.Trim();
+        var builder = new UriBuilder(endpoint);
+        var query = $"host={Uri.EscapeDataString(domain)}&publish=off&startNew=on&all=done&ignoreMismatch=on";
+
+        builder.Query = string.IsNullOrWhiteSpace(builder.Query)
+            ? query
+            : $"{builder.Query.TrimStart('?')}&{query}";
+
+        return builder.Uri;
+    }
+
+    /// <summary>
+    /// Converts the SSL Labs JSON response into normalized HIP evidence without storing the raw response.
+    /// </summary>
+    /// <param name="context">Privacy-safe scan context.</param>
+    /// <param name="root">Root SSL Labs JSON element.</param>
+    /// <returns>Normalized TLS evidence.</returns>
+    private SiteSafetyEvidence ParseSslLabsEvidence(SiteSafetyEvidenceContext context, JsonElement root)
+    {
+        var status = TryGetString(root, "status") ?? "Unknown";
+        if (!status.Equals("READY", StringComparison.OrdinalIgnoreCase))
+        {
+            var statusSummary = status.Equals("ERROR", StringComparison.OrdinalIgnoreCase)
+                ? "SSL Labs could not complete the TLS assessment."
+                : "SSL Labs TLS assessment is still pending; HIP did not apply a trust boost.";
+
+            return CreateStatusEvidence(context, status, statusSummary, status.Equals("ERROR", StringComparison.OrdinalIgnoreCase));
+        }
+
+        var grades = new List<string>();
+        if (root.TryGetProperty("endpoints", out var endpoints) && endpoints.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var endpoint in endpoints.EnumerateArray())
+            {
+                var grade = TryGetString(endpoint, "grade");
+                if (!string.IsNullOrWhiteSpace(grade))
+                {
+                    grades.Add(grade);
+                }
+            }
+        }
+
+        var selectedGrade = grades.Count == 0 ? "Unknown" : grades.OrderBy(GradeRiskRank).First();
+        var summary = selectedGrade.Equals("Unknown", StringComparison.OrdinalIgnoreCase)
+            ? "SSL Labs completed the TLS check, but no endpoint grade was available."
+            : $"SSL Labs reported TLS grade {selectedGrade} for this domain.";
+
+        return CreateTlsGradeEvidence(context, selectedGrade, summary);
+    }
+
+    /// <summary>
+    /// Creates normalized status evidence for pending or errored SSL Labs assessments.
+    /// </summary>
+    /// <param name="context">Privacy-safe scan context.</param>
+    /// <param name="status">Provider status label.</param>
+    /// <param name="summary">Plain-English summary.</param>
+    /// <param name="isError">Whether the provider returned a terminal error.</param>
+    /// <returns>Normalized status evidence.</returns>
+    private SiteSafetyEvidence CreateStatusEvidence(SiteSafetyEvidenceContext context, string status, string summary, bool isError) =>
+        new(
+            ProviderName,
+            ProviderType,
+            SiteSafetyEvidenceTargetType.Domain,
+            context.Domain,
+            context.UrlHash,
+            [new SiteSafetyEvidenceItem("TlsAssessmentStatus", status, isError ? SiteSafetyEvidenceStatus.Error : SiteSafetyEvidenceStatus.Weak, 0, 0, summary)],
+            Confidence: isError ? 0 : 30,
+            context.CheckedAtUtc,
+            context.CheckedAtUtc.AddMinutes(isError ? 5 : 2),
+            isError ? [summary] : [],
+            IsAuthoritativeForRisk: false,
+            IsAuthoritativeForTrust: false);
+
+    /// <summary>
+    /// Creates safe provider error evidence without leaking request URLs, secrets, or raw provider bodies.
+    /// </summary>
+    /// <param name="context">Privacy-safe scan context.</param>
+    /// <param name="message">Safe error message.</param>
+    /// <returns>Normalized error evidence.</returns>
+    private SiteSafetyEvidence CreateProviderErrorEvidence(SiteSafetyEvidenceContext context, string message) =>
+        new(
+            ProviderName,
+            ProviderType,
+            SiteSafetyEvidenceTargetType.Domain,
+            context.Domain,
+            context.UrlHash,
+            [],
+            Confidence: 0,
+            context.CheckedAtUtc,
+            context.CheckedAtUtc.AddMinutes(5),
+            [message],
+            IsAuthoritativeForRisk: false,
+            IsAuthoritativeForTrust: false);
+
+    /// <summary>
+    /// Reads a string property from provider JSON without throwing for missing or non-string values.
+    /// </summary>
+    /// <param name="element">JSON element to inspect.</param>
+    /// <param name="propertyName">Property name to read.</param>
+    /// <returns>String value or null.</returns>
+    private static string? TryGetString(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+
+    /// <summary>
+    /// Ranks TLS grades so the weakest endpoint grade is selected when a domain has multiple endpoints.
+    /// </summary>
+    /// <param name="grade">SSL Labs grade.</param>
+    /// <returns>Lower values represent weaker grades.</returns>
+    private static int GradeRiskRank(string grade) =>
+        grade.Trim().ToUpperInvariant() switch
+        {
+            "T" or "M" => 0,
+            "F" => 1,
+            "E" => 2,
+            "D" => 3,
+            "C" => 4,
+            "B" => 5,
+            "A-" => 6,
+            "A" => 7,
+            "A+" => 8,
+            _ => 9
+        };
 }
 
 /// <summary>

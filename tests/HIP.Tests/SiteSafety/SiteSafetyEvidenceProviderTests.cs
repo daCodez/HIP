@@ -1,5 +1,6 @@
 using HIP.Application.SiteSafety;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Net;
 
 namespace HIP.Tests.SiteSafety;
 
@@ -186,25 +187,125 @@ public sealed class SiteSafetyEvidenceProviderTests
     /// Verifies provider-specific enablement does not leak private content when a concrete adapter is not configured.
     /// </summary>
     [Test]
-    public async Task Enabled_external_provider_without_adapter_returns_safe_configuration_error()
+    public async Task Enabled_ssl_labs_provider_uses_safe_failure_when_provider_is_unavailable()
     {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.BadGateway));
         var options = new ExternalSiteEvidenceOptions
         {
             ExternalProvidersEnabled = true,
             SslLabs = new ExternalProviderOptions { Enabled = true }
         };
-        var provider = new SslLabsSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), options);
+        var provider = new SslLabsSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), options, new HttpClient(handler));
 
         var evidence = await provider.CollectEvidenceAsync(Context("https://example.com/login?password=secret"), CancellationToken.None);
 
         Assert.Multiple(() =>
         {
-            Assert.That(evidence.Errors, Has.Some.Contains("adapter is configured"));
+            Assert.That(evidence.Errors, Has.Some.Contains("SSL Labs TLS check returned HTTP 502."));
             Assert.That(evidence.EvidenceItems, Is.Empty);
             Assert.That(evidence.ToString(), Does.Not.Contain("password=secret"));
             Assert.That(evidence.ToString(), Does.Not.Contain("page body"));
             Assert.That(evidence.ToString(), Does.Not.Contain("form values"));
             Assert.That(evidence.ToString(), Does.Not.Contain("email content"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies the real SSL Labs adapter sends only the domain, not the full page URL or private query values.
+    /// </summary>
+    [Test]
+    public async Task Ssl_labs_provider_calls_domain_only_endpoint_when_enabled()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse("""{"status":"READY","endpoints":[{"grade":"A"}]}"""));
+        var provider = new SslLabsSiteEvidenceProvider(
+            new InMemoryExternalSiteEvidenceCache(),
+            EnabledSslLabsOptions(),
+            new HttpClient(handler));
+
+        var evidence = await provider.CollectEvidenceAsync(Context("https://example.com/login?password=secret"), CancellationToken.None);
+
+        var requestUri = handler.RequestUris.Single()!.ToString();
+        var item = evidence.EvidenceItems.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(requestUri, Does.Contain("host=example.com"));
+            Assert.That(requestUri, Does.Not.Contain("login"));
+            Assert.That(requestUri, Does.Not.Contain("password=secret"));
+            Assert.That(item.Category, Is.EqualTo("TlsGrade"));
+            Assert.That(item.Value, Is.EqualTo("A"));
+            Assert.That(item.TrustImpact, Is.EqualTo(5));
+            Assert.That(item.RiskImpact, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    /// Verifies weak SSL Labs grades create cautionary evidence instead of a trust signal.
+    /// </summary>
+    [Test]
+    public async Task Ssl_labs_provider_weak_grade_lowers_confidence()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse("""{"status":"READY","endpoints":[{"grade":"F"}]}"""));
+        var provider = new SslLabsSiteEvidenceProvider(
+            new InMemoryExternalSiteEvidenceCache(),
+            EnabledSslLabsOptions(),
+            new HttpClient(handler));
+
+        var evidence = await provider.CollectEvidenceAsync(Context(), CancellationToken.None);
+
+        var item = evidence.EvidenceItems.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(item.Value, Is.EqualTo("F"));
+            Assert.That(item.Status, Is.EqualTo(SiteSafetyEvidenceStatus.Weak));
+            Assert.That(item.RiskImpact, Is.EqualTo(25));
+            Assert.That(item.TrustImpact, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    /// Verifies pending SSL Labs scans do not create a fake trust boost.
+    /// </summary>
+    [Test]
+    public async Task Ssl_labs_provider_pending_assessment_does_not_add_trust()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse("""{"status":"IN_PROGRESS"}"""));
+        var provider = new SslLabsSiteEvidenceProvider(
+            new InMemoryExternalSiteEvidenceCache(),
+            EnabledSslLabsOptions(),
+            new HttpClient(handler));
+
+        var evidence = await provider.CollectEvidenceAsync(Context(), CancellationToken.None);
+
+        var item = evidence.EvidenceItems.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(item.Category, Is.EqualTo("TlsAssessmentStatus"));
+            Assert.That(item.TrustImpact, Is.EqualTo(0));
+            Assert.That(evidence.IsAuthoritativeForTrust, Is.False);
+            Assert.That(evidence.Errors, Is.Empty);
+        });
+    }
+
+    /// <summary>
+    /// Verifies SSL Labs failures are represented as safe evidence errors and do not leak private URL data.
+    /// </summary>
+    [Test]
+    public async Task Ssl_labs_provider_http_failure_returns_safe_error()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var provider = new SslLabsSiteEvidenceProvider(
+            new InMemoryExternalSiteEvidenceCache(),
+            EnabledSslLabsOptions(),
+            new HttpClient(handler));
+
+        var evidence = await provider.CollectEvidenceAsync(Context("https://example.com/private?token=secret"), CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(evidence.Errors, Has.Some.Contains("HTTP 500"));
+            Assert.That(evidence.EvidenceItems, Is.Empty);
+            Assert.That(evidence.ToString(), Does.Not.Contain("token=secret"));
+            Assert.That(evidence.IsAuthoritativeForRisk, Is.False);
         });
     }
 
@@ -282,6 +383,29 @@ public sealed class SiteSafetyEvidenceProviderTests
     /// </summary>
     private static SiteSafetyEvidenceContext Context(string url = "https://example.com") =>
         new(new Uri(url), "example.com", "hash", new SiteSafetyObservedSignals(), DateTimeOffset.UtcNow);
+
+    /// <summary>
+    /// Creates options that explicitly enable the SSL Labs adapter for tests.
+    /// </summary>
+    private static ExternalSiteEvidenceOptions EnabledSslLabsOptions() =>
+        new()
+        {
+            ExternalProvidersEnabled = true,
+            SslLabs = new ExternalProviderOptions
+            {
+                Enabled = true,
+                Endpoint = "https://api.ssllabs.com/api/v3/analyze"
+            }
+        };
+
+    /// <summary>
+    /// Creates a JSON HTTP response for fake provider responses.
+    /// </summary>
+    private static HttpResponseMessage JsonResponse(string json) =>
+        new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json)
+        };
 
     /// <summary>
     /// Creates normalized SSL Labs-style evidence without calling SSL Labs.
@@ -397,6 +521,24 @@ public sealed class SiteSafetyEvidenceProviderTests
         {
             ExternalCallCount++;
             return Task.FromResult(ThreatIntelEvidence("PhishingMatch", SiteSafetyEvidenceStatus.Dangerous, 95));
+        }
+    }
+
+    /// <summary>
+    /// HTTP handler used to test provider requests without calling external networks.
+    /// </summary>
+    private sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responseFactory) : HttpMessageHandler
+    {
+        /// <summary>
+        /// Gets the request URIs received by the stub.
+        /// </summary>
+        public List<Uri?> RequestUris { get; } = [];
+
+        /// <inheritdoc />
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestUris.Add(request.RequestUri);
+            return Task.FromResult(responseFactory(request));
         }
     }
 }
