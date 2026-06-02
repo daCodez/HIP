@@ -92,24 +92,42 @@ export class HipApiClient {
    * The request sends only the URL and optional privacy-safe observations; it never sends page text or form values.
    */
   async scanSiteSafety(request) {
-    const url = `${this.config.apiBaseUrl}/api/v1/site-safety/scan`;
-    const response = await fetch(url, {
+    const payload = {
+      url: request?.url || "",
+      observedSignals: request?.observedSignals || null
+    };
+    const apiUrl = `${this.config.apiBaseUrl}/api/v1/site-safety/scan`;
+    const apiResponse = await this.postJson(apiUrl, payload);
+
+    if (apiResponse.ok) {
+      return apiResponse.json();
+    }
+
+    const webUrl = `${this.config.webBaseUrl}/api/v1/site-safety/scan`;
+    if (apiResponse.status === 404 && normalizeHost(this.config.webBaseUrl) !== normalizeHost(this.config.apiBaseUrl)) {
+      const webResponse = await this.postJson(webUrl, payload);
+      if (webResponse.ok) {
+        return webResponse.json();
+      }
+
+      throw new Error(`HIP site safety scan failed with API status ${apiResponse.status} and Web status ${webResponse.status}.`);
+    }
+
+    throw new Error(`HIP site safety scan failed with status ${apiResponse.status}.`);
+  }
+
+  /**
+   * Sends a JSON POST without including private page text or form values.
+   */
+  async postJson(url, payload) {
+    return fetch(url, {
       method: "POST",
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        url: request?.url || "",
-        observedSignals: request?.observedSignals || null
-      })
+      body: JSON.stringify(payload)
     });
-
-    if (!response.ok) {
-      throw new Error(`HIP site safety scan failed with status ${response.status}.`);
-    }
-
-    return response.json();
   }
 
   /**
