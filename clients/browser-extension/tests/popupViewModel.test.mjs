@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildPopupViewModel,
   buildPublicLookupUrl,
+  loadingSummaryViewModel,
   statusFromScore,
   unavailableMessage
 } from "../src/popupViewModel.js";
@@ -79,4 +80,16 @@ test("popup request model does not include page text or form contents", () => {
   assert.deepEqual(Object.keys(request), ["url", "domain"]);
   assert.equal("pageText" in request, false);
   assert.equal("formContents" in request, false);
+});
+
+test("loading summary view model shows explicit pending indicators", () => {
+  const viewModel = loadingSummaryViewModel("Scanning page");
+
+  assert.equal(viewModel.apiStatus, "Scanning page");
+  assert.equal(viewModel.linksScanned, "Checking...");
+  assert.equal(viewModel.riskyLinks, "Checking...");
+  assert.equal(viewModel.unknownLinks, "Checking...");
+  assert.equal(viewModel.downloadCandidates, "Checking...");
+  assert.equal(viewModel.loginFormsDetected, "Checking...");
+  assert.equal(viewModel.lastSubmittedText, "Pending");
 });
