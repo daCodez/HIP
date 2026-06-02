@@ -1,6 +1,7 @@
 using HIP.Application;
 using HIP.Application.Browser;
 using HIP.Application.PublicLookup;
+using HIP.Application.SiteSafety;
 using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
 
@@ -33,6 +34,7 @@ app.MapDefaultEndpoints();
 
 var publicApi = app.MapGroup("/api/v1/public");
 var browserApi = app.MapGroup("/api/v1/browser");
+var siteSafetyApi = app.MapGroup("/api/v1/site-safety");
 
 publicApi.MapGet("/lookup/domain/{domain}", async (
     string domain,
@@ -67,6 +69,7 @@ publicApi.MapGet("/badge/domain/{domain}", async (
 .WithName("PublicDomainBadge");
 
 MapBrowserApis(browserApi);
+MapSiteSafetyApis(siteSafetyApi);
 
 app.Run();
 
@@ -146,6 +149,89 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
     })
     .WithName("BrowserGetScanResult");
 }
+
+/// <summary>
+/// Maps the site safety scan endpoint on HIP.ApiService so browser clients can use one API base URL.
+/// </summary>
+/// <param name="siteSafetyApi">The versioned site-safety route group.</param>
+/// <remarks>
+/// The request accepts only the current URL and privacy-safe observed counts/lists. It does not accept page
+/// text, form values, cookies, tokens, passwords, or private message bodies.
+/// </remarks>
+static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
+{
+    siteSafetyApi.MapPost("/scan", async (
+        SiteSafetyScanRequest request,
+        ISiteSafetyScanner scanner,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(ToSiteSafetyScanResponse(await scanner.ScanAsync(request, cancellationToken)));
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    })
+    .WithName("ApiServiceSiteSafetyScan");
+}
+
+/// <summary>
+/// Converts application site safety results to public-safe JSON with enum values rendered as readable strings.
+/// </summary>
+/// <param name="result">The application-layer scan result.</param>
+/// <returns>A privacy-safe response for browser clients and public tools.</returns>
+static object ToSiteSafetyScanResponse(SiteSafetyScanResult result) => new
+{
+    result.ScanId,
+    result.Url,
+    result.Domain,
+    result.ScannedAtUtc,
+    result.MalwareRiskScore,
+    result.PhishingRiskScore,
+    result.RedirectRiskScore,
+    result.ScriptRiskScore,
+    result.DownloadRiskScore,
+    result.FormRiskScore,
+    result.ReputationRiskScore,
+    result.OverallSafetyRiskScore,
+    Status = result.Status.ToString(),
+    result.Summary,
+    result.Reasons,
+    result.Warnings,
+    result.PositiveSignals,
+    result.NegativeSignals,
+    result.ConfidenceLevel,
+    result.DomainTrustScore,
+    result.PageTrustScore,
+    result.ContentRiskScore,
+    result.FinalHipScore,
+    ProviderEvidence = result.ProviderEvidence.Select(evidence => new
+    {
+        evidence.ProviderName,
+        ProviderType = evidence.ProviderType.ToString(),
+        TargetType = evidence.TargetType.ToString(),
+        evidence.Domain,
+        evidence.UrlHash,
+        evidence.Confidence,
+        evidence.CheckedAtUtc,
+        evidence.ExpiresAtUtc,
+        evidence.Errors,
+        evidence.IsAuthoritativeForRisk,
+        evidence.IsAuthoritativeForTrust,
+        EvidenceItems = evidence.EvidenceItems.Select(item => new
+        {
+            item.Category,
+            item.Value,
+            Status = item.Status.ToString(),
+            item.RiskImpact,
+            item.TrustImpact,
+            item.Summary
+        }).ToArray()
+    }).ToArray(),
+    result.ScoreImpact
+};
 
 /// <summary>
 /// Marker type used by integration tests to boot the standalone HIP API service.
