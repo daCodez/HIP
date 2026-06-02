@@ -44,7 +44,9 @@
     lastSummary.apiStatus = currentLookup ? "Available" : "Unavailable";
 
     if (settings.enableWarningBanner && currentLookup?.status) {
-      window.HipRiskBadgeRenderer.renderTrustBanner(withLookupUrl(currentLookup), pluginVersion);
+      window.HipRiskBadgeRenderer.renderTrustBanner(withLookupUrl(currentLookup), pluginVersion, {
+        onFeedback: submitBannerFeedback
+      });
     }
 
     if (settings.enableLinkScanning) {
@@ -221,6 +223,51 @@
     };
 
     await chrome.runtime.sendMessage({ type: "HIP_REPORT_RISK_FINDING", report });
+  }
+
+  /**
+   * Submits weighted trust feedback from the injected HIP banner.
+   * The payload intentionally avoids page text, form values, cookies, tokens, and private content.
+   */
+  async function submitBannerFeedback(feedbackType, lookup) {
+    const looksSafe = feedbackType === "LooksSafe";
+    const report = {
+      reportId: "",
+      sourceClient: "BrowserPlugin",
+      platform: "Web",
+      targetType: "Website",
+      domain: lookup?.domain || currentDomain,
+      urlHash: await sha256(window.location.href),
+      originalUrl: null,
+      senderHash: null,
+      riskLevel: looksSafe ? "ProbablySafe" : "Suspicious",
+      reason: looksSafe
+        ? "Browser plugin banner feedback: user reported the site looks safe."
+        : "Browser plugin banner feedback: user reported the site looks suspicious.",
+      detectedAtUtc: new Date().toISOString(),
+      reporterTrustLevel: "Medium",
+      privacySafeEvidence: {
+        evidenceType: "browser-banner-feedback",
+        summary: "Browser plugin banner feedback submitted without page text, form values, or private content.",
+        facts: {
+          source: "BrowserPluginBanner",
+          feedbackType,
+          domain: lookup?.domain || currentDomain,
+          displayedStatus: lookup?.status || "Unknown",
+          displayedScore: String(lookup?.finalHipScore ?? lookup?.score ?? "Unknown"),
+          scanMode: settings.scanMode
+        },
+        containsPrivateContent: false
+      },
+      hipSignature: "browser-plugin-banner-feedback-placeholder"
+    };
+
+    const response = await chrome.runtime.sendMessage({ type: "HIP_REPORT_RISK_FINDING", report });
+    if (!response?.ok) {
+      throw new Error(response?.error || "HIP feedback unavailable");
+    }
+
+    return response.result;
   }
 
   /**
