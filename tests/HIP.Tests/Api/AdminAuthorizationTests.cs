@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using NUnit.Framework;
 
@@ -106,6 +107,64 @@ public sealed class AdminAuthorizationTests
         var response = await client.GetAsync("/api/v1/admin/review");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
+    [Test]
+    public async Task Readonly_can_view_external_provider_settings()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddRole(client, "ReadOnly");
+
+        var response = await client.GetAsync("/api/v1/admin/site-safety/external-providers");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.That(json.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.False);
+    }
+
+    [Test]
+    public async Task Admin_can_enable_external_provider_settings()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddRole(client, "Admin");
+
+        var response = await client.PostAsJsonAsync("/api/v1/admin/site-safety/external-providers", new
+        {
+            ExternalProvidersEnabled = true,
+            AllowFullUrlChecks = false,
+            ProviderTimeout = "00:00:02",
+            DefaultCacheDuration = "06:00:00",
+            SslLabs = new { Enabled = true, Endpoint = "", ApiKey = "", AllowFullUrl = false, CacheDuration = "06:00:00" },
+            GoogleWebRisk = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = false, CacheDuration = (string?)null },
+            VirusTotal = new { Enabled = true, Endpoint = "https://example.invalid/vt", ApiKey = "dev-placeholder", AllowFullUrl = false, CacheDuration = "03:00:00" }
+        });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.That(json.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.True);
+        Assert.That(json.RootElement.GetProperty("sslLabs").GetProperty("enabled").GetBoolean(), Is.True);
+        Assert.That(json.RootElement.GetProperty("virusTotal").GetProperty("enabled").GetBoolean(), Is.True);
+    }
+
+    [Test]
+    public async Task Readonly_cannot_update_external_provider_settings()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddRole(client, "ReadOnly");
+
+        var response = await client.PostAsJsonAsync("/api/v1/admin/site-safety/external-providers", new
+        {
+            ExternalProvidersEnabled = true,
+            AllowFullUrlChecks = false,
+            SslLabs = new { Enabled = true, Endpoint = "", ApiKey = "", AllowFullUrl = false, CacheDuration = (string?)null },
+            GoogleWebRisk = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = false, CacheDuration = (string?)null },
+            VirusTotal = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = false, CacheDuration = (string?)null }
+        });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
     }
 
     private static void AddRole(HttpClient client, string role)

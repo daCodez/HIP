@@ -48,6 +48,40 @@ test("scan site safety calls versioned API route", async () => {
   assert.equal(calls[0].options.method, "POST");
 });
 
+test("scan site safety falls back to web host when API host route is missing", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    if (url === "http://localhost:5099/api/v1/site-safety/scan") {
+      return {
+        ok: false,
+        status: 404,
+        json: async () => ({ error: "missing" })
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ status: "LimitedData", source: "web-fallback" })
+    };
+  };
+
+  let result;
+  try {
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5260" });
+    result = await client.scanSiteSafety(client.buildSiteSafetyRequest("https://example.com", {}));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, "http://localhost:5099/api/v1/site-safety/scan");
+  assert.equal(calls[1].url, "http://localhost:5260/api/v1/site-safety/scan");
+  assert.equal(result.source, "web-fallback");
+});
+
 test("popup contains site safety display fields", async () => {
   const html = await readFile(new URL("../src/popup.html", import.meta.url), "utf8");
   const script = await readFile(new URL("../src/popup.js", import.meta.url), "utf8");

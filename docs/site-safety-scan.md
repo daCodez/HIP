@@ -185,6 +185,14 @@ Configuration section:
 }
 ```
 
+Runtime MVP controls:
+
+- Admin page: `/admin/settings`
+- Admin API: `GET /api/v1/admin/site-safety/external-providers`
+- Admin API: `POST /api/v1/admin/site-safety/external-providers`
+
+These runtime controls update the current running HIP process. Production deployments should persist the same values in configuration or a secure settings store and keep API keys in secret storage.
+
 External provider rules:
 
 - Prefer cached results when available.

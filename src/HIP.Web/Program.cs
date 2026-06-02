@@ -118,6 +118,17 @@ app.MapGet($"{ApiRoutes.Admin}/reports", async (
     CancellationToken cancellationToken) =>
     Results.Ok((await reportService.ListAsync(cancellationToken)).Select(PrivacySafeReportListItem.From).ToArray()))
     .RequireAuthorization(AdminPolicies.CanReviewReports);
+app.MapGet($"{ApiRoutes.Admin}/site-safety/external-providers", (ExternalSiteEvidenceOptions options) =>
+    Results.Ok(ExternalProviderSettingsResponse.From(options)))
+    .RequireAuthorization(AdminPolicies.CanViewAdminDashboard);
+app.MapPost($"{ApiRoutes.Admin}/site-safety/external-providers", (
+    ExternalProviderSettingsUpdateRequest request,
+    ExternalSiteEvidenceOptions options) =>
+{
+    ApplyExternalProviderSettings(options, request);
+    return Results.Ok(ExternalProviderSettingsResponse.From(options));
+})
+    .RequireAuthorization(AdminPolicies.CanManageRules);
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
@@ -137,6 +148,36 @@ static ExternalSiteEvidenceOptions BindExternalSiteEvidenceOptions(IConfiguratio
     var options = new ExternalSiteEvidenceOptions();
     configuration.GetSection("ExternalSiteEvidence").Bind(options);
     return options;
+}
+
+/// <summary>
+/// Applies admin-managed external evidence provider settings to the runtime options object.
+/// </summary>
+/// <param name="options">Runtime options used by Site Safety providers.</param>
+/// <param name="request">Requested settings from an authorized admin.</param>
+static void ApplyExternalProviderSettings(ExternalSiteEvidenceOptions options, ExternalProviderSettingsUpdateRequest request)
+{
+    options.ExternalProvidersEnabled = request.ExternalProvidersEnabled;
+    options.AllowFullUrlChecks = request.AllowFullUrlChecks;
+    options.ProviderTimeout = request.ProviderTimeout is { Ticks: > 0 } ? request.ProviderTimeout.Value : TimeSpan.FromSeconds(2);
+    options.DefaultCacheDuration = request.DefaultCacheDuration is { Ticks: > 0 } ? request.DefaultCacheDuration.Value : TimeSpan.FromHours(6);
+    ApplyProvider(options.SslLabs, request.SslLabs);
+    ApplyProvider(options.GoogleWebRisk, request.GoogleWebRisk);
+    ApplyProvider(options.VirusTotal, request.VirusTotal);
+}
+
+/// <summary>
+/// Applies one provider's safe runtime settings without logging or exposing secrets.
+/// </summary>
+/// <param name="options">Provider options to mutate.</param>
+/// <param name="request">Provider settings requested by the admin.</param>
+static void ApplyProvider(ExternalProviderOptions options, ExternalProviderSettings request)
+{
+    options.Enabled = request.Enabled;
+    options.Endpoint = string.IsNullOrWhiteSpace(request.Endpoint) ? null : request.Endpoint.Trim();
+    options.ApiKey = string.IsNullOrWhiteSpace(request.ApiKey) ? null : request.ApiKey.Trim();
+    options.AllowFullUrl = request.AllowFullUrl;
+    options.CacheDuration = request.CacheDuration is { Ticks: > 0 } ? request.CacheDuration : null;
 }
 
 static void MapPublicApis(RouteGroupBuilder publicApi)
@@ -1613,6 +1654,84 @@ public partial class Program
 })();
 """;
     }
+}
+
+/// <summary>
+/// Public-safe admin response for external evidence provider settings.
+/// </summary>
+/// <param name="ExternalProvidersEnabled">Whether any external provider can run.</param>
+/// <param name="AllowFullUrlChecks">Whether full URL checks are globally allowed.</param>
+/// <param name="ProviderTimeout">Provider timeout.</param>
+/// <param name="DefaultCacheDuration">Default provider cache duration.</param>
+/// <param name="SslLabs">SSL Labs/Qualys-style TLS settings.</param>
+/// <param name="GoogleWebRisk">Google Web Risk/Safe Browsing-style settings.</param>
+/// <param name="VirusTotal">VirusTotal-style settings.</param>
+sealed record ExternalProviderSettingsResponse(
+    bool ExternalProvidersEnabled,
+    bool AllowFullUrlChecks,
+    TimeSpan ProviderTimeout,
+    TimeSpan DefaultCacheDuration,
+    ExternalProviderSettings SslLabs,
+    ExternalProviderSettings GoogleWebRisk,
+    ExternalProviderSettings VirusTotal)
+{
+    /// <summary>
+    /// Converts runtime options into an admin-safe response.
+    /// </summary>
+    /// <param name="options">Runtime external evidence options.</param>
+    /// <returns>Admin-safe settings response.</returns>
+    public static ExternalProviderSettingsResponse From(ExternalSiteEvidenceOptions options) =>
+        new(
+            options.ExternalProvidersEnabled,
+            options.AllowFullUrlChecks,
+            options.ProviderTimeout,
+            options.DefaultCacheDuration,
+            ExternalProviderSettings.From(options.SslLabs),
+            ExternalProviderSettings.From(options.GoogleWebRisk),
+            ExternalProviderSettings.From(options.VirusTotal));
+}
+
+/// <summary>
+/// Admin request for updating external evidence provider settings at runtime.
+/// </summary>
+/// <param name="ExternalProvidersEnabled">Whether any external provider can run.</param>
+/// <param name="AllowFullUrlChecks">Whether full URL checks are globally allowed.</param>
+/// <param name="ProviderTimeout">Provider timeout.</param>
+/// <param name="DefaultCacheDuration">Default provider cache duration.</param>
+/// <param name="SslLabs">SSL Labs/Qualys-style TLS settings.</param>
+/// <param name="GoogleWebRisk">Google Web Risk/Safe Browsing-style settings.</param>
+/// <param name="VirusTotal">VirusTotal-style settings.</param>
+sealed record ExternalProviderSettingsUpdateRequest(
+    bool ExternalProvidersEnabled,
+    bool AllowFullUrlChecks,
+    TimeSpan? ProviderTimeout,
+    TimeSpan? DefaultCacheDuration,
+    ExternalProviderSettings SslLabs,
+    ExternalProviderSettings GoogleWebRisk,
+    ExternalProviderSettings VirusTotal);
+
+/// <summary>
+/// Provider-specific settings that avoid exposing raw scanner response data.
+/// </summary>
+/// <param name="Enabled">Whether this provider can run when global external providers are enabled.</param>
+/// <param name="Endpoint">Optional provider endpoint.</param>
+/// <param name="ApiKey">Optional API key placeholder. Production should move secrets to secret storage.</param>
+/// <param name="AllowFullUrl">Whether this provider may receive full URLs.</param>
+/// <param name="CacheDuration">Optional provider cache duration.</param>
+sealed record ExternalProviderSettings(
+    bool Enabled,
+    string? Endpoint,
+    string? ApiKey,
+    bool AllowFullUrl,
+    TimeSpan? CacheDuration)
+{
+    /// <summary>
+    /// Converts runtime provider options into the UI/API shape.
+    /// </summary>
+    /// <param name="options">Runtime provider options.</param>
+    /// <returns>Provider settings.</returns>
+    public static ExternalProviderSettings From(ExternalProviderOptions options) =>
+        new(options.Enabled, options.Endpoint, options.ApiKey, options.AllowFullUrl, options.CacheDuration);
 }
 
 /// <summary>

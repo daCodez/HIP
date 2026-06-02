@@ -58,6 +58,23 @@ public sealed class AdminRuleBuilderPageTests
         Assert.That(response.StatusCode, Is.Not.EqualTo(HttpStatusCode.OK));
     }
 
+    [Test]
+    public async Task Admin_settings_page_loads_external_provider_controls()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddAdmin(client);
+
+        var response = await client.GetAsync("/admin/settings");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(html, Does.Contain("External Safety Evidence"));
+        Assert.That(html, Does.Contain("SSL Labs / Qualys TLS"));
+        Assert.That(html, Does.Contain("Google Web Risk / Safe Browsing"));
+        Assert.That(html, Does.Contain("VirusTotal"));
+    }
+
     private static void AddAdmin(HttpClient client)
     {
         client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Admin");

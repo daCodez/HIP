@@ -1,0 +1,165 @@
+@page "/admin/settings"
+@attribute [Authorize(Policy = AdminPolicies.CanManageRules)]
+@rendermode InteractiveServer
+@inject ExternalSiteEvidenceOptions ExternalEvidenceOptions
+
+<PageTitle>HIP Admin Settings</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">Admin Settings</p>
+            <h1>External Safety Evidence</h1>
+            <p>Enable third-party evidence providers deliberately. HIP still never sends page body text, form values, passwords, tokens, cookies, or email content.</p>
+        </div>
+    </section>
+
+    <section class="rule-builder-panel">
+        <h2>Global Controls</h2>
+        <label><input type="checkbox" @bind="_externalProvidersEnabled" /> Enable external evidence providers</label>
+        <label><input type="checkbox" @bind="_allowFullUrlChecks" /> Allow full URL checks when a provider explicitly needs them</label>
+        <label>
+            Provider timeout seconds
+            <input type="number" min="1" max="30" @bind="_providerTimeoutSeconds" />
+        </label>
+        <label>
+            Default cache hours
+            <input type="number" min="1" max="168" @bind="_defaultCacheHours" />
+        </label>
+    </section>
+
+    <section class="hip-card-row three">
+        @ProviderCard("SSL Labs / Qualys TLS", _sslLabs, "Domain-only TLS evidence. Strong TLS is only a small trust boost.")
+        @ProviderCard("Google Web Risk / Safe Browsing", _googleWebRisk, "Threat evidence for phishing or social-engineering matches.")
+        @ProviderCard("VirusTotal", _virusTotal, "URL or domain reputation evidence for malware and malicious indicators.")
+    </section>
+
+    <section class="rule-builder-panel">
+        <h2>Provider Privacy Guardrails</h2>
+        <ul class="hip-x-list">
+            <li>Do not send page body text</li>
+            <li>Do not send form values</li>
+            <li>Do not send passwords, tokens, cookies, or email content</li>
+        </ul>
+        <button class="primary-button" type="button" @onclick="Save">Save External Provider Settings</button>
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <p class="admin-message">@_message</p>
+        }
+    </section>
+</main>
+
+@code {
+    private bool _externalProvidersEnabled;
+    private bool _allowFullUrlChecks;
+    private int _providerTimeoutSeconds = 2;
+    private int _defaultCacheHours = 6;
+    private ProviderFormState _sslLabs = new();
+    private ProviderFormState _googleWebRisk = new();
+    private ProviderFormState _virusTotal = new();
+    private string _message = string.Empty;
+
+    /// <summary>
+    /// Loads runtime external evidence settings into the form.
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        _externalProvidersEnabled = ExternalEvidenceOptions.ExternalProvidersEnabled;
+        _allowFullUrlChecks = ExternalEvidenceOptions.AllowFullUrlChecks;
+        _providerTimeoutSeconds = Math.Max(1, (int)Math.Round(ExternalEvidenceOptions.ProviderTimeout.TotalSeconds));
+        _defaultCacheHours = Math.Max(1, (int)Math.Round(ExternalEvidenceOptions.DefaultCacheDuration.TotalHours));
+        _sslLabs = ProviderFormState.From(ExternalEvidenceOptions.SslLabs);
+        _googleWebRisk = ProviderFormState.From(ExternalEvidenceOptions.GoogleWebRisk);
+        _virusTotal = ProviderFormState.From(ExternalEvidenceOptions.VirusTotal);
+    }
+
+    /// <summary>
+    /// Saves runtime settings for development/MVP provider control.
+    /// </summary>
+    private void Save()
+    {
+        ExternalEvidenceOptions.ExternalProvidersEnabled = _externalProvidersEnabled;
+        ExternalEvidenceOptions.AllowFullUrlChecks = _allowFullUrlChecks;
+        ExternalEvidenceOptions.ProviderTimeout = TimeSpan.FromSeconds(Math.Clamp(_providerTimeoutSeconds, 1, 30));
+        ExternalEvidenceOptions.DefaultCacheDuration = TimeSpan.FromHours(Math.Clamp(_defaultCacheHours, 1, 168));
+        Apply(ExternalEvidenceOptions.SslLabs, _sslLabs);
+        Apply(ExternalEvidenceOptions.GoogleWebRisk, _googleWebRisk);
+        Apply(ExternalEvidenceOptions.VirusTotal, _virusTotal);
+        _message = "External provider settings saved for the current running HIP process. Persist these values in appsettings or secret storage before production.";
+    }
+
+    /// <summary>
+    /// Applies one provider form state to runtime options.
+    /// </summary>
+    /// <param name="options">Provider options to update.</param>
+    /// <param name="state">Form state.</param>
+    private static void Apply(ExternalProviderOptions options, ProviderFormState state)
+    {
+        options.Enabled = state.Enabled;
+        options.Endpoint = string.IsNullOrWhiteSpace(state.Endpoint) ? null : state.Endpoint.Trim();
+        options.ApiKey = string.IsNullOrWhiteSpace(state.ApiKey) ? null : state.ApiKey.Trim();
+        options.AllowFullUrl = state.AllowFullUrl;
+        options.CacheDuration = state.CacheHours > 0 ? TimeSpan.FromHours(state.CacheHours) : null;
+    }
+
+    /// <summary>
+    /// Renders one external provider settings card.
+    /// </summary>
+    /// <param name="name">Provider display name.</param>
+    /// <param name="state">Provider form state.</param>
+    /// <param name="description">Provider description.</param>
+    /// <returns>Provider card fragment.</returns>
+    private RenderFragment ProviderCard(string name, ProviderFormState state, string description) => @<article class="hip-panel padded">
+        <h2>@name</h2>
+        <p>@description</p>
+        <label><input type="checkbox" @bind="state.Enabled" /> Enabled</label>
+        <label><input type="checkbox" @bind="state.AllowFullUrl" /> Allow full URL for this provider</label>
+        <label>
+            Endpoint
+            <input @bind="state.Endpoint" placeholder="Provider endpoint or adapter URL" />
+        </label>
+        <label>
+            API key placeholder
+            <input @bind="state.ApiKey" placeholder="Use secret storage before production" />
+        </label>
+        <label>
+            Cache hours
+            <input type="number" min="0" max="168" @bind="state.CacheHours" />
+        </label>
+    </article>;
+
+    /// <summary>
+    /// Mutable form state for one external provider.
+    /// </summary>
+    private sealed class ProviderFormState
+    {
+        /// <summary>Whether the provider is enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Whether full URL checks are allowed for this provider.</summary>
+        public bool AllowFullUrl { get; set; }
+
+        /// <summary>Provider endpoint or adapter URL.</summary>
+        public string? Endpoint { get; set; }
+
+        /// <summary>API key placeholder. Production should use secret storage.</summary>
+        public string? ApiKey { get; set; }
+
+        /// <summary>Provider cache hours.</summary>
+        public int CacheHours { get; set; }
+
+        /// <summary>
+        /// Creates form state from runtime provider options.
+        /// </summary>
+        /// <param name="options">Provider options.</param>
+        /// <returns>Form state.</returns>
+        public static ProviderFormState From(ExternalProviderOptions options) => new()
+        {
+            Enabled = options.Enabled,
+            AllowFullUrl = options.AllowFullUrl,
+            Endpoint = options.Endpoint,
+            ApiKey = options.ApiKey,
+            CacheHours = options.CacheDuration is null ? 0 : Math.Max(0, (int)Math.Round(options.CacheDuration.Value.TotalHours))
+        };
+    }
+}
