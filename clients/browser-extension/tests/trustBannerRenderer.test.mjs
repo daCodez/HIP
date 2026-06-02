@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const rendererSource = readFileSync(new URL("../src/riskBadgeRenderer.js", import.meta.url), "utf8");
+const backgroundSource = readFileSync(new URL("../src/background.js", import.meta.url), "utf8");
+const optionsSource = readFileSync(new URL("../src/options.html", import.meta.url), "utf8");
 
-test("trust banner saves dismissed state in localStorage", () => {
-  assert.equal(rendererSource.includes("window.localStorage.setItem"), true);
-  assert.equal(rendererSource.includes("hip:trust-banner-dismissed:"), true);
-  assert.equal(rendererSource.includes("isBannerDismissed"), true);
+test("trust banner dismissal uses extension storage instead of page localStorage", () => {
+  assert.equal(rendererSource.includes("localStorage"), false);
+  assert.equal(backgroundSource.includes("chrome.storage.local"), true);
+  assert.equal(backgroundSource.includes("HIP_SET_BANNER_DISMISSED"), true);
+  assert.equal(backgroundSource.includes("HIP_GET_BANNER_DISMISSED"), true);
 });
 
 test("trust banner renders safe and suspicious feedback buttons", () => {
@@ -20,4 +23,12 @@ test("trust banner renders safe and suspicious feedback buttons", () => {
 test("trust banner labels feedback instead of voting", () => {
   assert.equal(rendererSource.includes("trust feedback"), true);
   assert.equal(rendererSource.toLowerCase().includes("vote"), false);
+});
+
+test("options page exposes banner display mode foundation", () => {
+  assert.equal(optionsSource.includes("bannerDisplayMode"), true);
+  assert.equal(optionsSource.includes("WarningsOnly"), true);
+  assert.equal(optionsSource.includes("DangerousOnly"), true);
+  assert.equal(optionsSource.includes("AlwaysShow"), true);
+  assert.equal(optionsSource.includes("NeverShow"), true);
 });

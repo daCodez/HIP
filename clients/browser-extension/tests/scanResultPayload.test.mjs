@@ -6,7 +6,8 @@ import {
   buildScanResultPayload,
   formatPluginVersion,
   HipApiClient,
-  normalizeHipSettings
+  normalizeHipSettings,
+  shouldShowTrustBanner
 } from "../src/hipApiClient.js";
 
 test("plugin creates privacy-safe scan result payload", () => {
@@ -188,6 +189,34 @@ test("invalid API base URL is handled safely", async () => {
 
 test("plugin version is formatted from manifest version", () => {
   assert.equal(formatPluginVersion("0.1.0"), "HIP Plugin v0.1.0-dev");
+});
+
+test("banner display defaults to warnings only", () => {
+  assert.equal(shouldShowTrustBanner({ status: "Trusted" }, {}, {}), false);
+  assert.equal(shouldShowTrustBanner({ status: "MostlyTrusted" }, {}, {}), false);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, {}, {}), false);
+  assert.equal(shouldShowTrustBanner({ status: "Unknown" }, {}, {}), false);
+  assert.equal(shouldShowTrustBanner({ status: "Suspicious" }, {}, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "HighRisk" }, {}, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, {}), true);
+});
+
+test("banner display handles limited trust special cases", () => {
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { loginFormsDetected: 1 }, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { paymentFieldsDetected: 1 }, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { executableDownloadCandidates: 1 }, {}), true);
+});
+
+test("banner display handles trusted domain with risky page content", () => {
+  assert.equal(shouldShowTrustBanner({ status: "Trusted" }, { suspiciousLinks: 1 }, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "MostlyTrusted" }, { executableDownloadCandidates: 1 }, {}), true);
+});
+
+test("banner display modes are respected", () => {
+  assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, { bannerDisplayMode: "NeverShow" }), false);
+  assert.equal(shouldShowTrustBanner({ status: "Trusted" }, {}, { bannerDisplayMode: "AlwaysShow" }), true);
+  assert.equal(shouldShowTrustBanner({ status: "Suspicious" }, {}, { bannerDisplayMode: "DangerousOnly" }), false);
+  assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, { bannerDisplayMode: "DangerousOnly" }), true);
 });
 
 test("banner feedback creates privacy-safe suspicious evidence", async () => {
