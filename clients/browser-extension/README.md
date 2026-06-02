@@ -21,7 +21,8 @@ This Chromium Manifest V3 client helps users see HIP website trust, link risk, a
 - Login/form risk indicator foundation.
 - Social feed and webmail link detection hooks.
 - API availability status.
-- Scan refresh button.
+- Automatic popup refresh while the page scan is still loading.
+- Scan refresh button as a fallback.
 - Settings page.
 
 ## Settings
@@ -231,6 +232,8 @@ Download detection only flags download-like links by URL extension. It does not 
 ## Popup Privacy Behavior
 
 The popup scores only the active tab URL/domain. It does not read or send page text, form values, passwords, tokens, private messages, or email content.
+
+The popup may briefly show `Checking...` for link counts, Site Safety, and submission state while the content script scans the page asynchronously. It polls for a fresh scan summary for a short period so users do not need to manually refresh just because the popup opened before the page scan finished.
 
 ## Known Limitations
 

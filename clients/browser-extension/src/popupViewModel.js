@@ -122,6 +122,23 @@ export function buildPopupViewModel(lookup, summary, settings, currentUrl) {
   };
 }
 
+/**
+ * Builds explicit popup loading labels for asynchronous scan stages.
+ */
+export function loadingSummaryViewModel(stage = "Checking") {
+  return {
+    apiStatus: stage,
+    linksScanned: "Checking...",
+    riskyLinks: "Checking...",
+    unknownLinks: "Checking...",
+    downloadCandidates: "Checking...",
+    loginFormsDetected: "Checking...",
+    lastScanText: "Checking...",
+    lastSubmittedText: "Pending",
+    dataSourceText: "Pending"
+  };
+}
+
 export function unavailableMessage() {
   return "HIP API unavailable. Unable to score this site right now.";
 }

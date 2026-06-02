@@ -1,5 +1,5 @@
 import { HipApiClient, DEFAULT_HIP_SETTINGS, loadHipSettings, normalizeHost } from "./hipApiClient.js";
-import { buildPopupViewModel, unavailableMessage } from "./popupViewModel.js";
+import { buildPopupViewModel, loadingSummaryViewModel, unavailableMessage } from "./popupViewModel.js";
 
 let settings = DEFAULT_HIP_SETTINGS;
 let client = new HipApiClient(settings);
@@ -7,6 +7,9 @@ let activeTabId = null;
 let activeTabUrl = null;
 let activeLookup = null;
 let activeSiteSafety = null;
+
+const summaryPollAttempts = 6;
+const summaryPollDelayMs = 450;
 
 const elements = {
   domain: document.getElementById("domain"),
@@ -77,7 +80,8 @@ async function initialize() {
 
   const lookup = await client.scoreSite({ url: currentUrl.toString(), domain });
   activeLookup = lookup;
-  const summary = await renderScanSummary();
+  renderLoadingSummary("Checking page scan");
+  const summary = await waitForScanSummary();
   await renderSiteSafety(summary).catch(error => console.warn("HIP Site Safety Scan unavailable.", error));
   renderLookup(lookup, summary);
 }
@@ -125,8 +129,41 @@ async function renderScanSummary() {
     return {};
   }
 
-  const response = await chrome.runtime.sendMessage({ type: "HIP_GET_SCAN_SUMMARY", tabId: activeTabId });
-  const summary = response?.result || {};
+  const summary = await getScanSummary();
+  renderSummary(summary);
+  return summary;
+}
+
+/**
+ * Shows visible loading indicators while the content script is still scanning.
+ */
+function renderLoadingSummary(stage = "Checking") {
+  const viewModel = loadingSummaryViewModel(stage);
+  elements.scanPanel.hidden = false;
+  elements.apiStatus.textContent = viewModel.apiStatus;
+  elements.linksScanned.textContent = viewModel.linksScanned;
+  elements.riskyLinks.textContent = viewModel.riskyLinks;
+  elements.unknownLinks.textContent = viewModel.unknownLinks;
+  elements.downloadCandidates.textContent = viewModel.downloadCandidates;
+  elements.loginForms.textContent = viewModel.loginFormsDetected;
+  elements.lastScan.textContent = viewModel.lastScanText;
+  elements.lastSubmitted.textContent = viewModel.lastSubmittedText;
+  elements.dataSource.textContent = viewModel.dataSourceText;
+  elements.siteSafetyPanel.hidden = false;
+  elements.siteSafetyStatus.textContent = "Checking...";
+  elements.siteSafetyStatus.dataset.status = "Unknown";
+  elements.siteSafetySummary.textContent = "HIP is checking page safety signals.";
+  elements.malwareRisk.textContent = "Checking...";
+  elements.phishingRisk.textContent = "Checking...";
+  elements.redirectRisk.textContent = "Checking...";
+  elements.downloadRisk.textContent = "Checking...";
+  elements.scriptRisk.textContent = "Checking...";
+}
+
+/**
+ * Renders a content-script scan summary after one is available.
+ */
+function renderSummary(summary = {}) {
   const viewModel = buildPopupViewModel(activeLookup, summary, settings, activeTabUrl);
   elements.scanPanel.hidden = false;
   elements.apiStatus.textContent = viewModel.apiStatus;
@@ -138,7 +175,51 @@ async function renderScanSummary() {
   elements.lastScan.textContent = viewModel.lastScanText;
   elements.lastSubmitted.textContent = viewModel.lastSubmittedText;
   elements.dataSource.textContent = viewModel.dataSourceText;
-  return summary;
+}
+
+/**
+ * Polls briefly for a fresh content-script scan summary so users do not need to manually refresh.
+ */
+async function waitForScanSummary() {
+  for (let attempt = 0; attempt < summaryPollAttempts; attempt++) {
+    const summary = await getScanSummary();
+    if (isUsefulSummary(summary)) {
+      renderSummary(summary);
+      return summary;
+    }
+
+    renderLoadingSummary(attempt === 0 ? "Scanning page" : "Still scanning");
+    await delay(summaryPollDelayMs);
+  }
+
+  const fallback = await getScanSummary();
+  renderSummary(fallback);
+  return fallback;
+}
+
+/**
+ * Retrieves the latest summary cached by the background worker.
+ */
+async function getScanSummary() {
+  if (!activeTabId) {
+    return {};
+  }
+
+  const response = await chrome.runtime.sendMessage({ type: "HIP_GET_SCAN_SUMMARY", tabId: activeTabId });
+  return response?.result || {};
+}
+
+/**
+ * Determines whether a summary has enough data to replace loading indicators.
+ */
+function isUsefulSummary(summary = {}) {
+  return Boolean(summary.updatedAt) ||
+    summary.apiStatus === "Available" ||
+    summary.apiStatus === "Unavailable" ||
+    (summary.linksScanned ?? 0) > 0 ||
+    summary.scanResultSubmission === "Success" ||
+    summary.scanResultSubmission === "Failure" ||
+    summary.scanResultSubmission === "Disabled";
 }
 
 /**
@@ -174,9 +255,10 @@ async function refreshScan() {
   }
 
   elements.refreshScan.disabled = true;
+  renderLoadingSummary("Refreshing scan");
   try {
     await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
-    const summary = await renderScanSummary();
+    const summary = await waitForScanSummary();
     await renderSiteSafety(summary).catch(error => console.warn("HIP Site Safety Scan unavailable after refresh.", error));
     if (activeLookup) {
       renderLookup(activeLookup, summary);
@@ -186,6 +268,13 @@ async function refreshScan() {
   } finally {
     elements.refreshScan.disabled = false;
   }
+}
+
+/**
+ * Waits without blocking popup rendering.
+ */
+function delay(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
 /**
