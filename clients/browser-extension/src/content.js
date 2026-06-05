@@ -662,7 +662,7 @@
     }
 
     const status = lookup?.status || "Unknown";
-    const dangerousPageRisk = status === "Dangerous" || status === "Critical" || summary.dangerousLinks > 0;
+    const dangerousPageRisk = status === "Dangerous" || summary.dangerousLinks > 0;
     if (mode === "DangerousOnly") {
       return dangerousPageRisk;
     }
@@ -697,6 +697,9 @@
       summary.suspiciousRedirects > 0 ||
       summary.containsPhishingWording === true ||
       summary.containsScamWording === true ||
+      summary.containsImpersonationWording === true ||
+      summary.knownRiskyProviderEvidence === true ||
+      summary.trustedDomainRiskMismatch === true ||
       summary.riskyUserGeneratedContent === true;
   }
 
@@ -723,16 +726,19 @@
     if (lookup.status === "Suspicious") {
       return {
         ...lookup,
-        bannerTitle: "HIP Notice: This page has suspicious signals.",
+        bannerTitle: "HIP Notice: This page may need review.",
         bannerReason: lookup.knownRisks?.[0] || lookup.explanations?.[0] || "HIP found signals that should be reviewed before you trust this page."
       };
     }
 
     if (lookup.status === "LimitedTrustData" && hasRiskyLimitedTrustSignals(summary)) {
+      const limitedReason = limitedTrustBannerReason(summary);
       return {
         ...lookup,
-        bannerTitle: "HIP Notice: This page has limited trust data.",
-        bannerReason: limitedTrustBannerReason(summary)
+        bannerTitle: limitedReason === "This page has limited trust data and contains login fields."
+          ? "HIP Notice: This page has limited trust data and contains login fields."
+          : "HIP Notice: This page may need review.",
+        bannerReason: limitedReason
       };
     }
 
@@ -761,6 +767,18 @@
 
     if (summary.containsPhishingWording || summary.containsScamWording) {
       return "This page has limited trust data and contains scam or phishing signals.";
+    }
+
+    if (summary.containsImpersonationWording) {
+      return "This page has limited trust data and contains impersonation signals.";
+    }
+
+    if (summary.knownRiskyProviderEvidence) {
+      return "This page has limited trust data and a configured safety provider reported risky evidence.";
+    }
+
+    if (summary.trustedDomainRiskMismatch) {
+      return "The parent domain has trust signals, but this page has risky content signals.";
     }
 
     return "This page has limited trust data and risky page behavior.";

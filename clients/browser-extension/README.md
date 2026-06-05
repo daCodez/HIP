@@ -80,6 +80,18 @@ Default banner behavior:
 
 The popup remains the default place to view full HIP details. The banner is for protecting users when page risk is meaningful, not for forcing users to close a banner on normal pages.
 
+Limited trust pages show a banner only for meaningful risky signals:
+
+- login or password fields
+- payment fields
+- executable downloads
+- suspicious redirects
+- phishing, scam, or impersonation wording signals
+- known risky provider evidence
+- trusted-domain/risky-page mismatch
+
+`DangerousOnly` mode shows the banner only when HIP sees a Dangerous page or dangerous page-level link signal. It does not globally suppress future Dangerous warnings when a different page is dismissed.
+
 ## Popup Primary UX
 
 The popup shows the full user-facing HIP state for the current tab:
@@ -258,6 +270,10 @@ Download detection only flags download-like links by URL extension. It does not 
 18. Open `/api/v1/browser/scan-results/{domain}` on the API host and confirm the latest scan summary was stored.
 19. Confirm the popup Site Safety panel shows a status plus malware, phishing, redirect, download, and script risk labels.
 20. Add a link to an executable such as `https://example.com/setup.exe` and confirm the Site Safety download risk changes after refresh.
+21. Set banner display mode to `WarningsOnly`, visit a normal `Trusted`, `MostlyTrusted`, `LimitedTrustData`, or `Unknown` page, and confirm no banner appears.
+22. Add a login form or executable download to a `LimitedTrustData` test page and confirm a soft warning banner appears.
+23. Dismiss the banner, reload the same page, and confirm the page-scoped dismissal is respected.
+24. Visit a different Dangerous page and confirm the prior dismissal does not hide the new warning.
 
 ## Popup Privacy Behavior
 

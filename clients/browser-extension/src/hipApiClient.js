@@ -272,7 +272,7 @@ export function shouldShowTrustBanner(lookup, summary = {}, settings = {}) {
   }
 
   const status = lookup?.status || "Unknown";
-  const hasDangerousPageRisk = status === "Dangerous" || status === "Critical" || (summary.dangerousLinks ?? 0) > 0;
+  const hasDangerousPageRisk = status === "Dangerous" || (summary.dangerousLinks ?? 0) > 0;
   if (mode === "DangerousOnly") {
     return hasDangerousPageRisk;
   }
@@ -307,6 +307,9 @@ export function hasRiskyLimitedTrustSignals(summary = {}) {
     (summary.suspiciousRedirects ?? 0) > 0 ||
     (summary.containsPhishingWording ?? false) === true ||
     (summary.containsScamWording ?? false) === true ||
+    (summary.containsImpersonationWording ?? false) === true ||
+    (summary.knownRiskyProviderEvidence ?? false) === true ||
+    (summary.trustedDomainRiskMismatch ?? false) === true ||
     (summary.riskyUserGeneratedContent ?? false) === true;
 }
 
