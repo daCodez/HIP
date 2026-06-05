@@ -13,6 +13,7 @@ namespace HIP.Application.Dashboard;
 /// <param name="HasScanData">Whether stored browser scan data exists.</param>
 /// <param name="TopRiskyDomains">Top risky domains from stored scan summaries.</param>
 /// <param name="RecentScans">Recent privacy-safe browser scan summaries.</param>
+/// <param name="RecentThreats">Recent privacy-safe threats filtered from real HIP evidence.</param>
 public sealed record AdminDashboardSummary(
     IReadOnlyCollection<AdminDashboardCard> Cards,
     IReadOnlyCollection<AdminRecentActivityItem> RecentActivity,
@@ -21,7 +22,8 @@ public sealed record AdminDashboardSummary(
     string DataSource,
     bool HasScanData,
     IReadOnlyCollection<AdminRiskyDomainItem> TopRiskyDomains,
-    IReadOnlyCollection<AdminRecentScanItem> RecentScans);
+    IReadOnlyCollection<AdminRecentScanItem> RecentScans,
+    IReadOnlyCollection<AdminRecentThreatItem> RecentThreats);
 
 /// <summary>
 /// Dashboard metric card.
@@ -94,3 +96,42 @@ public sealed record AdminRecentScanItem(
     int DangerousLinksFound,
     DateTimeOffset LastCheckedUtc,
     string ReasonSummary);
+
+/// <summary>
+/// Privacy-safe recent threat row for the dashboard. It intentionally carries only domain-level
+/// identifiers, URL hashes, summarized evidence, and related IDs so admins can triage without
+/// exposing page text, form values, private messages, cookies, or raw browsing history.
+/// </summary>
+/// <param name="ThreatId">Stable dashboard threat identifier.</param>
+/// <param name="Domain">Affected domain.</param>
+/// <param name="UrlHash">Optional URL hash for page-level cases.</param>
+/// <param name="TargetType">Target type such as Domain, Url, Feedback, ProviderEvidence, or Scan.</param>
+/// <param name="Status">Workflow or scan status.</param>
+/// <param name="SiteSafetyStatus">Site Safety status label.</param>
+/// <param name="FinalHipScore">Final HIP score when available.</param>
+/// <param name="Severity">Threat severity label.</param>
+/// <param name="ConfidenceLevel">Confidence label for the evidence.</param>
+/// <param name="ReasonSummary">Plain-English privacy-safe reason.</param>
+/// <param name="WarningSummary">Optional warning summary.</param>
+/// <param name="Source">Source evidence stream.</param>
+/// <param name="RelatedScanId">Optional related browser scan or Site Safety scan ID.</param>
+/// <param name="RelatedReviewId">Optional related review item ID.</param>
+/// <param name="RelatedRuleId">Optional related rule ID.</param>
+/// <param name="CreatedAtUtc">UTC creation or observation time.</param>
+public sealed record AdminRecentThreatItem(
+    string ThreatId,
+    string Domain,
+    string? UrlHash,
+    string TargetType,
+    string Status,
+    string SiteSafetyStatus,
+    int? FinalHipScore,
+    string Severity,
+    string ConfidenceLevel,
+    string ReasonSummary,
+    string? WarningSummary,
+    string Source,
+    string? RelatedScanId,
+    string? RelatedReviewId,
+    string? RelatedRuleId,
+    DateTimeOffset CreatedAtUtc);

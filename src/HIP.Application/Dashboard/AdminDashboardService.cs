@@ -5,6 +5,7 @@ using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.SelfHealing;
 using HIP.Application.SiteSafety;
+using HIP.Domain.Reporting;
 using HIP.Domain.Review;
 using HIP.Domain.Risk;
 using HIP.Domain.Rules;
@@ -185,6 +186,8 @@ public sealed class AdminDashboardService(
             .Take(10)
             .ToArray();
 
+        var recentThreats = BuildRecentThreats(browserScans, findings, reviews, generatedReviews, feedback);
+
         var browserScanActivity = recentScans
             .Select(scan => new AdminRecentActivityItem(
                 "Browser Scan",
@@ -269,7 +272,52 @@ public sealed class AdminDashboardService(
             .Take(12)
             .ToArray();
 
-        return new AdminDashboardSummary(cards, recentActivity, "Healthy", DateTimeOffset.UtcNow, hasScanData ? "BrowserPluginScanResults" : "NoStoredScanData", hasScanData, topRiskyDomains, recentScans);
+        return new AdminDashboardSummary(cards, recentActivity, "Healthy", DateTimeOffset.UtcNow, hasScanData ? "BrowserPluginScanResults" : "NoStoredScanData", hasScanData, topRiskyDomains, recentScans, recentThreats);
+    }
+
+    /// <summary>
+    /// Builds the threat-only dashboard stream from real privacy-safe HIP evidence.
+    /// Clean scans are intentionally excluded so admins see actionable risk, not normal browsing activity.
+    /// </summary>
+    /// <param name="browserScans">Stored browser plugin scan summaries.</param>
+    /// <param name="findings">Privacy-safe risk finding reports.</param>
+    /// <param name="reviews">Manual review queue items.</param>
+    /// <param name="generatedReviews">Generated admin review signals from Site Safety, providers, rules, and feedback.</param>
+    /// <param name="feedback">Weighted feedback submissions.</param>
+    /// <returns>Newest-first recent threat rows.</returns>
+    private static IReadOnlyCollection<AdminRecentThreatItem> BuildRecentThreats(
+        IReadOnlyCollection<BrowserScanResultRecord> browserScans,
+        IReadOnlyCollection<RiskFindingReport> findings,
+        IReadOnlyCollection<ReviewItem> reviews,
+        IReadOnlyCollection<AdminReviewQueueItem> generatedReviews,
+        IReadOnlyCollection<WeightedFeedbackSubmission> feedback)
+    {
+        var scanThreats = browserScans
+            .Where(IsThreatScan)
+            .Select(ToScanThreat);
+
+        var findingThreats = findings
+            .Where(finding => IsRisky(finding.RiskLevel))
+            .Select(ToFindingThreat);
+
+        var manualReviewThreats = reviews
+            .Where(IsThreatReview)
+            .Select(ToManualReviewThreat);
+
+        var generatedReviewThreats = generatedReviews
+            .Where(IsThreatGeneratedReview)
+            .Select(ToGeneratedReviewThreat);
+
+        var feedbackThreats = BuildFeedbackThreats(feedback);
+
+        return scanThreats
+            .Concat(findingThreats)
+            .Concat(manualReviewThreats)
+            .Concat(generatedReviewThreats)
+            .Concat(feedbackThreats)
+            .OrderByDescending(item => item.CreatedAtUtc)
+            .Take(12)
+            .ToArray();
     }
 
     /// <summary>
@@ -327,6 +375,278 @@ public sealed class AdminDashboardService(
             .Where(item => item.FeedbackType is HipFeedbackType.LooksSuspicious or HipFeedbackType.ReportIssue)
             .GroupBy(item => item.Domain, StringComparer.OrdinalIgnoreCase)
             .Count(group => group.Count() >= 5);
+
+    /// <summary>
+    /// Determines whether a stored browser scan represents a recent threat rather than a normal clean page.
+    /// This uses conservative status and count signals only; it never inspects page text or form values.
+    /// </summary>
+    /// <param name="scan">Stored browser scan summary.</param>
+    /// <returns>True when the scan should appear in Recent Threats.</returns>
+    private static bool IsThreatScan(BrowserScanResultRecord scan)
+    {
+        if (IsDangerousScan(scan) || IsHighRiskScan(scan))
+        {
+            return true;
+        }
+
+        if (IsSuspiciousScan(scan) && (scan.RiskyLinksFound > 0 || scan.SuspiciousLinksFound > 0 || HasStrongWarning(scan)))
+        {
+            return true;
+        }
+
+        return IsTrustedOrMostlyTrusted(scan) && (scan.RiskyLinksFound > 0 || scan.DangerousLinksFound > 0 || HasStrongWarning(scan));
+    }
+
+    /// <summary>
+    /// Converts a stored browser scan into a privacy-safe threat row.
+    /// </summary>
+    /// <param name="scan">Stored browser scan summary.</param>
+    /// <returns>Recent threat item.</returns>
+    private static AdminRecentThreatItem ToScanThreat(BrowserScanResultRecord scan) =>
+        new(
+            $"scan-threat:{scan.ScanResultId}",
+            scan.Domain,
+            scan.PageUrlHash,
+            "Scan",
+            scan.Status,
+            scan.RiskLevel,
+            scan.Score,
+            ScanSeverity(scan),
+            scan.PrivacySafeMetadata.GetValueOrDefault("confidenceLevel", "Medium"),
+            SanitizeThreatSummary(ScanThreatReason(scan)),
+            scan.DangerousLinksFound > 0
+                ? $"{scan.DangerousLinksFound} dangerous link(s) found."
+                : scan.RiskyLinksFound > 0 ? $"{scan.RiskyLinksFound} risky link(s) found." : null,
+            scan.ScanSource,
+            scan.ScanResultId,
+            null,
+            null,
+            scan.LastCheckedUtc);
+
+    /// <summary>
+    /// Converts a privacy-safe risk finding into a threat row.
+    /// </summary>
+    /// <param name="finding">Risk finding report.</param>
+    /// <returns>Recent threat item.</returns>
+    private static AdminRecentThreatItem ToFindingThreat(RiskFindingReport finding) =>
+        new(
+            $"finding-threat:{finding.ReportId}",
+            finding.Domain,
+            finding.UrlHash,
+            finding.TargetType.ToString(),
+            finding.RiskLevel.ToString(),
+            finding.RiskLevel.ToString(),
+            null,
+            finding.RiskLevel.ToString(),
+            finding.ReporterTrustLevel.ToString(),
+            SanitizeThreatSummary(finding.Reason),
+            SanitizeThreatSummary(finding.PrivacySafeEvidence.Summary),
+            finding.SourceClient.ToString(),
+            null,
+            null,
+            null,
+            finding.DetectedAtUtc);
+
+    /// <summary>
+    /// Determines whether a manual review item belongs in the threat-only stream.
+    /// </summary>
+    /// <param name="item">Manual review item.</param>
+    /// <returns>True when the item is open or high-impact enough for Recent Threats.</returns>
+    private static bool IsThreatReview(ReviewItem item) =>
+        item.Status is ReviewStatus.Open or ReviewStatus.InReview or ReviewStatus.NeedsMoreInfo ||
+        item.RiskLevel is RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical ||
+        item.Priority is ReviewPriority.High or ReviewPriority.Critical;
+
+    /// <summary>
+    /// Converts a manual review item into a privacy-safe threat row.
+    /// </summary>
+    /// <param name="item">Manual review item.</param>
+    /// <returns>Recent threat item.</returns>
+    private static AdminRecentThreatItem ToManualReviewThreat(ReviewItem item) =>
+        new(
+            $"review-threat:{item.ReviewItemId}",
+            item.TargetType is TargetType.Domain or TargetType.Website or TargetType.Url ? item.TargetId : item.TargetId,
+            null,
+            item.TargetType.ToString(),
+            item.Status.ToString(),
+            item.RiskLevel.ToString(),
+            null,
+            item.Priority.ToString(),
+            "ManualReview",
+            SanitizeThreatSummary(item.Summary),
+            SanitizeThreatSummary(item.EvidenceSummary),
+            item.Source,
+            null,
+            item.ReviewItemId,
+            null,
+            item.UpdatedAtUtc);
+
+    /// <summary>
+    /// Determines whether a generated review signal is threat evidence rather than low-priority bookkeeping.
+    /// </summary>
+    /// <param name="item">Generated admin review item.</param>
+    /// <returns>True when the generated review should appear in Recent Threats.</returns>
+    private static bool IsThreatGeneratedReview(AdminReviewQueueItem item) =>
+        item.Severity is AdminReviewSeverity.High or AdminReviewSeverity.Critical ||
+        item.Source is AdminReviewSource.ExternalProvider or AdminReviewSource.UserFeedback ||
+        StatusLooksThreatening(item.CurrentStatus) ||
+        item.ReviewReason.Contains("login", StringComparison.OrdinalIgnoreCase) ||
+        item.ReviewReason.Contains("provider", StringComparison.OrdinalIgnoreCase) ||
+        item.ReviewReason.Contains("redirect", StringComparison.OrdinalIgnoreCase) ||
+        item.ReviewReason.Contains("download", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Converts generated admin review evidence into a dashboard threat row.
+    /// </summary>
+    /// <param name="item">Generated review item.</param>
+    /// <returns>Recent threat item.</returns>
+    private static AdminRecentThreatItem ToGeneratedReviewThreat(AdminReviewQueueItem item) =>
+        new(
+            $"generated-review-threat:{item.ReviewId}",
+            item.Domain,
+            item.UrlHash,
+            item.TargetType.ToString(),
+            item.Status.ToString(),
+            item.CurrentStatus ?? "ReviewSignal",
+            item.CurrentFinalHipScore,
+            item.Severity.ToString(),
+            item.ConfidenceLevel ?? "Medium",
+            SanitizeThreatSummary(item.Summary),
+            SanitizeThreatSummary(item.EvidenceSummary),
+            item.Source.ToString(),
+            item.RelatedScanId,
+            item.ReviewId,
+            item.RelatedRuleId,
+            item.UpdatedAtUtc);
+
+    /// <summary>
+    /// Builds repeated suspicious feedback threats. Feedback is treated as weak evidence and never as raw voting.
+    /// </summary>
+    /// <param name="feedback">Weighted feedback submissions.</param>
+    /// <returns>Repeated feedback threat rows.</returns>
+    private static IReadOnlyCollection<AdminRecentThreatItem> BuildFeedbackThreats(IReadOnlyCollection<WeightedFeedbackSubmission> feedback) =>
+        feedback
+            .Where(item => item.FeedbackType is HipFeedbackType.LooksSuspicious or HipFeedbackType.ReportIssue)
+            .GroupBy(item => item.Domain, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() >= 5)
+            .Select(group =>
+            {
+                var latest = group.OrderByDescending(item => item.SubmittedAtUtc).First();
+                return new AdminRecentThreatItem(
+                    $"feedback-threat:{group.Key}",
+                    group.Key,
+                    latest.PageUrlHash,
+                    "Feedback",
+                    "NeedsReview",
+                    "FeedbackSignal",
+                    null,
+                    group.Count() >= 10 ? "High" : "Medium",
+                    "Low",
+                    "Repeated suspicious feedback was submitted for this domain. HIP treats feedback as supporting evidence, not proof.",
+                    $"{group.Count()} suspicious feedback item(s) in the current dashboard data.",
+                    latest.Source.ToString(),
+                    null,
+                    null,
+                    null,
+                    latest.SubmittedAtUtc);
+            })
+            .ToArray();
+
+    /// <summary>
+    /// Maps a stored scan to a dashboard severity label.
+    /// </summary>
+    /// <param name="scan">Stored browser scan.</param>
+    /// <returns>Severity label.</returns>
+    private static string ScanSeverity(BrowserScanResultRecord scan)
+    {
+        if (IsDangerousScan(scan) || scan.DangerousLinksFound > 0)
+        {
+            return "Critical";
+        }
+
+        if (IsHighRiskScan(scan))
+        {
+            return "High";
+        }
+
+        return "Medium";
+    }
+
+    /// <summary>
+    /// Builds a short reason for a scan threat without exposing the raw URL or page content.
+    /// </summary>
+    /// <param name="scan">Stored browser scan.</param>
+    /// <returns>Plain-English threat reason.</returns>
+    private static string ScanThreatReason(BrowserScanResultRecord scan)
+    {
+        if (IsTrustedOrMostlyTrusted(scan) && (scan.RiskyLinksFound > 0 || scan.DangerousLinksFound > 0))
+        {
+            return "The parent domain has stronger trust, but this page or its links showed risky signals.";
+        }
+
+        if (scan.DangerousLinksFound > 0)
+        {
+            return "The latest browser scan found dangerous link signals on this page.";
+        }
+
+        if (scan.RiskyLinksFound > 0 || scan.SuspiciousLinksFound > 0)
+        {
+            return "The latest browser scan found suspicious link signals on this page.";
+        }
+
+        return FirstReason(scan);
+    }
+
+    /// <summary>
+    /// Detects warning-style scan summaries using only public-safe reason text and action labels.
+    /// </summary>
+    /// <param name="scan">Stored browser scan.</param>
+    /// <returns>True when the scan contains a strong warning signal.</returns>
+    private static bool HasStrongWarning(BrowserScanResultRecord scan) =>
+        scan.RecommendedAction.Contains("Safety", StringComparison.OrdinalIgnoreCase) ||
+        scan.RecommendedAction.Contains("Block", StringComparison.OrdinalIgnoreCase) ||
+        scan.Reasons.Any(reason =>
+            reason.Contains("warning", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("phishing", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("malware", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("download", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("redirect", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Determines whether a scan status indicates a trusted parent context where page/content risk still matters.
+    /// </summary>
+    /// <param name="scan">Stored browser scan.</param>
+    /// <returns>True when the scan label is trusted or mostly trusted.</returns>
+    private static bool IsTrustedOrMostlyTrusted(BrowserScanResultRecord scan) =>
+        MatchesScanStatus(scan, "Trusted", "MostlyTrusted", "ProbablySafe");
+
+    /// <summary>
+    /// Checks nullable status text for high-risk labels.
+    /// </summary>
+    /// <param name="status">Status label.</param>
+    /// <returns>True when the status is threatening.</returns>
+    private static bool StatusLooksThreatening(string? status) =>
+        !string.IsNullOrWhiteSpace(status) &&
+        (status.Contains("Suspicious", StringComparison.OrdinalIgnoreCase) ||
+         status.Contains("HighRisk", StringComparison.OrdinalIgnoreCase) ||
+         status.Contains("Dangerous", StringComparison.OrdinalIgnoreCase) ||
+         status.Contains("Critical", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Redacts obvious private-content markers from dashboard threat summaries.
+    /// Upstream validators should block these already; this is a defensive UI/API boundary.
+    /// </summary>
+    /// <param name="summary">Summary text.</param>
+    /// <returns>Safe summary text.</returns>
+    private static string SanitizeThreatSummary(string summary) =>
+        summary.Contains("page text", StringComparison.OrdinalIgnoreCase) ||
+        summary.Contains("form value", StringComparison.OrdinalIgnoreCase) ||
+        summary.Contains("password", StringComparison.OrdinalIgnoreCase) ||
+        summary.Contains("token=", StringComparison.OrdinalIgnoreCase) ||
+        summary.Contains("cookie", StringComparison.OrdinalIgnoreCase) ||
+        summary.Contains("private message", StringComparison.OrdinalIgnoreCase)
+            ? "[privacy-safe threat summary redacted]"
+            : summary;
 
     /// <summary>
     /// Determines whether a stored scan is Trusted.

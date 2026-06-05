@@ -231,6 +231,175 @@ public sealed class AdminDashboardTests
     }
 
     [Test]
+    public async Task Recent_threats_do_not_show_clean_pages()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        var now = DateTimeOffset.UtcNow;
+        await repository.SaveAsync(Scan("trusted.example", 92, "Trusted", 12, 0, 0, now, "No risky links found."), CancellationToken.None);
+        await repository.SaveAsync(Scan("limited.example", 58, "LimitedTrustData", 7, 0, 0, now, "No obvious malware or phishing found."), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.That(summary.RecentThreats, Is.Empty);
+    }
+
+    [Test]
+    public async Task Dangerous_scan_appears_in_recent_threats()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        await repository.SaveAsync(Scan("danger.example", 4, "Dangerous", 12, 4, 2, DateTimeOffset.UtcNow, "Confirmed malware indicator."), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        var threat = summary.RecentThreats.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(threat.Domain, Is.EqualTo("danger.example"));
+            Assert.That(threat.Severity, Is.EqualTo("Critical"));
+            Assert.That(threat.Source, Is.EqualTo("BrowserPlugin"));
+        });
+    }
+
+    [Test]
+    public async Task Highrisk_scan_appears_in_recent_threats()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        await repository.SaveAsync(Scan("high.example", 18, "HighRisk", 8, 3, 0, DateTimeOffset.UtcNow, "Suspicious redirect chain found."), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.That(summary.RecentThreats.Single().Domain, Is.EqualTo("high.example"));
+    }
+
+    [Test]
+    public async Task Suspicious_scan_with_warning_appears_in_recent_threats()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        await repository.SaveAsync(Scan("suspicious.example", 32, "Suspicious", 9, 1, 0, DateTimeOffset.UtcNow, "Warning: suspicious download link found."), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.That(summary.RecentThreats.Single().ReasonSummary, Does.Contain("suspicious link signals"));
+    }
+
+    [Test]
+    public async Task Unknown_login_page_review_signal_appears_in_recent_threats()
+    {
+        var generatedReviews = new InMemoryAdminReviewQueueRepository();
+        await generatedReviews.SaveAsync(AdminReview(
+            "unknown-login",
+            "login.example",
+            "UnknownDomainLoginForm",
+            AdminReviewSeverity.Medium,
+            AdminReviewSource.SiteSafetyScan,
+            DateTimeOffset.UtcNow,
+            "LimitedTrustData",
+            "Unknown login page needs review."), CancellationToken.None);
+        var service = Dashboard(new InMemoryBrowserScanResultRepository(), generatedReviewRepository: generatedReviews);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.That(summary.RecentThreats.Single().ReasonSummary, Is.EqualTo("Unknown login page needs review."));
+    }
+
+    [Test]
+    public async Task Repeated_suspicious_feedback_appears_in_recent_threats()
+    {
+        var feedback = new InMemoryWeightedFeedbackRepository();
+        var now = DateTimeOffset.UtcNow;
+        for (var i = 0; i < 5; i++)
+        {
+            await feedback.SaveAsync(Feedback("feedback-threat.example", HipFeedbackType.LooksSuspicious, now.AddMinutes(i), $"reporter-{i}"), CancellationToken.None);
+        }
+
+        var service = Dashboard(new InMemoryBrowserScanResultRepository(), weightedFeedbackRepository: feedback);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        var threat = summary.RecentThreats.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(threat.Domain, Is.EqualTo("feedback-threat.example"));
+            Assert.That(threat.Source, Is.EqualTo(HipFeedbackSource.BrowserPluginBanner.ToString()));
+            Assert.That(threat.ReasonSummary, Does.Contain("Repeated suspicious feedback"));
+        });
+    }
+
+    [Test]
+    public async Task External_provider_threat_hit_appears_in_recent_threats()
+    {
+        var generatedReviews = new InMemoryAdminReviewQueueRepository();
+        await generatedReviews.SaveAsync(AdminReview(
+            "provider-hit",
+            "provider-hit.example",
+            "ExternalProviderThreatHit",
+            AdminReviewSeverity.High,
+            AdminReviewSource.ExternalProvider,
+            DateTimeOffset.UtcNow,
+            "Dangerous",
+            "External provider reported phishing evidence."), CancellationToken.None);
+        var service = Dashboard(new InMemoryBrowserScanResultRepository(), generatedReviewRepository: generatedReviews);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        var threat = summary.RecentThreats.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(threat.Source, Is.EqualTo(AdminReviewSource.ExternalProvider.ToString()));
+            Assert.That(threat.SiteSafetyStatus, Is.EqualTo("Dangerous"));
+        });
+    }
+
+    [Test]
+    public async Task Recent_threats_are_sorted_newest_first()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        await repository.SaveAsync(Scan("older.example", 8, "Dangerous", 3, 2, 1, DateTimeOffset.UtcNow.AddHours(-3), "Older dangerous scan."), CancellationToken.None);
+        await repository.SaveAsync(Scan("newer.example", 18, "HighRisk", 3, 1, 0, DateTimeOffset.UtcNow, "Newer high-risk scan."), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.That(summary.RecentThreats.First().Domain, Is.EqualTo("newer.example"));
+    }
+
+    [Test]
+    public async Task Dashboard_route_shows_recent_threat_section()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddRole(client, "ReadOnly");
+
+        var response = await client.GetAsync("/admin");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.That(body, Does.Contain("Recent Threats"));
+    }
+
+    [Test]
+    public async Task Recent_threats_do_not_expose_private_content()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        await repository.SaveAsync(Scan("privacy-threat.example", 10, "HighRisk", 4, 0, 0, DateTimeOffset.UtcNow, "password token=secret page text form value private message cookie"), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+        var serialized = JsonSerializer.Serialize(summary.RecentThreats);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(serialized, Does.Contain("[privacy-safe threat summary redacted]"));
+            Assert.That(serialized, Does.Not.Contain("password token=secret"));
+            Assert.That(serialized, Does.Not.Contain("form value"));
+            Assert.That(serialized, Does.Not.Contain("private message"));
+        });
+    }
+
+    [Test]
     public async Task Dashboard_scan_sections_do_not_expose_private_page_text_or_form_values()
     {
         var repository = new InMemoryBrowserScanResultRepository();
@@ -416,6 +585,8 @@ public sealed class AdminDashboardTests
     /// <returns>Dashboard service.</returns>
     private static AdminDashboardService Dashboard(
         IBrowserScanResultRepository browserScanRepository,
+        IRiskFindingReportRepository? riskFindingRepository = null,
+        IReviewQueueService? reviewQueueService = null,
         IAdminReviewQueueRepository? generatedReviewRepository = null,
         IWeightedFeedbackRepository? weightedFeedbackRepository = null,
         IAdminSiteSafetyRuleRepository? adminSiteSafetyRuleRepository = null,
@@ -424,8 +595,8 @@ public sealed class AdminDashboardTests
         var auditLogService = new AuditLogService();
         return new AdminDashboardService(
             browserScanRepository,
-            new InMemoryRiskFindingReportRepository(),
-            new ReviewQueueService(new ReviewItemValidator(), auditLogService),
+            riskFindingRepository ?? new InMemoryRiskFindingReportRepository(),
+            reviewQueueService ?? new ReviewQueueService(new ReviewItemValidator(), auditLogService),
             new AppealService(new AppealRequestValidator(), auditLogService),
             new ReputationOverrideService(new ReputationOverrideRequestValidator(), auditLogService),
             auditLogService,
@@ -533,6 +704,52 @@ public sealed class AdminDashboardTests
             PageUrlHash: "sha256:page",
             ReporterHash: reporterHash,
             PluginVersion: "0.1.0-test");
+
+    /// <summary>
+    /// Creates a generated admin review queue item with configurable threat evidence.
+    /// </summary>
+    /// <param name="reviewId">Review ID.</param>
+    /// <param name="domain">Review domain.</param>
+    /// <param name="reason">Machine-readable review reason.</param>
+    /// <param name="severity">Review severity.</param>
+    /// <param name="source">Review source.</param>
+    /// <param name="createdAtUtc">Creation timestamp.</param>
+    /// <param name="currentStatus">Current Site Safety status.</param>
+    /// <param name="summary">Privacy-safe summary.</param>
+    /// <returns>Admin review queue item.</returns>
+    private static AdminReviewQueueItem AdminReview(
+        string reviewId,
+        string domain,
+        string reason,
+        AdminReviewSeverity severity,
+        AdminReviewSource source,
+        DateTimeOffset createdAtUtc,
+        string currentStatus,
+        string summary) =>
+        new(
+            reviewId,
+            domain,
+            "sha256:review",
+            source == AdminReviewSource.ExternalProvider ? AdminReviewTargetType.ProviderEvidence : AdminReviewTargetType.Url,
+            reason,
+            severity,
+            AdminReviewStatus.Open,
+            source,
+            "scan-review",
+            null,
+            null,
+            42,
+            currentStatus,
+            "Medium",
+            summary,
+            "Privacy-safe evidence summary.",
+            createdAtUtc,
+            createdAtUtc,
+            null,
+            null,
+            null,
+            null,
+            null);
 
     /// <summary>
     /// Creates a minimal JSON trust rule for dashboard rule count tests.

@@ -105,6 +105,58 @@
         <section class="lookup-result">
             <div class="result-header">
                 <div>
+                    <h2>Recent Threats</h2>
+                    <p>Real HIP threat signals only. Clean pages and normal low-risk scans are not shown here.</p>
+                </div>
+            </div>
+
+            @if (_summary.RecentThreats.Count == 0)
+            {
+                <p>No recent threats found.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Domain</th>
+                                <th>Severity</th>
+                                <th>Status</th>
+                                <th>Score</th>
+                                <th>Source</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var threat in _summary.RecentThreats)
+                            {
+                                <tr>
+                                    <td>@threat.CreatedAtUtc.UtcDateTime.ToString("u")</td>
+                                    <td>@threat.Domain</td>
+                                    <td>@threat.Severity</td>
+                                    <td>@threat.SiteSafetyStatus</td>
+                                    <td>@(threat.FinalHipScore?.ToString() ?? "-")</td>
+                                    <td>@threat.Source</td>
+                                    <td>
+                                        @threat.ReasonSummary
+                                        @if (!string.IsNullOrWhiteSpace(threat.WarningSummary))
+                                        {
+                                            <small>@threat.WarningSummary</small>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="lookup-result">
+            <div class="result-header">
+                <div>
                     <h2>Recent Scans</h2>
                     <p>Newest stored browser plugin scans, with privacy-safe summaries only.</p>
                 </div>

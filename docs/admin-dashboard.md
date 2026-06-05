@@ -76,6 +76,38 @@ The dashboard must not display full private chat logs, private message bodies, r
 
 Browser scan summaries may display only domain, score, risk level, counts, last checked date, and reason summaries. They must not show page text, form values, passwords, tokens, private messages, full browsing history, or raw scan payloads.
 
+## Recent Threats
+
+The dashboard now has a dedicated `Recent Threats` section. This is intentionally separate from `Recent Activity`.
+
+Recent Threats shows only real HIP evidence that needs attention, such as:
+
+- Dangerous or HighRisk browser Site Safety scans
+- Suspicious scans with warning, redirect, download, phishing, malware, or risky-link signals
+- trusted or mostly trusted domains where page/content signals are risky
+- HighRisk, Dangerous, or Critical privacy-safe finding reports
+- open or high-priority review items
+- generated admin review signals such as unknown login pages, external provider threat hits, suspicious redirects, risky downloads, or provider conflicts
+- repeated suspicious weighted feedback
+
+Normal clean pages, Trusted scans with no risk signals, and LimitedTrustData scans with no warnings do not appear in Recent Threats.
+
+If no threat evidence exists, the UI shows:
+
+`No recent threats found.`
+
+Rows are sorted newest first and show:
+
+- domain
+- severity
+- status
+- final HIP score when available
+- source
+- short privacy-safe reason
+- created time
+
+Recent Threats must not display full URLs, page body text, form values, passwords, tokens, cookies, private messages, unrelated browsing history, raw reports, or reporter private identity. URL hashes and related scan/review/rule IDs may be included in the API response for admin correlation.
+
 ## Risky Domains and Recent Scans
 
 The dashboard includes:
@@ -119,7 +151,7 @@ Support can view the dashboard as an operational overview. Rule management, over
 - `GET /api/v1/admin/dashboard/risky-domains`
 - `GET /api/v1/admin/dashboard/recent-scans`
 
-The summary response returns dashboard cards, recent activity summaries, API health, generation timestamp, data source, no-data state, top risky domains, and recent scans.
+The summary response returns dashboard cards, recent activity summaries, recent threats, API health, generation timestamp, data source, no-data state, top risky domains, and recent scans.
 
 ## Generating Test Scan Data
 
