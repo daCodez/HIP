@@ -191,8 +191,54 @@ p {
   background: rgba(251, 146, 60, 0.1);
 }
 
-.reasons-panel {
+.reasons-panel,
+.warnings-panel,
+.feedback-panel {
   margin-top: 12px;
+}
+
+.warnings-panel,
+.feedback-panel {
+  border: 1px solid #173456;
+  border-radius: 8px;
+  background: #0f2138;
+  padding: 12px;
+}
+
+.warnings-panel {
+  border-color: #7c2d12;
+  background: #22140d;
+}
+
+.metric-label {
+  display: grid;
+  gap: 2px;
+  max-width: 190px;
+}
+
+.metric-label small {
+  color: #71829b;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.feedback-state {
+  min-height: 16px;
+  color: #9fb0c8;
+}
+
+.feedback-state.success {
+  color: #21e59f;
+}
+
+.feedback-state.failure {
+  color: #fb7185;
 }
 
 ul {
