@@ -160,6 +160,8 @@ webBaseUrl: "http://localhost:5260"
 
 These match the default HTTP launch profiles used by Aspire for `hip-api` and `hip-web`. Update these in settings if local launch profiles use different ports.
 
+The content script skips pages whose origin matches the configured HIP API or HIP Web base URL. This avoids recursive scanning of HIP's own lookup/admin UI and prevents noisy localhost errors while testing the product itself.
+
 ## Safety Page Flow
 
 The content script scans anchor `href` values only. It sends the current page URL and discovered link URLs to `/api/v1/browser/scan-links`.
@@ -274,6 +276,7 @@ Download detection only flags download-like links by URL extension. It does not 
 22. Add a login form or executable download to a `LimitedTrustData` test page and confirm a soft warning banner appears.
 23. Dismiss the banner, reload the same page, and confirm the page-scoped dismissal is respected.
 24. Visit a different Dangerous page and confirm the prior dismissal does not hide the new warning.
+25. Visit the configured HIP Web host, such as `http://localhost:5260/lookup/example.com`, and confirm the content script does not log site-score API errors for the HIP UI itself.
 
 ## Popup Privacy Behavior
 

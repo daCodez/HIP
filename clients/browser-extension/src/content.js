@@ -40,6 +40,19 @@
     settings = await loadSettings();
     pluginVersion = await loadPluginVersion();
     lastSummary = emptySummary();
+    if (isHipOwnedPage(window.location.href, settings)) {
+      lastSummary.apiStatus = "Skipped";
+      lastSummary.scanResultSubmission = "Skipped";
+      lastSummary.scanResultDataSource = "HipOwnedPage";
+      lastSummary.website = {
+        domain: currentDomain,
+        status: "NotScanned",
+        publicLookupUrl: `${settings.webBaseUrl}/lookup/domain/${encodeURIComponent(currentDomain)}`
+      };
+      publishSummary();
+      return;
+    }
+
     const currentLookup = await scoreSite(currentDomain, window.location.href);
     lastSummary.website = compactLookup(currentLookup);
     lastSummary.apiStatus = currentLookup ? "Available" : "Unavailable";
@@ -400,6 +413,22 @@
       bannerDisplayMode: "WarningsOnly",
       scanMode: "Normal"
     };
+  }
+
+  /**
+   * Detects the configured HIP API/Web hosts so the extension does not recursively scan HIP's own UI.
+   * This prevents localhost lookup pages from generating noisy API-unavailable errors during development.
+   */
+  function isHipOwnedPage(pageUrl, currentSettings = {}) {
+    try {
+      const pageOrigin = new URL(pageUrl).origin;
+      const hipOrigins = [currentSettings.apiBaseUrl, currentSettings.hipApiBaseUrl, currentSettings.webBaseUrl]
+        .filter(Boolean)
+        .map(value => new URL(value).origin);
+      return hipOrigins.includes(pageOrigin);
+    } catch {
+      return false;
+    }
   }
 
   /**

@@ -428,6 +428,28 @@ export function normalizeHost(hostname) {
   return (hostname || "").replace(/^www\./i, "").toLowerCase();
 }
 
+/**
+ * Detects pages owned by the configured HIP API or HIP Web app.
+ * The browser extension should not recursively scan HIP's own UI because that creates noisy localhost errors
+ * and does not produce useful trust evidence about third-party sites.
+ */
+export function isHipOwnedPageUrl(pageUrl, settings = {}) {
+  try {
+    const normalizedSettings = normalizeHipSettings(settings);
+    const pageOrigin = new URL(pageUrl).origin;
+    const hipOrigins = [
+      normalizedSettings.apiBaseUrl,
+      normalizedSettings.webBaseUrl
+    ]
+      .filter(Boolean)
+      .map(value => new URL(value).origin);
+
+    return hipOrigins.includes(pageOrigin);
+  } catch {
+    return false;
+  }
+}
+
 export function statusNeedsAttention(status) {
   return ["Unknown", "LimitedTrustData", "Caution", "Suspicious", "HighRisk", "Dangerous", "Critical"].includes(status);
 }
