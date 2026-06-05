@@ -16,7 +16,8 @@ This Chromium Manifest V3 client helps users see HIP website trust, link risk, a
 - Privacy-safe browser scan result submission.
 - HIP Site Safety Scan popup panel for malware, phishing, redirect, download, and script risk.
 - Privacy-safe risk finding reports for risky links.
-- Injected HIP trust banner with score/status, Details, Looks Safe, Looks Suspicious, and dismiss controls.
+- Popup-first HIP details surface with final score, layered scores, Site Safety, confidence, reasons, warnings, and feedback.
+- Injected HIP trust banner with score/status, Details, Looks Safe, Looks Suspicious, and dismiss controls only when page risk is meaningful.
 - Download-like link detection foundation.
 - Login/form risk indicator foundation.
 - Social feed and webmail link detection hooks.
@@ -79,12 +80,39 @@ Default banner behavior:
 
 The popup remains the default place to view full HIP details. The banner is for protecting users when page risk is meaningful, not for forcing users to close a banner on normal pages.
 
+## Popup Primary UX
+
+The popup shows the full user-facing HIP state for the current tab:
+
+- `Final HIP Score`: the final trust score for this interaction.
+- `Status`: plain-English HIP status, such as `Trusted`, `MostlyTrusted`, `LimitedTrustData`, `Unknown`, `Suspicious`, `HighRisk`, or `Dangerous`.
+- `Domain Trust`: how trustworthy this website is overall.
+- `Page Trust`: how trustworthy this exact page is.
+- `Content Risk`: how risky the content on this page is.
+- `Site Safety`: page-level safety scan status.
+- `Confidence`: how confident HIP is in the current safety signal.
+- reasons and warnings when useful.
+- privacy-safe feedback buttons: `Looks Safe`, `Looks Suspicious`, and `Report Issue`.
+
+The status copy is intentionally plain English:
+
+- `Trusted`: HIP found strong trust signals for this site.
+- `MostlyTrusted`: HIP found mostly positive trust signals, but you should still use normal caution.
+- `LimitedTrustData`: HIP has limited trust data for this website.
+- `Unknown`: HIP does not have enough information about this website yet.
+- `Suspicious`: HIP found suspicious signals on this page.
+- `HighRisk`: HIP found high-risk signals. Be careful.
+- `Dangerous`: HIP found strong phishing or malware indicators. Avoid this page.
+
+Warnings appear only when HIP has useful page-level warning text. A normal trusted or mostly trusted page should use the popup for details and should not inject an interrupting banner.
+
 ## Trust Banner Feedback
 
-The injected page banner shows the current HIP Trust Score, status, Details link, and simple feedback buttons:
+The injected page banner and popup can submit simple feedback:
 
 - `Looks Safe`
 - `Looks Suspicious`
+- `Report Issue` from the popup
 
 This is feedback, not voting. HIP should treat it as weighted trust evidence:
 
@@ -99,9 +127,11 @@ The extension submits only privacy-safe evidence:
 - URL hash
 - displayed score/status
 - feedback type
-- source = `BrowserPluginBanner`
+- source = `BrowserPluginBanner` or `BrowserPluginPopup`
 - timestamp
 - scan mode
+- displayed score/status
+- plugin version for dev/MVP troubleshooting
 
 It does not submit page text, form values, passwords, tokens, private messages, or email content.
 

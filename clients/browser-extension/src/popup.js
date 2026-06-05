@@ -1,5 +1,11 @@
 import { HipApiClient, DEFAULT_HIP_SETTINGS, loadHipSettings, normalizeHost } from "./hipApiClient.js";
-import { buildPopupViewModel, loadingSummaryViewModel, unavailableMessage } from "./popupViewModel.js";
+import {
+  buildPopupViewModel,
+  buildSiteSafetyViewModel,
+  feedbackCopy,
+  loadingSummaryViewModel,
+  unavailableMessage
+} from "./popupViewModel.js";
 
 let settings = DEFAULT_HIP_SETTINGS;
 let client = new HipApiClient(settings);
@@ -20,6 +26,11 @@ const elements = {
   score: document.getElementById("score"),
   status: document.getElementById("status"),
   statusBadge: document.getElementById("statusBadge"),
+  statusDescription: document.getElementById("statusDescription"),
+  finalHipScoreHelp: document.getElementById("finalHipScoreHelp"),
+  domainTrustHelp: document.getElementById("domainTrustHelp"),
+  pageTrustHelp: document.getElementById("pageTrustHelp"),
+  contentRiskHelp: document.getElementById("contentRiskHelp"),
   domainTrustScore: document.getElementById("domainTrustScore"),
   pageTrustScore: document.getElementById("pageTrustScore"),
   contentRiskScore: document.getElementById("contentRiskScore"),
@@ -39,13 +50,21 @@ const elements = {
   dataSource: document.getElementById("dataSource"),
   siteSafetyPanel: document.getElementById("siteSafetyPanel"),
   siteSafetyStatus: document.getElementById("siteSafetyStatus"),
+  siteSafetyConfidence: document.getElementById("siteSafetyConfidence"),
   siteSafetySummary: document.getElementById("siteSafetySummary"),
   malwareRisk: document.getElementById("malwareRisk"),
   phishingRisk: document.getElementById("phishingRisk"),
   redirectRisk: document.getElementById("redirectRisk"),
   downloadRisk: document.getElementById("downloadRisk"),
   scriptRisk: document.getElementById("scriptRisk"),
+  warningsPanel: document.getElementById("warningsPanel"),
+  warnings: document.getElementById("warnings"),
   reasons: document.getElementById("reasons"),
+  feedbackPanel: document.getElementById("feedbackPanel"),
+  feedbackLooksSafe: document.getElementById("feedbackLooksSafe"),
+  feedbackLooksSuspicious: document.getElementById("feedbackLooksSuspicious"),
+  feedbackReportIssue: document.getElementById("feedbackReportIssue"),
+  feedbackState: document.getElementById("feedbackState"),
   lookupLink: document.getElementById("lookupLink"),
   safetyLink: document.getElementById("safetyLink"),
   refreshScan: document.getElementById("refreshScan"),
@@ -54,6 +73,9 @@ const elements = {
 
 elements.refreshScan.addEventListener("click", refreshScan);
 elements.settingsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
+elements.feedbackLooksSafe.addEventListener("click", () => submitPopupFeedback("LooksSafe"));
+elements.feedbackLooksSuspicious.addEventListener("click", () => submitPopupFeedback("LooksSuspicious"));
+elements.feedbackReportIssue.addEventListener("click", () => submitPopupFeedback("ReportIssue"));
 initialize().catch(error => showUnavailable(error));
 
 /**
@@ -99,6 +121,11 @@ function renderLookup(lookup, summary = {}) {
   elements.score.textContent = viewModel.scoreText;
   elements.status.textContent = viewModel.statusLabel;
   elements.status.dataset.status = viewModel.status;
+  elements.statusDescription.textContent = viewModel.statusDescription;
+  elements.finalHipScoreHelp.textContent = viewModel.finalHipScoreHelp;
+  elements.domainTrustHelp.textContent = viewModel.domainTrustHelp;
+  elements.pageTrustHelp.textContent = viewModel.pageTrustHelp;
+  elements.contentRiskHelp.textContent = viewModel.contentRiskHelp;
   elements.statusBadge.textContent = viewModel.statusLabel;
   elements.statusBadge.className = `status-badge ${viewModel.statusClass}`;
   elements.domainTrustScore.textContent = viewModel.domainTrustScoreText;
@@ -119,6 +146,7 @@ function renderLookup(lookup, summary = {}) {
   elements.lookupLink.hidden = false;
   elements.safetyLink.href = viewModel.safetyDetailsUrl || "#";
   elements.safetyLink.hidden = !viewModel.safetyDetailsUrl;
+  renderFeedbackReadyState();
 }
 
 /**
@@ -152,12 +180,14 @@ function renderLoadingSummary(stage = "Checking") {
   elements.siteSafetyPanel.hidden = false;
   elements.siteSafetyStatus.textContent = "Checking...";
   elements.siteSafetyStatus.dataset.status = "Unknown";
+  elements.siteSafetyConfidence.textContent = "Checking...";
   elements.siteSafetySummary.textContent = "HIP is checking page safety signals.";
   elements.malwareRisk.textContent = "Checking...";
   elements.phishingRisk.textContent = "Checking...";
   elements.redirectRisk.textContent = "Checking...";
   elements.downloadRisk.textContent = "Checking...";
   elements.scriptRisk.textContent = "Checking...";
+  renderWarnings([]);
 }
 
 /**
@@ -234,16 +264,131 @@ async function renderSiteSafety(summary = {}) {
   const request = client.buildSiteSafetyRequest(activeTabUrl, summary);
   const result = await client.scanSiteSafety(request);
   activeSiteSafety = result;
+  const viewModel = buildSiteSafetyViewModel(result);
   elements.siteSafetyPanel.hidden = false;
-  elements.siteSafetyStatus.textContent = result.status || "Unknown";
-  elements.siteSafetyStatus.dataset.status = result.status || "Unknown";
-  elements.siteSafetySummary.textContent = result.summary || "HIP has limited site safety data for this page.";
-  elements.malwareRisk.textContent = riskLabel(result.malwareRiskScore);
-  elements.phishingRisk.textContent = riskLabel(result.phishingRiskScore);
-  elements.redirectRisk.textContent = riskLabel(result.redirectRiskScore);
-  elements.downloadRisk.textContent = riskLabel(result.downloadRiskScore);
-  elements.scriptRisk.textContent = riskLabel(result.scriptRiskScore);
+  elements.siteSafetyStatus.textContent = viewModel.statusLabel;
+  elements.siteSafetyStatus.dataset.status = viewModel.status;
+  elements.siteSafetyConfidence.textContent = viewModel.confidenceLevelText;
+  elements.siteSafetySummary.textContent = viewModel.summary;
+  elements.malwareRisk.textContent = viewModel.malwareRiskText;
+  elements.phishingRisk.textContent = viewModel.phishingRiskText;
+  elements.redirectRisk.textContent = viewModel.redirectRiskText;
+  elements.downloadRisk.textContent = viewModel.downloadRiskText;
+  elements.scriptRisk.textContent = viewModel.scriptRiskText;
+  renderWarnings(viewModel.warnings);
   return result;
+}
+
+/**
+ * Renders warning rows only when HIP has a useful page-level warning.
+ */
+function renderWarnings(warnings = []) {
+  elements.warningsPanel.hidden = warnings.length === 0;
+  elements.warnings.replaceChildren(...warnings.map(warning => {
+    const item = document.createElement("li");
+    item.textContent = warning;
+    return item;
+  }));
+}
+
+/**
+ * Shows popup feedback controls after HIP has identified the current domain.
+ * Feedback is weighted trust evidence, not voting, and is submitted without private page content.
+ */
+function renderFeedbackReadyState() {
+  const copy = feedbackCopy();
+  elements.feedbackPanel.hidden = !activeLookup?.domain;
+  elements.feedbackState.textContent = copy.prompt;
+  elements.feedbackState.className = "feedback-state";
+}
+
+/**
+ * Submits privacy-safe popup feedback without page text, form values, passwords, cookies, or tokens.
+ */
+async function submitPopupFeedback(feedbackType) {
+  const copy = feedbackCopy();
+  if (!activeLookup?.domain || !activeTabUrl) {
+    elements.feedbackState.textContent = copy.failure;
+    elements.feedbackState.className = "feedback-state failure";
+    return;
+  }
+
+  setFeedbackButtonsDisabled(true);
+  elements.feedbackState.textContent = "Sending feedback...";
+  elements.feedbackState.className = "feedback-state";
+
+  try {
+    const report = await buildPopupFeedbackReport(feedbackType);
+    const response = await chrome.runtime.sendMessage({ type: "HIP_REPORT_RISK_FINDING", report });
+    if (!response?.ok) {
+      throw new Error(response?.error || "HIP feedback unavailable");
+    }
+
+    elements.feedbackState.textContent = copy.success;
+    elements.feedbackState.className = "feedback-state success";
+  } catch (error) {
+    console.warn("HIP popup feedback unavailable.", error);
+    elements.feedbackState.textContent = copy.failure;
+    elements.feedbackState.className = "feedback-state failure";
+  } finally {
+    setFeedbackButtonsDisabled(false);
+  }
+}
+
+/**
+ * Builds the popup feedback report with only a domain, hashed URL, displayed score/status, and feedback type.
+ */
+async function buildPopupFeedbackReport(feedbackType) {
+  const looksSafe = feedbackType === "LooksSafe";
+  return {
+    reportId: "",
+    sourceClient: "BrowserPlugin",
+    platform: "Web",
+    targetType: "Website",
+    domain: activeLookup?.domain || "",
+    urlHash: await sha256(activeTabUrl),
+    originalUrl: null,
+    senderHash: null,
+    riskLevel: looksSafe ? "ProbablySafe" : "Suspicious",
+    reason: looksSafe
+      ? "Browser plugin popup feedback: user reported the site looks safe."
+      : "Browser plugin popup feedback: user reported the site looks suspicious.",
+    detectedAtUtc: new Date().toISOString(),
+    reporterTrustLevel: "Medium",
+    privacySafeEvidence: {
+      evidenceType: "browser-popup-feedback",
+      summary: "Browser plugin popup feedback submitted without page text, form values, passwords, tokens, or private content.",
+      facts: {
+        source: "BrowserPluginPopup",
+        feedbackType,
+        domain: activeLookup?.domain || "",
+        displayedStatus: activeLookup?.status || activeSiteSafety?.status || "Unknown",
+        displayedScore: String(activeLookup?.finalHipScore ?? activeLookup?.score ?? "Unknown"),
+        pluginVersion: elements.pluginVersion.textContent || "Unknown",
+        scanMode: settings.scanMode || "Normal"
+      },
+      containsPrivateContent: false
+    },
+    hipSignature: "browser-plugin-popup-feedback-placeholder"
+  };
+}
+
+/**
+ * Disables feedback buttons during submission so users cannot accidentally submit duplicate feedback.
+ */
+function setFeedbackButtonsDisabled(disabled) {
+  elements.feedbackLooksSafe.disabled = disabled;
+  elements.feedbackLooksSuspicious.disabled = disabled;
+  elements.feedbackReportIssue.disabled = disabled;
+}
+
+/**
+ * Hashes the current URL before feedback submission so HIP does not need raw browsing paths.
+ */
+async function sha256(value) {
+  const encoded = new TextEncoder().encode(value || "");
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
+  return `sha256:${Array.from(new Uint8Array(hashBuffer)).map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
 /**
@@ -284,6 +429,7 @@ function showUnavailable(error) {
   console.warn("HIP popup unavailable.", error);
   elements.state.textContent = unavailableMessage();
   elements.state.className = "state unavailable";
+  elements.feedbackPanel.hidden = true;
 }
 
 /**
@@ -292,32 +438,4 @@ function showUnavailable(error) {
 async function loadPluginVersion() {
   const response = await chrome.runtime.sendMessage({ type: "HIP_GET_PLUGIN_VERSION" });
   return response?.ok ? response.result : "HIP Plugin vunknown-dev";
-}
-
-/**
- * Converts a numeric risk score into a compact popup label.
- * Labels intentionally describe safety risk, not overall HIP trust.
- */
-function riskLabel(score) {
-  if (typeof score !== "number") {
-    return "Unknown";
-  }
-
-  if (score <= 0) {
-    return "None found";
-  }
-
-  if (score <= 20) {
-    return "Low";
-  }
-
-  if (score <= 40) {
-    return "Medium";
-  }
-
-  if (score <= 65) {
-    return "Elevated";
-  }
-
-  return "High";
 }

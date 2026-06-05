@@ -105,12 +105,33 @@ The browser popup explains the core HIP relationship in plain language:
 
 The popup shows the active tab domain, final HIP website score, status badge, plain-English reasons, links scanned, risky links, last scan time, public lookup link, and safety details link when the current site is risky.
 
-The popup also shows the layered score components:
+The popup is the primary HIP details surface. It should be where users see the full trust result without forcing a page banner onto normal sites.
+
+The popup shows the layered score components:
 
 - `DomainTrustScore`: how trustworthy the root domain is overall.
 - `PageTrustScore`: how trustworthy the exact page or URL is.
-- `ContentRiskScore`: how safe the page content, links, forms, downloads, and behavior look.
+- `ContentRiskScore`: how risky the page content, links, forms, downloads, and behavior look.
 - `FinalHipScore`: the user-facing score derived from the separate scores.
+
+Plain-English popup labels:
+
+- `Domain Trust`: how trustworthy this website is overall.
+- `Page Trust`: how trustworthy this exact page is.
+- `Content Risk`: how risky the content on this page is.
+- `Final HIP Score`: the final trust score for this interaction.
+
+Plain-English status copy:
+
+- `Trusted`: HIP found strong trust signals for this site.
+- `MostlyTrusted`: HIP found mostly positive trust signals, but you should still use normal caution.
+- `LimitedTrustData`: HIP has limited trust data for this website.
+- `Unknown`: HIP does not have enough information about this website yet.
+- `Suspicious`: HIP found suspicious signals on this page.
+- `HighRisk`: HIP found high-risk signals. Be careful.
+- `Dangerous`: HIP found strong phishing or malware indicators. Avoid this page.
+
+The popup also shows Site Safety status, confidence level, summary, warnings when useful, and feedback buttons when reporting is available. Feedback is weighted trust evidence, not voting. The popup submits only domain, URL hash, displayed score/status, feedback type, plugin version, scan mode, and a privacy-safe timestamp.
 
 Status bands:
 
