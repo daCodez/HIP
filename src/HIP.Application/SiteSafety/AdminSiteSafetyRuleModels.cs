@@ -109,7 +109,58 @@ public sealed record AdminSiteSafetyRule(
     DateTimeOffset? ApprovedAtUtc,
     int Version,
     string? PreviousVersionId,
-    bool IsRollbackAvailable);
+    bool IsRollbackAvailable,
+    string? UpdatedBy = null,
+    DateTimeOffset? UpdatedAtUtc = null);
+
+/// <summary>
+/// Privacy-safe input facts used when simulating an admin Site Safety rule without sending page text.
+/// </summary>
+public sealed record AdminSiteSafetyRuleSimulationInput(
+    string Url = "https://example.com",
+    string? Domain = null,
+    string? Tld = null,
+    bool HasHttps = true,
+    int RedirectCount = 0,
+    int ShortenedLinkCount = 0,
+    int ObfuscatedLinkCount = 0,
+    int ExternalScriptCount = 0,
+    int InlineScriptCount = 0,
+    int SuspiciousScriptPatternCount = 0,
+    int ExecutableDownloadCount = 0,
+    int ArchiveDownloadCount = 0,
+    bool HasLoginForm = false,
+    bool HasPasswordField = false,
+    bool HasPaymentField = false,
+    int KnownAbuseReports = 0,
+    int? DomainReputationScore = null,
+    int? PageReputationScore = null,
+    IReadOnlyCollection<string>? MatchedRiskTerms = null,
+    bool TrustDataAvailable = false);
+
+/// <summary>
+/// Structured simulation output used by APIs and admins before a rule can enforce.
+/// </summary>
+public sealed record AdminSiteSafetyRuleSimulationResult(
+    string RuleId,
+    bool Matched,
+    IReadOnlyCollection<string> MatchedConditions,
+    int MatchedCount,
+    int RiskImpact,
+    int TrustImpact,
+    SiteSafetyScanStatus? StatusImpact,
+    IReadOnlyCollection<string> ReasonsAdded,
+    IReadOnlyCollection<string> WarningsCreated,
+    int ConfidenceImpact,
+    bool SendsToAdminReview,
+    bool ApprovalRequired,
+    AdminSiteSafetyRuleMode RecommendedMode,
+    string Recommendation);
+
+/// <summary>
+/// Actor request used by admin endpoints that change rule lifecycle state.
+/// </summary>
+public sealed record AdminSiteSafetyRuleActionRequest(string ActorId = "dev-admin");
 
 /// <summary>
 /// Repository for persisted admin-managed Site Safety rules.
@@ -317,9 +368,70 @@ public sealed class AdminSiteSafetyRuleService(
         {
             Version = Math.Max((current?.Version ?? 0) + 1, rule.Version),
             PreviousVersionId = current?.RuleId,
-            IsRollbackAvailable = current is not null
+            IsRollbackAvailable = current is not null,
+            UpdatedAtUtc = DateTimeOffset.UtcNow
         };
         return await repository.SaveAsync(updated, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs a rule simulation against privacy-safe input facts before any enforced rollout.
+    /// </summary>
+    public AdminSiteSafetyRuleSimulationResult Simulate(AdminSiteSafetyRule rule, AdminSiteSafetyRuleSimulationInput input)
+    {
+        var validation = validator.Validate(rule with { Mode = AdminSiteSafetyRuleMode.Simulation });
+        if (!validation.IsValid)
+        {
+            throw new ValidationException(validation.Errors);
+        }
+
+        return AdminSiteSafetyRuleEvaluator.Simulate(rule, ToRuleInput(input));
+    }
+
+    /// <summary>
+    /// Approves a rule so it can later be activated after review.
+    /// </summary>
+    public async Task<AdminSiteSafetyRule> ApproveAsync(string ruleId, string approvedBy, CancellationToken cancellationToken)
+    {
+        var current = await RequireRuleAsync(ruleId, cancellationToken);
+        var actor = string.IsNullOrWhiteSpace(approvedBy) ? "dev-admin" : approvedBy;
+        return await UpdateAsync(current with
+        {
+            Status = AdminSiteSafetyRuleStatus.Approved,
+            ApprovedBy = actor,
+            ApprovedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedBy = actor
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Activates an approved rule in enforced mode.
+    /// </summary>
+    public async Task<AdminSiteSafetyRule> ActivateAsync(string ruleId, string actorId, CancellationToken cancellationToken)
+    {
+        var current = await RequireRuleAsync(ruleId, cancellationToken);
+        var actor = string.IsNullOrWhiteSpace(actorId) ? "dev-admin" : actorId;
+        return await UpdateAsync(current with
+        {
+            Status = AdminSiteSafetyRuleStatus.Active,
+            Mode = AdminSiteSafetyRuleMode.Enforced,
+            UpdatedBy = actor
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Disables a rule so it no longer participates in Site Safety scoring.
+    /// </summary>
+    public async Task<AdminSiteSafetyRule> DisableAsync(string ruleId, string actorId, CancellationToken cancellationToken)
+    {
+        var current = await RequireRuleAsync(ruleId, cancellationToken);
+        var actor = string.IsNullOrWhiteSpace(actorId) ? "dev-admin" : actorId;
+        return await UpdateAsync(current with
+        {
+            Status = AdminSiteSafetyRuleStatus.Disabled,
+            Mode = AdminSiteSafetyRuleMode.Simulation,
+            UpdatedBy = actor
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -339,6 +451,46 @@ public sealed class AdminSiteSafetyRuleService(
     /// </summary>
     private static string Slug(string value) =>
         string.Join('-', value.Trim().ToLowerInvariant().Select(character => char.IsLetterOrDigit(character) ? character : '-')).Replace("--", "-", StringComparison.Ordinal).Trim('-');
+
+    /// <summary>
+    /// Loads a rule or fails with a clear application exception.
+    /// </summary>
+    private async Task<AdminSiteSafetyRule> RequireRuleAsync(string ruleId, CancellationToken cancellationToken) =>
+        await repository.GetByIdAsync(ruleId, cancellationToken) ??
+        throw new InvalidOperationException("Admin Site Safety rule was not found.");
+
+    /// <summary>
+    /// Converts admin-provided simulation facts into the same privacy-safe input used by the scanner.
+    /// </summary>
+    private static SiteSafetyRuleInput ToRuleInput(AdminSiteSafetyRuleSimulationInput input)
+    {
+        var url = Uri.TryCreate(input.Url, UriKind.Absolute, out var parsedUrl) ? parsedUrl : new Uri("https://example.com");
+        var domain = input.Domain ?? url.Host;
+
+        return new SiteSafetyRuleInput(
+            url,
+            domain,
+            input.Tld ?? domain.Split('.').LastOrDefault() ?? string.Empty,
+            input.HasHttps,
+            Math.Max(0, input.RedirectCount),
+            Math.Max(0, input.ShortenedLinkCount),
+            Math.Max(0, input.ObfuscatedLinkCount),
+            HasSuspiciousQueryShape: false,
+            Math.Max(0, input.ExternalScriptCount),
+            Math.Max(0, input.InlineScriptCount),
+            Math.Max(0, input.SuspiciousScriptPatternCount),
+            Math.Max(0, input.ExecutableDownloadCount),
+            Math.Max(0, input.ArchiveDownloadCount),
+            input.HasLoginForm,
+            input.HasPasswordField,
+            input.HasPaymentField,
+            Math.Max(0, input.KnownAbuseReports),
+            input.DomainReputationScore,
+            input.PageReputationScore,
+            input.MatchedRiskTerms ?? [],
+            [],
+            input.TrustDataAvailable);
+    }
 }
 
 /// <summary>
@@ -362,6 +514,43 @@ public static class AdminSiteSafetyRuleEvaluator
 
         var isSimulationOnly = rule.Mode is AdminSiteSafetyRuleMode.Simulation or AdminSiteSafetyRuleMode.WatchOnly;
         return BuildResults(rule, isSimulationOnly);
+    }
+
+    /// <summary>
+    /// Simulates an admin rule and explains what would happen without enforcing score changes.
+    /// </summary>
+    public static AdminSiteSafetyRuleSimulationResult Simulate(AdminSiteSafetyRule rule, SiteSafetyRuleInput input)
+    {
+        var matchedConditions = rule.Conditions
+            .Where(condition => ConditionMatches(condition, input))
+            .Select(DescribeCondition)
+            .ToArray();
+        var matched = matchedConditions.Length == rule.Conditions.Count;
+        var results = matched ? BuildResults(rule with { Mode = AdminSiteSafetyRuleMode.Simulation }, isSimulationOnly: true) : [];
+        var riskImpact = results.Select(result => result.RiskImpact).DefaultIfEmpty(0).Max();
+        var trustImpact = results.Sum(result => result.TrustImpact);
+        var statusImpact = StrongestStatusOverride(results);
+        var confidenceImpact = results.Select(result => result.ConfidencePenalty).DefaultIfEmpty(0).Max();
+        var approvalRequired = RequiresApproval(rule);
+        var recommendedMode = approvalRequired || riskImpact >= 40 || statusImpact is SiteSafetyScanStatus.HighRisk or SiteSafetyScanStatus.Dangerous
+            ? AdminSiteSafetyRuleMode.WatchOnly
+            : AdminSiteSafetyRuleMode.Enforced;
+
+        return new AdminSiteSafetyRuleSimulationResult(
+            rule.RuleId,
+            matched,
+            matchedConditions,
+            matchedConditions.Length,
+            riskImpact,
+            trustImpact,
+            statusImpact,
+            results.Select(result => result.Reason).Distinct().ToArray(),
+            results.Select(result => result.Warning).OfType<string>().Distinct().ToArray(),
+            confidenceImpact,
+            results.Any(result => result.SendToAdminReview),
+            approvalRequired,
+            recommendedMode,
+            matched ? Recommendation(approvalRequired, recommendedMode) : "The rule did not match the simulation input.");
     }
 
     /// <summary>
@@ -419,7 +608,9 @@ public static class AdminSiteSafetyRuleEvaluator
                 rule.Effects.SetStatusOverride,
                 rule.Effects.LowerConfidence,
                 rule.Effects.SendToAdminReview,
-                isSimulationOnly));
+                isSimulationOnly,
+                rule.Effects.AddPositiveSignal,
+                rule.Effects.AddNegativeSignal));
         }
 
         return results;
@@ -451,8 +642,54 @@ public static class AdminSiteSafetyRuleEvaluator
             rule.Effects.SetStatusOverride,
             rule.Effects.LowerConfidence,
             rule.Effects.SendToAdminReview,
-            isSimulationOnly));
+            isSimulationOnly,
+            rule.Effects.AddPositiveSignal,
+            rule.Effects.AddNegativeSignal));
     }
+
+    /// <summary>
+    /// Selects the strongest status override from simulated or enforced rule results.
+    /// </summary>
+    private static SiteSafetyScanStatus? StrongestStatusOverride(IEnumerable<SiteSafetyRuleResult> results)
+    {
+        var overrides = results.Select(result => result.StatusOverride).OfType<SiteSafetyScanStatus>().ToArray();
+        if (overrides.Contains(SiteSafetyScanStatus.Dangerous))
+        {
+            return SiteSafetyScanStatus.Dangerous;
+        }
+
+        if (overrides.Contains(SiteSafetyScanStatus.HighRisk))
+        {
+            return SiteSafetyScanStatus.HighRisk;
+        }
+
+        return overrides.Contains(SiteSafetyScanStatus.Suspicious) ? SiteSafetyScanStatus.Suspicious : null;
+    }
+
+    /// <summary>
+    /// Describes a matched condition without exposing private scan data.
+    /// </summary>
+    private static string DescribeCondition(AdminSiteSafetyRuleCondition condition) =>
+        $"{condition.Field} {condition.Operator} {condition.Value}";
+
+    /// <summary>
+    /// Decides whether a simulated rule needs approval before enforcement.
+    /// </summary>
+    private static bool RequiresApproval(AdminSiteSafetyRule rule) =>
+        rule.Severity is SiteSafetyRuleSeverity.High or SiteSafetyRuleSeverity.Critical ||
+        rule.Mode == AdminSiteSafetyRuleMode.Enforced ||
+        rule.Effects.SetStatusOverride is SiteSafetyScanStatus.HighRisk or SiteSafetyScanStatus.Dangerous ||
+        rule.Effects.SendToAdminReview;
+
+    /// <summary>
+    /// Builds the plain-English recommendation admins see after simulation.
+    /// </summary>
+    private static string Recommendation(bool approvalRequired, AdminSiteSafetyRuleMode recommendedMode) =>
+        approvalRequired
+            ? "Simulation matched. Approval is required, and the rule should start in watch-only mode."
+            : recommendedMode == AdminSiteSafetyRuleMode.Enforced
+                ? "Simulation matched with low impact. The rule can be considered for enforced mode after review."
+                : "Simulation matched. Start in watch-only mode before enforcement.";
 
     /// <summary>
     /// Gets a safe field value from the rule input.

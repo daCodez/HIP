@@ -170,12 +170,12 @@ public sealed class SiteSafetyScanner(
 
             if (!rule.IsSimulationOnly && rule.RiskImpact > 0)
             {
-                negative.Add(rule.Reason);
+                negative.Add(rule.NegativeSignal ?? rule.Reason);
             }
 
             if (!rule.IsSimulationOnly && rule.TrustImpact > 0)
             {
-                positive.Add(rule.Reason);
+                positive.Add(rule.PositiveSignal ?? rule.Reason);
             }
         }
 

@@ -109,6 +109,29 @@ public sealed class AdminSiteSafetyRuleTests
     }
 
     /// <summary>
+    /// Watch-only rules are visible to admins but cannot change user-facing risk scores.
+    /// </summary>
+    [Test]
+    public async Task Watch_only_rule_does_not_affect_final_score()
+    {
+        var repository = new InMemoryAdminSiteSafetyRuleRepository();
+        await repository.SaveAsync(ValidRule("Watch rule") with
+        {
+            Status = AdminSiteSafetyRuleStatus.Active,
+            Mode = AdminSiteSafetyRuleMode.WatchOnly,
+            Effects = new AdminSiteSafetyRuleEffects(IncreaseDownloadRisk: 90, AddReason: "Watch-only download risk.")
+        }, CancellationToken.None);
+
+        var result = await CreateScanner(repository).ScanAsync(new SiteSafetyScanRequest("https://watch-rule.example"), CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.DownloadRiskScore, Is.EqualTo(0));
+            Assert.That(result.MatchedRules, Has.Some.Matches<SiteSafetyRuleResult>(rule => rule.IsSimulationOnly));
+        });
+    }
+
+    /// <summary>
     /// Enforced approved rules affect the score using structured effects.
     /// </summary>
     [Test]
@@ -181,6 +204,62 @@ public sealed class AdminSiteSafetyRuleTests
     }
 
     /// <summary>
+    /// Admin rules can add explicit positive and negative signal text without raw page content.
+    /// </summary>
+    [Test]
+    public async Task Rule_can_add_positive_and_negative_signals()
+    {
+        var repository = new InMemoryAdminSiteSafetyRuleRepository();
+        await repository.SaveAsync(ApprovedRule("Signal rule") with
+        {
+            Effects = new AdminSiteSafetyRuleEffects(
+                IncreaseDownloadRisk: 20,
+                AddPositiveSignal: "Admin found a limited positive trust signal.",
+                AddNegativeSignal: "Admin found a download risk signal.",
+                AddReason: "Admin signal rule matched.")
+        }, CancellationToken.None);
+
+        var result = await CreateScanner(repository).ScanAsync(new SiteSafetyScanRequest("https://signal-rule.example"), CancellationToken.None);
+
+        Assert.That(result.NegativeSignals, Has.Some.EqualTo("Admin found a download risk signal."));
+    }
+
+    /// <summary>
+    /// Rule simulation explains matched conditions and impacts before enforcement is allowed.
+    /// </summary>
+    [Test]
+    public void Simulation_output_includes_plain_english_impact()
+    {
+        var service = CreateService();
+        var rule = ValidRule("Simulation output") with
+        {
+            Conditions = [Condition("ExecutableDownloadCount", AdminSiteSafetyRuleOperator.GreaterThan, 0)],
+            Severity = SiteSafetyRuleSeverity.High,
+            Effects = new AdminSiteSafetyRuleEffects(
+                IncreaseDownloadRisk: 45,
+                AddReason: "Executable download matched.",
+                AddWarning: "Executable download should be reviewed.",
+                LowerConfidence: 20,
+                SendToAdminReview: true)
+        };
+
+        var result = service.Simulate(rule, new AdminSiteSafetyRuleSimulationInput(ExecutableDownloadCount: 1));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Matched, Is.True);
+            Assert.That(result.MatchedCount, Is.EqualTo(1));
+            Assert.That(result.RiskImpact, Is.EqualTo(45));
+            Assert.That(result.ReasonsAdded, Has.Some.EqualTo("Executable download matched."));
+            Assert.That(result.WarningsCreated, Has.Some.EqualTo("Executable download should be reviewed."));
+            Assert.That(result.ConfidenceImpact, Is.EqualTo(20));
+            Assert.That(result.SendsToAdminReview, Is.True);
+            Assert.That(result.ApprovalRequired, Is.True);
+            Assert.That(result.RecommendedMode, Is.EqualTo(AdminSiteSafetyRuleMode.WatchOnly));
+        });
+    }
+
+    /// <summary>
     /// Admin rules cannot mark an otherwise unknown clean site as trusted by themselves.
     /// </summary>
     [Test]
@@ -244,6 +323,29 @@ public sealed class AdminSiteSafetyRuleTests
         var restored = await service.RollbackAsync(original.RuleId, CancellationToken.None);
 
         Assert.That(restored.Description, Is.EqualTo(original.Description));
+    }
+
+    /// <summary>
+    /// Approved rules can be activated, disabled, and versioned through the service lifecycle methods.
+    /// </summary>
+    [Test]
+    public async Task Rule_lifecycle_actions_update_status_and_versions()
+    {
+        var repository = new InMemoryAdminSiteSafetyRuleRepository();
+        var service = CreateService(repository);
+        var original = await service.CreateAsync(ValidRule("Lifecycle rule"), CancellationToken.None);
+        var approved = await service.ApproveAsync(original.RuleId, "owner", CancellationToken.None);
+        var active = await service.ActivateAsync(original.RuleId, "owner", CancellationToken.None);
+        var disabled = await service.DisableAsync(original.RuleId, "owner", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(approved.Status, Is.EqualTo(AdminSiteSafetyRuleStatus.Approved));
+            Assert.That(active.Status, Is.EqualTo(AdminSiteSafetyRuleStatus.Active));
+            Assert.That(active.Mode, Is.EqualTo(AdminSiteSafetyRuleMode.Enforced));
+            Assert.That(disabled.Status, Is.EqualTo(AdminSiteSafetyRuleStatus.Disabled));
+            Assert.That(disabled.IsRollbackAvailable, Is.True);
+        });
     }
 
     /// <summary>

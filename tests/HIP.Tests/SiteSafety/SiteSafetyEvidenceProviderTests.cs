@@ -323,8 +323,13 @@ public sealed class SiteSafetyEvidenceProviderTests
         Assert.Multiple(() =>
         {
             Assert.That(item.Category, Is.EqualTo("TlsGrade"));
+            Assert.That(item.EvidenceType, Is.EqualTo("TlsGrade"));
             Assert.That(item.Status, Is.EqualTo(SiteSafetyEvidenceStatus.Positive));
             Assert.That(item.TrustImpact, Is.EqualTo(5));
+            Assert.That(item.Confidence, Is.EqualTo(80));
+            Assert.That(item.IsPositiveSignal, Is.True);
+            Assert.That(item.IsNegativeSignal, Is.False);
+            Assert.That(item.IsBlockingSignal, Is.False);
             Assert.That(evidence.IsAuthoritativeForTrust, Is.True);
             Assert.That(evidence.IsAuthoritativeForRisk, Is.False);
         });
@@ -344,8 +349,13 @@ public sealed class SiteSafetyEvidenceProviderTests
         Assert.Multiple(() =>
         {
             Assert.That(item.Category, Is.EqualTo("PhishingMatch"));
+            Assert.That(item.EvidenceType, Is.EqualTo("ThreatMatch"));
             Assert.That(item.Status, Is.EqualTo(SiteSafetyEvidenceStatus.Dangerous));
             Assert.That(item.RiskImpact, Is.EqualTo(95));
+            Assert.That(item.Severity, Is.EqualTo(SiteSafetyEvidenceSeverity.Critical));
+            Assert.That(item.EvidenceQuality, Is.EqualTo(SiteSafetyEvidenceItemQuality.Strong));
+            Assert.That(item.IsNegativeSignal, Is.True);
+            Assert.That(item.IsBlockingSignal, Is.True);
             Assert.That(evidence.IsAuthoritativeForRisk, Is.True);
             Assert.That(evidence.IsAuthoritativeForTrust, Is.False);
         });
@@ -365,10 +375,38 @@ public sealed class SiteSafetyEvidenceProviderTests
         Assert.Multiple(() =>
         {
             Assert.That(item.Category, Is.EqualTo("MalwareMatch"));
+            Assert.That(item.EvidenceType, Is.EqualTo("ThreatMatch"));
             Assert.That(item.Status, Is.EqualTo(SiteSafetyEvidenceStatus.Dangerous));
             Assert.That(item.RiskImpact, Is.EqualTo(95));
+            Assert.That(item.IsNegativeSignal, Is.True);
+            Assert.That(item.IsBlockingSignal, Is.True);
             Assert.That(evidence.IsAuthoritativeForRisk, Is.True);
             Assert.That(evidence.IsAuthoritativeForTrust, Is.False);
+        });
+    }
+
+    /// <summary>
+    /// Verifies browser-observed evidence marks risky signals without storing raw page content.
+    /// </summary>
+    [Test]
+    public async Task Browser_observed_provider_marks_negative_and_blocking_signals()
+    {
+        var provider = new BrowserObservedSignalProvider();
+        var context = Context() with
+        {
+            ObservedSignals = new SiteSafetyObservedSignals(
+                DownloadLinks: ["https://example.com/setup.exe"],
+                KnownPhishingPattern: true)
+        };
+
+        var evidence = await provider.CollectEvidenceAsync(context, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(evidence.EvidenceItems, Has.Some.Matches<SiteSafetyEvidenceItem>(item => item.IsNegativeSignal));
+            Assert.That(evidence.EvidenceItems, Has.Some.Matches<SiteSafetyEvidenceItem>(item => item.IsBlockingSignal));
+            Assert.That(evidence.ToString(), Does.Not.Contain("page text"));
+            Assert.That(evidence.ToString(), Does.Not.Contain("form value"));
         });
     }
 

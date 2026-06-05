@@ -82,6 +82,7 @@ MapBadgeApis(app.MapGroup(ApiRoutes.Badge));
 MapBrowserApis(app.MapGroup(ApiRoutes.Browser));
 MapSafetyApis(app.MapGroup(ApiRoutes.Safety));
 MapSiteSafetyApis(app.MapGroup(ApiRoutes.SiteSafety));
+MapAdminSiteSafetyRuleApis(app.MapGroup($"{ApiRoutes.Admin}/site-safety-rules").RequireAuthorization(AdminPolicies.CanManageRules));
 Program.MapJsonRulesApis(app.MapGroup(ApiRoutes.Rules));
 MapAiApis(app.MapGroup(ApiRoutes.Ai).RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingPatternApis(app.MapGroup(ApiRoutes.SelfHealing).RequireAuthorization(AdminPolicies.CanManageRules));
@@ -500,6 +501,110 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     });
+}
+
+/// <summary>
+/// Maps protected admin-managed Site Safety rule endpoints.
+/// </summary>
+/// <param name="adminRuleApi">Versioned admin Site Safety rule route group.</param>
+static void MapAdminSiteSafetyRuleApis(RouteGroupBuilder adminRuleApi)
+{
+    adminRuleApi.MapGet("/", async (
+        IAdminSiteSafetyRuleRepository repository,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await repository.ListAsync(cancellationToken)));
+
+    adminRuleApi.MapGet("/{ruleId}", async (
+        string ruleId,
+        IAdminSiteSafetyRuleRepository repository,
+        CancellationToken cancellationToken) =>
+    {
+        var rule = await repository.GetByIdAsync(ruleId, cancellationToken);
+        return rule is null ? Results.NotFound() : Results.Ok(rule);
+    });
+
+    adminRuleApi.MapPost("/", async (
+        AdminSiteSafetyRule rule,
+        AdminSiteSafetyRuleService service,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await service.CreateAsync(rule, cancellationToken));
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    adminRuleApi.MapPost("/{ruleId}/simulate", async (
+        string ruleId,
+        AdminSiteSafetyRuleSimulationInput input,
+        IAdminSiteSafetyRuleRepository repository,
+        AdminSiteSafetyRuleService service,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var rule = await repository.GetByIdAsync(ruleId, cancellationToken);
+            return rule is null ? Results.NotFound() : Results.Ok(service.Simulate(rule, input));
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    adminRuleApi.MapPost("/{ruleId}/approve", async (
+        string ruleId,
+        AdminSiteSafetyRuleActionRequest request,
+        AdminSiteSafetyRuleService service,
+        CancellationToken cancellationToken) =>
+        await RunRuleActionAsync(() => service.ApproveAsync(ruleId, request.ActorId, cancellationToken)));
+
+    adminRuleApi.MapPost("/{ruleId}/activate", async (
+        string ruleId,
+        AdminSiteSafetyRuleActionRequest request,
+        AdminSiteSafetyRuleService service,
+        CancellationToken cancellationToken) =>
+        await RunRuleActionAsync(() => service.ActivateAsync(ruleId, request.ActorId, cancellationToken)));
+
+    adminRuleApi.MapPost("/{ruleId}/disable", async (
+        string ruleId,
+        AdminSiteSafetyRuleActionRequest request,
+        AdminSiteSafetyRuleService service,
+        CancellationToken cancellationToken) =>
+        await RunRuleActionAsync(() => service.DisableAsync(ruleId, request.ActorId, cancellationToken)));
+
+    adminRuleApi.MapPost("/{ruleId}/rollback", async (
+        string ruleId,
+        AdminSiteSafetyRuleService service,
+        CancellationToken cancellationToken) =>
+        await RunRuleActionAsync(() => service.RollbackAsync(ruleId, cancellationToken)));
+}
+
+/// <summary>
+/// Converts admin rule action exceptions into safe API responses.
+/// </summary>
+/// <param name="action">Rule lifecycle action to run.</param>
+/// <returns>HTTP result for the admin rule action.</returns>
+static async Task<IResult> RunRuleActionAsync(Func<Task<AdminSiteSafetyRule>> action)
+{
+    try
+    {
+        return Results.Ok(await action());
+    }
+    catch (InvalidOperationException ex)
+    {
+        return ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase)
+            ? Results.NotFound(new { error = ex.Message })
+            : Results.BadRequest(new { error = ex.Message });
+    }
+    catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
 }
 
 /// <summary>

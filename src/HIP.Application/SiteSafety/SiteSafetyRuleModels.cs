@@ -336,7 +336,9 @@ public sealed record SiteSafetyRuleResult(
     SiteSafetyScanStatus? StatusOverride,
     int ConfidencePenalty,
     bool SendToAdminReview,
-    bool IsSimulationOnly);
+    bool IsSimulationOnly,
+    string? PositiveSignal = null,
+    string? NegativeSignal = null);
 
 /// <summary>
 /// Privacy-safe context used by ordered status label rules after risk rules have been evaluated.

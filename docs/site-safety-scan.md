@@ -106,6 +106,24 @@ Each provider returns:
 - whether it is authoritative for risk
 - whether it is authoritative for trust
 
+Each evidence item includes:
+
+- evidence type
+- category
+- normalized status
+- safe summary
+- risk impact
+- trust impact
+- confidence
+- severity
+- evidence quality
+- optional safe source reference
+- positive signal flag
+- negative signal flag
+- blocking signal flag
+
+Evidence item metadata is normalized before scoring. Providers collect facts and labels; they do not directly decide the final HIP score or mark a site trusted.
+
 The scanner combines provider evidence with browser-observed facts. Provider failures and timeouts lower confidence but do not crash HIP scoring.
 
 ## Rule-Based Scoring
@@ -167,7 +185,7 @@ The current EF implementation stores admin rules in HIP's SQLite-backed JSON rec
 
 ## External Scanner Policy
 
-External evidence providers are configurable. HIP development settings currently enable the SSL Labs / Qualys-style TLS provider so local MVP scans can collect real TLS evidence. Google Web Risk, VirusTotal, Safe Browsing, and any other third-party scanner remain disabled until an operator explicitly configures them.
+External evidence providers are configurable and disabled by default. Operators can explicitly enable the SSL Labs / Qualys-style TLS provider for local MVP scans. Google Web Risk, VirusTotal, Safe Browsing, and any other third-party scanner remain disabled until an operator explicitly configures them.
 
 Current MVP provider foundations:
 
@@ -180,12 +198,12 @@ Configuration section:
 ```json
 {
   "ExternalSiteEvidence": {
-    "ExternalProvidersEnabled": true,
+    "ExternalProvidersEnabled": false,
     "AllowFullUrlChecks": false,
     "ProviderTimeout": "00:00:02",
     "DefaultCacheDuration": "06:00:00",
     "SslLabs": {
-      "Enabled": true,
+      "Enabled": false,
       "Endpoint": "https://api.ssllabs.com/api/v3/analyze"
     },
     "GoogleWebRisk": {
@@ -210,7 +228,7 @@ Runtime MVP controls:
 
 These runtime controls update the current running HIP process. Production deployments should persist the same values in configuration or a secure settings store and keep API keys in secret storage.
 
-To disable the live TLS provider during development, turn off either:
+To enable the live TLS provider during development, turn on both:
 
 - `ExternalSiteEvidence:ExternalProvidersEnabled`
 - `ExternalSiteEvidence:SslLabs:Enabled`

@@ -128,21 +128,94 @@ public enum SiteSafetyEvidenceStatus
 }
 
 /// <summary>
+/// Provider-neutral evidence item severity.
+/// </summary>
+public enum SiteSafetyEvidenceSeverity
+{
+    /// <summary>
+    /// Informational evidence that should not increase risk by itself.
+    /// </summary>
+    Info,
+
+    /// <summary>
+    /// Low-severity evidence.
+    /// </summary>
+    Low,
+
+    /// <summary>
+    /// Medium-severity evidence.
+    /// </summary>
+    Medium,
+
+    /// <summary>
+    /// High-severity evidence.
+    /// </summary>
+    High,
+
+    /// <summary>
+    /// Critical evidence that can support HighRisk or Dangerous outcomes.
+    /// </summary>
+    Critical
+}
+
+/// <summary>
+/// Provider-neutral evidence quality for normalized evidence items.
+/// </summary>
+public enum SiteSafetyEvidenceItemQuality
+{
+    /// <summary>
+    /// Unknown quality when a provider does not expose enough metadata.
+    /// </summary>
+    Unknown,
+
+    /// <summary>
+    /// Weak evidence that should mainly affect confidence or review state.
+    /// </summary>
+    Weak,
+
+    /// <summary>
+    /// Medium-quality evidence.
+    /// </summary>
+    Medium,
+
+    /// <summary>
+    /// Strong evidence that can materially affect scoring.
+    /// </summary>
+    Strong
+}
+
+/// <summary>
 /// Represents one normalized provider finding that can influence scoring.
 /// </summary>
+/// <param name="EvidenceType">Provider-neutral evidence type, such as TlsGrade or ThreatMatch.</param>
 /// <param name="Category">Provider-neutral evidence category, such as TlsGrade or PhishingMatch.</param>
 /// <param name="Value">Provider-neutral value, such as A, F, Clean, or Hit.</param>
 /// <param name="Status">Normalized evidence status.</param>
 /// <param name="RiskImpact">0-100 risk impact where higher means riskier.</param>
 /// <param name="TrustImpact">0-100 trust impact where higher means more positive trust signal.</param>
 /// <param name="Summary">Plain-English explanation that is safe to show to users or admins.</param>
+/// <param name="Confidence">0-100 confidence for this individual evidence item.</param>
+/// <param name="Severity">Provider-neutral severity.</param>
+/// <param name="EvidenceQuality">Provider-neutral evidence quality.</param>
+/// <param name="SourceReference">Optional safe source reference. Must never contain secrets or private page content.</param>
+/// <param name="IsPositiveSignal">Whether this is a positive signal.</param>
+/// <param name="IsNegativeSignal">Whether this is a negative signal.</param>
+/// <param name="IsBlockingSignal">Whether this signal can support a block or strong warning.</param>
 public sealed record SiteSafetyEvidenceItem(
     string Category,
     string Value,
     SiteSafetyEvidenceStatus Status,
     int RiskImpact,
     int TrustImpact,
-    string Summary);
+    string Summary,
+    string EvidenceType = "ProviderEvidence",
+    int Confidence = 50,
+    SiteSafetyEvidenceSeverity Severity = SiteSafetyEvidenceSeverity.Low,
+    SiteSafetyEvidenceItemQuality EvidenceQuality = SiteSafetyEvidenceItemQuality.Medium,
+    string? SourceReference = null,
+    bool IsPositiveSignal = false,
+    bool IsNegativeSignal = false,
+    bool IsBlockingSignal = false);
 
 /// <summary>
 /// Normalized evidence returned by a site safety provider.
@@ -385,7 +458,18 @@ public sealed class BrowserObservedSignalProvider : ISiteSafetyEvidenceProvider
 
         if (items.Count == 0)
         {
-            items.Add(new SiteSafetyEvidenceItem("BrowserObserved", "NoRiskSignals", SiteSafetyEvidenceStatus.Clean, 0, 5, "The browser plugin did not observe obvious page safety risk signals."));
+            items.Add(new SiteSafetyEvidenceItem(
+                "BrowserObserved",
+                "NoRiskSignals",
+                SiteSafetyEvidenceStatus.Clean,
+                0,
+                5,
+                "The browser plugin did not observe obvious page safety risk signals.",
+                EvidenceType: "BrowserObserved",
+                Confidence: 60,
+                Severity: SiteSafetyEvidenceSeverity.Info,
+                EvidenceQuality: SiteSafetyEvidenceItemQuality.Weak,
+                IsPositiveSignal: true));
         }
 
         return Task.FromResult(new SiteSafetyEvidence(
@@ -410,7 +494,19 @@ public sealed class BrowserObservedSignalProvider : ISiteSafetyEvidenceProvider
     {
         if (count > 0)
         {
-            items.Add(new SiteSafetyEvidenceItem(category, count.ToString(), riskImpact >= 70 ? SiteSafetyEvidenceStatus.HighRisk : SiteSafetyEvidenceStatus.Suspicious, riskImpact, 0, summary));
+            items.Add(new SiteSafetyEvidenceItem(
+                category,
+                count.ToString(),
+                riskImpact >= 70 ? SiteSafetyEvidenceStatus.HighRisk : SiteSafetyEvidenceStatus.Suspicious,
+                riskImpact,
+                0,
+                summary,
+                EvidenceType: "BrowserObservedCount",
+                Confidence: 75,
+                Severity: riskImpact >= 70 ? SiteSafetyEvidenceSeverity.High : SiteSafetyEvidenceSeverity.Medium,
+                EvidenceQuality: SiteSafetyEvidenceItemQuality.Medium,
+                IsNegativeSignal: true,
+                IsBlockingSignal: riskImpact >= 70));
         }
     }
 
@@ -421,7 +517,19 @@ public sealed class BrowserObservedSignalProvider : ISiteSafetyEvidenceProvider
     {
         if (present)
         {
-            items.Add(new SiteSafetyEvidenceItem(category, "true", riskImpact >= 85 ? SiteSafetyEvidenceStatus.Dangerous : SiteSafetyEvidenceStatus.Suspicious, riskImpact, 0, summary));
+            items.Add(new SiteSafetyEvidenceItem(
+                category,
+                "true",
+                riskImpact >= 85 ? SiteSafetyEvidenceStatus.Dangerous : SiteSafetyEvidenceStatus.Suspicious,
+                riskImpact,
+                0,
+                summary,
+                EvidenceType: "BrowserObservedBoolean",
+                Confidence: 75,
+                Severity: riskImpact >= 85 ? SiteSafetyEvidenceSeverity.Critical : SiteSafetyEvidenceSeverity.Medium,
+                EvidenceQuality: SiteSafetyEvidenceItemQuality.Medium,
+                IsNegativeSignal: true,
+                IsBlockingSignal: riskImpact >= 85));
         }
     }
 
@@ -622,7 +730,20 @@ public sealed class SslLabsSiteEvidenceProvider : ExternalSiteEvidenceProviderBa
             SiteSafetyEvidenceTargetType.Domain,
             context.Domain,
             context.UrlHash,
-            [new SiteSafetyEvidenceItem("TlsGrade", normalizedGrade, status, riskImpact, trustImpact, summary)],
+            [new SiteSafetyEvidenceItem(
+                "TlsGrade",
+                normalizedGrade,
+                status,
+                riskImpact,
+                trustImpact,
+                summary,
+                EvidenceType: "TlsGrade",
+                Confidence: isStrong || isWeak ? 80 : 50,
+                Severity: isWeak ? SiteSafetyEvidenceSeverity.Medium : SiteSafetyEvidenceSeverity.Low,
+                EvidenceQuality: SiteSafetyEvidenceItemQuality.Medium,
+                SourceReference: "SSL Labs domain assessment",
+                IsPositiveSignal: isStrong,
+                IsNegativeSignal: isWeak)],
             Confidence: isStrong || isWeak ? 80 : 50,
             context.CheckedAtUtc,
             context.CheckedAtUtc.Add(ProviderOptions.CacheDuration ?? TimeSpan.FromHours(6)),
@@ -703,7 +824,18 @@ public sealed class SslLabsSiteEvidenceProvider : ExternalSiteEvidenceProviderBa
             SiteSafetyEvidenceTargetType.Domain,
             context.Domain,
             context.UrlHash,
-            [new SiteSafetyEvidenceItem("TlsAssessmentStatus", status, isError ? SiteSafetyEvidenceStatus.Error : SiteSafetyEvidenceStatus.Weak, 0, 0, summary)],
+            [new SiteSafetyEvidenceItem(
+                "TlsAssessmentStatus",
+                status,
+                isError ? SiteSafetyEvidenceStatus.Error : SiteSafetyEvidenceStatus.Weak,
+                0,
+                0,
+                summary,
+                EvidenceType: "ProviderStatus",
+                Confidence: isError ? 0 : 30,
+                Severity: isError ? SiteSafetyEvidenceSeverity.Low : SiteSafetyEvidenceSeverity.Info,
+                EvidenceQuality: SiteSafetyEvidenceItemQuality.Weak,
+                SourceReference: "SSL Labs domain assessment")],
             Confidence: isError ? 0 : 30,
             context.CheckedAtUtc,
             context.CheckedAtUtc.AddMinutes(isError ? 5 : 2),
@@ -913,7 +1045,20 @@ internal static class ExternalSiteEvidenceProviderHelpers
             SiteSafetyEvidenceTargetType.Url,
             context.Domain,
             context.UrlHash,
-            [new SiteSafetyEvidenceItem(category, value, SiteSafetyEvidenceStatus.Dangerous, 95, 0, summary)],
+            [new SiteSafetyEvidenceItem(
+                category,
+                value,
+                SiteSafetyEvidenceStatus.Dangerous,
+                95,
+                0,
+                summary,
+                EvidenceType: "ThreatMatch",
+                Confidence: 90,
+                Severity: SiteSafetyEvidenceSeverity.Critical,
+                EvidenceQuality: SiteSafetyEvidenceItemQuality.Strong,
+                SourceReference: providerName,
+                IsNegativeSignal: true,
+                IsBlockingSignal: true)],
             Confidence: 90,
             context.CheckedAtUtc,
             context.CheckedAtUtc.AddHours(6),
