@@ -40,6 +40,34 @@ Supported actions:
 - request more info
 - close
 
+## Generated Safety Review Signals
+
+HIP also maintains a generated review-signal queue for cases created by Site Safety Scan, weighted feedback, external evidence providers, HIP history, admin rules, and system checks.
+
+Generated review signals are not raw enforcement decisions. They are privacy-safe evidence that tells an admin, "this case deserves human review before HIP makes a stronger trust or risk change."
+
+Signal statuses:
+
+- Open
+- InReview
+- Resolved
+- Dismissed
+- Escalated
+
+Signal decisions:
+
+- ConfirmSafe
+- ConfirmSuspicious
+- ConfirmHighRisk
+- ConfirmDangerous
+- FalsePositive
+- NeedsMoreData
+- NoAction
+
+Generated signals can be created for high-risk low-confidence scans, conflicting external provider evidence, trusted parent domains with risky page/content, unknown login or payment forms, repeated suspicious feedback, conflicting feedback, provider failures on important targets, and future self-healing or admin-rule cases.
+
+Generated review signals store only privacy-safe fields: domain, URL hash, target type, source, score/status, confidence, summaries, and related IDs. They must not store page text, form values, passwords, tokens, cookies, private messages, raw private URLs, or private chat logs.
+
 ## Appeal Process
 
 Appeals support domains, senders, device keys, organizations, and content patterns. Appeals require only privacy-safe evidence such as hashes, public remediation notes, domain identifiers, risk reasons, and timestamps.
@@ -102,6 +130,14 @@ Review queue:
 - `POST /api/v1/admin/review/{id}/needs-more-info`
 - `POST /api/v1/admin/review/{id}/assign`
 
+Generated safety review signals:
+
+- `GET /api/v1/admin/review-queue`
+- `GET /api/v1/admin/review-queue/{id}`
+- `POST /api/v1/admin/review-queue/{id}/assign`
+- `POST /api/v1/admin/review-queue/{id}/decision`
+- `POST /api/v1/admin/review-queue/{id}/dismiss`
+
 Appeals:
 
 - `POST /api/v1/public/appeals`
@@ -129,6 +165,7 @@ Audit logs:
 
 - `/admin/review`
 - `/admin/review/{id}`
+- `/admin/review-queue`
 - `/admin/appeals`
 - `/admin/appeals/{id}`
 - `/admin/reputation-overrides`
@@ -137,9 +174,9 @@ Audit logs:
 
 ## Known Limitations
 
-- In-memory only.
 - Development-only role enforcement; no production authentication yet.
 - No durable audit retention.
 - No full approval workflow for generated rule promotion yet.
 - No appeal notification system.
 - No database-backed reputation mutation yet.
+- Admin review decisions are recorded as evidence and audit history, but they do not silently override scoring in the MVP.

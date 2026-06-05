@@ -91,6 +91,7 @@ MapLicenseApis(app.MapGroup(ApiRoutes.Licenses).RequireAuthorization(AdminPolici
 MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules").RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingApis(app.MapGroup($"{ApiRoutes.Admin}/self-healing").RequireAuthorization(AdminPolicies.CanManageRules));
 MapReviewApis(app.MapGroup($"{ApiRoutes.Admin}/review").RequireAuthorization(AdminPolicies.CanReviewReports));
+MapAdminReviewQueueApis(app.MapGroup($"{ApiRoutes.Admin}/review-queue").RequireAuthorization(AdminPolicies.CanReviewReports));
 MapAppealApis(app.MapGroup($"{ApiRoutes.Admin}/appeals").RequireAuthorization(AdminPolicies.CanReviewReports));
 MapReputationOverrideApis(app.MapGroup($"{ApiRoutes.Admin}/reputation-overrides").RequireAuthorization(AdminPolicies.CanApproveOverrides));
 MapReputationApis(app.MapGroup($"{ApiRoutes.Admin}/reputation").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
@@ -146,16 +147,19 @@ app.Run();
 /// </summary>
 /// <param name="feedback">Existing reputation feedback payload.</param>
 /// <param name="weightedFeedbackService">Weighted feedback aggregation service.</param>
+/// <param name="reviewQueueService">Admin review queue service.</param>
 /// <param name="cancellationToken">Token used to cancel feedback storage.</param>
 /// <returns>Completed task.</returns>
 static async Task StoreWeightedFeedbackIfDomainAsync(
     ReputationFeedbackRequest feedback,
     IWeightedFeedbackAggregationService weightedFeedbackService,
+    IAdminReviewQueueService reviewQueueService,
     CancellationToken cancellationToken)
 {
     if (feedback.TargetType is ReputationSubjectType.Domain or ReputationSubjectType.Website)
     {
-        await weightedFeedbackService.SubmitAsync(WeightedFeedbackAggregationService.FromReputationFeedback(feedback), cancellationToken);
+        var summary = await weightedFeedbackService.SubmitAsync(WeightedFeedbackAggregationService.FromReputationFeedback(feedback), cancellationToken);
+        await reviewQueueService.CreateSignalsFromFeedbackAsync(summary, cancellationToken);
     }
 }
 
@@ -321,11 +325,12 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
         ReputationFeedbackRequest feedback,
         IReputationService reputationService,
         IWeightedFeedbackAggregationService weightedFeedbackService,
+        IAdminReviewQueueService reviewQueueService,
         CancellationToken cancellationToken) =>
     {
         try
         {
-            await StoreWeightedFeedbackIfDomainAsync(feedback, weightedFeedbackService, cancellationToken);
+            await StoreWeightedFeedbackIfDomainAsync(feedback, weightedFeedbackService, reviewQueueService, cancellationToken);
             return Results.Ok(await reputationService.SubmitFeedbackAsync(feedback, cancellationToken));
         }
         catch (ArgumentException ex)
@@ -510,11 +515,14 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     siteSafetyApi.MapPost("/scan", async (
         SiteSafetyScanRequest request,
         ISiteSafetyScanner scanner,
+        IAdminReviewQueueService reviewQueueService,
         CancellationToken cancellationToken) =>
     {
         try
         {
-            return Results.Ok(ToSiteSafetyScanResponse(await scanner.ScanAsync(request, cancellationToken)));
+            var result = await scanner.ScanAsync(request, cancellationToken);
+            await reviewQueueService.CreateSignalsFromScanAsync(result, cancellationToken);
+            return Results.Ok(ToSiteSafetyScanResponse(result));
         }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
         {
@@ -1077,6 +1085,75 @@ static void MapReviewApis(RouteGroupBuilder reviewApi)
         Results.Ok(reviewQueueService.Assign(id, request.AssignedTo, request.ActorId)));
 }
 
+/// <summary>
+/// Maps privacy-safe admin review-signal endpoints used by Site Safety, feedback, and future self-healing flows.
+/// </summary>
+/// <param name="adminReviewQueueApi">Versioned admin review queue route group.</param>
+static void MapAdminReviewQueueApis(RouteGroupBuilder adminReviewQueueApi)
+{
+    adminReviewQueueApi.MapGet("/", async (
+        IAdminReviewQueueService adminReviewQueueService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await adminReviewQueueService.ListAsync(cancellationToken)));
+
+    adminReviewQueueApi.MapGet("/{id}", async (
+        string id,
+        IAdminReviewQueueService adminReviewQueueService,
+        CancellationToken cancellationToken) =>
+    {
+        var item = await adminReviewQueueService.GetAsync(id, cancellationToken);
+        return item is null ? Results.NotFound() : Results.Ok(item);
+    });
+
+    adminReviewQueueApi.MapPost("/{id}/assign", async (
+        string id,
+        AdminReviewQueueAssignRequest request,
+        IAdminReviewQueueService adminReviewQueueService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await adminReviewQueueService.AssignAsync(id, request.AssignedTo, request.ActorId, cancellationToken));
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    adminReviewQueueApi.MapPost("/{id}/decision", async (
+        string id,
+        HIP.Application.Review.AdminReviewDecisionRequest request,
+        IAdminReviewQueueService adminReviewQueueService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await adminReviewQueueService.RecordDecisionAsync(id, request, cancellationToken));
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+
+    adminReviewQueueApi.MapPost("/{id}/dismiss", async (
+        string id,
+        AdminReviewQueueDismissRequest request,
+        IAdminReviewQueueService adminReviewQueueService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await adminReviewQueueService.DismissAsync(id, request.ActorId, request.Reason, cancellationToken));
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
+}
+
 static void MapAppealApis(RouteGroupBuilder appealApi)
 {
     appealApi.MapGet("/", (IAppealService appealService) => Results.Ok(appealService.List()));
@@ -1335,6 +1412,20 @@ public sealed record AdminReviewDecisionRequest(string ActorId, ReviewStatus Sta
 public sealed record AdminAppealDecisionRequest(string ActorId, AppealStatus Status, string Reason);
 
 public sealed record AdminAssignRequest(string ActorId, string AssignedTo);
+
+/// <summary>
+/// Request used to assign a generated admin review signal to a reviewer without exposing private evidence.
+/// </summary>
+/// <param name="ActorId">Admin actor or service account performing the assignment.</param>
+/// <param name="AssignedTo">Reviewer ID, alias, or hash that should handle the review.</param>
+public sealed record AdminReviewQueueAssignRequest(string ActorId, string AssignedTo);
+
+/// <summary>
+/// Request used to dismiss a generated admin review signal while preserving its privacy-safe evidence summary.
+/// </summary>
+/// <param name="ActorId">Admin actor or service account dismissing the review.</param>
+/// <param name="Reason">Privacy-safe dismissal reason. Raw page text, credentials, and private messages are rejected by validation.</param>
+public sealed record AdminReviewQueueDismissRequest(string ActorId, string Reason);
 
 public sealed record AuditQueryRequest(string? Action, TargetType? TargetType, string? TargetId, AuditSeverity? Severity, int? Limit);
 

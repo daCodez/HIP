@@ -95,6 +95,28 @@ public sealed class ReviewAppealsMvpTests
     }
 
     [Test]
+    public async Task Generated_review_queue_route_is_protected()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/review-queue");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
+    [Test]
+    public async Task Authorized_admin_can_list_generated_review_queue()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = AdminClient(factory);
+
+        var response = await client.GetAsync("/api/v1/admin/review-queue");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [Test]
     public async Task Consumer_appeal_response_does_not_expose_private_reviewer_data()
     {
         await using var factory = new WebApplicationFactory<Program>();

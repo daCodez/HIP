@@ -1,0 +1,79 @@
+@page "/admin/review-queue"
+@attribute [Authorize(Policy = AdminPolicies.CanReviewReports)]
+@rendermode InteractiveServer
+@using HIP.Application.Review
+@inject IAdminReviewQueueService AdminReviewQueueService
+
+<PageTitle>HIP Safety Review Signals</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <p class="eyebrow">Admin MVP</p>
+        <h1>Safety Review Signals</h1>
+        <p>Scan, feedback, provider, and system signals that need human review before HIP changes trust decisions.</p>
+    </section>
+
+    <section class="rule-builder-panel">
+        <h2>Open Signals</h2>
+        <p>Only privacy-safe summaries, score labels, URL hashes, and domain-level evidence are shown here.</p>
+        <table class="admin-rule-table">
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Reason</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Score</th>
+                    <th>Confidence</th>
+                    <th>Source</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _items)
+                {
+                    <tr>
+                        <td>@item.Domain</td>
+                        <td>@item.ReviewReason</td>
+                        <td>@item.Severity</td>
+                        <td>@item.Status</td>
+                        <td>@(item.CurrentFinalHipScore?.ToString() ?? "n/a") @item.CurrentStatus</td>
+                        <td>@(item.ConfidenceLevel ?? "n/a")</td>
+                        <td>@item.Source</td>
+                        <td>@item.UpdatedAtUtc.UtcDateTime.ToString("u")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    @if (_items.Count > 0)
+    {
+        var selected = _items.First();
+        <section class="rule-builder-panel">
+            <h2>Newest Signal Detail</h2>
+            <dl class="lookup-details">
+                <dt>Review ID</dt><dd>@selected.ReviewId</dd>
+                <dt>Target</dt><dd>@selected.TargetType</dd>
+                <dt>URL Hash</dt><dd>@(selected.UrlHash ?? "Not stored")</dd>
+                <dt>Summary</dt><dd>@selected.Summary</dd>
+                <dt>Evidence</dt><dd>@selected.EvidenceSummary</dd>
+                <dt>Decision</dt><dd>@(selected.Decision?.ToString() ?? "Pending")</dd>
+                <dt>Decision Reason</dt><dd>@(selected.DecisionReason ?? "No decision yet")</dd>
+            </dl>
+        </section>
+    }
+</main>
+
+@code {
+    private IReadOnlyCollection<AdminReviewQueueItem> _items = [];
+
+    /// <summary>
+    /// Loads current generated review signals for the admin surface.
+    /// </summary>
+    /// <returns>A task that completes after privacy-safe review signals are loaded.</returns>
+    protected override async Task OnInitializedAsync()
+    {
+        _items = await AdminReviewQueueService.ListAsync(CancellationToken.None);
+    }
+}

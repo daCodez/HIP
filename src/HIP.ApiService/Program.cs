@@ -2,6 +2,7 @@ using HIP.Application;
 using HIP.Application.Browser;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reputation;
+using HIP.Application.Review;
 using HIP.Application.SiteSafety;
 using HIP.Domain.Reputation;
 using HIP.Infrastructure;
@@ -75,11 +76,12 @@ publicApi.MapPost("/feedback", async (
     ReputationFeedbackRequest feedback,
     IReputationService reputationService,
     IWeightedFeedbackAggregationService weightedFeedbackService,
+    IAdminReviewQueueService reviewQueueService,
     CancellationToken cancellationToken) =>
 {
     try
     {
-        await StoreWeightedFeedbackIfDomainAsync(feedback, weightedFeedbackService, cancellationToken);
+        await StoreWeightedFeedbackIfDomainAsync(feedback, weightedFeedbackService, reviewQueueService, cancellationToken);
         return Results.Ok(await reputationService.SubmitFeedbackAsync(feedback, cancellationToken));
     }
     catch (ArgumentException ex)
@@ -99,16 +101,19 @@ app.Run();
 /// </summary>
 /// <param name="feedback">Existing reputation feedback payload.</param>
 /// <param name="weightedFeedbackService">Weighted feedback aggregation service.</param>
+/// <param name="reviewQueueService">Admin review queue service.</param>
 /// <param name="cancellationToken">Token used to cancel feedback storage.</param>
 /// <returns>Completed task.</returns>
 static async Task StoreWeightedFeedbackIfDomainAsync(
     ReputationFeedbackRequest feedback,
     IWeightedFeedbackAggregationService weightedFeedbackService,
+    IAdminReviewQueueService reviewQueueService,
     CancellationToken cancellationToken)
 {
     if (feedback.TargetType is ReputationSubjectType.Domain or ReputationSubjectType.Website)
     {
-        await weightedFeedbackService.SubmitAsync(WeightedFeedbackAggregationService.FromReputationFeedback(feedback), cancellationToken);
+        var summary = await weightedFeedbackService.SubmitAsync(WeightedFeedbackAggregationService.FromReputationFeedback(feedback), cancellationToken);
+        await reviewQueueService.CreateSignalsFromFeedbackAsync(summary, cancellationToken);
     }
 }
 
@@ -214,11 +219,14 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     siteSafetyApi.MapPost("/scan", async (
         SiteSafetyScanRequest request,
         ISiteSafetyScanner scanner,
+        IAdminReviewQueueService reviewQueueService,
         CancellationToken cancellationToken) =>
     {
         try
         {
-            return Results.Ok(ToSiteSafetyScanResponse(await scanner.ScanAsync(request, cancellationToken)));
+            var result = await scanner.ScanAsync(request, cancellationToken);
+            await reviewQueueService.CreateSignalsFromScanAsync(result, cancellationToken);
+            return Results.Ok(ToSiteSafetyScanResponse(result));
         }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
         {

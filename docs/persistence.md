@@ -24,11 +24,13 @@ Current persisted record categories include:
 - rules
 - rule simulation results
 - review items
+- generated admin review queue signals
 - appeals
 - reputation override requests
 - audit logs
 - risk finding reports
 - self-healing rule candidates
+- weighted browser/banner feedback
 
 The first storage implementation uses a JSON-backed `hip_records` table keyed by partition and ID. This keeps the foundation small while preserving clean boundaries for later normalized PostgreSQL storage.
 

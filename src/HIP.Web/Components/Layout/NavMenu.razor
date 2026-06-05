@@ -33,11 +33,18 @@
             <span class="hip-chevron">›</span>
         </NavLink>
 
-        <NavLink class="hip-nav-link" href="admin/review">
-            <span class="hip-nav-icon">@IconClipboard()</span>
-            <span class="hip-nav-text">Review Queue</span>
-            <span class="hip-count warning">4</span>
-        </NavLink>
+        <div class="hip-nav-group">
+            <NavLink class="hip-nav-link" href="admin/review">
+                <span class="hip-nav-icon">@IconClipboard()</span>
+                <span class="hip-nav-text">Review Queue</span>
+                <span class="hip-count warning">4</span>
+                <span class="hip-chevron">›</span>
+            </NavLink>
+            <div class="hip-subnav">
+                <NavLink href="admin/review" class="hip-subnav-link">Manual Reviews</NavLink>
+                <NavLink href="admin/review-queue" class="hip-subnav-link">Safety Signals</NavLink>
+            </div>
+        </div>
 
         <div class="hip-nav-group">
             <NavLink class="hip-nav-link" href="admin/reputation/senders">

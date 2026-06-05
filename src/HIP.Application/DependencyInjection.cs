@@ -62,8 +62,8 @@ public static class DependencyInjection
         services.AddScoped<IReputationEventRepository, InMemoryReputationEventRepository>();
         services.AddScoped<IReputationProfileRepository, InMemoryReputationProfileRepository>();
         services.AddScoped<IReputationService, ReputationService>();
-        services.AddSingleton<IWeightedFeedbackRepository, InMemoryWeightedFeedbackRepository>();
-        services.AddSingleton<IWeightedFeedbackAggregationService, WeightedFeedbackAggregationService>();
+        services.AddScoped<IWeightedFeedbackRepository, InMemoryWeightedFeedbackRepository>();
+        services.AddScoped<IWeightedFeedbackAggregationService, WeightedFeedbackAggregationService>();
         services.AddScoped<IRiskFindingReportRepository, InMemoryRiskFindingReportRepository>();
         services.AddScoped<IRiskFindingIngestionService, RiskFindingIngestionService>();
         services.AddSingleton<IPrivacyHashingService, Sha256PrivacyHashingService>();
@@ -86,6 +86,9 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<AdminSiteSafetyRule>, AdminSiteSafetyRuleValidator>();
         services.AddScoped<IAdminSiteSafetyRuleRepository, InMemoryAdminSiteSafetyRuleRepository>();
         services.AddScoped<AdminSiteSafetyRuleService>();
+        services.AddScoped<IAdminReviewQueueRepository, InMemoryAdminReviewQueueRepository>();
+        services.AddScoped<IAdminReviewQueueService, AdminReviewQueueService>();
+        services.AddSingleton<IValidator<AdminReviewQueueItem>, AdminReviewQueueItemValidator>();
         services.AddSingleton(new SiteSafetyRuleOptions());
         services.AddSingleton(_ => new HttpClient());
         services.AddSingleton<IExternalSiteEvidenceCache, InMemoryExternalSiteEvidenceCache>();

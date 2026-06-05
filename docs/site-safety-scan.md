@@ -139,6 +139,38 @@ Feedback does not directly create malware or phishing findings. A single anonymo
 
 Feedback evidence explanations must avoid voting language. Use "reported" or "feedback" rather than "voted."
 
+## Admin Review Signals
+
+Site Safety Scan now creates privacy-safe admin review signals for cases that should not be silently enforced. These signals are routed to:
+
+```http
+GET /api/v1/admin/review-queue
+```
+
+Current MVP review reasons include:
+
+- `HighRiskLowConfidence`: high-risk or dangerous result with low confidence.
+- `ConflictingProviderEvidence`: external provider evidence conflicts.
+- `TrustedDomainRiskyPageContent`: trusted parent domain with risky page or content signals.
+- `UnknownDomainLoginForm`: limited-data site with login/password fields.
+- `UnknownDomainPaymentField`: limited-data or suspicious site with payment fields.
+- `WeightedFeedbackReview`: feedback volume or reporter trust recommends review.
+- `ConflictingFeedbackReports`: safe and suspicious feedback conflict.
+- `ImportantProviderFailure`: provider failure on a high-trust target.
+
+Review records store only public-safe data:
+
+- domain
+- URL hash, when available
+- target type
+- final HIP score/status
+- confidence label
+- plain-English summary
+- privacy-safe evidence summary
+- related scan, rule, or feedback IDs when available
+
+Review records must not store page text, form values, passwords, tokens, cookies, private messages, raw private URLs, or private chat logs. Admin decisions are recorded as evidence and audit history only in the MVP. They do not silently override scoring; future scoring can consume approved admin-review evidence through a dedicated provider.
+
 ## Rule-Based Scoring
 
 Site Safety scoring now evaluates small strongly typed rule objects instead of one long conditional chain. The scanner builds a privacy-safe rule input, evaluates matched rules, then calculates risk scores from the matched rule results.

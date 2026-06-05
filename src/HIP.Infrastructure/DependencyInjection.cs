@@ -37,6 +37,8 @@ public static class DependencyInjection
         services.AddScoped<IGeneratedRuleCandidateRepository, EfGeneratedRuleCandidateRepository>();
         services.AddScoped<IBrowserScanResultRepository, EfBrowserScanResultRepository>();
         services.AddScoped<IAdminSiteSafetyRuleRepository, EfAdminSiteSafetyRuleRepository>();
+        services.AddScoped<IWeightedFeedbackRepository, EfWeightedFeedbackRepository>();
+        services.AddScoped<IAdminReviewQueueRepository, EfAdminReviewQueueRepository>();
 
         return services;
     }

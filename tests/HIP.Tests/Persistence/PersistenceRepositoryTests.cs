@@ -170,6 +170,38 @@ public sealed class PersistenceRepositoryTests
         Assert.That(events.Single().EventId, Is.EqualTo("event-1"));
     }
 
+    /// <summary>
+    /// Verifies browser/banner feedback is persisted with only privacy-safe fields for later scoring and review signals.
+    /// </summary>
+    [Test]
+    public async Task WeightedFeedbackCanBeSavedAndRetrieved()
+    {
+        await using var database = await CreateDatabaseAsync();
+        IWeightedFeedbackRepository repository = new EfWeightedFeedbackRepository(new HipRecordStore(database.Context));
+        var submittedAtUtc = DateTimeOffset.UtcNow;
+        var feedback = new WeightedFeedbackSubmission(
+            "feedback.example",
+            HipFeedbackType.LooksSuspicious,
+            HipFeedbackSource.BrowserPluginBanner,
+            HIP.Domain.Reputation.ReporterTrustLevel.Anonymous,
+            submittedAtUtc,
+            PageUrlHash: "sha256:page",
+            ReporterHash: "sha256:reporter",
+            PluginVersion: "0.1.0-dev",
+            HipFeedbackReasonCode.ScamOrPhishing);
+
+        await repository.SaveAsync(feedback, CancellationToken.None);
+
+        var retrieved = await repository.ListRecentAsync("feedback.example", submittedAtUtc.AddMinutes(-1), CancellationToken.None);
+        Assert.Multiple(() =>
+        {
+            Assert.That(retrieved, Has.Count.EqualTo(1));
+            Assert.That(retrieved.Single().Domain, Is.EqualTo("feedback.example"));
+            Assert.That(retrieved.Single().PageUrlHash, Is.EqualTo("sha256:page"));
+            Assert.That(retrieved.Single().ReasonCode, Is.EqualTo(HipFeedbackReasonCode.ScamOrPhishing));
+        });
+    }
+
     private static TrustRule CreateRule(string ruleId) =>
         new(
             ruleId,
