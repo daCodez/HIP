@@ -142,7 +142,14 @@
                                         <div class="hip-threat-domain">
                                             <span class="hip-threat-icon @ThreatIconClass(threat.Severity)">!</span>
                                             <div>
-                                                <strong>@threat.Domain</strong>
+                                                @if (!string.IsNullOrWhiteSpace(threat.RelatedScanId))
+                                                {
+                                                    <a href="@($"/admin/scans/{Uri.EscapeDataString(threat.RelatedScanId)}")">@threat.Domain</a>
+                                                }
+                                                else
+                                                {
+                                                    <strong>@threat.Domain</strong>
+                                                }
                                                 <small>@threat.TargetType</small>
                                             </div>
                                         </div>
@@ -199,7 +206,7 @@
                             {
                                 <tr>
                                     <td>@scan.LastCheckedUtc.UtcDateTime.ToString("u")</td>
-                                    <td>@scan.Domain</td>
+                                    <td><a href="@($"/admin/scans/{Uri.EscapeDataString(scan.ScanResultId)}")">@scan.Domain</a></td>
                                     <td>@scan.Score</td>
                                     <td>@scan.RiskLevel</td>
                                     <td>@scan.LinksScanned</td>

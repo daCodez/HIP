@@ -716,6 +716,48 @@ h1:focus {
     color: #12d895;
 }
 
+.scan-score-grid,
+.scan-detail-grid {
+    max-width: 1240px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 28px;
+}
+
+.scan-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.scan-detail-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 24px;
+    margin: 18px 0 0;
+}
+
+.scan-detail-list div {
+    border-top: 1px solid #172b45;
+    padding-top: 12px;
+}
+
+.scan-detail-list dt {
+    color: #8fa4c1;
+    font-weight: 800;
+}
+
+.scan-detail-list dd {
+    margin: 4px 0 0;
+    color: #eef4ff;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+.muted-note {
+    color: #8fa4c1;
+    font-size: 0.95rem;
+}
+
 .hip-panel {
     max-width: 1540px;
     overflow: hidden;
@@ -733,6 +775,18 @@ h1:focus {
     color: #08d7ec;
     text-decoration: none;
     font-weight: 800;
+}
+
+.hip-threat-domain a,
+.table-wrap a {
+    color: #d8e4f7;
+    font-weight: 900;
+    text-decoration: none;
+}
+
+.hip-threat-domain a:hover,
+.table-wrap a:hover {
+    color: #08d7ec;
 }
 
 .hip-table-wrap,
@@ -766,6 +820,13 @@ h1:focus {
     font-size: 0.82rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+}
+
+.hip-data-table small {
+    display: block;
+    margin-top: 6px;
+    color: #7f91ad;
+    line-height: 1.35;
 }
 
 .hip-pill {
@@ -973,6 +1034,14 @@ h1:focus {
     color: #12d895;
     background: rgba(18, 216, 149, 0.14);
     border: 1px solid rgba(18, 216, 149, 0.24);
+}
+
+@media (max-width: 980px) {
+    .scan-score-grid,
+    .scan-detail-grid,
+    .scan-detail-list {
+        grid-template-columns: 1fr;
+    }
 }
 
 .hip-threat-panel {

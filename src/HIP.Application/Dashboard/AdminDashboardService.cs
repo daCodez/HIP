@@ -155,6 +155,7 @@ public sealed class AdminDashboardService(
             .OrderByDescending(scan => scan.LastCheckedUtc)
             .Take(10)
             .Select(scan => new AdminRecentScanItem(
+                scan.ScanResultId,
                 scan.Domain,
                 scan.Score,
                 scan.RiskLevel,

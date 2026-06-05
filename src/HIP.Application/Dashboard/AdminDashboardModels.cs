@@ -79,6 +79,7 @@ public sealed record AdminRiskyDomainItem(
 /// <summary>
 /// Privacy-safe recent browser scan item for the dashboard.
 /// </summary>
+/// <param name="ScanResultId">Stable stored browser scan identifier used for admin detail navigation.</param>
 /// <param name="Domain">Scanned domain.</param>
 /// <param name="Score">HIP score.</param>
 /// <param name="RiskLevel">Risk level label.</param>
@@ -88,6 +89,7 @@ public sealed record AdminRiskyDomainItem(
 /// <param name="LastCheckedUtc">UTC scan timestamp.</param>
 /// <param name="ReasonSummary">Plain-English reason summary.</param>
 public sealed record AdminRecentScanItem(
+    string ScanResultId,
     string Domain,
     int Score,
     string RiskLevel,

@@ -12,6 +12,7 @@ using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.Safety;
+using HIP.Application.Scans;
 using HIP.Application.SelfHealing;
 using HIP.Application.SecondLife;
 using HIP.Application.SiteSafety;
@@ -96,6 +97,7 @@ MapAppealApis(app.MapGroup($"{ApiRoutes.Admin}/appeals").RequireAuthorization(Ad
 MapReputationOverrideApis(app.MapGroup($"{ApiRoutes.Admin}/reputation-overrides").RequireAuthorization(AdminPolicies.CanApproveOverrides));
 MapReputationApis(app.MapGroup($"{ApiRoutes.Admin}/reputation").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapDashboardApis(app.MapGroup($"{ApiRoutes.Admin}/dashboard").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
+MapAdminScanApis(app.MapGroup($"{ApiRoutes.Admin}/scans").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapConsumerApis(app.MapGroup(ApiRoutes.Consumer).RequireAuthorization(ConsumerPolicies.CanUseConsumerPortal));
 MapIdentityApis(app.MapGroup(ApiRoutes.Identity));
 app.MapGet($"{ApiRoutes.Admin}/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()))
@@ -381,6 +383,31 @@ static void MapDashboardApis(RouteGroupBuilder dashboardApi)
         IAdminDashboardService dashboardService,
         CancellationToken cancellationToken) =>
         Results.Ok((await dashboardService.GetSummaryAsync(cancellationToken)).RecentScans));
+}
+
+/// <summary>
+/// Maps protected admin scan detail endpoints that expose only privacy-safe scan explanations.
+/// </summary>
+/// <param name="scanApi">Versioned admin scan route group.</param>
+static void MapAdminScanApis(RouteGroupBuilder scanApi)
+{
+    scanApi.MapGet("/{scanId}", async (
+        string scanId,
+        IAdminScanDetailService scanDetailService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var detail = await scanDetailService.GetAsync(scanId, cancellationToken);
+            return detail is null
+                ? Results.NotFound(new { error = "Scan result was not found." })
+                : Results.Ok(detail);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
 }
 
 static void MapBadgeApis(RouteGroupBuilder badgeApi)

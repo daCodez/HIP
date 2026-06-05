@@ -1,0 +1,304 @@
+@page "/admin/scans/{ScanId}"
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@rendermode InteractiveServer
+@inject IAdminScanDetailService ScanDetailService
+
+<PageTitle>HIP Scan Details</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">HIP Admin</p>
+            <h1>Scan Result Details</h1>
+            <p>Privacy-safe explanation of the domain, page, content, provider evidence, rules, and feedback used by HIP.</p>
+        </div>
+        <a class="primary-button" href="/admin">Back to Dashboard</a>
+    </section>
+
+    @if (_detail is null && !_notFound)
+    {
+        <section class="hip-panel padded narrow">
+            <p>Loading scan details...</p>
+        </section>
+    }
+    else if (_notFound)
+    {
+        <section class="hip-panel padded narrow">
+            <h2>Scan not found</h2>
+            <p>HIP could not find that stored browser scan result. It may have been removed or the ID may be stale.</p>
+        </section>
+    }
+    else if (_detail is not null)
+    {
+        <section class="hip-panel padded narrow">
+            <div class="hip-panel-heading flush">
+                <div>
+                    <h2>@_detail.Domain</h2>
+                    <p>Target: @_detail.TargetType. URL hash: <code>@_detail.UrlHash</code></p>
+                </div>
+                <span class="hip-pill @StatusClass(_detail.SiteSafetyStatus)">@DisplayStatus(_detail.SiteSafetyStatus)</span>
+            </div>
+
+            <dl class="scan-detail-list">
+                <div><dt>Scanned</dt><dd>@_detail.ScannedAtUtc.UtcDateTime.ToString("u")</dd></div>
+                <div><dt>Final status</dt><dd>@DisplayStatus(_detail.FinalStatus)</dd></div>
+                <div><dt>Site Safety status</dt><dd>@DisplayStatus(_detail.SiteSafetyStatus)</dd></div>
+                <div><dt>Confidence</dt><dd>@_detail.ConfidenceLevel</dd></div>
+            </dl>
+        </section>
+
+        <section class="scan-score-grid">
+            @ScoreCard("Domain Trust", _detail.DomainTrustScore, "Root-domain trust. A trusted domain does not automatically make every page safe.")
+            @ScoreCard("Page Trust", _detail.PageTrustScore, "Exact-page trust. User-generated pages and risky paths can score lower than the parent domain.")
+            @ScoreCard("Content Risk", _detail.ContentRiskScore, "Content trust. Downloads, forms, scripts, redirects, and page behavior can lower this score.")
+            @ScoreCard("Final HIP Score", _detail.FinalHipScore, "Final user-facing score after domain, page, content, rules, and evidence are combined.")
+        </section>
+
+        <section class="hip-panel padded narrow">
+            <h2>Summary</h2>
+            <p>@_detail.Summary</p>
+        </section>
+
+        <section class="scan-detail-grid">
+            @SignalPanel("Reasons", _detail.Reasons, "No reasons were recorded for this scan.")
+            @SignalPanel("Warnings", _detail.Warnings, "No warnings were recorded for this scan.")
+            @SignalPanel("Positive Signals", _detail.PositiveSignals, "No positive signals were recorded for this scan.")
+            @SignalPanel("Negative Signals", _detail.NegativeSignals, "No negative signals were recorded for this scan.")
+        </section>
+
+        <section class="hip-panel padded narrow">
+            <h2>Matched Rules</h2>
+            @if (_detail.MatchedRules.Count == 0)
+            {
+                <p>No matched rules for this scan.</p>
+            }
+            else
+            {
+                <div class="hip-table-wrap">
+                    <table class="hip-data-table">
+                        <thead>
+                            <tr>
+                                <th>Rule</th>
+                                <th>Source</th>
+                                <th>Severity</th>
+                                <th>Mode</th>
+                                <th>Status</th>
+                                <th>Impact</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var rule in _detail.MatchedRules)
+                            {
+                                <tr>
+                                    <td><strong>@rule.RuleName</strong><small>@rule.RuleId</small></td>
+                                    <td>@rule.Source</td>
+                                    <td><span class="hip-pill @SeverityClass(rule.Severity)">@rule.Severity</span></td>
+                                    <td>@rule.Mode</td>
+                                    <td>@(rule.StatusOverride ?? rule.Status)</td>
+                                    <td>Risk @rule.RiskImpact / Trust @rule.TrustImpact</td>
+                                    <td>@rule.Reason @if (!string.IsNullOrWhiteSpace(rule.Warning)) { <small>@rule.Warning</small> }</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="hip-panel padded narrow">
+            <h2>Provider Evidence</h2>
+            @if (_detail.ProviderEvidence.Count == 0)
+            {
+                <p>No provider evidence available.</p>
+            }
+            else
+            {
+                <div class="hip-table-wrap">
+                    <table class="hip-data-table">
+                        <thead>
+                            <tr>
+                                <th>Provider</th>
+                                <th>Type</th>
+                                <th>Confidence</th>
+                                <th>Quality</th>
+                                <th>Impact</th>
+                                <th>Checked</th>
+                                <th>Summary</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var evidence in _detail.ProviderEvidence)
+                            {
+                                <tr>
+                                    <td>@evidence.ProviderName</td>
+                                    <td>@evidence.ProviderType</td>
+                                    <td>@evidence.Confidence</td>
+                                    <td>@evidence.EvidenceQuality</td>
+                                    <td>Risk @evidence.RiskImpact / Trust @evidence.TrustImpact</td>
+                                    <td>@evidence.CheckedAtUtc.UtcDateTime.ToString("u")</td>
+                                    <td>
+                                        @evidence.Summary
+                                        @foreach (var error in evidence.Errors)
+                                        {
+                                            <small>@error</small>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="hip-panel padded narrow">
+            <h2>Feedback Evidence</h2>
+            @if (_detail.FeedbackEvidence is null)
+            {
+                <p>No feedback evidence available.</p>
+            }
+            else
+            {
+                <dl class="scan-detail-list">
+                    <div><dt>Looks Safe</dt><dd>@_detail.FeedbackEvidence.LooksSafeWeightedTotal weighted total</dd></div>
+                    <div><dt>Looks Suspicious</dt><dd>@_detail.FeedbackEvidence.LooksSuspiciousWeightedTotal weighted total</dd></div>
+                    <div><dt>Report Issue</dt><dd>@_detail.FeedbackEvidence.ReportIssueWeightedTotal weighted total</dd></div>
+                    <div><dt>Confidence Impact</dt><dd>@_detail.FeedbackEvidence.ConfidenceImpact</dd></div>
+                    <div><dt>Review Recommended</dt><dd>@(_detail.FeedbackEvidence.ReviewRecommended ? "Yes" : "No")</dd></div>
+                </dl>
+                <p>@_detail.FeedbackEvidence.ReporterTrustSummary</p>
+                <ul>
+                    @foreach (var explanation in _detail.FeedbackEvidence.Explanations)
+                    {
+                        <li>@explanation</li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="hip-panel padded narrow">
+            <h2>Review Status</h2>
+            @if (_detail.ReviewStatus is null)
+            {
+                <p>No related admin review item is currently linked to this scan.</p>
+            }
+            else
+            {
+                <dl class="scan-detail-list">
+                    <div><dt>Review ID</dt><dd>@_detail.ReviewStatus.ReviewId</dd></div>
+                    <div><dt>Status</dt><dd>@_detail.ReviewStatus.Status</dd></div>
+                    <div><dt>Severity</dt><dd>@_detail.ReviewStatus.Severity</dd></div>
+                    <div><dt>Source</dt><dd>@_detail.ReviewStatus.Source</dd></div>
+                    <div><dt>Decision</dt><dd>@(_detail.ReviewStatus.Decision ?? "Pending")</dd></div>
+                </dl>
+                <p>@_detail.ReviewStatus.Summary</p>
+                @if (!string.IsNullOrWhiteSpace(_detail.ReviewStatus.DecisionReason))
+                {
+                    <p>@_detail.ReviewStatus.DecisionReason</p>
+                }
+            }
+            <p class="muted-note">Review actions are read-only on this MVP detail page. Use the Review Queue to make or change decisions.</p>
+        </section>
+    }
+</main>
+
+@code {
+    [Parameter]
+    public string? ScanId { get; set; }
+
+    private AdminScanDetail? _detail;
+    private bool _notFound;
+
+    /// <summary>
+    /// Loads the privacy-safe scan detail when the page receives a scan ID.
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        _notFound = false;
+        if (string.IsNullOrWhiteSpace(ScanId))
+        {
+            _notFound = true;
+            return;
+        }
+
+        _detail = await ScanDetailService.GetAsync(ScanId, CancellationToken.None);
+        _notFound = _detail is null;
+    }
+
+    /// <summary>
+    /// Renders one score card for the layered HIP scoring model.
+    /// </summary>
+    /// <param name="label">Score label.</param>
+    /// <param name="score">0-100 score.</param>
+    /// <param name="description">Plain-English score explanation.</param>
+    /// <returns>Score card fragment.</returns>
+    private static RenderFragment ScoreCard(string label, int score, string description) => @<article class="hip-metric-card">
+        <span>@label</span>
+        <strong>@score/100</strong>
+        <small>@description</small>
+    </article>;
+
+    /// <summary>
+    /// Renders a signal list with an explicit empty state.
+    /// </summary>
+    /// <param name="title">Panel title.</param>
+    /// <param name="items">Signal items.</param>
+    /// <param name="emptyText">Empty state text.</param>
+    /// <returns>Signal panel fragment.</returns>
+    private static RenderFragment SignalPanel(string title, IReadOnlyCollection<string> items, string emptyText) => @<section class="hip-panel padded">
+        <h2>@title</h2>
+        @if (items.Count == 0)
+        {
+            <p>@emptyText</p>
+        }
+        else
+        {
+            <ul>
+                @foreach (var item in items)
+                {
+                    <li>@item</li>
+                }
+            </ul>
+        }
+    </section>;
+
+    /// <summary>
+    /// Maps status labels to HIP pill tone classes.
+    /// </summary>
+    /// <param name="status">Status label.</param>
+    /// <returns>CSS class.</returns>
+    private static string StatusClass(string status) =>
+        status.Contains("Danger", StringComparison.OrdinalIgnoreCase) ||
+        status.Contains("HighRisk", StringComparison.OrdinalIgnoreCase)
+            ? "danger"
+            : status.Contains("Suspicious", StringComparison.OrdinalIgnoreCase)
+                ? "suspicious"
+                : status.Contains("Limited", StringComparison.OrdinalIgnoreCase) ||
+                  status.Contains("Unknown", StringComparison.OrdinalIgnoreCase)
+                    ? "caution"
+                    : "good";
+
+    /// <summary>
+    /// Maps rule severity labels to HIP pill tone classes.
+    /// </summary>
+    /// <param name="severity">Severity label.</param>
+    /// <returns>CSS class.</returns>
+    private static string SeverityClass(string severity) =>
+        severity is "Critical" or "High" ? "danger" : severity == "Medium" ? "suspicious" : "caution";
+
+    /// <summary>
+    /// Adds spaces to compact status labels so admins can scan them quickly.
+    /// </summary>
+    /// <param name="status">Raw status label.</param>
+    /// <returns>Readable status label.</returns>
+    private static string DisplayStatus(string status) =>
+        status switch
+        {
+            "HighRisk" => "High Risk",
+            "LimitedData" => "Limited Data",
+            "LimitedTrustData" => "Limited Trust Data",
+            "MostlyTrusted" => "Mostly Trusted",
+            _ => status
+        };
+}
