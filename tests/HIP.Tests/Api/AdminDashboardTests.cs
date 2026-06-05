@@ -3,13 +3,16 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using HIP.Application.Browser;
 using HIP.Application.Dashboard;
+using HIP.Application.Reputation;
 using HIP.Domain.Reporting;
 using HIP.Domain.Review;
 using HIP.Domain.Risk;
+using HIP.Domain.Rules;
 using HIP.Application.Reporting;
 using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.SelfHealing;
+using HIP.Application.SiteSafety;
 using Microsoft.AspNetCore.Mvc.Testing;
 using NUnit.Framework;
 using FindingReporterTrustLevel = HIP.Domain.SelfHealing.ReporterTrustLevel;
@@ -69,6 +72,30 @@ public sealed class AdminDashboardTests
     }
 
     [Test]
+    public async Task Dashboard_status_cards_count_real_scan_results()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        var now = DateTimeOffset.UtcNow;
+        await repository.SaveAsync(Scan("trusted.example", 90, "Trusted", 1, 0, 0, now, "Trusted scan."), CancellationToken.None);
+        await repository.SaveAsync(Scan("limited.example", 56, "LimitedTrustData", 1, 0, 0, now, "Limited trust data."), CancellationToken.None);
+        await repository.SaveAsync(Scan("suspicious.example", 34, "Suspicious", 1, 1, 0, now, "Suspicious scan."), CancellationToken.None);
+        await repository.SaveAsync(Scan("high.example", 18, "HighRisk", 1, 1, 0, now, "High-risk scan."), CancellationToken.None);
+        await repository.SaveAsync(Scan("danger.example", 5, "Dangerous", 1, 1, 1, now, "Dangerous scan."), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Card(summary, "trustedResults").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "limitedTrustResults").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "suspiciousResults").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "highRiskResults").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "dangerousResults").Value, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
     public async Task Dashboard_scans_last_24_hours_is_calculated_correctly()
     {
         var service = await DashboardWithScansAsync();
@@ -79,6 +106,90 @@ public sealed class AdminDashboardTests
         {
             Assert.That(Card(summary, "scansLast24Hours").Value, Is.EqualTo(2));
             Assert.That(Card(summary, "scansLast7Days").Value, Is.EqualTo(3));
+        });
+    }
+
+    [Test]
+    public async Task Dashboard_review_cards_include_generated_review_signals()
+    {
+        var generatedReviews = new InMemoryAdminReviewQueueRepository();
+        await generatedReviews.SaveAsync(AdminReview("review-high", AdminReviewSeverity.High, DateTimeOffset.UtcNow.AddHours(-3)), CancellationToken.None);
+        var service = Dashboard(new InMemoryBrowserScanResultRepository(), generatedReviewRepository: generatedReviews);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Card(summary, "pendingReviewItems").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "highSeverityReviewItems").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "oldestOpenReviewAgeHours").Value, Is.GreaterThanOrEqualTo(3));
+        });
+    }
+
+    [Test]
+    public async Task Dashboard_feedback_cards_count_weighted_feedback()
+    {
+        var feedback = new InMemoryWeightedFeedbackRepository();
+        var now = DateTimeOffset.UtcNow;
+        await feedback.SaveAsync(Feedback("feedback.example", HipFeedbackType.LooksSafe, now), CancellationToken.None);
+        await feedback.SaveAsync(Feedback("feedback.example", HipFeedbackType.LooksSuspicious, now), CancellationToken.None);
+        await feedback.SaveAsync(Feedback("feedback.example", HipFeedbackType.ReportIssue, now), CancellationToken.None);
+        await feedback.SaveAsync(Feedback("spike.example", HipFeedbackType.LooksSuspicious, now, "reporter-1"), CancellationToken.None);
+        await feedback.SaveAsync(Feedback("spike.example", HipFeedbackType.LooksSuspicious, now, "reporter-2"), CancellationToken.None);
+        await feedback.SaveAsync(Feedback("spike.example", HipFeedbackType.LooksSuspicious, now, "reporter-3"), CancellationToken.None);
+        await feedback.SaveAsync(Feedback("spike.example", HipFeedbackType.ReportIssue, now, "reporter-4"), CancellationToken.None);
+        await feedback.SaveAsync(Feedback("spike.example", HipFeedbackType.ReportIssue, now, "reporter-5"), CancellationToken.None);
+        var service = Dashboard(new InMemoryBrowserScanResultRepository(), weightedFeedbackRepository: feedback);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Card(summary, "feedbackReceived").Value, Is.EqualTo(8));
+            Assert.That(Card(summary, "looksSafeFeedback").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "looksSuspiciousFeedback").Value, Is.EqualTo(4));
+            Assert.That(Card(summary, "reportIssueFeedback").Value, Is.EqualTo(3));
+            Assert.That(Card(summary, "suspiciousFeedbackSpikes").Value, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task Dashboard_rule_cards_include_built_in_admin_and_disabled_rules()
+    {
+        var trustRules = new InMemoryRuleRepository();
+        await trustRules.SaveAsync(TrustRule("trust-watch", RuleMode.Watch, enabled: true), CancellationToken.None);
+        await trustRules.SaveAsync(TrustRule("trust-disabled", RuleMode.Disabled, enabled: false), CancellationToken.None);
+        var adminRules = new InMemoryAdminSiteSafetyRuleRepository();
+        await adminRules.SaveAsync(AdminRule("admin-active", AdminSiteSafetyRuleStatus.Active, AdminSiteSafetyRuleMode.Enforced), CancellationToken.None);
+        await adminRules.SaveAsync(AdminRule("admin-watch", AdminSiteSafetyRuleStatus.Active, AdminSiteSafetyRuleMode.WatchOnly), CancellationToken.None);
+        await adminRules.SaveAsync(AdminRule("admin-simulation", AdminSiteSafetyRuleStatus.Draft, AdminSiteSafetyRuleMode.Simulation), CancellationToken.None);
+        await adminRules.SaveAsync(AdminRule("admin-disabled", AdminSiteSafetyRuleStatus.Disabled, AdminSiteSafetyRuleMode.Simulation), CancellationToken.None);
+        var service = Dashboard(new InMemoryBrowserScanResultRepository(), ruleRepository: trustRules, adminSiteSafetyRuleRepository: adminRules);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Card(summary, "activeBuiltInRules").Value, Is.GreaterThan(0));
+            Assert.That(Card(summary, "activeAdminRules").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "watchOnlyRules").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "simulationRules").Value, Is.EqualTo(2));
+            Assert.That(Card(summary, "disabledRules").Value, Is.EqualTo(2));
+        });
+    }
+
+    [Test]
+    public async Task Dashboard_marks_missing_feedback_and_external_provider_data_as_placeholders()
+    {
+        var service = Dashboard(new InMemoryBrowserScanResultRepository());
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Card(summary, "feedbackReceived").IsPlaceholder, Is.True);
+            Assert.That(Card(summary, "externalProviderErrors").IsPlaceholder, Is.True);
+            Assert.That(Card(summary, "externalProviderErrors").Status, Is.EqualTo("Not connected yet"));
         });
     }
 
@@ -303,7 +414,12 @@ public sealed class AdminDashboardTests
     /// </summary>
     /// <param name="browserScanRepository">Browser scan repository.</param>
     /// <returns>Dashboard service.</returns>
-    private static AdminDashboardService Dashboard(IBrowserScanResultRepository browserScanRepository)
+    private static AdminDashboardService Dashboard(
+        IBrowserScanResultRepository browserScanRepository,
+        IAdminReviewQueueRepository? generatedReviewRepository = null,
+        IWeightedFeedbackRepository? weightedFeedbackRepository = null,
+        IAdminSiteSafetyRuleRepository? adminSiteSafetyRuleRepository = null,
+        IRuleRepository? ruleRepository = null)
     {
         var auditLogService = new AuditLogService();
         return new AdminDashboardService(
@@ -313,8 +429,11 @@ public sealed class AdminDashboardTests
             new AppealService(new AppealRequestValidator(), auditLogService),
             new ReputationOverrideService(new ReputationOverrideRequestValidator(), auditLogService),
             auditLogService,
-            new InMemoryRuleRepository(),
-            new InMemoryGeneratedRuleCandidateRepository());
+            ruleRepository ?? new InMemoryRuleRepository(),
+            new InMemoryGeneratedRuleCandidateRepository(),
+            generatedReviewRepository ?? new InMemoryAdminReviewQueueRepository(),
+            weightedFeedbackRepository ?? new InMemoryWeightedFeedbackRepository(),
+            adminSiteSafetyRuleRepository ?? new InMemoryAdminSiteSafetyRuleRepository());
     }
 
     /// <summary>
@@ -358,4 +477,112 @@ public sealed class AdminDashboardTests
             {
                 ["scanMode"] = "Normal"
             });
+
+    /// <summary>
+    /// Creates a generated admin review queue item with privacy-safe summary fields.
+    /// </summary>
+    /// <param name="reviewId">Review ID.</param>
+    /// <param name="severity">Review severity.</param>
+    /// <param name="createdAtUtc">Creation time.</param>
+    /// <returns>Admin review queue item.</returns>
+    private static AdminReviewQueueItem AdminReview(string reviewId, AdminReviewSeverity severity, DateTimeOffset createdAtUtc) =>
+        new(
+            reviewId,
+            "review.example",
+            "sha256:review",
+            AdminReviewTargetType.Domain,
+            "DashboardTest",
+            severity,
+            AdminReviewStatus.Open,
+            AdminReviewSource.SiteSafetyScan,
+            null,
+            null,
+            null,
+            42,
+            "HighRisk",
+            "Medium",
+            "Privacy-safe review summary.",
+            "Privacy-safe evidence summary.",
+            createdAtUtc,
+            createdAtUtc,
+            null,
+            null,
+            null,
+            null,
+            null);
+
+    /// <summary>
+    /// Creates privacy-safe weighted feedback for dashboard aggregation.
+    /// </summary>
+    /// <param name="domain">Feedback domain.</param>
+    /// <param name="feedbackType">Feedback type.</param>
+    /// <param name="submittedAtUtc">Submission time.</param>
+    /// <param name="reporterHash">Optional reporter hash used only for abuse controls.</param>
+    /// <returns>Weighted feedback submission.</returns>
+    private static WeightedFeedbackSubmission Feedback(
+        string domain,
+        HipFeedbackType feedbackType,
+        DateTimeOffset submittedAtUtc,
+        string? reporterHash = null) =>
+        new(
+            domain,
+            feedbackType,
+            HipFeedbackSource.BrowserPluginBanner,
+            HIP.Domain.Reputation.ReporterTrustLevel.Anonymous,
+            submittedAtUtc,
+            PageUrlHash: "sha256:page",
+            ReporterHash: reporterHash,
+            PluginVersion: "0.1.0-test");
+
+    /// <summary>
+    /// Creates a minimal JSON trust rule for dashboard rule count tests.
+    /// </summary>
+    /// <param name="ruleId">Rule ID.</param>
+    /// <param name="mode">Rule mode.</param>
+    /// <param name="enabled">Whether the rule is enabled.</param>
+    /// <returns>Trust rule.</returns>
+    private static TrustRule TrustRule(string ruleId, RuleMode mode, bool enabled) =>
+        new(
+            ruleId,
+            ruleId,
+            string.Empty,
+            enabled,
+            mode,
+            RuleSeverity.Low,
+            [],
+            [],
+            false,
+            false,
+            "test",
+            "Dashboard test rule.",
+            ApprovalStatus.NotRequired,
+            0,
+            1);
+
+    /// <summary>
+    /// Creates a minimal admin Site Safety rule for dashboard rule-state counts.
+    /// </summary>
+    /// <param name="ruleId">Rule ID.</param>
+    /// <param name="status">Rule lifecycle status.</param>
+    /// <param name="mode">Rule execution mode.</param>
+    /// <returns>Admin Site Safety rule.</returns>
+    private static AdminSiteSafetyRule AdminRule(string ruleId, AdminSiteSafetyRuleStatus status, AdminSiteSafetyRuleMode mode) =>
+        new(
+            ruleId,
+            ruleId,
+            "Dashboard rule count test.",
+            AdminSiteSafetyRuleTargetType.Domain,
+            [],
+            new AdminSiteSafetyRuleEffects(AddReason: "Dashboard test rule."),
+            SiteSafetyRuleSeverity.Low,
+            SiteSafetyEvidenceQuality.Weak,
+            status,
+            mode,
+            "test",
+            DateTimeOffset.UtcNow,
+            status is AdminSiteSafetyRuleStatus.Active or AdminSiteSafetyRuleStatus.Approved ? "approver" : null,
+            status is AdminSiteSafetyRuleStatus.Active or AdminSiteSafetyRuleStatus.Approved ? DateTimeOffset.UtcNow : null,
+            1,
+            null,
+            false);
 }

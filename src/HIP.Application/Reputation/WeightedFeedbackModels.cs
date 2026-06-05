@@ -164,6 +164,13 @@ public interface IWeightedFeedbackRepository
     /// <param name="cancellationToken">Token used to cancel repository work.</param>
     /// <returns>Recent submissions.</returns>
     Task<IReadOnlyCollection<WeightedFeedbackSubmission>> ListRecentAsync(string domain, DateTimeOffset sinceUtc, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists all privacy-safe feedback submissions for administrative summaries.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel repository work.</param>
+    /// <returns>All stored feedback submissions.</returns>
+    Task<IReadOnlyCollection<WeightedFeedbackSubmission>> ListAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -202,6 +209,24 @@ public sealed class InMemoryWeightedFeedbackRepository : IWeightedFeedbackReposi
                     .OrderBy(item => item.SubmittedAtUtc)
                     .ToArray());
         }
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyCollection<WeightedFeedbackSubmission>> ListAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var all = submissions.Values
+            .SelectMany(list =>
+            {
+                lock (list)
+                {
+                    return list.ToArray();
+                }
+            })
+            .OrderByDescending(item => item.SubmittedAtUtc)
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyCollection<WeightedFeedbackSubmission>>(all);
     }
 }
 

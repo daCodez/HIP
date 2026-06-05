@@ -9,6 +9,12 @@ The MVP dashboard now uses stored browser plugin scan results as the first real 
 Scan cards show:
 
 - total scans
+- scans today
+- trusted results
+- limited trust results
+- suspicious results
+- high-risk results
+- dangerous results
 - domains scanned
 - links scanned
 - risky links found
@@ -23,12 +29,26 @@ Operational cards still show:
 
 - risky findings
 - open review items
+- pending review items across manual and generated queues
+- high-severity review items
+- oldest open review age in hours
 - pending appeals
 - pending reputation overrides
 - active rules
+- active built-in rules
+- active admin rules
 - watch mode rules
+- watch-only admin rules
+- simulation rules
+- disabled rules
+- feedback received
+- Looks Safe feedback
+- Looks Suspicious feedback
+- Report Issue feedback
+- suspicious feedback spikes
 - self-healing candidates
 - dangerous domains
+- external provider errors
 - API health
 
 If no stored browser scan data exists, the dashboard shows:
@@ -37,6 +57,8 @@ If no stored browser scan data exists, the dashboard shows:
 
 No fake scan counts are generated.
 
+Feedback cards use persisted weighted trust feedback. Feedback is evidence, not voting; the dashboard only shows counts and spike indicators, never page text or reporter identity. External provider error counts are currently marked `Not connected yet` because provider error history is not persisted into a dashboard-ready store.
+
 ## Recent Activity
 
 Recent activity includes privacy-safe summaries for:
@@ -44,6 +66,8 @@ Recent activity includes privacy-safe summaries for:
 - browser plugin scans
 - risk findings
 - review items
+- generated admin review signals
+- weighted feedback
 - audit logs
 - generated rule candidates
 - reputation changes

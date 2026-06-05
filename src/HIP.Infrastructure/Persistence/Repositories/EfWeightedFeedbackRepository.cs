@@ -25,4 +25,13 @@ public sealed class EfWeightedFeedbackRepository(HipRecordStore store) : IWeight
             .OrderBy(item => item.SubmittedAtUtc)
             .ToArray();
     }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<WeightedFeedbackSubmission>> ListAsync(CancellationToken cancellationToken)
+    {
+        var submissions = await store.ListAsync<WeightedFeedbackSubmission>(Partition, cancellationToken);
+        return submissions
+            .OrderByDescending(item => item.SubmittedAtUtc)
+            .ToArray();
+    }
 }
