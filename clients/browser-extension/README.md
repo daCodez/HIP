@@ -244,6 +244,10 @@ Social and webmail detection only scans `href` URLs. It does not parse message t
 
 Download detection only flags download-like links by URL extension. It does not download or inspect files.
 
+## Automated Extension Tests
+
+The extension test suite includes browser-banner visual smoke coverage in `tests/bannerVisualSmoke.test.mjs`. It executes the real injected banner renderer against a minimal DOM harness and verifies the visible banner classes, score/status text, feedback controls, close control styling hooks, and banner display modes. This is intentionally dependency-light until HIP adds a full browser automation stack.
+
 ## Manual Test Steps
 
 1. Start the HIP API/Web host:
