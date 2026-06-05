@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  externalEvidenceFor,
   buildSiteSafetyViewModel,
   buildPopupViewModel,
   buildPublicLookupUrl,
@@ -133,6 +134,55 @@ test("site safety view model renders status confidence summary and warnings", ()
   assert.equal(viewModel.downloadRiskText, "High");
 });
 
+test("site safety view model renders SSL Labs Qualys provider evidence", () => {
+  const viewModel = buildSiteSafetyViewModel({
+    status: "LimitedData",
+    confidenceLevel: "Medium",
+    providerEvidence: [
+      {
+        providerName: "SSL Labs / Qualys TLS",
+        confidence: 80,
+        evidenceItems: [
+          {
+            category: "TlsGrade",
+            value: "A",
+            status: "Positive",
+            summary: "SSL Labs reported TLS grade A for this domain."
+          }
+        ]
+      }
+    ]
+  });
+
+  assert.equal(viewModel.externalEvidence.length, 1);
+  assert.equal(viewModel.externalEvidence[0].providerName, "SSL Labs / Qualys TLS");
+  assert.equal(viewModel.externalEvidence[0].statusLabel, "Positive A");
+  assert.equal(viewModel.externalEvidence[0].summary, "SSL Labs reported TLS grade A for this domain. Confidence: 80.");
+});
+
+test("external evidence display supports API casing and redacts private-looking text", () => {
+  const evidence = externalEvidenceFor({
+    ProviderEvidence: [
+      {
+        ProviderName: "SSL Labs / Qualys TLS",
+        Confidence: 0,
+        EvidenceItems: [
+          {
+            Value: "Unknown",
+            Status: "Error",
+            Summary: "provider response included token details"
+          }
+        ]
+      }
+    ]
+  });
+
+  assert.equal(evidence.length, 1);
+  assert.equal(evidence[0].providerName, "SSL Labs / Qualys TLS");
+  assert.equal(evidence[0].statusLabel, "Error Unknown");
+  assert.equal(evidence[0].summary, "HIP removed private-looking details from this message. Confidence: 0.");
+});
+
 test("warnings are hidden when there are no useful warnings", () => {
   const viewModel = buildSiteSafetyViewModel({
     status: "Clean",
@@ -184,6 +234,8 @@ test("popup markup contains primary UX fields and feedback controls", () => {
   assert.equal(popupHtml.includes("Domain Trust"), true);
   assert.equal(popupHtml.includes("Page Trust"), true);
   assert.equal(popupHtml.includes("Content Risk"), true);
+  assert.equal(popupHtml.includes("External evidence"), true);
+  assert.equal(popupHtml.includes('id="externalEvidence"'), true);
   assert.equal(popupHtml.includes('id="siteSafetyConfidence"'), true);
   assert.equal(popupHtml.includes('id="warningsPanel"'), true);
   assert.equal(popupHtml.includes("Looks Safe"), true);

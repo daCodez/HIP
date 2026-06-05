@@ -210,6 +210,47 @@ p {
   background: #22140d;
 }
 
+.external-evidence-panel {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.external-evidence-panel h2 {
+  margin-bottom: 6px;
+}
+
+.external-evidence-panel ul {
+  display: grid;
+  gap: 6px;
+  padding-left: 0;
+}
+
+.external-evidence-panel li {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 8px 9px;
+  border-radius: 6px;
+  color: #b7c4d8;
+  background: #081827;
+  list-style: none;
+}
+
+.external-evidence-provider {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #dbeafe;
+  font-weight: 700;
+}
+
+.external-evidence-detail {
+  color: #9fb0c8;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .metric-label {
   display: grid;
   gap: 2px;

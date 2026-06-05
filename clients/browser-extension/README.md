@@ -103,6 +103,7 @@ The popup shows the full user-facing HIP state for the current tab:
 - `Content Risk`: how risky the content on this page is.
 - `Site Safety`: page-level safety scan status.
 - `Confidence`: how confident HIP is in the current safety signal.
+- `External evidence`: normalized provider evidence such as SSL Labs / Qualys TLS grade, status, and confidence when configured providers return results.
 - reasons and warnings when useful.
 - privacy-safe feedback buttons: `Looks Safe`, `Looks Suspicious`, and `Report Issue`.
 
@@ -215,6 +216,8 @@ The request includes the active tab URL plus privacy-safe observations from the 
 The request does not include page body text, script contents, form values, passwords, tokens, private messages, or email contents.
 
 The popup displays Site Safety status and compact malware, phishing, redirect, download, and script risk labels. These labels describe page safety risk only; they do not replace the overall HIP trust score.
+
+When configured external providers return evidence, the popup shows a compact `External evidence` section. For SSL Labs / Qualys-style TLS checks, this includes the provider name, normalized TLS grade/status, confidence, and a safe summary. Provider evidence is hidden when no provider returns displayable evidence.
 
 ## Privacy Promises
 
