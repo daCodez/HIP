@@ -272,24 +272,16 @@ export function shouldShowTrustBanner(lookup, summary = {}, settings = {}) {
   }
 
   const status = lookup?.status || "Unknown";
-  const hasDangerousPageRisk = status === "Dangerous" || (summary.dangerousLinks ?? 0) > 0;
   if (mode === "DangerousOnly") {
-    return hasDangerousPageRisk;
+    return status === "Dangerous";
   }
 
-  if (status === "Suspicious" || status === "HighRisk" || hasDangerousPageRisk) {
+  if (status === "Suspicious" || status === "HighRisk" || status === "Dangerous") {
     return true;
   }
 
   if (status === "LimitedTrustData") {
     return hasRiskyLimitedTrustSignals(summary);
-  }
-
-  if (status === "Trusted" || status === "MostlyTrusted" || status === "ProbablySafe") {
-    return (summary.suspiciousLinks ?? 0) > 0 ||
-      (summary.dangerousLinks ?? 0) > 0 ||
-      (summary.executableDownloadCandidates ?? 0) > 0 ||
-      (summary.paymentFieldsDetected ?? 0) > 0;
   }
 
   return false;

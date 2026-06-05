@@ -165,7 +165,7 @@ Default behavior:
 Banner modes:
 
 - `WarningsOnly`: show for Suspicious, HighRisk, Dangerous, and risky LimitedTrustData pages.
-- `DangerousOnly`: show only for Dangerous pages or dangerous page-level link signals.
+- `DangerousOnly`: show only when the current page status is `Dangerous`.
 - `AlwaysShow`: show on all HTTP/HTTPS pages unless dismissed.
 - `NeverShow`: never inject the banner.
 

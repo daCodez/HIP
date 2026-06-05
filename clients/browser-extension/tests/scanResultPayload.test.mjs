@@ -234,9 +234,10 @@ test("limited trust risky signal helper ignores private content fields", () => {
   assert.equal(hasRiskyLimitedTrustSignals({ passwordFieldsDetected: 1 }), true);
 });
 
-test("banner display handles trusted domain with risky page content", () => {
-  assert.equal(shouldShowTrustBanner({ status: "Trusted" }, { suspiciousLinks: 1 }, {}), true);
-  assert.equal(shouldShowTrustBanner({ status: "MostlyTrusted" }, { executableDownloadCandidates: 1 }, {}), true);
+test("trusted and mostly trusted pages do not show warning banners", () => {
+  assert.equal(shouldShowTrustBanner({ status: "Trusted" }, { suspiciousLinks: 1 }, {}), false);
+  assert.equal(shouldShowTrustBanner({ status: "MostlyTrusted" }, { executableDownloadCandidates: 1 }, {}), false);
+  assert.equal(shouldShowTrustBanner({ status: "ProbablySafe" }, { paymentFieldsDetected: 1 }, {}), false);
 });
 
 test("banner display does not interrupt for mostly trusted pages with broad attention counts only", () => {
@@ -250,7 +251,7 @@ test("banner display modes are respected", () => {
   assert.equal(shouldShowTrustBanner({ status: "HighRisk" }, {}, { bannerDisplayMode: "DangerousOnly" }), false);
   assert.equal(shouldShowTrustBanner({ status: "Critical" }, {}, { bannerDisplayMode: "DangerousOnly" }), false);
   assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, { bannerDisplayMode: "DangerousOnly" }), true);
-  assert.equal(shouldShowTrustBanner({ status: "Trusted" }, { dangerousLinks: 1 }, { bannerDisplayMode: "DangerousOnly" }), true);
+  assert.equal(shouldShowTrustBanner({ status: "Trusted" }, { dangerousLinks: 1 }, { bannerDisplayMode: "DangerousOnly" }), false);
   assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, { bannerDisplayMode: "WarningsOnly", enableWarningBanner: false }), false);
 });
 

@@ -662,24 +662,16 @@
     }
 
     const status = lookup?.status || "Unknown";
-    const dangerousPageRisk = status === "Dangerous" || summary.dangerousLinks > 0;
     if (mode === "DangerousOnly") {
-      return dangerousPageRisk;
+      return status === "Dangerous";
     }
 
-    if (status === "Suspicious" || status === "HighRisk" || dangerousPageRisk) {
+    if (status === "Suspicious" || status === "HighRisk" || status === "Dangerous") {
       return true;
     }
 
     if (status === "LimitedTrustData") {
       return hasRiskyLimitedTrustSignals(summary);
-    }
-
-    if (status === "Trusted" || status === "MostlyTrusted" || status === "ProbablySafe") {
-      return summary.suspiciousLinks > 0 ||
-        summary.dangerousLinks > 0 ||
-        summary.executableDownloadCandidates > 0 ||
-        summary.paymentFieldsDetected > 0;
     }
 
     return false;
