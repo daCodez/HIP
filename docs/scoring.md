@@ -48,6 +48,10 @@ HIP scoring is intentionally conservative. The core scoring rule is:
 
 The scanner must avoid both over-trusting unknown sites and over-penalizing known domains without clear page or content evidence. A domain such as `github.com` can have strong domain trust, while a specific repository, release asset, or download page still needs page and content review. Conversely, an unknown site with HTTPS and no obvious warnings should usually remain `LimitedTrustData` or `Unknown` until HIP has stronger public trust evidence.
 
+HIP may use a small built-in known-domain baseline for well-known public domains such as `github.com`, `microsoft.com`, `google.com`, `apple.com`, and `wikipedia.org`. That baseline earns `DomainTrustScore` only. It does not make a page trusted by itself, and it does not suppress download, form, redirect, script, phishing, malware, or user-generated-content checks.
+
+Known domains with user-generated surfaces receive separate page scoring. For example, a GitHub homepage can have high domain and page trust, while a repository, release asset, or download page is capped at the page layer and lowered further when executable downloads or scam labels are present.
+
 ## Layered Score Contract
 
 Every user-facing scoring result should expose these fields:

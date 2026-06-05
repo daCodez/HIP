@@ -344,6 +344,10 @@ Archive-like extensions require review but are not automatically dangerous:
 
 Clean site-safety findings provide only a small trust improvement. Unknown or limited-data sites do not receive a trust boost. A clean scan with no reputation or identity data returns `LimitedData`, not `Trusted`.
 
+Known high-trust public domains can receive a higher `DomainTrustScore` baseline, but that trust is intentionally layered. The baseline applies to the parent domain only. Repository pages, release/download pages, user-generated content, forms, redirects, scripts, and downloads are still scored separately at the page and content layers.
+
+For example, `github.com` may earn high domain trust. A URL such as `github.com/random-user/free-cracked-tool` does not inherit full trust from `github.com`; HIP caps page trust for likely user-generated surfaces and lowers the final score further when executable downloads or risky labels are observed.
+
 Site Safety affects:
 
 - `DomainTrustScore`

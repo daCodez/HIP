@@ -45,6 +45,15 @@ public sealed class SiteSafetyScanner(
         ".iso"
     };
 
+    private static readonly HashSet<string> KnownTrustedDomains = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "github.com",
+        "microsoft.com",
+        "google.com",
+        "apple.com",
+        "wikipedia.org"
+    };
+
     /// <summary>
     /// Runs a Site Safety Scan using URL structure and privacy-safe observed facts.
     /// </summary>
@@ -77,7 +86,7 @@ public sealed class SiteSafetyScanner(
             var options = ruleOptions ?? new SiteSafetyRuleOptions();
             var ruleInput = BuildRuleInput(uri, domain, signals, evidence);
             var matchedRules = await EvaluateRulesAsync(ruleInput, cancellationToken);
-            var context = Analyze(signals, matchedRules, options);
+            var context = Analyze(uri, domain, signals, matchedRules, options);
             var scores = BuildScoreImpact(context);
             var status = DetermineStatus(context);
             var summary = BuildSummary(status, context);
@@ -144,12 +153,15 @@ public sealed class SiteSafetyScanner(
     /// </summary>
     /// <param name="signals">Privacy-safe observed scan facts.</param>
     /// <returns>Internal scan context used for status and score impact calculation.</returns>
-    private static SiteSafetyContext Analyze(SiteSafetyObservedSignals signals, IReadOnlyCollection<SiteSafetyRuleResult> matchedRules, SiteSafetyRuleOptions options)
+    private static SiteSafetyContext Analyze(Uri uri, string domain, SiteSafetyObservedSignals signals, IReadOnlyCollection<SiteSafetyRuleResult> matchedRules, SiteSafetyRuleOptions options)
     {
         var reasons = new List<string>();
         var warnings = new List<string>();
         var positive = new List<string>();
         var negative = new List<string>();
+        var knownTrustedDomain = IsKnownTrustedDomain(domain);
+        var effectiveTrustDataAvailable = signals.TrustDataAvailable || knownTrustedDomain;
+        var userGeneratedContentSurface = IsUserGeneratedContentSurface(uri, domain);
 
         var enforcedRules = matchedRules.Where(rule => !rule.IsSimulationOnly).ToArray();
         var malwareRisk = MaxRisk(enforcedRules, SiteSafetyRiskCategory.Malware);
@@ -196,7 +208,17 @@ public sealed class SiteSafetyScanner(
             reasons.Add("No suspicious redirects were found.");
         }
 
-        if (!signals.TrustDataAvailable)
+        if (knownTrustedDomain)
+        {
+            reasons.Add("The parent domain has strong public trust signals, but HIP still evaluates this specific page and content separately.");
+        }
+
+        if (userGeneratedContentSurface)
+        {
+            reasons.Add("This page appears to contain user-generated or repository content, so parent-domain trust does not automatically make it safe.");
+        }
+
+        if (!effectiveTrustDataAvailable)
         {
             reasons.Add("The domain has limited reputation history.");
         }
@@ -211,7 +233,10 @@ public sealed class SiteSafetyScanner(
             formRisk,
             reputationRisk,
             overallRisk,
-            signals.TrustDataAvailable,
+            effectiveTrustDataAvailable,
+            knownTrustedDomain,
+            userGeneratedContentSurface,
+            knownTrustedDomain ? 95 : signals.TrustDataAvailable ? 80 : 58,
             externalTrustBoost,
             confidencePenalty,
             hasAuthoritativeRiskHit,
@@ -261,7 +286,7 @@ public sealed class SiteSafetyScanner(
             signals.PageReputationScore,
             matchedTerms.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             evidence,
-            signals.TrustDataAvailable);
+            signals.TrustDataAvailable || IsKnownTrustedDomain(domain));
     }
 
     /// <summary>
@@ -420,10 +445,20 @@ public sealed class SiteSafetyScanner(
     /// <returns>Score impact used by the larger HIP scoring model.</returns>
     private static SiteSafetyScoreImpact BuildScoreImpact(SiteSafetyContext context)
     {
-        var domainTrust = Math.Clamp(80 - context.ReputationRiskScore + context.ExternalTrustBoost, 0, 100);
+        var domainTrust = Math.Clamp(context.DomainTrustBase - context.ReputationRiskScore + context.ExternalTrustBoost, 0, 100);
         var pageTrust = Math.Clamp(82 - context.PhishingRiskScore / 2 - context.RedirectRiskScore / 3 - context.FormRiskScore / 3 - context.ReputationRiskScore / 4, 0, 100);
         var rawContentRisk = Math.Clamp(context.MalwareRiskScore / 2 + context.ScriptRiskScore / 3 + context.DownloadRiskScore / 3 + context.PhishingRiskScore / 3, 0, 100);
         var contentTrust = Math.Clamp(100 - rawContentRisk, 0, 100);
+
+        if (context.KnownTrustedDomain)
+        {
+            pageTrust = Math.Max(pageTrust, 78);
+        }
+
+        if (context.UserGeneratedContentSurface)
+        {
+            pageTrust = Math.Min(pageTrust, 76);
+        }
 
         if (context.MalwareRiskScore >= 90)
         {
@@ -550,6 +585,35 @@ public sealed class SiteSafetyScanner(
         host.Replace("www.", string.Empty, StringComparison.OrdinalIgnoreCase).ToLowerInvariant();
 
     /// <summary>
+    /// Determines whether HIP has a built-in high-trust baseline for a public domain.
+    /// This earns only domain trust; page and content scores are still evaluated independently.
+    /// </summary>
+    /// <param name="domain">Normalized domain.</param>
+    /// <returns>True for a small allow-list of well-known public domains.</returns>
+    private static bool IsKnownTrustedDomain(string domain) =>
+        KnownTrustedDomains.Contains(domain);
+
+    /// <summary>
+    /// Detects surfaces on trusted domains where users can publish content that HIP must score separately.
+    /// </summary>
+    /// <param name="uri">Validated scan URI.</param>
+    /// <param name="domain">Normalized domain.</param>
+    /// <returns>True when parent-domain trust should be capped at the page layer.</returns>
+    private static bool IsUserGeneratedContentSurface(Uri uri, string domain)
+    {
+        if (!domain.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length >= 2 &&
+               !segments[0].Equals("orgs", StringComparison.OrdinalIgnoreCase) &&
+               !segments[0].Equals("features", StringComparison.OrdinalIgnoreCase) &&
+               !segments[0].Equals("enterprise", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Removes query and fragment from output URLs to avoid returning secrets or tokens.
     /// </summary>
     /// <param name="uri">Validated scan URI.</param>
@@ -654,6 +718,9 @@ public sealed class SiteSafetyScanner(
         int ReputationRiskScore,
         int OverallSafetyRiskScore,
         bool TrustDataAvailable,
+        bool KnownTrustedDomain,
+        bool UserGeneratedContentSurface,
+        int DomainTrustBase,
         int ExternalTrustBoost,
         int ExternalConfidencePenalty,
         bool HasAuthoritativeRiskHit,

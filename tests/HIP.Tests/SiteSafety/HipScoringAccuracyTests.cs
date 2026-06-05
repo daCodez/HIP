@@ -55,6 +55,63 @@ public sealed class HipScoringAccuracyTests
     }
 
     /// <summary>
+    /// The Site Safety scanner itself should understand known domain trust without making page/content risk disappear.
+    /// </summary>
+    [Test]
+    public async Task Site_safety_github_homepage_has_high_domain_trust_without_high_risk_label()
+    {
+        var result = await Scanner().ScanAsync(new SiteSafetyScanRequest("https://github.com"), CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.DomainTrustScore, Is.GreaterThanOrEqualTo(85));
+            Assert.That(result.Status, Is.Not.EqualTo(SiteSafetyScanStatus.HighRisk));
+            Assert.That(result.Status, Is.Not.EqualTo(SiteSafetyScanStatus.Dangerous));
+            Assert.That(result.Reasons, Has.Some.Contains("parent domain has strong public trust signals"));
+        });
+    }
+
+    /// <summary>
+    /// Repository-style pages on trusted domains are scored as page/content surfaces, not as the whole parent domain.
+    /// </summary>
+    [Test]
+    public async Task Site_safety_github_repo_page_does_not_inherit_full_parent_trust()
+    {
+        var result = await Scanner().ScanAsync(new SiteSafetyScanRequest("https://github.com/random-user/free-cracked-tool"), CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.DomainTrustScore, Is.GreaterThanOrEqualTo(85));
+            Assert.That(result.PageTrustScore, Is.LessThan(result.DomainTrustScore));
+            Assert.That(result.Reasons, Has.Some.Contains("parent-domain trust does not automatically make it safe"));
+        });
+    }
+
+    /// <summary>
+    /// Risky page content on a trusted parent domain should lower page trust and create user-facing warnings.
+    /// </summary>
+    [Test]
+    public async Task Site_safety_trusted_domain_with_risky_content_lowers_page_and_content_scores()
+    {
+        var result = await Scanner().ScanAsync(
+            new SiteSafetyScanRequest(
+                "https://github.com/random-user/free-cracked-tool",
+                new SiteSafetyObservedSignals(
+                    DownloadLinks: ["https://github.com/random-user/free-cracked-tool/releases/download/v1/tool.exe"],
+                    MatchedRiskTerms: ["CrackedSoftware", "DisableAntivirus"])),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.DomainTrustScore, Is.GreaterThanOrEqualTo(85));
+            Assert.That(result.PageTrustScore, Is.LessThan(70));
+            Assert.That(result.DownloadRiskScore, Is.GreaterThanOrEqualTo(45));
+            Assert.That(result.FinalHipScore, Is.LessThan(result.DomainTrustScore));
+            Assert.That(result.Warnings, Has.Some.Contains("executable"));
+        });
+    }
+
+    /// <summary>
     /// Risky page/content signals on a trusted parent domain must lower final trust and explain the mixed case.
     /// </summary>
     [Test]
