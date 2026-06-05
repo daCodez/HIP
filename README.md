@@ -1,6 +1,6 @@
 # HIP
 
-HIP stands for Human Identity Protocol.
+HIP stands for Human Interactive Protocol.
 
 HIP is a trust and origin verification layer for the internet. It sits above TCP and TLS:
 
