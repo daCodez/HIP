@@ -105,7 +105,7 @@ The extension submits only privacy-safe evidence:
 
 It does not submit page text, form values, passwords, tokens, private messages, or email content.
 
-When the user closes the banner, the extension stores a per-domain dismissal flag in `chrome.storage.local`. This is only a local display preference and does not affect HIP scoring, reputation, safety routing, or trust decisions.
+When the user closes the banner, the extension stores a per-page dismissal flag in `chrome.storage.local` using a hash of the current URL plus the domain. This avoids storing raw page URLs while keeping a dismissal on one page from hiding warnings on a different page. This is only a local display preference and does not affect HIP scoring, reputation, safety routing, or trust decisions.
 
 ## Configuration
 
