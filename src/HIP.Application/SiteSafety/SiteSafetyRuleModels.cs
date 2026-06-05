@@ -422,6 +422,11 @@ public static class BuiltInSiteSafetyRules
         new("feedback-suspicious", "Weighted suspicious feedback", "Weighted suspicious feedback increases reputation risk without directly creating malware or phishing findings.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, SiteSafetyRuleHelpers.HasSuspiciousFeedback, SiteSafetyRuleHelpers.FeedbackRiskImpact, 0, "Some users have reported this site as suspicious, but HIP has not confirmed a threat.", null, SiteSafetyRuleSeverity.Low, SiteSafetyEvidenceQuality.Weak),
         new("feedback-conflict", "Conflicting feedback", "Conflicting feedback lowers confidence and recommends review.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Confidence, SiteSafetyRuleHelpers.HasConflictingFeedback, 0, 0, "Recent feedback is conflicting, so HIP lowered confidence and recommends review.", "Recent feedback is conflicting, so HIP recommends review before changing trust significantly.", SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Weak, confidencePenalty: 25, sendToAdminReview: true),
         new("feedback-review-signal", "Feedback review signal", "Feedback patterns can request admin review without directly controlling score.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Confidence, SiteSafetyRuleHelpers.HasFeedbackReviewSignal, 0, 0, "Feedback patterns recommend admin review before HIP changes trust significantly.", "Feedback patterns recommend admin review before HIP changes trust significantly.", SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Weak, confidencePenalty: 10, sendToAdminReview: true),
+        new("admin-review-safe", "Admin safe review", "Admin safe or false-positive review gives only a small capped support signal.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, SiteSafetyRuleHelpers.HasAdminSafeReview, 0, 3, "Admin review found privacy-safe evidence supporting a safer interpretation, but this alone does not make the site trusted.", null, SiteSafetyRuleSeverity.Low, SiteSafetyEvidenceQuality.Strong),
+        new("admin-review-needs-more-data", "Admin needs more data", "Admin review needing more data lowers confidence.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Confidence, SiteSafetyRuleHelpers.HasAdminNeedsMoreDataReview, 0, 0, "Admin review needs more privacy-safe evidence before HIP makes a stronger decision.", "Admin review needs more privacy-safe evidence before HIP makes a stronger decision.", SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Weak, confidencePenalty: 20, sendToAdminReview: true),
+        new("admin-review-suspicious", "Admin suspicious review", "Admin-confirmed suspicious review increases reputation risk.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, SiteSafetyRuleHelpers.HasAdminSuspiciousReview, SiteSafetyRuleHelpers.AdminReviewRiskImpact, 0, "Admin review confirmed suspicious behavior from privacy-safe evidence.", "Admin review confirmed suspicious behavior.", SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Strong),
+        new("admin-review-high-risk", "Admin high-risk review", "Admin-confirmed high-risk review affects status transparently.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, SiteSafetyRuleHelpers.HasAdminHighRiskReview, SiteSafetyRuleHelpers.AdminReviewRiskImpact, 0, "Admin review confirmed high-risk behavior from privacy-safe evidence.", "Admin review confirmed high-risk behavior.", SiteSafetyRuleSeverity.High, SiteSafetyEvidenceQuality.Strong, SiteSafetyScanStatus.HighRisk, sendToAdminReview: true),
+        new("admin-review-dangerous", "Admin dangerous review", "Admin-confirmed dangerous review affects status transparently.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, SiteSafetyRuleHelpers.HasAdminDangerousReview, SiteSafetyRuleHelpers.AdminReviewRiskImpact, 0, "Admin review confirmed dangerous behavior from privacy-safe evidence.", "Admin review confirmed dangerous behavior.", SiteSafetyRuleSeverity.Critical, SiteSafetyEvidenceQuality.Strong, SiteSafetyScanStatus.Dangerous, sendToAdminReview: true),
         new("external-weak", "Weak external evidence", "Weak external evidence lowers confidence.", SiteSafetyRuleCollectionType.ExternalEvidenceRules, SiteSafetyRiskCategory.Confidence, input => input.ProviderEvidence.SelectMany(evidence => evidence.EvidenceItems).Any(item => item.Status == SiteSafetyEvidenceStatus.Weak), 0, 0, "External TLS or provider evidence is weak and lowers confidence.", "External TLS or provider evidence is weak and lowers confidence.", SiteSafetyRuleSeverity.Low, SiteSafetyEvidenceQuality.Weak, confidencePenalty: 20),
         new("external-conflict", "Conflicting external evidence", "Conflicting external evidence lowers confidence and creates review warning.", SiteSafetyRuleCollectionType.ExternalEvidenceRules, SiteSafetyRiskCategory.Confidence, SiteSafetyRuleHelpers.HasConflictingExternalEvidence, 0, 0, "External scanner evidence conflicts; HIP lowered confidence and recommends review.", "External scanner evidence conflicts; HIP lowered confidence and recommends review.", SiteSafetyRuleSeverity.High, SiteSafetyEvidenceQuality.Medium, confidencePenalty: 35, sendToAdminReview: true),
         new("external-threat-intel-phishing", "External phishing hit", "Authoritative phishing evidence raises phishing risk.", SiteSafetyRuleCollectionType.ExternalEvidenceRules, SiteSafetyRiskCategory.Phishing, input => SiteSafetyRuleHelpers.HasAuthoritativeExternalHit(input, "phishing"), 90, 0, "Threat-intel provider matched a phishing indicator.", null, SiteSafetyRuleSeverity.Critical, SiteSafetyEvidenceQuality.Confirmed, SiteSafetyScanStatus.HighRisk, sendToAdminReview: true),
@@ -540,10 +545,58 @@ public static class SiteSafetyRuleHelpers
             .Max(), 0, 35);
 
     /// <summary>
+    /// Detects admin-confirmed safe or false-positive decisions.
+    /// </summary>
+    public static bool HasAdminSafeReview(SiteSafetyRuleInput input) =>
+        AdminReviewItems(input).Any(item => item.Category is "AdminConfirmSafe" or "AdminFalsePositive");
+
+    /// <summary>
+    /// Detects admin decisions that need more evidence and should lower confidence.
+    /// </summary>
+    public static bool HasAdminNeedsMoreDataReview(SiteSafetyRuleInput input) =>
+        AdminReviewItems(input).Any(item => item.Category.Equals("AdminNeedsMoreData", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Detects admin-confirmed suspicious decisions.
+    /// </summary>
+    public static bool HasAdminSuspiciousReview(SiteSafetyRuleInput input) =>
+        AdminReviewItems(input).Any(item => item.Category.Equals("AdminConfirmSuspicious", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Detects admin-confirmed high-risk decisions.
+    /// </summary>
+    public static bool HasAdminHighRiskReview(SiteSafetyRuleInput input) =>
+        AdminReviewItems(input).Any(item => item.Category.Equals("AdminConfirmHighRisk", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Detects admin-confirmed dangerous decisions.
+    /// </summary>
+    public static bool HasAdminDangerousReview(SiteSafetyRuleInput input) =>
+        AdminReviewItems(input).Any(item => item.Category.Equals("AdminConfirmDangerous", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Calculates the strongest admin-review risk impact while preserving rule transparency.
+    /// </summary>
+    public static int AdminReviewRiskImpact(SiteSafetyRuleInput input) =>
+        Math.Clamp(AdminReviewItems(input)
+            .Where(item => item.Category.StartsWith("AdminConfirm", StringComparison.OrdinalIgnoreCase))
+            .Select(item => item.RiskImpact)
+            .DefaultIfEmpty(0)
+            .Max(), 0, 95);
+
+    /// <summary>
     /// Enumerates user feedback evidence items only.
     /// </summary>
     private static IEnumerable<SiteSafetyEvidenceItem> UserFeedbackItems(SiteSafetyRuleInput input) =>
         input.ProviderEvidence
             .Where(evidence => evidence.ProviderType == SiteSafetyEvidenceProviderType.UserFeedback)
+            .SelectMany(evidence => evidence.EvidenceItems);
+
+    /// <summary>
+    /// Enumerates approved admin review evidence items only.
+    /// </summary>
+    private static IEnumerable<SiteSafetyEvidenceItem> AdminReviewItems(SiteSafetyRuleInput input) =>
+        input.ProviderEvidence
+            .Where(evidence => evidence.ProviderType == SiteSafetyEvidenceProviderType.AdminReview)
             .SelectMany(evidence => evidence.EvidenceItems);
 }

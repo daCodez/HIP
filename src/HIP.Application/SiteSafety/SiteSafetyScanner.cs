@@ -65,7 +65,8 @@ public sealed class SiteSafetyScanner(
             var domain = NormalizeHost(uri.Host);
             var providers = ActiveEvidenceProviders();
             var cacheKey = BuildCacheKey(request, providers);
-            if (TryGetCachedResult(cacheKey, out var cached))
+            var canUseCache = CanUseCache(providers);
+            if (canUseCache && TryGetCachedResult(cacheKey, out var cached))
             {
                 logger.LogInformation("Returned cached HIP Site Safety Scan for domain {Domain}.", domain);
                 return cached;
@@ -109,7 +110,11 @@ public sealed class SiteSafetyScanner(
                 evidence,
                 scores,
                 matchedRules);
-            RecentScans[cacheKey] = new CachedSiteSafetyScan(result, DateTimeOffset.UtcNow.Add(options.ScanCacheDuration));
+            if (canUseCache)
+            {
+                RecentScans[cacheKey] = new CachedSiteSafetyScan(result, DateTimeOffset.UtcNow.Add(options.ScanCacheDuration));
+            }
+
             return result;
         }
         catch (ValidationException)
@@ -337,6 +342,14 @@ public sealed class SiteSafetyScanner(
 
         return providers;
     }
+
+    /// <summary>
+    /// Determines whether scan results can be cached without hiding mutable admin review decisions.
+    /// </summary>
+    /// <param name="providers">Evidence providers active for the scan.</param>
+    /// <returns>True when none of the active providers depend on live admin review decisions.</returns>
+    private static bool CanUseCache(IReadOnlyCollection<ISiteSafetyEvidenceProvider> providers) =>
+        providers.All(provider => provider.ProviderType != SiteSafetyEvidenceProviderType.AdminReview);
 
     /// <summary>
     /// Collects normalized provider evidence and converts provider failures into safe error evidence.

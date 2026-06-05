@@ -79,6 +79,7 @@ Current provider types:
 
 - `BrowserObserved`: active in the MVP. Uses privacy-safe browser facts.
 - `UserFeedback`: active in the MVP. Uses weighted HIP trust feedback as weak evidence.
+- `AdminReview`: active in the MVP. Uses approved admin review decisions as transparent scoring evidence.
 - `TlsScanner`: SSL Labs / Qualys-style TLS provider. Enabled in development/MVP config and configurable at runtime.
 - `ThreatIntel`: Google Web Risk / Safe Browsing-style provider foundation. Disabled by default.
 - `UrlReputation`: VirusTotal-style URL/domain reputation provider foundation. Disabled by default.
@@ -169,7 +170,19 @@ Review records store only public-safe data:
 - privacy-safe evidence summary
 - related scan, rule, or feedback IDs when available
 
-Review records must not store page text, form values, passwords, tokens, cookies, private messages, raw private URLs, or private chat logs. Admin decisions are recorded as evidence and audit history only in the MVP. They do not silently override scoring; future scoring can consume approved admin-review evidence through a dedicated provider.
+Review records must not store page text, form values, passwords, tokens, cookies, private messages, raw private URLs, or private chat logs.
+
+Approved generated-review decisions now flow back into Site Safety through the `HIP Admin Review` evidence provider. This keeps admin influence visible in the scan response under `ProviderEvidence` and `MatchedRules`.
+
+Admin review effects are intentionally bounded:
+
+- `ConfirmSafe` and `FalsePositive` provide a small capped trust support signal only.
+- `NeedsMoreData` lowers confidence and recommends more review.
+- `ConfirmSuspicious` increases reputation risk.
+- `ConfirmHighRisk` can set HighRisk through an explicit built-in rule.
+- `ConfirmDangerous` can set Dangerous through an explicit built-in rule.
+
+Admin review evidence does not execute code, call external APIs, store private content, or mark an unknown clean site Trusted by itself. URL-hash-specific decisions apply only to the matching page hash; domain-level decisions can apply across the domain.
 
 ## Rule-Based Scoring
 

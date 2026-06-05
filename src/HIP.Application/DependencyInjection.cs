@@ -95,6 +95,7 @@ public static class DependencyInjection
         services.AddSingleton(new ExternalSiteEvidenceOptions());
         services.AddScoped<ISiteSafetyEvidenceProvider, BrowserObservedSignalProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, WeightedFeedbackSiteSafetyEvidenceProvider>();
+        services.AddScoped<ISiteSafetyEvidenceProvider, AdminReviewEvidenceProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, SslLabsSiteEvidenceProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, GoogleWebRiskSiteEvidenceProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, VirusTotalSiteEvidenceProvider>();
