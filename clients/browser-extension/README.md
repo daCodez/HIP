@@ -64,7 +64,7 @@ Current setting keys:
 Banner display modes:
 
 - `WarningsOnly`: default. Show the banner only for meaningful risk.
-- `DangerousOnly`: show only for dangerous or critical page risk.
+- `DangerousOnly`: show only when the current page status is `Dangerous`.
 - `AlwaysShow`: show on every page unless dismissed.
 - `NeverShow`: never inject the page banner.
 
@@ -90,7 +90,7 @@ Limited trust pages show a banner only for meaningful risky signals:
 - known risky provider evidence
 - trusted-domain/risky-page mismatch
 
-`DangerousOnly` mode shows the banner only when HIP sees a Dangerous page or dangerous page-level link signal. It does not globally suppress future Dangerous warnings when a different page is dismissed.
+`DangerousOnly` mode shows the banner only when HIP sees a `Dangerous` page status. It does not globally suppress future Dangerous warnings when a different page is dismissed.
 
 ## Popup Primary UX
 
