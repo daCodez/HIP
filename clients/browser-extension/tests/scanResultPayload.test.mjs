@@ -202,6 +202,16 @@ test("banner display defaults to warnings only", () => {
   assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, {}), true);
 });
 
+test("unknown without risky signals does not show banner", () => {
+  assert.equal(shouldShowTrustBanner({ status: "Unknown" }, {
+    loginFormsDetected: 0,
+    passwordFieldsDetected: 0,
+    paymentFieldsDetected: 0,
+    executableDownloadCandidates: 0,
+    dangerousLinks: 0
+  }, { bannerDisplayMode: "WarningsOnly" }), false);
+});
+
 test("banner display handles limited trust special cases", () => {
   assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { loginFormsDetected: 1 }, {}), true);
   assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { passwordFieldsDetected: 1 }, {}), true);
@@ -210,6 +220,9 @@ test("banner display handles limited trust special cases", () => {
   assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { suspiciousRedirects: 1 }, {}), true);
   assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { containsPhishingWording: true }, {}), true);
   assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { containsScamWording: true }, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { containsImpersonationWording: true }, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { knownRiskyProviderEvidence: true }, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { trustedDomainRiskMismatch: true }, {}), true);
   assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { riskyUserGeneratedContent: true }, {}), true);
 });
 
@@ -234,9 +247,21 @@ test("banner display modes are respected", () => {
   assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, { bannerDisplayMode: "NeverShow" }), false);
   assert.equal(shouldShowTrustBanner({ status: "Trusted" }, {}, { bannerDisplayMode: "AlwaysShow" }), true);
   assert.equal(shouldShowTrustBanner({ status: "Suspicious" }, {}, { bannerDisplayMode: "DangerousOnly" }), false);
+  assert.equal(shouldShowTrustBanner({ status: "HighRisk" }, {}, { bannerDisplayMode: "DangerousOnly" }), false);
+  assert.equal(shouldShowTrustBanner({ status: "Critical" }, {}, { bannerDisplayMode: "DangerousOnly" }), false);
   assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, { bannerDisplayMode: "DangerousOnly" }), true);
   assert.equal(shouldShowTrustBanner({ status: "Trusted" }, { dangerousLinks: 1 }, { bannerDisplayMode: "DangerousOnly" }), true);
   assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, { bannerDisplayMode: "WarningsOnly", enableWarningBanner: false }), false);
+});
+
+test("warnings only mode shows warning statuses and risky limited trust only", () => {
+  const settings = { bannerDisplayMode: "WarningsOnly" };
+
+  assert.equal(shouldShowTrustBanner({ status: "Suspicious" }, {}, settings), true);
+  assert.equal(shouldShowTrustBanner({ status: "HighRisk" }, {}, settings), true);
+  assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, settings), true);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, {}, settings), false);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { paymentFieldsDetected: 1 }, settings), true);
 });
 
 test("banner feedback creates privacy-safe suspicious evidence", async () => {

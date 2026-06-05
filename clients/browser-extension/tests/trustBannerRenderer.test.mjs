@@ -41,8 +41,10 @@ test("trust banner renders readable status labels and plain-English fallback rea
 test("trust banner supports notice warning and dangerous copy", () => {
   assert.equal(rendererSource.includes("HIP Warning: Dangerous Site"), true);
   assert.equal(rendererSource.includes("HIP Warning: This page may be risky."), true);
+  assert.equal(contentSource.includes("HIP Notice: This page may need review."), true);
   assert.equal(contentSource.includes("This page has limited trust data and contains login fields."), true);
   assert.equal(contentSource.includes("This page has limited trust data and links to an executable download."), true);
+  assert.equal(contentSource.includes("This page has limited trust data and a configured safety provider reported risky evidence."), true);
 });
 
 test("banner runtime does not collect private page data", () => {
@@ -51,6 +53,9 @@ test("banner runtime does not collect private page data", () => {
   assert.equal(contentSource.includes("textarea.value"), false);
   assert.equal(contentSource.includes("formData"), false);
   assert.equal(contentSource.includes("localStorage"), false);
+  assert.equal(contentSource.includes("document.cookie"), false);
+  assert.equal(contentSource.includes("sessionStorage"), false);
+  assert.equal(contentSource.includes("token="), false);
   assert.equal(contentSource.includes("passwordFieldsDetected"), true);
 });
 

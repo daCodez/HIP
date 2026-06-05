@@ -133,6 +133,46 @@ Plain-English status copy:
 
 The popup also shows Site Safety status, confidence level, summary, warnings when useful, and feedback buttons when reporting is available. Feedback is weighted trust evidence, not voting. The popup submits only domain, URL hash, displayed score/status, feedback type, plugin version, scan mode, and a privacy-safe timestamp.
 
+## Warning-Only Banner
+
+The injected banner is not the normal HIP details surface. It appears only when HIP finds meaningful risk, unless the user explicitly changes the banner mode in extension settings.
+
+Default mode: `WarningsOnly`.
+
+Default behavior:
+
+- `Trusted`: no banner.
+- `MostlyTrusted`: no banner.
+- `LimitedTrustData`: no banner by default.
+- `Unknown`: no banner by default.
+- `Suspicious`: soft warning banner.
+- `HighRisk`: warning banner.
+- `Dangerous`: strong warning banner.
+
+`LimitedTrustData` pages show a banner only when privacy-safe structural signals justify interrupting the user:
+
+- login form present
+- password field present
+- payment field present
+- executable download present
+- suspicious redirect present
+- phishing wording present
+- scam wording present
+- impersonation wording present
+- known risky provider evidence present
+- trusted domain with risky page/content mismatch
+
+Banner modes:
+
+- `WarningsOnly`: show for Suspicious, HighRisk, Dangerous, and risky LimitedTrustData pages.
+- `DangerousOnly`: show only for Dangerous pages or dangerous page-level link signals.
+- `AlwaysShow`: show on all HTTP/HTTPS pages unless dismissed.
+- `NeverShow`: never inject the banner.
+
+Dismissal is stored in extension-owned storage with a domain and URL hash. HIP does not store raw page URLs for dismissal, and dismissal is only a local display preference. It does not change HIP scoring, reputation, reporting, or safety routing.
+
+The Details link opens the configured public lookup page. Content scripts cannot programmatically open the browser-action popup in a reliable cross-browser way, so the MVP keeps the existing details-link behavior.
+
 Status bands:
 
 - `0-9`: Dangerous
