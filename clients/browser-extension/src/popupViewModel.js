@@ -247,8 +247,68 @@ export function buildSiteSafetyViewModel(result = {}) {
     phishingRiskText: riskLabel(result?.phishingRiskScore),
     redirectRiskText: riskLabel(result?.redirectRiskScore),
     downloadRiskText: riskLabel(result?.downloadRiskScore),
-    scriptRiskText: riskLabel(result?.scriptRiskScore)
+    scriptRiskText: riskLabel(result?.scriptRiskScore),
+    externalEvidence: externalEvidenceFor(result)
   };
+}
+
+/**
+ * Builds compact display rows for normalized external safety evidence.
+ * Provider evidence is intentionally summarized so the popup never displays raw scanner payloads or private page data.
+ */
+export function externalEvidenceFor(siteSafety = {}) {
+  const evidence = Array.isArray(siteSafety?.providerEvidence)
+    ? siteSafety.providerEvidence
+    : Array.isArray(siteSafety?.ProviderEvidence)
+      ? siteSafety.ProviderEvidence
+      : [];
+
+  return evidence
+    .map(provider => externalEvidenceRow(provider))
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
+/**
+ * Converts a single provider result into a safe display row.
+ */
+function externalEvidenceRow(provider) {
+  const providerName = safeDisplayText(provider?.providerName || provider?.ProviderName || "External provider");
+  const confidence = provider?.confidence ?? provider?.Confidence ?? "Unknown";
+  const items = Array.isArray(provider?.evidenceItems)
+    ? provider.evidenceItems
+    : Array.isArray(provider?.EvidenceItems)
+      ? provider.EvidenceItems
+      : [];
+  const firstItem = items[0] || {};
+  const status = firstItem.status || firstItem.Status || "Unknown";
+  const value = firstItem.value || firstItem.Value || "";
+  const summary = safeDisplayText(firstItem.summary || firstItem.Summary || provider?.errors?.[0] || provider?.Errors?.[0] || "Provider returned no displayable evidence yet.");
+  const statusLabel = value
+    ? `${statusLabelForProvider(status)} ${safeDisplayText(value)}`
+    : statusLabelForProvider(status);
+
+  return {
+    providerName,
+    statusLabel,
+    summary: `${summary} Confidence: ${confidence}.`
+  };
+}
+
+/**
+ * Converts provider evidence statuses into concise popup labels.
+ */
+function statusLabelForProvider(status) {
+  return {
+    Positive: "Positive",
+    Clean: "Clean",
+    Weak: "Weak",
+    Error: "Error",
+    Dangerous: "Dangerous",
+    HighRisk: "High Risk",
+    Suspicious: "Suspicious",
+    Unknown: "Unknown"
+  }[status] || "Unknown";
 }
 
 /**

@@ -57,6 +57,8 @@ const elements = {
   redirectRisk: document.getElementById("redirectRisk"),
   downloadRisk: document.getElementById("downloadRisk"),
   scriptRisk: document.getElementById("scriptRisk"),
+  externalEvidencePanel: document.getElementById("externalEvidencePanel"),
+  externalEvidence: document.getElementById("externalEvidence"),
   warningsPanel: document.getElementById("warningsPanel"),
   warnings: document.getElementById("warnings"),
   reasons: document.getElementById("reasons"),
@@ -187,6 +189,8 @@ function renderLoadingSummary(stage = "Checking") {
   elements.redirectRisk.textContent = "Checking...";
   elements.downloadRisk.textContent = "Checking...";
   elements.scriptRisk.textContent = "Checking...";
+  elements.externalEvidencePanel.hidden = true;
+  elements.externalEvidence.replaceChildren();
   renderWarnings([]);
 }
 
@@ -275,8 +279,33 @@ async function renderSiteSafety(summary = {}) {
   elements.redirectRisk.textContent = viewModel.redirectRiskText;
   elements.downloadRisk.textContent = viewModel.downloadRiskText;
   elements.scriptRisk.textContent = viewModel.scriptRiskText;
+  renderExternalEvidence(viewModel.externalEvidence);
   renderWarnings(viewModel.warnings);
   return result;
+}
+
+/**
+ * Renders normalized external provider evidence such as SSL Labs / Qualys TLS results.
+ * The Site Safety API sends only provider summaries and never raw page content or private form data.
+ */
+function renderExternalEvidence(providerEvidence = []) {
+  elements.externalEvidencePanel.hidden = providerEvidence.length === 0;
+  elements.externalEvidence.replaceChildren(...providerEvidence.map(evidence => {
+    const item = document.createElement("li");
+    const header = document.createElement("span");
+    const providerName = document.createElement("span");
+    const statusLabel = document.createElement("strong");
+    const detail = document.createElement("span");
+
+    header.className = "external-evidence-provider";
+    detail.className = "external-evidence-detail";
+    providerName.textContent = evidence.providerName;
+    statusLabel.textContent = evidence.statusLabel;
+    detail.textContent = evidence.summary;
+    header.append(providerName, statusLabel);
+    item.append(header, detail);
+    return item;
+  }));
 }
 
 /**
