@@ -5,6 +5,7 @@ import {
   buildBannerFeedbackReport,
   buildScanResultPayload,
   formatPluginVersion,
+  hasRiskyLimitedTrustSignals,
   HipApiClient,
   normalizeHipSettings,
   shouldShowTrustBanner
@@ -203,8 +204,21 @@ test("banner display defaults to warnings only", () => {
 
 test("banner display handles limited trust special cases", () => {
   assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { loginFormsDetected: 1 }, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { passwordFieldsDetected: 1 }, {}), true);
   assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { paymentFieldsDetected: 1 }, {}), true);
   assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { executableDownloadCandidates: 1 }, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { suspiciousRedirects: 1 }, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { containsPhishingWording: true }, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { containsScamWording: true }, {}), true);
+  assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { riskyUserGeneratedContent: true }, {}), true);
+});
+
+test("limited trust risky signal helper ignores private content fields", () => {
+  assert.equal(hasRiskyLimitedTrustSignals({
+    pageText: "private message text",
+    formValues: "password=secret"
+  }), false);
+  assert.equal(hasRiskyLimitedTrustSignals({ passwordFieldsDetected: 1 }), true);
 });
 
 test("banner display handles trusted domain with risky page content", () => {
@@ -221,6 +235,8 @@ test("banner display modes are respected", () => {
   assert.equal(shouldShowTrustBanner({ status: "Trusted" }, {}, { bannerDisplayMode: "AlwaysShow" }), true);
   assert.equal(shouldShowTrustBanner({ status: "Suspicious" }, {}, { bannerDisplayMode: "DangerousOnly" }), false);
   assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, { bannerDisplayMode: "DangerousOnly" }), true);
+  assert.equal(shouldShowTrustBanner({ status: "Trusted" }, { dangerousLinks: 1 }, { bannerDisplayMode: "DangerousOnly" }), true);
+  assert.equal(shouldShowTrustBanner({ status: "Dangerous" }, {}, { bannerDisplayMode: "WarningsOnly", enableWarningBanner: false }), false);
 });
 
 test("banner feedback creates privacy-safe suspicious evidence", async () => {

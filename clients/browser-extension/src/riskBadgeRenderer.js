@@ -59,8 +59,8 @@
     const status = lookup?.status || "Unknown";
     const statusClass = status.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     const score = lookup?.finalHipScore ?? lookup?.score ?? "Unknown";
-    const title = bannerTitle(status);
-    const reason = lookup?.knownRisks?.[0] || lookup?.explanations?.[0] || "HIP does not have enough verified trust history for this website yet.";
+    const title = lookup?.bannerTitle || bannerTitle(status);
+    const reason = lookup?.bannerReason || lookup?.knownRisks?.[0] || lookup?.explanations?.[0] || "HIP does not have enough verified trust history for this website yet.";
     const lookupUrl = safeHref(lookup?.publicLookupUrl);
     const statusLabel = displayStatusLabel(status);
     const banner = document.createElement("div");
@@ -282,8 +282,16 @@
    * Selects a concise banner title that distinguishes normal trust checks from high-risk warnings.
    */
   function bannerTitle(status) {
-    if (status === "Suspicious" || status === "HighRisk" || status === "Dangerous" || status === "Critical") {
-      return "HIP Warning";
+    if (status === "Dangerous" || status === "Critical") {
+      return "HIP Warning: Dangerous Site";
+    }
+
+    if (status === "HighRisk") {
+      return "HIP Warning: This page may be risky.";
+    }
+
+    if (status === "Suspicious") {
+      return "HIP Notice: This page has suspicious signals.";
     }
 
     if (status === "Unknown" || status === "LimitedTrustData") {

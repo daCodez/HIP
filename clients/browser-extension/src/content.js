@@ -129,6 +129,7 @@
     const forms = Array.from(document.querySelectorAll("form"));
     lastSummary.formsDetected = forms.length;
     lastSummary.loginFormsDetected = forms.filter(form => form.querySelector('input[type="password"]')).length;
+    lastSummary.passwordFieldsDetected = document.querySelectorAll('input[type="password"]').length;
     lastSummary.paymentFieldsDetected = forms.filter(hasPaymentField).length;
 
     for (const form of forms) {
@@ -158,17 +159,19 @@
       return;
     }
 
+    const pageKey = await sha256(window.location.href);
     const dismissedResponse = await chrome.runtime.sendMessage({
       type: "HIP_GET_BANNER_DISMISSED",
-      domain: currentLookup.domain || currentDomain
+      domain: currentLookup.domain || currentDomain,
+      pageKey
     });
     if (dismissedResponse?.ok && dismissedResponse.result === true) {
       return;
     }
 
-    window.HipRiskBadgeRenderer.renderTrustBanner(withLookupUrl(currentLookup), pluginVersion, {
+    window.HipRiskBadgeRenderer.renderTrustBanner(withBannerCopy(withLookupUrl(currentLookup), lastSummary), pluginVersion, {
       onFeedback: submitBannerFeedback,
-      onDismiss: dismissTrustBanner
+      onDismiss: lookup => dismissTrustBanner(lookup, pageKey)
     });
   }
 
@@ -669,9 +672,7 @@
     }
 
     if (status === "LimitedTrustData") {
-      return summary.loginFormsDetected > 0 ||
-        summary.paymentFieldsDetected > 0 ||
-        summary.executableDownloadCandidates > 0;
+      return hasRiskyLimitedTrustSignals(summary);
     }
 
     if (status === "Trusted" || status === "MostlyTrusted" || status === "ProbablySafe") {
@@ -685,12 +686,95 @@
   }
 
   /**
-   * Saves banner dismissal in extension-owned storage so websites cannot forge HIP trust decisions.
+   * Detects LimitedTrustData cases that deserve a banner using privacy-safe structural facts only.
+   * The content script does not read or store page text, form values, passwords, tokens, or cookies.
    */
-  async function dismissTrustBanner(lookup) {
+  function hasRiskyLimitedTrustSignals(summary = {}) {
+    return summary.loginFormsDetected > 0 ||
+      summary.passwordFieldsDetected > 0 ||
+      summary.paymentFieldsDetected > 0 ||
+      summary.executableDownloadCandidates > 0 ||
+      summary.suspiciousRedirects > 0 ||
+      summary.containsPhishingWording === true ||
+      summary.containsScamWording === true ||
+      summary.riskyUserGeneratedContent === true;
+  }
+
+  /**
+   * Adds concise banner copy based on status and structural risk facts.
+   */
+  function withBannerCopy(lookup, summary = {}) {
+    if (lookup.status === "Dangerous" || lookup.status === "Critical") {
+      return {
+        ...lookup,
+        bannerTitle: "HIP Warning: Dangerous Site",
+        bannerReason: "HIP found strong phishing or malware indicators. Avoid entering passwords or downloading files."
+      };
+    }
+
+    if (lookup.status === "HighRisk") {
+      return {
+        ...lookup,
+        bannerTitle: "HIP Warning: This page may be risky.",
+        bannerReason: lookup.knownRisks?.[0] || lookup.explanations?.[0] || "HIP found high-risk signals on this page."
+      };
+    }
+
+    if (lookup.status === "Suspicious") {
+      return {
+        ...lookup,
+        bannerTitle: "HIP Notice: This page has suspicious signals.",
+        bannerReason: lookup.knownRisks?.[0] || lookup.explanations?.[0] || "HIP found signals that should be reviewed before you trust this page."
+      };
+    }
+
+    if (lookup.status === "LimitedTrustData" && hasRiskyLimitedTrustSignals(summary)) {
+      return {
+        ...lookup,
+        bannerTitle: "HIP Notice: This page has limited trust data.",
+        bannerReason: limitedTrustBannerReason(summary)
+      };
+    }
+
+    return lookup;
+  }
+
+  /**
+   * Explains why a LimitedTrustData page is being interrupted without exposing private page content.
+   */
+  function limitedTrustBannerReason(summary = {}) {
+    if (summary.paymentFieldsDetected > 0) {
+      return "This page has limited trust data and contains payment fields.";
+    }
+
+    if (summary.loginFormsDetected > 0 || summary.passwordFieldsDetected > 0) {
+      return "This page has limited trust data and contains login fields.";
+    }
+
+    if (summary.executableDownloadCandidates > 0) {
+      return "This page has limited trust data and links to an executable download.";
+    }
+
+    if (summary.suspiciousRedirects > 0) {
+      return "This page has limited trust data and suspicious redirect signals.";
+    }
+
+    if (summary.containsPhishingWording || summary.containsScamWording) {
+      return "This page has limited trust data and contains scam or phishing signals.";
+    }
+
+    return "This page has limited trust data and risky page behavior.";
+  }
+
+  /**
+   * Saves banner dismissal in extension-owned storage so websites cannot forge HIP trust decisions.
+   * Dismissal is page-scoped by URL hash and does not hide warnings on other pages.
+   */
+  async function dismissTrustBanner(lookup, pageKey) {
     await chrome.runtime.sendMessage({
       type: "HIP_SET_BANNER_DISMISSED",
-      domain: lookup?.domain || currentDomain
+      domain: lookup?.domain || currentDomain,
+      pageKey
     });
   }
 
@@ -708,6 +792,7 @@
       downloadLinks: [],
       formsDetected: 0,
       loginFormsDetected: 0,
+      passwordFieldsDetected: 0,
       paymentFieldsDetected: 0,
       crossDomainLoginForms: 0,
       socialLinkCandidates: 0,

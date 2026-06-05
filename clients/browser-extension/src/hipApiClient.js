@@ -282,9 +282,7 @@ export function shouldShowTrustBanner(lookup, summary = {}, settings = {}) {
   }
 
   if (status === "LimitedTrustData") {
-    return (summary.loginFormsDetected ?? 0) > 0 ||
-      (summary.paymentFieldsDetected ?? 0) > 0 ||
-      (summary.executableDownloadCandidates ?? 0) > 0;
+    return hasRiskyLimitedTrustSignals(summary);
   }
 
   if (status === "Trusted" || status === "MostlyTrusted" || status === "ProbablySafe") {
@@ -295,6 +293,21 @@ export function shouldShowTrustBanner(lookup, summary = {}, settings = {}) {
   }
 
   return false;
+}
+
+/**
+ * Detects the special LimitedTrustData cases that justify interrupting the user.
+ * These checks use only structural counts and labels, never page text, form values, passwords, or tokens.
+ */
+export function hasRiskyLimitedTrustSignals(summary = {}) {
+  return (summary.loginFormsDetected ?? 0) > 0 ||
+    (summary.passwordFieldsDetected ?? 0) > 0 ||
+    (summary.paymentFieldsDetected ?? 0) > 0 ||
+    (summary.executableDownloadCandidates ?? 0) > 0 ||
+    (summary.suspiciousRedirects ?? 0) > 0 ||
+    (summary.containsPhishingWording ?? false) === true ||
+    (summary.containsScamWording ?? false) === true ||
+    (summary.riskyUserGeneratedContent ?? false) === true;
 }
 
 /**

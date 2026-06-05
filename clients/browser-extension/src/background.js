@@ -19,7 +19,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === "HIP_GET_BANNER_DISMISSED") {
-    isBannerDismissed(message.domain)
+    isBannerDismissed(message.domain, message.pageKey)
       .then(result => sendResponse({ ok: true, result }))
       .catch(error => sendResponse({ ok: false, error: error.message }));
 
@@ -27,7 +27,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === "HIP_SET_BANNER_DISMISSED") {
-    setBannerDismissed(message.domain)
+    setBannerDismissed(message.domain, message.pageKey)
       .then(() => sendResponse({ ok: true }))
       .catch(error => sendResponse({ ok: false, error: error.message }));
 
@@ -186,25 +186,26 @@ function getPluginVersion() {
 }
 
 /**
- * Reads the per-domain banner dismissal flag from extension-owned storage.
+ * Reads a page-scoped banner dismissal flag from extension-owned storage.
  * Websites cannot tamper with chrome.storage.local, unlike page localStorage.
  */
-async function isBannerDismissed(domain) {
-  const key = bannerDismissalKey(domain);
+async function isBannerDismissed(domain, pageKey) {
+  const key = bannerDismissalKey(domain, pageKey);
   const stored = await chrome.storage.local.get({ [key]: false });
   return stored[key] === true;
 }
 
 /**
- * Saves a per-domain banner dismissal flag in extension-owned storage.
+ * Saves a page-scoped banner dismissal flag in extension-owned storage.
+ * The domain fallback preserves compatibility with older messages, but current content scripts pass a URL hash.
  */
-async function setBannerDismissed(domain) {
-  await chrome.storage.local.set({ [bannerDismissalKey(domain)]: true });
+async function setBannerDismissed(domain, pageKey) {
+  await chrome.storage.local.set({ [bannerDismissalKey(domain, pageKey)]: true });
 }
 
 /**
- * Builds a stable storage key for local banner dismissal state.
+ * Builds a stable storage key for local banner dismissal state without storing raw URLs.
  */
-function bannerDismissalKey(domain) {
-  return `hip.bannerDismissed.${normalizeHost(domain)}`;
+function bannerDismissalKey(domain, pageKey) {
+  return `hip.bannerDismissed.${normalizeHost(domain)}.${pageKey || "domain"}`;
 }
