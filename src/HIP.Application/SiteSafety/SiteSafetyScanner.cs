@@ -22,29 +22,6 @@ public sealed class SiteSafetyScanner(
 {
     private static readonly ConcurrentDictionary<string, CachedSiteSafetyScan> RecentScans = new();
 
-    private static readonly HashSet<string> ShortenerDomains = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "bit.ly",
-        "tinyurl.com",
-        "t.co",
-        "goo.gl",
-        "is.gd",
-        "buff.ly",
-        "ow.ly",
-        "rebrand.ly",
-        "cutt.ly"
-    };
-
-    private static readonly HashSet<string> RiskyTlds = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "zip",
-        "mov",
-        "top",
-        "xyz",
-        "ru",
-        "tk"
-    };
-
     private static readonly HashSet<string> ExecutableExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".exe",
@@ -99,7 +76,7 @@ public sealed class SiteSafetyScanner(
             var options = ruleOptions ?? new SiteSafetyRuleOptions();
             var ruleInput = BuildRuleInput(uri, domain, signals, evidence);
             var matchedRules = await EvaluateRulesAsync(ruleInput, cancellationToken);
-            var context = Analyze(uri, domain, signals, evidence, matchedRules, options);
+            var context = Analyze(signals, matchedRules, options);
             var scores = BuildScoreImpact(context);
             var status = DetermineStatus(context);
             var summary = BuildSummary(status, context);
@@ -160,11 +137,9 @@ public sealed class SiteSafetyScanner(
     /// <summary>
     /// Converts the URL and observed signals into individual risk scores and explanations.
     /// </summary>
-    /// <param name="uri">Validated scan URI.</param>
-    /// <param name="domain">Normalized domain.</param>
     /// <param name="signals">Privacy-safe observed scan facts.</param>
     /// <returns>Internal scan context used for status and score impact calculation.</returns>
-    private static SiteSafetyContext Analyze(Uri uri, string domain, SiteSafetyObservedSignals signals, IReadOnlyCollection<SiteSafetyEvidence> evidence, IReadOnlyCollection<SiteSafetyRuleResult> matchedRules, SiteSafetyRuleOptions options)
+    private static SiteSafetyContext Analyze(SiteSafetyObservedSignals signals, IReadOnlyCollection<SiteSafetyRuleResult> matchedRules, SiteSafetyRuleOptions options)
     {
         var reasons = new List<string>();
         var warnings = new List<string>();
@@ -202,50 +177,6 @@ public sealed class SiteSafetyScanner(
             {
                 positive.Add(rule.Reason);
             }
-        }
-
-        if (uri.Scheme == "https")
-        {
-            positive.Add("HTTPS is present, which protects transport encryption but does not prove the site is trusted.");
-        }
-        else
-        {
-            warnings.Add("This page does not use HTTPS.");
-            negative.Add("Missing HTTPS increases page trust risk.");
-            phishingRisk = Math.Max(phishingRisk, 20);
-        }
-
-        if (ShortenerDomains.Contains(domain))
-        {
-            redirectRisk = Math.Max(redirectRisk, 45);
-            phishingRisk = Math.Max(phishingRisk, 35);
-            negative.Add("The URL uses a known URL shortener, which can hide the final destination.");
-        }
-
-        if (HasStrangeQuery(uri))
-        {
-            phishingRisk = Math.Max(phishingRisk, 35);
-            negative.Add("The URL contains unusual query parameters often seen in tracking or redirect abuse.");
-        }
-
-        if (signals.ContainsScamWording || signals.ContainsUrgencyWording || signals.ContainsImpersonationWording)
-        {
-            phishingRisk = Math.Max(phishingRisk, signals.KnownPhishingPattern ? phishingRisk : 55);
-            negative.Add("Scam, urgency, or impersonation wording was detected by a privacy-safe client scan.");
-            reasons.Add("Scam-like wording raises phishing risk.");
-        }
-
-        if (signals.KnownMalwareIndicator)
-        {
-            warnings.Add("HIP found a strong malware indicator.");
-            negative.Add("Known malware indicator matched.");
-            reasons.Add("HIP found strong malware or phishing indicators. Avoid this page.");
-        }
-
-        if (signals.KnownPhishingPattern)
-        {
-            warnings.Add("HIP found a known phishing pattern.");
-            negative.Add("Known phishing pattern matched.");
         }
 
         if (downloadRisk == 0)
@@ -299,7 +230,7 @@ public sealed class SiteSafetyScanner(
         AddTerm(matchedTerms, signals.KnownMalwareIndicator, "KnownMalwareIndicator");
 
         var shortenerRedirectCount = signals.RedirectChain?
-            .Count(link => Uri.TryCreate(link, UriKind.Absolute, out var redirectUri) && ShortenerDomains.Contains(NormalizeHost(redirectUri.Host))) ?? 0;
+            .Count(link => Uri.TryCreate(link, UriKind.Absolute, out var redirectUri) && SiteSafetyRuleHelpers.ShortenerDomains.Contains(NormalizeHost(redirectUri.Host))) ?? 0;
 
         return new SiteSafetyRuleInput(
             uri,
@@ -307,8 +238,9 @@ public sealed class SiteSafetyScanner(
             domain.Split('.').LastOrDefault() ?? string.Empty,
             uri.Scheme == "https",
             signals.RedirectChain?.Count ?? 0,
-            signals.ShortenedLinkCount + shortenerRedirectCount + (ShortenerDomains.Contains(domain) ? 1 : 0),
+            signals.ShortenedLinkCount + shortenerRedirectCount + (SiteSafetyRuleHelpers.ShortenerDomains.Contains(domain) ? 1 : 0),
             signals.ObfuscatedLinkCount,
+            HasStrangeQuery(uri),
             signals.ExternalScriptUrls?.Count ?? 0,
             signals.InlineScriptCount,
             signals.SuspiciousScriptPatternCount,
@@ -467,223 +399,6 @@ public sealed class SiteSafetyScanner(
             IsAuthoritativeForTrust: false);
 
     /// <summary>
-    /// Converts normalized provider evidence into risk, trust, and confidence adjustments.
-    /// </summary>
-    private static ExternalEvidenceImpact BuildExternalEvidenceImpact(
-        IReadOnlyCollection<SiteSafetyEvidence> evidence,
-        ICollection<string> reasons,
-        ICollection<string> warnings,
-        ICollection<string> positive,
-        ICollection<string> negative)
-    {
-        var malwareRisk = 0;
-        var phishingRisk = 0;
-        var reputationRisk = 0;
-        var trustBoost = 0;
-        var confidencePenalty = evidence.Any(item => item.Errors.Count > 0) ? 15 : 0;
-        var hasAuthoritativeRiskHit = false;
-        var hasCleanExternal = false;
-
-        foreach (var providerEvidence in evidence)
-        {
-            foreach (var item in providerEvidence.EvidenceItems)
-            {
-                if (item.Status is SiteSafetyEvidenceStatus.Clean or SiteSafetyEvidenceStatus.Positive)
-                {
-                    hasCleanExternal |= providerEvidence.ProviderType is not SiteSafetyEvidenceProviderType.BrowserObserved;
-                    if (providerEvidence.IsAuthoritativeForTrust)
-                    {
-                        trustBoost = Math.Max(trustBoost, Math.Min(5, item.TrustImpact));
-                        positive.Add(item.Summary);
-                    }
-
-                    continue;
-                }
-
-                if (item.Status is SiteSafetyEvidenceStatus.Weak)
-                {
-                    confidencePenalty = Math.Max(confidencePenalty, 20);
-                    warnings.Add(item.Summary);
-                    negative.Add(item.Summary);
-                    continue;
-                }
-
-                if (providerEvidence.ProviderType is SiteSafetyEvidenceProviderType.ThreatIntel or SiteSafetyEvidenceProviderType.PhishingScanner &&
-                    item.Category.Contains("phishing", StringComparison.OrdinalIgnoreCase))
-                {
-                    phishingRisk = Math.Max(phishingRisk, providerEvidence.IsAuthoritativeForRisk ? 90 : item.RiskImpact);
-                    hasAuthoritativeRiskHit |= providerEvidence.IsAuthoritativeForRisk;
-                }
-
-                if (providerEvidence.ProviderType is SiteSafetyEvidenceProviderType.ThreatIntel or SiteSafetyEvidenceProviderType.MalwareScanner &&
-                    item.Category.Contains("malware", StringComparison.OrdinalIgnoreCase))
-                {
-                    malwareRisk = Math.Max(malwareRisk, providerEvidence.IsAuthoritativeForRisk ? 95 : item.RiskImpact);
-                    hasAuthoritativeRiskHit |= providerEvidence.IsAuthoritativeForRisk;
-                }
-
-                reputationRisk = Math.Max(reputationRisk, item.RiskImpact);
-                reasons.Add(item.Summary);
-                negative.Add(item.Summary);
-            }
-        }
-
-        var hasConflictingEvidence = hasAuthoritativeRiskHit && hasCleanExternal;
-        if (hasConflictingEvidence)
-        {
-            confidencePenalty = Math.Max(confidencePenalty, 35);
-            warnings.Add("External scanner evidence conflicts; HIP lowered confidence and recommends review.");
-        }
-
-        return new ExternalEvidenceImpact(malwareRisk, phishingRisk, reputationRisk, trustBoost, confidencePenalty, hasAuthoritativeRiskHit, hasConflictingEvidence);
-    }
-
-    /// <summary>
-    /// Scores redirect risk without following unlimited redirects or probing private networks.
-    /// </summary>
-    /// <param name="uri">Validated URL.</param>
-    /// <param name="signals">Observed redirect signals.</param>
-    /// <param name="reasons">Reason list to update.</param>
-    /// <param name="negative">Negative signal list to update.</param>
-    /// <returns>0-100 redirect risk score.</returns>
-    private static int RedirectRisk(Uri uri, SiteSafetyObservedSignals signals, ICollection<string> reasons, ICollection<string> negative)
-    {
-        var chain = signals.RedirectChain ?? [];
-        var risk = chain.Count > 3 ? 45 : 0;
-
-        if (chain.Any(link => Uri.TryCreate(link, UriKind.Absolute, out var redirectUri) && IsSuspiciousRedirect(uri, redirectUri)))
-        {
-            risk = Math.Max(risk, 60);
-            negative.Add("This page redirects through one or more unusual URLs, which may increase risk.");
-            reasons.Add("This page redirects through one or more unusual URLs, which may increase risk.");
-        }
-
-        return risk;
-    }
-
-    /// <summary>
-    /// Scores script risk using counts and source URLs only, never script contents.
-    /// </summary>
-    /// <param name="signals">Observed script facts.</param>
-    /// <param name="reasons">Reason list to update.</param>
-    /// <param name="warnings">Warning list to update.</param>
-    /// <param name="negative">Negative signal list to update.</param>
-    /// <returns>0-100 script risk score.</returns>
-    private static int ScriptRisk(SiteSafetyObservedSignals signals, ICollection<string> reasons, ICollection<string> warnings, ICollection<string> negative)
-    {
-        var externalScripts = signals.ExternalScriptUrls?.Count ?? 0;
-        var risk = Math.Min(70, signals.SuspiciousScriptPatternCount * 25 + Math.Max(0, signals.InlineScriptCount - 8) * 3 + Math.Max(0, externalScripts - 12) * 2);
-        if (risk > 0)
-        {
-            warnings.Add("Script structure should be reviewed before trusting this page.");
-            negative.Add("External, inline, or suspicious JavaScript patterns increased script risk.");
-            reasons.Add("HIP saw script signals that increase content risk without executing scripts.");
-        }
-
-        return risk;
-    }
-
-    /// <summary>
-    /// Scores download risk and treats archives as review-needed rather than automatically dangerous.
-    /// </summary>
-    /// <param name="signals">Observed download links.</param>
-    /// <param name="reasons">Reason list to update.</param>
-    /// <param name="warnings">Warning list to update.</param>
-    /// <param name="negative">Negative signal list to update.</param>
-    /// <returns>0-100 download risk score.</returns>
-    private static int DownloadRisk(SiteSafetyObservedSignals signals, ICollection<string> reasons, ICollection<string> warnings, ICollection<string> negative)
-    {
-        var links = signals.DownloadLinks ?? [];
-        var executableCount = links.Count(link => ExecutableExtensions.Contains(Path.GetExtension(SafePath(link))));
-        var archiveCount = links.Count(link => ArchiveExtensions.Contains(Path.GetExtension(SafePath(link))));
-        var risk = Math.Clamp(executableCount * 45 + archiveCount * 18, 0, 95);
-
-        if (executableCount > 0)
-        {
-            warnings.Add("This page links to executable files that should not be downloaded unless the source is trusted.");
-            negative.Add("Executable download links raised download risk.");
-            reasons.Add("This page links to executable files that should be reviewed before downloading.");
-        }
-
-        if (archiveCount > 0)
-        {
-            warnings.Add("This page links to compressed or disk image files that need review.");
-            negative.Add("Archive download links require review but are not automatically dangerous.");
-            reasons.Add("This page links to compressed files that should be reviewed before downloading.");
-        }
-
-        return risk;
-    }
-
-    /// <summary>
-    /// Scores login, password, and payment form risk without reading or sending field values.
-    /// </summary>
-    /// <param name="signals">Observed form facts.</param>
-    /// <param name="reasons">Reason list to update.</param>
-    /// <param name="warnings">Warning list to update.</param>
-    /// <param name="negative">Negative signal list to update.</param>
-    /// <returns>0-100 form risk score.</returns>
-    private static int FormRisk(SiteSafetyObservedSignals signals, ICollection<string> reasons, ICollection<string> warnings, ICollection<string> negative)
-    {
-        var risk = 0;
-        if (signals.HasLoginForm || signals.HasPasswordField)
-        {
-            risk += signals.TrustDataAvailable ? 18 : 45;
-            warnings.Add("This page contains login fields; verify the domain before entering credentials.");
-            negative.Add("Login or password fields increased form risk.");
-            reasons.Add("This page contains login fields, but HIP has limited trust data for the domain.");
-        }
-
-        if (signals.HasPaymentField)
-        {
-            risk += signals.TrustDataAvailable ? 20 : 50;
-            warnings.Add("This page contains payment fields; review the domain and identity before entering payment details.");
-            negative.Add("Payment fields increased form risk.");
-        }
-
-        return Math.Clamp(risk, 0, 90);
-    }
-
-    /// <summary>
-    /// Scores reputation risk from public-safe reports, risky TLDs, and optional reputation scores.
-    /// </summary>
-    /// <param name="domain">Normalized domain.</param>
-    /// <param name="signals">Observed reputation facts.</param>
-    /// <param name="reasons">Reason list to update.</param>
-    /// <param name="negative">Negative signal list to update.</param>
-    /// <returns>0-100 reputation risk score.</returns>
-    private static int ReputationRisk(string domain, SiteSafetyObservedSignals signals, ICollection<string> reasons, ICollection<string> negative)
-    {
-        var risk = 0;
-        if (RiskyTlds.Contains(domain.Split('.').LastOrDefault() ?? string.Empty))
-        {
-            risk = Math.Max(risk, 25);
-            negative.Add("The domain uses a TLD that can require extra review in early HIP scoring.");
-        }
-
-        if (signals.KnownAbuseReports > 0)
-        {
-            risk = Math.Max(risk, Math.Min(85, 30 + signals.KnownAbuseReports * 10));
-            negative.Add("Known abuse reports increased reputation risk.");
-            reasons.Add("Known abuse reports are present for this page or domain.");
-        }
-
-        if (signals.DomainReputationScore is < 50)
-        {
-            risk = Math.Max(risk, 100 - signals.DomainReputationScore.Value);
-            negative.Add("Domain reputation is weak.");
-        }
-
-        if (signals.PageReputationScore is < 50)
-        {
-            risk = Math.Max(risk, 100 - signals.PageReputationScore.Value);
-            negative.Add("Page reputation is weak.");
-        }
-
-        return Math.Clamp(risk, 0, 100);
-    }
-
-    /// <summary>
     /// Builds HIP score impact without replacing domain, reputation, or identity scoring.
     /// </summary>
     /// <param name="context">Safety scan context.</param>
@@ -735,37 +450,20 @@ public sealed class SiteSafetyScanner(
     /// <returns>Scan status.</returns>
     private static SiteSafetyScanStatus DetermineStatus(SiteSafetyContext context)
     {
-        if (context.StatusOverride is not null)
-        {
-            return context.StatusOverride.Value;
-        }
+        var evaluationContext = new SiteSafetyRuleEvaluationContext(
+            context.MalwareRiskScore,
+            context.PhishingRiskScore,
+            context.RedirectRiskScore,
+            context.ScriptRiskScore,
+            context.DownloadRiskScore,
+            context.FormRiskScore,
+            context.ReputationRiskScore,
+            context.OverallSafetyRiskScore,
+            context.TrustDataAvailable,
+            context.HasAuthoritativeRiskHit,
+            context.StatusOverride);
 
-        if (context.MalwareRiskScore >= 90 || context.PhishingRiskScore >= 85)
-        {
-            return SiteSafetyScanStatus.Dangerous;
-        }
-
-        if (context.HasAuthoritativeRiskHit)
-        {
-            return SiteSafetyScanStatus.HighRisk;
-        }
-
-        if (context.DownloadRiskScore >= 45)
-        {
-            return SiteSafetyScanStatus.Suspicious;
-        }
-
-        if (context.OverallSafetyRiskScore >= 65)
-        {
-            return SiteSafetyScanStatus.HighRisk;
-        }
-
-        if (context.OverallSafetyRiskScore >= 30)
-        {
-            return SiteSafetyScanStatus.Suspicious;
-        }
-
-        return context.TrustDataAvailable ? SiteSafetyScanStatus.Clean : SiteSafetyScanStatus.LimitedData;
+        return SiteSafetyRuleEvaluator.EvaluateStatus(evaluationContext, BuiltInSiteSafetyRules.CreateStatusRules());
     }
 
     /// <summary>
@@ -816,16 +514,6 @@ public sealed class SiteSafetyScanner(
 
         return context.PositiveSignals.Count > 0 || context.NegativeSignals.Count > 0 ? "Medium" : "Low";
     }
-
-    /// <summary>
-    /// Detects cross-domain or shortener redirects without performing new redirect requests.
-    /// </summary>
-    /// <param name="original">Original scan URI.</param>
-    /// <param name="redirect">Observed redirect URI.</param>
-    /// <returns>True when the redirect appears suspicious.</returns>
-    private static bool IsSuspiciousRedirect(Uri original, Uri redirect) =>
-        !NormalizeHost(original.Host).Equals(NormalizeHost(redirect.Host), StringComparison.OrdinalIgnoreCase) ||
-        ShortenerDomains.Contains(NormalizeHost(redirect.Host));
 
     /// <summary>
     /// Detects unusually long or risky query strings without logging full secret-bearing query values.
@@ -960,18 +648,6 @@ public sealed class SiteSafetyScanner(
         IReadOnlyCollection<string> Warnings,
         IReadOnlyCollection<string> PositiveSignals,
         IReadOnlyCollection<string> NegativeSignals);
-
-    /// <summary>
-    /// Risk and confidence adjustments derived from normalized provider evidence.
-    /// </summary>
-    private sealed record ExternalEvidenceImpact(
-        int MalwareRisk,
-        int PhishingRisk,
-        int ReputationRisk,
-        int TrustBoost,
-        int ConfidencePenalty,
-        bool HasAuthoritativeRiskHit,
-        bool HasConflictingEvidence);
 
     /// <summary>
     /// Cached scan result with expiration metadata; raw private page contents are never cached.

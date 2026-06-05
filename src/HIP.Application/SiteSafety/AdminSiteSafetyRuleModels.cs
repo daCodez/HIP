@@ -405,7 +405,9 @@ public static class AdminSiteSafetyRuleEvaluator
         {
             results.Add(new SiteSafetyRuleResult(
                 rule.RuleId,
+                rule.Name,
                 rule.Description,
+                SiteSafetyRuleSource.Admin,
                 SiteSafetyRuleCollectionType.StatusRules,
                 SiteSafetyRiskCategory.Confidence,
                 0,
@@ -435,7 +437,9 @@ public static class AdminSiteSafetyRuleEvaluator
 
         results.Add(new SiteSafetyRuleResult(
             rule.RuleId,
+            rule.Name,
             rule.Description,
+            SiteSafetyRuleSource.Admin,
             SiteSafetyRuleCollectionType.StatusRules,
             category,
             Math.Clamp(impact, 0, 100),

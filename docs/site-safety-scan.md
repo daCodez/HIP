@@ -114,16 +114,32 @@ Site Safety scoring now evaluates small strongly typed rule objects instead of o
 
 Built-in code rule collections:
 
-- `StatusRules`
-- `OverrideRules`
+- `MalwareRiskRules`
+- `PhishingRiskRules`
 - `DownloadRiskRules`
 - `FormRiskRules`
 - `RedirectRiskRules`
 - `ScriptRiskRules`
 - `ReputationRiskRules`
 - `ExternalEvidenceRules`
+- `ConfidenceRules`
+- `StatusLabelRules`
+- `OverrideRules`
 
-Each built-in rule includes a stable rule ID, description, typed condition, risk or trust impact, reason, optional warning, severity, and evidence quality. Built-in rule tuning is exposed through `SiteSafetyRuleOptions` so MVP thresholds and risk impacts can be configured without scattering constants through the scanner.
+Each built-in rule includes a stable rule ID, name, source, description, typed condition, risk or trust impact, reason, optional warning, severity, evidence quality, and optional status override. Built-in rule tuning is exposed through `SiteSafetyRuleOptions` so MVP thresholds and risk impacts can be configured without scattering constants through the scanner.
+
+The scanner evaluates rule results first, then aggregates the matched results into malware, phishing, redirect, script, download, form, reputation, confidence, and trust-impact scores. HTTPS is represented as a small positive rule result only. Missing HTTPS is a warning and a modest phishing/page-risk signal. A clean scan does not make a site trusted; it only means HIP did not find major safety risk in the available signals.
+
+Status labels are selected by ordered status rules:
+
+- confirmed malware or phishing overrides can set `Dangerous`
+- authoritative external threat evidence can set `HighRisk` or `Dangerous`
+- high overall safety risk becomes `HighRisk`
+- moderate overall safety risk or executable downloads become `Suspicious`
+- no major risk with trust data becomes `Clean`
+- no major risk without trust data stays `LimitedData`
+
+Matched rule results are returned in the scan response so admins and tests can explain why a score changed. User-facing surfaces should summarize those results instead of dumping internal rule details into banners.
 
 ## Admin-Managed Site Safety Rules
 

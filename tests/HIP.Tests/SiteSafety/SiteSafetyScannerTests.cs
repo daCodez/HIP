@@ -137,6 +137,26 @@ public sealed class SiteSafetyScannerTests
     }
 
     /// <summary>
+    /// Confirmed phishing indicators use a built-in phishing rule and force a Dangerous status.
+    /// </summary>
+    [Test]
+    public async Task Known_phishing_pattern_returns_dangerous()
+    {
+        var result = await CreateScanner().ScanAsync(
+            new SiteSafetyScanRequest(
+                "https://login-test.example",
+                new SiteSafetyObservedSignals(KnownPhishingPattern: true, TrustDataAvailable: true)),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(SiteSafetyScanStatus.Dangerous));
+            Assert.That(result.MatchedRules, Has.Some.Matches<SiteSafetyRuleResult>(rule => rule.RuleId == "phishing-known-pattern"));
+            Assert.That(result.MatchedRules, Has.Some.Matches<SiteSafetyRuleResult>(rule => rule.StatusOverride == SiteSafetyScanStatus.Dangerous));
+        });
+    }
+
+    /// <summary>
     /// Confirmed malware indicators force a dangerous result and lower the final HIP score.
     /// </summary>
     [Test]
@@ -152,6 +172,74 @@ public sealed class SiteSafetyScannerTests
         {
             Assert.That(result.Status, Is.EqualTo(SiteSafetyScanStatus.Dangerous));
             Assert.That(result.FinalHipScore, Is.LessThan(60));
+            Assert.That(result.MatchedRules, Has.Some.Matches<SiteSafetyRuleResult>(rule => rule.RuleId == "malware-known-indicator"));
+        });
+    }
+
+    /// <summary>
+    /// Payment fields carry stronger form risk than ordinary login fields because financial loss impact is higher.
+    /// </summary>
+    [Test]
+    public async Task Payment_field_raises_stronger_form_risk()
+    {
+        var loginResult = await CreateScanner().ScanAsync(
+            new SiteSafetyScanRequest(
+                "https://signin.example.com",
+                new SiteSafetyObservedSignals(HasLoginForm: true)),
+            CancellationToken.None);
+        var paymentResult = await CreateScanner().ScanAsync(
+            new SiteSafetyScanRequest(
+                "https://checkout.example.com",
+                new SiteSafetyObservedSignals(HasPaymentField: true)),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(paymentResult.FormRiskScore, Is.GreaterThan(loginResult.FormRiskScore));
+            Assert.That(paymentResult.Warnings, Has.Some.Contains("payment fields"));
+            Assert.That(paymentResult.MatchedRules, Has.Some.Matches<SiteSafetyRuleResult>(rule => rule.RuleId == "form-payment-limited-data"));
+        });
+    }
+
+    /// <summary>
+    /// Missing HTTPS is represented as a built-in rule warning and modest risk impact, not as an automatic block.
+    /// </summary>
+    [Test]
+    public async Task Missing_https_adds_warning()
+    {
+        var result = await CreateScanner().ScanAsync(
+            new SiteSafetyScanRequest("http://example.com"),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Warnings, Has.Some.Contains("does not use HTTPS"));
+            Assert.That(result.PhishingRiskScore, Is.GreaterThanOrEqualTo(20));
+            Assert.That(result.Status, Is.Not.EqualTo(SiteSafetyScanStatus.Dangerous));
+            Assert.That(result.MatchedRules, Has.Some.Matches<SiteSafetyRuleResult>(rule => rule.RuleId == "transport-https-missing"));
+        });
+    }
+
+    /// <summary>
+    /// Matched rule results expose explainable built-in rule metadata without leaking private page content.
+    /// </summary>
+    [Test]
+    public async Task Matched_rules_are_included_with_builtin_metadata()
+    {
+        var result = await CreateScanner().ScanAsync(
+            new SiteSafetyScanRequest(
+                "https://example.com/download",
+                new SiteSafetyObservedSignals(DownloadLinks: ["https://example.com/tool.exe"])),
+            CancellationToken.None);
+
+        var matchedRule = result.MatchedRules!.Single(rule => rule.RuleId == "download-executable");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(matchedRule.RuleName, Is.EqualTo("Executable download"));
+            Assert.That(matchedRule.Source, Is.EqualTo(SiteSafetyRuleSource.BuiltIn));
+            Assert.That(matchedRule.RiskImpact, Is.GreaterThanOrEqualTo(40));
+            Assert.That(matchedRule.Warning, Does.Contain("executable files"));
         });
     }
 
@@ -192,6 +280,8 @@ public sealed class SiteSafetyScannerTests
         {
             Assert.That(result.PageTrustScore, Is.LessThan(60));
             Assert.That(result.ContentRiskScore, Is.GreaterThan(0));
+            Assert.That(result.DomainTrustScore, Is.InRange(0, 100));
+            Assert.That(result.FinalHipScore, Is.InRange(0, 100));
             Assert.That(result.ScoreImpact.ScoreBreakdown, Has.Count.EqualTo(3));
         });
     }
