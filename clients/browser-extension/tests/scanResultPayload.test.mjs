@@ -7,6 +7,7 @@ import {
   formatPluginVersion,
   hasRiskyLimitedTrustSignals,
   HipApiClient,
+  isHipOwnedPageUrl,
   normalizeHipSettings,
   shouldShowTrustBanner
 } from "../src/hipApiClient.js";
@@ -190,6 +191,21 @@ test("invalid API base URL is handled safely", async () => {
 
 test("plugin version is formatted from manifest version", () => {
   assert.equal(formatPluginVersion("0.1.0"), "HIP Plugin v0.1.0-dev");
+});
+
+test("hip owned web pages are skipped by content scanning guard", () => {
+  const settings = {
+    apiBaseUrl: "http://localhost:5099",
+    webBaseUrl: "http://localhost:5260"
+  };
+
+  assert.equal(isHipOwnedPageUrl("http://localhost:5260/lookup/example.com", settings), true);
+  assert.equal(isHipOwnedPageUrl("http://localhost:5099/swagger", settings), true);
+  assert.equal(isHipOwnedPageUrl("https://example.com", settings), false);
+});
+
+test("hip owned page guard tolerates invalid settings safely", () => {
+  assert.equal(isHipOwnedPageUrl("https://example.com", { apiBaseUrl: "not a url" }), false);
 });
 
 test("banner display defaults to warnings only", () => {
