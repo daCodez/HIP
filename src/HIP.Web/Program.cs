@@ -142,6 +142,24 @@ app.MapDefaultEndpoints();
 app.Run();
 
 /// <summary>
+/// Stores public feedback as weak weighted site-safety evidence when the target is a domain-like HIP target.
+/// </summary>
+/// <param name="feedback">Existing reputation feedback payload.</param>
+/// <param name="weightedFeedbackService">Weighted feedback aggregation service.</param>
+/// <param name="cancellationToken">Token used to cancel feedback storage.</param>
+/// <returns>Completed task.</returns>
+static async Task StoreWeightedFeedbackIfDomainAsync(
+    ReputationFeedbackRequest feedback,
+    IWeightedFeedbackAggregationService weightedFeedbackService,
+    CancellationToken cancellationToken)
+{
+    if (feedback.TargetType is ReputationSubjectType.Domain or ReputationSubjectType.Website)
+    {
+        await weightedFeedbackService.SubmitAsync(WeightedFeedbackAggregationService.FromReputationFeedback(feedback), cancellationToken);
+    }
+}
+
+/// <summary>
 /// Binds external evidence provider options from configuration without requiring providers to be enabled.
 /// </summary>
 /// <param name="configuration">Application configuration.</param>
@@ -302,10 +320,12 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
     publicApi.MapPost("/feedback", async (
         ReputationFeedbackRequest feedback,
         IReputationService reputationService,
+        IWeightedFeedbackAggregationService weightedFeedbackService,
         CancellationToken cancellationToken) =>
     {
         try
         {
+            await StoreWeightedFeedbackIfDomainAsync(feedback, weightedFeedbackService, cancellationToken);
             return Results.Ok(await reputationService.SubmitFeedbackAsync(feedback, cancellationToken));
         }
         catch (ArgumentException ex)

@@ -62,6 +62,8 @@ public static class DependencyInjection
         services.AddScoped<IReputationEventRepository, InMemoryReputationEventRepository>();
         services.AddScoped<IReputationProfileRepository, InMemoryReputationProfileRepository>();
         services.AddScoped<IReputationService, ReputationService>();
+        services.AddSingleton<IWeightedFeedbackRepository, InMemoryWeightedFeedbackRepository>();
+        services.AddSingleton<IWeightedFeedbackAggregationService, WeightedFeedbackAggregationService>();
         services.AddScoped<IRiskFindingReportRepository, InMemoryRiskFindingReportRepository>();
         services.AddScoped<IRiskFindingIngestionService, RiskFindingIngestionService>();
         services.AddSingleton<IPrivacyHashingService, Sha256PrivacyHashingService>();
@@ -89,6 +91,7 @@ public static class DependencyInjection
         services.AddSingleton<IExternalSiteEvidenceCache, InMemoryExternalSiteEvidenceCache>();
         services.AddSingleton(new ExternalSiteEvidenceOptions());
         services.AddScoped<ISiteSafetyEvidenceProvider, BrowserObservedSignalProvider>();
+        services.AddScoped<ISiteSafetyEvidenceProvider, WeightedFeedbackSiteSafetyEvidenceProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, SslLabsSiteEvidenceProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, GoogleWebRiskSiteEvidenceProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, VirusTotalSiteEvidenceProvider>();

@@ -78,6 +78,7 @@ Site Safety Scan is provider-based. Providers return normalized evidence; they d
 Current provider types:
 
 - `BrowserObserved`: active in the MVP. Uses privacy-safe browser facts.
+- `UserFeedback`: active in the MVP. Uses weighted HIP trust feedback as weak evidence.
 - `TlsScanner`: SSL Labs / Qualys-style TLS provider. Enabled in development/MVP config and configurable at runtime.
 - `ThreatIntel`: Google Web Risk / Safe Browsing-style provider foundation. Disabled by default.
 - `UrlReputation`: VirusTotal-style URL/domain reputation provider foundation. Disabled by default.
@@ -85,7 +86,6 @@ Current provider types:
 Planned provider types:
 
 - `HipHistory`: future HIP scan, report, and reputation history.
-- `UserFeedback`: future weighted user feedback.
 - `AdminReview`: future moderator/admin review signals.
 - `DomainReputation`: future domain reputation providers.
 - `MalwareScanner`: future malware scanner providers.
@@ -125,6 +125,19 @@ Each evidence item includes:
 Evidence item metadata is normalized before scoring. Providers collect facts and labels; they do not directly decide the final HIP score or mark a site trusted.
 
 The scanner combines provider evidence with browser-observed facts. Provider failures and timeouts lower confidence but do not crash HIP scoring.
+
+## Weighted Feedback Evidence
+
+The `HIP Weighted Feedback` provider converts recent feedback aggregates into normalized evidence. Feedback is intentionally weak:
+
+- `LooksSafe` can add a small capped support signal.
+- `LooksSuspicious` and `ReportIssue` can increase `ReputationRiskScore`.
+- conflicting feedback lowers `ConfidenceLevel`.
+- repetitive or high-volume patterns create an admin-review signal.
+
+Feedback does not directly create malware or phishing findings. A single anonymous report cannot make a site `Trusted` or `Dangerous`. Many low-trust reports create review pressure instead of direct enforcement.
+
+Feedback evidence explanations must avoid voting language. Use "reported" or "feedback" rather than "voted."
 
 ## Rule-Based Scoring
 

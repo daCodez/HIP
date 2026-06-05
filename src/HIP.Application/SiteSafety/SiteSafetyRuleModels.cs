@@ -418,6 +418,10 @@ public static class BuiltInSiteSafetyRules
         new("reputation-abuse-reports", "Known abuse reports", "Known abuse reports increase reputation risk.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, input => input.KnownAbuseReports > 0, input => Math.Min(85, 30 + input.KnownAbuseReports * 10), 0, "Known abuse reports are present for this page or domain.", null, SiteSafetyRuleSeverity.High, SiteSafetyEvidenceQuality.Strong),
         new("reputation-domain-score", "Weak domain reputation", "Weak domain reputation increases reputation risk.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, input => input.DomainReputationScore is < 50, 55, 0, "Domain reputation is weak.", null, SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
         new("reputation-page-score", "Weak page reputation", "Weak page reputation increases reputation risk.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, input => input.PageReputationScore is < 50, 55, 0, "Page reputation is weak.", null, SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Medium),
+        new("feedback-looks-safe", "Weighted safe feedback", "Weighted safe feedback gives only a small capped support signal.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, SiteSafetyRuleHelpers.HasLooksSafeFeedback, 0, 2, "Trusted feedback suggests this warning may be too strong, but feedback alone does not prove safety.", null, SiteSafetyRuleSeverity.Low, SiteSafetyEvidenceQuality.Weak),
+        new("feedback-suspicious", "Weighted suspicious feedback", "Weighted suspicious feedback increases reputation risk without directly creating malware or phishing findings.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Reputation, SiteSafetyRuleHelpers.HasSuspiciousFeedback, SiteSafetyRuleHelpers.FeedbackRiskImpact, 0, "Some users have reported this site as suspicious, but HIP has not confirmed a threat.", null, SiteSafetyRuleSeverity.Low, SiteSafetyEvidenceQuality.Weak),
+        new("feedback-conflict", "Conflicting feedback", "Conflicting feedback lowers confidence and recommends review.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Confidence, SiteSafetyRuleHelpers.HasConflictingFeedback, 0, 0, "Recent feedback is conflicting, so HIP lowered confidence and recommends review.", "Recent feedback is conflicting, so HIP recommends review before changing trust significantly.", SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Weak, confidencePenalty: 25, sendToAdminReview: true),
+        new("feedback-review-signal", "Feedback review signal", "Feedback patterns can request admin review without directly controlling score.", SiteSafetyRuleCollectionType.ReputationRiskRules, SiteSafetyRiskCategory.Confidence, SiteSafetyRuleHelpers.HasFeedbackReviewSignal, 0, 0, "Feedback patterns recommend admin review before HIP changes trust significantly.", "Feedback patterns recommend admin review before HIP changes trust significantly.", SiteSafetyRuleSeverity.Medium, SiteSafetyEvidenceQuality.Weak, confidencePenalty: 10, sendToAdminReview: true),
         new("external-weak", "Weak external evidence", "Weak external evidence lowers confidence.", SiteSafetyRuleCollectionType.ExternalEvidenceRules, SiteSafetyRiskCategory.Confidence, input => input.ProviderEvidence.SelectMany(evidence => evidence.EvidenceItems).Any(item => item.Status == SiteSafetyEvidenceStatus.Weak), 0, 0, "External TLS or provider evidence is weak and lowers confidence.", "External TLS or provider evidence is weak and lowers confidence.", SiteSafetyRuleSeverity.Low, SiteSafetyEvidenceQuality.Weak, confidencePenalty: 20),
         new("external-conflict", "Conflicting external evidence", "Conflicting external evidence lowers confidence and creates review warning.", SiteSafetyRuleCollectionType.ExternalEvidenceRules, SiteSafetyRiskCategory.Confidence, SiteSafetyRuleHelpers.HasConflictingExternalEvidence, 0, 0, "External scanner evidence conflicts; HIP lowered confidence and recommends review.", "External scanner evidence conflicts; HIP lowered confidence and recommends review.", SiteSafetyRuleSeverity.High, SiteSafetyEvidenceQuality.Medium, confidencePenalty: 35, sendToAdminReview: true),
         new("external-threat-intel-phishing", "External phishing hit", "Authoritative phishing evidence raises phishing risk.", SiteSafetyRuleCollectionType.ExternalEvidenceRules, SiteSafetyRiskCategory.Phishing, input => SiteSafetyRuleHelpers.HasAuthoritativeExternalHit(input, "phishing"), 90, 0, "Threat-intel provider matched a phishing indicator.", null, SiteSafetyRuleSeverity.Critical, SiteSafetyEvidenceQuality.Confirmed, SiteSafetyScanStatus.HighRisk, sendToAdminReview: true),
@@ -500,4 +504,46 @@ public static class SiteSafetyRuleHelpers
         input.ProviderEvidence.Any(evidence => evidence.ProviderType == SiteSafetyEvidenceProviderType.TlsScanner &&
                                                 evidence.IsAuthoritativeForTrust &&
                                                 evidence.EvidenceItems.Any(item => item.Status is SiteSafetyEvidenceStatus.Clean or SiteSafetyEvidenceStatus.Positive));
+
+    /// <summary>
+    /// Detects weighted LooksSafe feedback.
+    /// </summary>
+    public static bool HasLooksSafeFeedback(SiteSafetyRuleInput input) =>
+        UserFeedbackItems(input).Any(item => item.Category.Equals("LooksSafe", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Detects weighted suspicious or report-issue feedback.
+    /// </summary>
+    public static bool HasSuspiciousFeedback(SiteSafetyRuleInput input) =>
+        UserFeedbackItems(input).Any(item => item.Category.Equals("LooksSuspicious", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Detects conflicting feedback that should lower confidence.
+    /// </summary>
+    public static bool HasConflictingFeedback(SiteSafetyRuleInput input) =>
+        UserFeedbackItems(input).Any(item => item.Category.Equals("ConflictingFeedback", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Detects feedback patterns that should create an admin-review signal.
+    /// </summary>
+    public static bool HasFeedbackReviewSignal(SiteSafetyRuleInput input) =>
+        UserFeedbackItems(input).Any(item => item.Category.Equals("AdminReviewSignal", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Calculates the conservative reputation-risk impact from weighted feedback evidence.
+    /// </summary>
+    public static int FeedbackRiskImpact(SiteSafetyRuleInput input) =>
+        Math.Clamp(UserFeedbackItems(input)
+            .Where(item => item.Category.Equals("LooksSuspicious", StringComparison.OrdinalIgnoreCase))
+            .Select(item => item.RiskImpact)
+            .DefaultIfEmpty(0)
+            .Max(), 0, 35);
+
+    /// <summary>
+    /// Enumerates user feedback evidence items only.
+    /// </summary>
+    private static IEnumerable<SiteSafetyEvidenceItem> UserFeedbackItems(SiteSafetyRuleInput input) =>
+        input.ProviderEvidence
+            .Where(evidence => evidence.ProviderType == SiteSafetyEvidenceProviderType.UserFeedback)
+            .SelectMany(evidence => evidence.EvidenceItems);
 }

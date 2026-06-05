@@ -154,7 +154,9 @@ public sealed class SiteSafetyScanner(
         var downloadRisk = MaxRisk(enforcedRules, SiteSafetyRiskCategory.Download);
         var formRisk = MaxRisk(enforcedRules, SiteSafetyRiskCategory.Form);
         var reputationRisk = MaxRisk(enforcedRules, SiteSafetyRiskCategory.Reputation);
-        var externalTrustBoost = Math.Clamp(enforcedRules.Where(rule => rule.CollectionType == SiteSafetyRuleCollectionType.ExternalEvidenceRules).Sum(rule => rule.TrustImpact), 0, Math.Max(0, options.MaxExternalTrustBoost));
+        var externalTrustBoost = Math.Clamp(enforcedRules
+            .Where(rule => rule.CollectionType is SiteSafetyRuleCollectionType.ExternalEvidenceRules or SiteSafetyRuleCollectionType.ReputationRiskRules)
+            .Sum(rule => rule.TrustImpact), 0, Math.Max(0, options.MaxExternalTrustBoost));
         var confidencePenalty = enforcedRules.Select(rule => rule.ConfidencePenalty).DefaultIfEmpty(0).Max();
         var hasAuthoritativeRiskHit = enforcedRules.Any(rule => rule.CollectionType == SiteSafetyRuleCollectionType.ExternalEvidenceRules && rule.Severity == SiteSafetyRuleSeverity.Critical);
         var hasConflictingEvidence = enforcedRules.Any(rule => rule.RuleId.Equals("external-conflict", StringComparison.OrdinalIgnoreCase));

@@ -27,6 +27,95 @@ Feedback impact is weighted by reporter trust:
 
 Low-trust feedback can still create a signal, but it cannot heavily damage reputation by itself.
 
+## Weighted Trust Feedback
+
+HIP treats user feedback as trust evidence, not voting. Feedback helps HIP learn over time, but it does not directly control the final score.
+
+Supported feedback types:
+
+- `LooksSafe`
+- `LooksSuspicious`
+- `ReportIssue`
+
+Supported privacy-safe reason codes:
+
+- `ScamOrPhishing`
+- `FakeLogin`
+- `SuspiciousDownload`
+- `BadRedirect`
+- `MisleadingContent`
+- `FalsePositive`
+- `Other`
+
+MVP aggregation weights:
+
+- Anonymous: `1`
+- Verified: `3`
+- Trusted: `6`
+- Moderator: `8`
+- Admin: `10`
+- KnownFalseReporter: `1`
+
+The aggregation service calculates:
+
+- total `LooksSafe` weight
+- total `LooksSuspicious` weight
+- total `ReportIssue` weight
+- recent feedback count
+- repeated reporter count
+- suspicious feedback pattern flag
+- conflicting feedback spike flag
+- confidence impact
+- recommended admin-review flag
+
+Feedback may affect `ReputationRiskScore`, `DomainTrustScore`, `PageTrustScore`, and `ConfidenceLevel`. It does not directly affect `MalwareRiskScore` or `PhishingRiskScore` unless an admin-reviewed report later confirms the issue.
+
+Examples of safe explanations:
+
+- "Some users have reported this site as suspicious, but HIP has not confirmed a threat."
+- "Trusted feedback suggests this warning may be too strong."
+- "Recent feedback is conflicting, so HIP lowered confidence and recommends review."
+
+Do not describe feedback as votes. Voting language implies popularity control, while HIP needs weighted trust evidence.
+
+## Feedback Privacy Rules
+
+Feedback can store:
+
+- domain
+- feedback type
+- source
+- reporter trust level
+- timestamp
+- page URL hash
+- reporter/browser/device hash
+- plugin version
+- reason code
+
+Feedback must not store:
+
+- page body text
+- form values
+- passwords
+- tokens
+- cookies
+- private messages
+- unrelated browsing history
+- full raw URLs unless a future explicit policy allows it
+
+## Abuse Protection Foundation
+
+The MVP flags review when:
+
+- many suspicious reports arrive quickly
+- repeated reports come from the same reporter hash
+- safe and suspicious feedback spikes conflict
+- a trusted or admin source reports suspicious behavior
+- many safe reports suggest a possible false positive
+- low-trust feedback appears spammy
+
+These signals recommend review instead of instantly marking a site safe or dangerous.
+
 ## Events
 
 Reputation events include:
