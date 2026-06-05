@@ -102,22 +102,26 @@
             }
         </section>
 
-        <section class="lookup-result">
-            <div class="result-header">
+        <section class="hip-panel hip-threat-panel" aria-labelledby="recent-threats-heading">
+            <div class="hip-panel-heading">
                 <div>
-                    <h2>Recent Threats</h2>
+                    <h2 id="recent-threats-heading">Recent Threats</h2>
                     <p>Real HIP threat signals only. Clean pages and normal low-risk scans are not shown here.</p>
                 </div>
+                <span class="hip-pill @( _summary.RecentThreats.Count == 0 ? "good" : "danger" )">@_summary.RecentThreats.Count active</span>
             </div>
 
             @if (_summary.RecentThreats.Count == 0)
             {
-                <p>No recent threats found.</p>
+                <div class="hip-threat-empty">
+                    <strong>No recent threats found.</strong>
+                    <span>HIP has no current high-risk evidence in the connected dashboard data.</span>
+                </div>
             }
             else
             {
-                <div class="table-wrap">
-                    <table>
+                <div class="hip-table-wrap">
+                    <table class="hip-data-table hip-threat-table">
                         <thead>
                             <tr>
                                 <th>Time</th>
@@ -133,14 +137,22 @@
                             @foreach (var threat in _summary.RecentThreats)
                             {
                                 <tr>
-                                    <td>@threat.CreatedAtUtc.UtcDateTime.ToString("u")</td>
-                                    <td>@threat.Domain</td>
-                                    <td>@threat.Severity</td>
-                                    <td>@threat.SiteSafetyStatus</td>
-                                    <td>@(threat.FinalHipScore?.ToString() ?? "-")</td>
-                                    <td>@threat.Source</td>
+                                    <td class="hip-threat-time">@threat.CreatedAtUtc.UtcDateTime.ToString("u")</td>
                                     <td>
-                                        @threat.ReasonSummary
+                                        <div class="hip-threat-domain">
+                                            <span class="hip-threat-icon @ThreatIconClass(threat.Severity)">!</span>
+                                            <div>
+                                                <strong>@threat.Domain</strong>
+                                                <small>@threat.TargetType</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="hip-pill @ThreatSeverityClass(threat.Severity)">@DisplaySeverity(threat.Severity)</span></td>
+                                    <td><span class="hip-pill @ThreatStatusClass(threat.SiteSafetyStatus)">@DisplayStatus(threat.SiteSafetyStatus)</span></td>
+                                    <td><strong class="hip-threat-score">@(threat.FinalHipScore?.ToString() ?? "-")</strong></td>
+                                    <td><span class="hip-source-pill">@threat.Source</span></td>
+                                    <td class="hip-threat-reason">
+                                        <span>@threat.ReasonSummary</span>
                                         @if (!string.IsNullOrWhiteSpace(threat.WarningSummary))
                                         {
                                             <small>@threat.WarningSummary</small>
@@ -268,6 +280,69 @@
 
     protected override Task OnInitializedAsync() => RefreshAsync();
 
+    /// <summary>
+    /// Maps a Recent Threats severity label to the existing HIP pill color system.
+    /// </summary>
+    /// <param name="severity">Severity label from the dashboard summary.</param>
+    /// <returns>CSS class for the pill.</returns>
+    private static string ThreatSeverityClass(string severity) =>
+        severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
+        severity.Equals("Dangerous", StringComparison.OrdinalIgnoreCase) ||
+        severity.Equals("High", StringComparison.OrdinalIgnoreCase)
+            ? "danger"
+            : severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)
+                ? "suspicious"
+                : "caution";
+
+    /// <summary>
+    /// Maps the Site Safety status into the HIP pill tone used by the prototype.
+    /// </summary>
+    /// <param name="status">Site Safety status label.</param>
+    /// <returns>CSS class for the pill.</returns>
+    private static string ThreatStatusClass(string status) =>
+        status.Contains("Danger", StringComparison.OrdinalIgnoreCase) ||
+        status.Contains("Critical", StringComparison.OrdinalIgnoreCase) ||
+        status.Contains("HighRisk", StringComparison.OrdinalIgnoreCase)
+            ? "danger"
+            : status.Contains("Suspicious", StringComparison.OrdinalIgnoreCase) ||
+              status.Contains("Feedback", StringComparison.OrdinalIgnoreCase) ||
+              status.Contains("Review", StringComparison.OrdinalIgnoreCase)
+                ? "suspicious"
+                : "caution";
+
+    /// <summary>
+    /// Gives the row icon the same risk tone as the severity badge.
+    /// </summary>
+    /// <param name="severity">Severity label.</param>
+    /// <returns>CSS class for the icon.</returns>
+    private static string ThreatIconClass(string severity) => ThreatSeverityClass(severity);
+
+    /// <summary>
+    /// Adds readable spacing to compact severity labels.
+    /// </summary>
+    /// <param name="severity">Severity label.</param>
+    /// <returns>Display label.</returns>
+    private static string DisplaySeverity(string severity) =>
+        severity.Equals("HighRisk", StringComparison.OrdinalIgnoreCase) ? "High Risk" : severity;
+
+    /// <summary>
+    /// Adds readable spacing to compact status labels while preserving the source value.
+    /// </summary>
+    /// <param name="status">Status label.</param>
+    /// <returns>Display label.</returns>
+    private static string DisplayStatus(string status) =>
+        status switch
+        {
+            "HighRisk" => "High Risk",
+            "LimitedTrustData" => "Limited Trust Data",
+            "FeedbackSignal" => "Feedback Signal",
+            "ReviewSignal" => "Review Signal",
+            _ => status
+        };
+
+    /// <summary>
+    /// Refreshes dashboard data from the privacy-safe admin summary service.
+    /// </summary>
     private async Task RefreshAsync()
     {
         _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);

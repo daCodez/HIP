@@ -975,6 +975,111 @@ h1:focus {
     border: 1px solid rgba(18, 216, 149, 0.24);
 }
 
+.hip-threat-panel {
+    max-width: 1240px;
+    margin: 0 auto 18px;
+    overflow: hidden;
+}
+
+.hip-threat-panel .hip-panel-heading {
+    border-bottom: 1px solid #172b45;
+}
+
+.hip-threat-empty {
+    display: grid;
+    gap: 4px;
+    padding: 24px;
+    color: #8fa1ba;
+}
+
+.hip-threat-empty strong {
+    color: #eef4ff;
+    font-size: 1rem;
+}
+
+.hip-threat-table tr {
+    background: rgba(14, 32, 54, 0.86);
+}
+
+.hip-threat-table tbody tr:hover {
+    background: #122943;
+}
+
+.hip-threat-time {
+    min-width: 176px;
+    color: #6f829e;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+}
+
+.hip-threat-domain {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    min-width: 220px;
+}
+
+.hip-threat-domain strong,
+.hip-threat-reason span {
+    color: #eef4ff;
+    font-weight: 850;
+}
+
+.hip-threat-domain small,
+.hip-threat-reason small {
+    display: block;
+    margin-top: 3px;
+    color: #6f829e;
+}
+
+.hip-threat-icon {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    font-weight: 900;
+}
+
+.hip-threat-icon.danger {
+    color: #ff6276;
+    background: rgba(255, 81, 104, 0.14);
+    border: 1px solid rgba(255, 81, 104, 0.24);
+}
+
+.hip-threat-icon.suspicious {
+    color: #ff944d;
+    background: rgba(255, 148, 77, 0.14);
+    border: 1px solid rgba(255, 148, 77, 0.24);
+}
+
+.hip-threat-icon.caution {
+    color: #ffd044;
+    background: rgba(255, 208, 68, 0.14);
+    border: 1px solid rgba(255, 208, 68, 0.24);
+}
+
+.hip-threat-score {
+    color: #eef4ff;
+    font-size: 1rem;
+}
+
+.hip-source-pill {
+    display: inline-flex;
+    max-width: 180px;
+    border-radius: 7px;
+    padding: 4px 10px;
+    color: #9db0c8;
+    background: #07111f;
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.hip-threat-reason {
+    min-width: 280px;
+}
+
 .hip-primary-action,
 .hip-button-row button,
 .hip-button-row a {

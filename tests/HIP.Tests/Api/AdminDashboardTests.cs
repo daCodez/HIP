@@ -378,6 +378,7 @@ public sealed class AdminDashboardTests
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.That(body, Does.Contain("Recent Threats"));
+        Assert.That(body, Does.Contain("hip-threat-panel"));
     }
 
     [Test]
