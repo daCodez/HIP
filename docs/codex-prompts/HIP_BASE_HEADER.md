@@ -1,4 +1,4 @@
-# HIP Agent Working Protocol
+# HIP Base Prompt Header
 
 You are continuing the HIP project.
 
