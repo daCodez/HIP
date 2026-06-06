@@ -32,7 +32,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+if (ShouldUseHttpsRedirection(app))
+{
+    app.UseHttpsRedirection();
+}
 app.UseCors("PublicHipReadOnly");
 app.MapDefaultEndpoints();
 
@@ -95,6 +98,19 @@ MapBrowserApis(browserApi);
 MapSiteSafetyApis(siteSafetyApi);
 
 app.Run();
+
+/// <summary>
+/// Determines whether HTTPS redirection should be enabled for this host.
+/// </summary>
+/// <param name="app">The built web application.</param>
+/// <returns>True when HIP should redirect HTTP requests to HTTPS.</returns>
+/// <remarks>
+/// Aspire can launch the API service with HTTP-only localhost endpoints for local development.
+/// Disabling redirect middleware in Development avoids the "failed to determine HTTPS port" warning
+/// without weakening production deployments, where redirection remains enabled.
+/// </remarks>
+static bool ShouldUseHttpsRedirection(WebApplication app) =>
+    !app.Environment.IsDevelopment();
 
 /// <summary>
 /// Stores public feedback as weak weighted site-safety evidence when the target is a domain-like HIP target.

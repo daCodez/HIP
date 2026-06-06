@@ -64,7 +64,10 @@ if (!app.Environment.IsDevelopment())
 app.UseWhen(
     context => !context.Request.Path.StartsWithSegments("/api"),
     branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
-app.UseHttpsRedirection();
+if (ShouldUseHttpsRedirection(app))
+{
+    app.UseHttpsRedirection();
+}
 app.UseCors("PublicHipReadOnly");
 app.UseAuthentication();
 app.UseAuthorization();
@@ -139,6 +142,19 @@ app.MapRazorComponents<App>()
 app.MapDefaultEndpoints();
 
 app.Run();
+
+/// <summary>
+/// Determines whether HTTPS redirection should be enabled for this host.
+/// </summary>
+/// <param name="app">The built web application.</param>
+/// <returns>True when HIP should redirect HTTP requests to HTTPS.</returns>
+/// <remarks>
+/// Local Aspire and browser-extension testing often run HIP.Web on HTTP-only localhost ports.
+/// In that mode ASP.NET Core cannot infer the target HTTPS port and logs a noisy warning.
+/// Production keeps redirection enabled so public deployments still enforce HTTPS at the app edge.
+/// </remarks>
+static bool ShouldUseHttpsRedirection(WebApplication app) =>
+    !app.Environment.IsDevelopment();
 
 /// <summary>
 /// Stores public feedback as weak weighted site-safety evidence when the target is a domain-like HIP target.
