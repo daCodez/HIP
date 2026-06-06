@@ -33,10 +33,6 @@ using HIP.Web.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
-builder.Logging.AddDebug();
-
 builder.AddServiceDefaults();
 builder.Services.AddHipApplication();
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
