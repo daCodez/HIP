@@ -12,12 +12,28 @@
             <h1>Dashboard</h1>
             <p>Privacy-safe operational overview for HIP review, rules, reputation, and reporting.</p>
         </div>
-        <button class="primary-button" @onclick="RefreshAsync">Refresh</button>
+        <div class="dashboard-refresh-controls" aria-live="polite">
+            <button class="primary-button dashboard-refresh-button" @onclick="RefreshAsync" disabled="@_isRefreshing">
+                @(_isRefreshing ? "Refreshing..." : "Refresh")
+            </button>
+            <span class="dashboard-refresh-status">@RefreshStatusText()</span>
+        </div>
     </section>
+
+    @if (!string.IsNullOrWhiteSpace(_refreshError))
+    {
+        <section class="dashboard-refresh-error" role="alert">
+            <strong>Dashboard refresh failed.</strong>
+            <span>@_refreshError</span>
+        </section>
+    }
 
     @if (_summary is null)
     {
-        <p>Loading dashboard...</p>
+        <section class="dashboard-loading-state" aria-busy="true">
+            <strong>Loading dashboard...</strong>
+            <span>HIP is reading stored scan summaries and review signals.</span>
+        </section>
     }
     else
     {
@@ -284,6 +300,9 @@
 
 @code {
     private AdminDashboardSummary? _summary;
+    private bool _isRefreshing;
+    private DateTimeOffset? _lastUpdatedUtc;
+    private string? _refreshError;
 
     protected override Task OnInitializedAsync() => RefreshAsync();
 
@@ -352,6 +371,42 @@
     /// </summary>
     private async Task RefreshAsync()
     {
-        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+        if (_isRefreshing)
+        {
+            return;
+        }
+
+        _isRefreshing = true;
+        _refreshError = null;
+
+        try
+        {
+            _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+            _lastUpdatedUtc = DateTimeOffset.UtcNow;
+        }
+        catch
+        {
+            _refreshError = "HIP could not load dashboard data right now. Try again after the API is running.";
+        }
+        finally
+        {
+            _isRefreshing = false;
+        }
+    }
+
+    /// <summary>
+    /// Builds the refresh status text shown beside the button without exposing private scan details.
+    /// </summary>
+    /// <returns>Last-updated text, loading state, or pending state.</returns>
+    private string RefreshStatusText()
+    {
+        if (_isRefreshing)
+        {
+            return "Loading latest HIP scan data...";
+        }
+
+        return _lastUpdatedUtc is null
+            ? "Last updated: not loaded yet"
+            : $"Last updated: {_lastUpdatedUtc.Value.UtcDateTime:u}";
     }
 }

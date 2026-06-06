@@ -13,7 +13,10 @@ using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.SelfHealing;
 using HIP.Application.SiteSafety;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NUnit.Framework;
 using FindingReporterTrustLevel = HIP.Domain.SelfHealing.ReporterTrustLevel;
 
@@ -491,6 +494,88 @@ public sealed class AdminDashboardTests
     }
 
     [Test]
+    public async Task Dashboard_route_shows_refresh_button_and_last_updated_status()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddRole(client, "ReadOnly");
+
+        var response = await client.GetAsync("/admin");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(body, Does.Contain("dashboard-refresh-button"));
+            Assert.That(body, Does.Contain("Refresh"));
+            Assert.That(body, Does.Contain("Last updated:"));
+        });
+    }
+
+    [Test]
+    public async Task Dashboard_route_shows_empty_data_state_when_no_scans_exist()
+    {
+        await using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<IAdminDashboardService>();
+                services.AddScoped<IAdminDashboardService, EmptyDashboardService>();
+            }));
+        using var client = factory.CreateClient();
+        AddRole(client, "ReadOnly");
+
+        var response = await client.GetAsync("/admin");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(body, Does.Contain("No scan data yet."));
+            Assert.That(body, Does.Contain("No fake scan counts are generated").Or.Contain("do not use fake scan counts"));
+        });
+    }
+
+    [Test]
+    public async Task Dashboard_route_shows_safe_refresh_error_when_summary_service_fails()
+    {
+        await using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<IAdminDashboardService>();
+                services.AddScoped<IAdminDashboardService, FailingDashboardService>();
+            }));
+        using var client = factory.CreateClient();
+        AddRole(client, "ReadOnly");
+
+        var response = await client.GetAsync("/admin");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(body, Does.Contain("Dashboard refresh failed."));
+            Assert.That(body, Does.Contain("HIP could not load dashboard data right now."));
+            Assert.That(body, Does.Not.Contain("database-password"));
+            Assert.That(body, Does.Not.Contain("private stack trace"));
+        });
+    }
+
+    [Test]
+    public void Dashboard_refresh_markup_includes_loading_state_and_duplicate_request_guard()
+    {
+        var source = ReadDashboardSource();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("dashboard-loading-state"));
+            Assert.That(source, Does.Contain("Loading dashboard..."));
+            Assert.That(source, Does.Contain("disabled=\"@_isRefreshing\""));
+            Assert.That(source, Does.Contain("if (_isRefreshing)"));
+            Assert.That(source, Does.Contain("return;"));
+        });
+    }
+
+    [Test]
     public async Task Recent_threats_do_not_expose_private_content()
     {
         var repository = new InMemoryBrowserScanResultRepository();
@@ -673,6 +758,64 @@ public sealed class AdminDashboardTests
     /// <returns>Matching card.</returns>
     private static AdminDashboardCard Card(AdminDashboardSummary summary, string key) =>
         summary.Cards.Single(card => card.Key == key);
+
+    /// <summary>
+    /// Reads the dashboard Razor source from the repository root so markup-only refresh states are covered.
+    /// </summary>
+    /// <returns>Dashboard Razor source text.</returns>
+    private static string ReadDashboardSource()
+    {
+        var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "src", "HIP.Web", "Components", "Pages", "AdminDashboard.razor");
+            if (File.Exists(candidate))
+            {
+                return File.ReadAllText(candidate);
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate AdminDashboard.razor from the test output directory.");
+    }
+
+    /// <summary>
+    /// Dashboard service used to verify the UI returns a safe generic refresh error without leaking exception details.
+    /// </summary>
+    private sealed class FailingDashboardService : IAdminDashboardService
+    {
+        /// <inheritdoc />
+        public Task<AdminDashboardSummary> GetSummaryAsync(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("private stack trace database-password token=secret");
+    }
+
+    /// <summary>
+    /// Dashboard service used to verify the no-data UI without depending on the developer SQLite database state.
+    /// </summary>
+    private sealed class EmptyDashboardService : IAdminDashboardService
+    {
+        /// <inheritdoc />
+        public Task<AdminDashboardSummary> GetSummaryAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new AdminDashboardSummary(
+                [
+                    new AdminDashboardCard(
+                        "totalScans",
+                        "Total Scans",
+                        0,
+                        "No Data",
+                        true,
+                        "No stored scan results are available yet.")
+                ],
+                [],
+                "Healthy",
+                DateTimeOffset.UtcNow,
+                "NoStoredScanData",
+                false,
+                [],
+                [],
+                []));
+    }
 
     /// <summary>
     /// Creates a dashboard service seeded with representative browser scan data.

@@ -1129,6 +1129,51 @@ h1:focus {
     border: 1px solid rgba(255, 208, 68, 0.24);
 }
 
+.dashboard-refresh-controls {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+}
+
+.dashboard-refresh-button:disabled {
+    cursor: progress;
+    opacity: 0.72;
+}
+
+.dashboard-refresh-status {
+    color: #8fa1ba;
+    font-size: 0.86rem;
+}
+
+.dashboard-refresh-error,
+.dashboard-loading-state {
+    max-width: 1240px;
+    margin: 0 auto 18px;
+    display: grid;
+    gap: 4px;
+    border: 1px solid rgba(255, 98, 118, 0.28);
+    border-radius: 8px;
+    padding: 16px 18px;
+    background: rgba(255, 98, 118, 0.08);
+    color: #b8c7dc;
+}
+
+.dashboard-loading-state {
+    border-color: rgba(8, 215, 236, 0.24);
+    background: rgba(8, 215, 236, 0.08);
+}
+
+.dashboard-refresh-error strong,
+.dashboard-loading-state strong {
+    color: #eef4ff;
+}
+
+@media (max-width: 720px) {
+    .dashboard-refresh-controls {
+        justify-items: stretch;
+    }
+}
+
 .hip-threat-score {
     color: #eef4ff;
     font-size: 1rem;

@@ -163,6 +163,21 @@ Support can view the dashboard as an operational overview. Rule management, over
 
 The summary response returns dashboard cards, recent activity summaries, recent threats, API health, generation timestamp, data source, no-data state, top risky domains, and recent scans.
 
+## Refresh Behavior
+
+The Admin Dashboard does not auto-refresh in the MVP. This avoids hidden request loops while live scan storage and provider evidence are still being exercised during development.
+
+The `/admin` page includes a manual `Refresh` button. During refresh:
+
+- the button shows `Refreshing...`
+- the button is disabled so duplicate requests are not spammed
+- the dashboard shows a loading state on first load
+- the page records a `Last updated` timestamp after a successful refresh
+- refresh failures show a safe generic message without stack traces, secrets, raw URLs, or private scan data
+- empty scan history continues to show `No scan data yet` instead of fake metrics
+
+If auto-refresh is added later, it should use a conservative interval, stop when the dashboard is not visible, and keep the same privacy and duplicate-request protections.
+
 ## Live Data Flow
 
 The dashboard does not run scans itself. It reads already-stored, privacy-safe outputs from HIP services:
@@ -183,9 +198,12 @@ Missing sources are shown as `No Data`, `Not connected yet`, or `Placeholder`. H
 2. Load the browser extension from `clients/browser-extension`.
 3. Visit a test page with a few links.
 4. Open the extension popup and confirm `Last submitted` shows success.
-5. Refresh `/admin` and verify cards reflect the stored scan result.
-6. Trigger a risky link, login/payment warning, provider review signal, or repeated suspicious feedback in development data.
-7. Refresh `/admin` and verify the item appears in Recent Threats while normal clean pages remain absent.
+5. Open `/admin`.
+6. Click `Refresh`.
+7. Verify `Last updated` changes and cards reflect the stored scan result.
+8. If no scans exist yet, verify the dashboard shows `No scan data yet` instead of fake activity.
+9. Trigger a risky link, login/payment warning, provider review signal, or repeated suspicious feedback in development data.
+10. Click `Refresh` on `/admin` and verify the item appears in Recent Threats while normal clean pages remain absent.
 
 ## Known Limitations
 
