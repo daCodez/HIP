@@ -634,9 +634,10 @@ static void MapAdminSiteSafetyRuleApis(RouteGroupBuilder adminRuleApi)
 
     adminRuleApi.MapPost("/{ruleId}/rollback", async (
         string ruleId,
+        AdminSiteSafetyRuleActionRequest request,
         AdminSiteSafetyRuleService service,
         CancellationToken cancellationToken) =>
-        await RunRuleActionAsync(() => service.RollbackAsync(ruleId, cancellationToken)));
+        await RunRuleActionAsync(() => service.RollbackAsync(ruleId, request.ActorId, cancellationToken)));
 }
 
 /// <summary>

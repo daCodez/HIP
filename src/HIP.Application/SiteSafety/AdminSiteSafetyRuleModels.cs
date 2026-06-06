@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using FluentValidation;
+using HIP.Application.Review;
+using HIP.Domain.Audit;
+using HIP.Domain.Review;
 
 namespace HIP.Application.SiteSafety;
 
@@ -229,7 +232,7 @@ public interface IAdminSiteSafetyRuleRepository
 public sealed class InMemoryAdminSiteSafetyRuleRepository : IAdminSiteSafetyRuleRepository
 {
     private readonly ConcurrentDictionary<string, AdminSiteSafetyRule> rules = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, Stack<AdminSiteSafetyRule>> versions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<int, AdminSiteSafetyRule>> versions = new(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc />
     public Task<AdminSiteSafetyRule> SaveAsync(AdminSiteSafetyRule rule, CancellationToken cancellationToken)
@@ -252,20 +255,20 @@ public sealed class InMemoryAdminSiteSafetyRuleRepository : IAdminSiteSafetyRule
     /// <inheritdoc />
     public Task SaveVersionAsync(AdminSiteSafetyRule rule, CancellationToken cancellationToken)
     {
-        var stack = versions.GetOrAdd(rule.RuleId, _ => new Stack<AdminSiteSafetyRule>());
-        stack.Push(rule);
+        var versionSet = versions.GetOrAdd(rule.RuleId, _ => new ConcurrentDictionary<int, AdminSiteSafetyRule>());
+        versionSet[rule.Version] = rule;
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
     public Task<AdminSiteSafetyRule?> GetPreviousVersionAsync(string ruleId, CancellationToken cancellationToken)
     {
-        if (!versions.TryGetValue(ruleId, out var stack) || stack.Count == 0)
+        if (!versions.TryGetValue(ruleId, out var versionSet) || versionSet.IsEmpty)
         {
             return Task.FromResult<AdminSiteSafetyRule?>(null);
         }
 
-        return Task.FromResult<AdminSiteSafetyRule?>(stack.Pop());
+        return Task.FromResult<AdminSiteSafetyRule?>(versionSet.Values.OrderByDescending(rule => rule.Version).FirstOrDefault());
     }
 }
 
@@ -377,7 +380,8 @@ public sealed class AdminSiteSafetyRuleValidator : AbstractValidator<AdminSiteSa
 /// </summary>
 public sealed class AdminSiteSafetyRuleService(
     IAdminSiteSafetyRuleRepository repository,
-    IValidator<AdminSiteSafetyRule> validator)
+    IValidator<AdminSiteSafetyRule> validator,
+    IAuditLogService auditLogService)
 {
     /// <summary>
     /// Creates a validated Draft rule.
@@ -412,11 +416,28 @@ public sealed class AdminSiteSafetyRuleService(
         var updated = rule with
         {
             Version = Math.Max((current?.Version ?? 0) + 1, rule.Version),
-            PreviousVersionId = current?.RuleId,
+            PreviousVersionId = current is null ? rule.PreviousVersionId : VersionId(current),
             IsRollbackAvailable = current is not null,
             UpdatedAtUtc = DateTimeOffset.UtcNow
         };
-        return await repository.SaveAsync(updated, cancellationToken);
+        var saved = await repository.SaveAsync(updated, cancellationToken);
+        if (current is not null)
+        {
+            auditLogService.Write(
+                saved.UpdatedBy ?? saved.CreatedBy,
+                "Admin Site Safety rule updated",
+                TargetType.Rule,
+                saved.RuleId,
+                $"Updated rule '{saved.Name}' from version {current.Version} to {saved.Version}.",
+                AuditSeverity.Medium,
+                new Dictionary<string, string>
+                {
+                    ["previousVersion"] = current.Version.ToString(),
+                    ["newVersion"] = saved.Version.ToString()
+                });
+        }
+
+        return saved;
     }
 
     /// <summary>
@@ -482,13 +503,46 @@ public sealed class AdminSiteSafetyRuleService(
     /// <summary>
     /// Restores the most recent stored previous version.
     /// </summary>
-    public async Task<AdminSiteSafetyRule> RollbackAsync(string ruleId, CancellationToken cancellationToken)
+    public Task<AdminSiteSafetyRule> RollbackAsync(string ruleId, CancellationToken cancellationToken) =>
+        RollbackAsync(ruleId, "dev-admin", cancellationToken);
+
+    /// <summary>
+    /// Restores the most recent stored previous version after validating guardrails and writing an audit entry.
+    /// </summary>
+    public async Task<AdminSiteSafetyRule> RollbackAsync(string ruleId, string actorId, CancellationToken cancellationToken)
     {
+        var current = await RequireRuleAsync(ruleId, cancellationToken);
         var previous = await repository.GetPreviousVersionAsync(ruleId, cancellationToken) ??
                        throw new InvalidOperationException("No rollback version is available.");
 
-        var restored = previous with { IsRollbackAvailable = false };
-        return await repository.SaveAsync(restored, cancellationToken);
+        var actor = string.IsNullOrWhiteSpace(actorId) ? "dev-admin" : actorId;
+        var restored = previous with
+        {
+            Version = current.Version + 1,
+            PreviousVersionId = VersionId(current),
+            IsRollbackAvailable = true,
+            UpdatedBy = actor,
+            UpdatedAtUtc = DateTimeOffset.UtcNow
+        };
+
+        await validator.ValidateAndThrowAsync(restored, cancellationToken);
+        await repository.SaveVersionAsync(current, cancellationToken);
+        var saved = await repository.SaveAsync(restored, cancellationToken);
+        auditLogService.Write(
+            actor,
+            "Admin Site Safety rule rollback",
+            TargetType.Rule,
+            saved.RuleId,
+            $"Rolled back rule '{saved.Name}' from version {current.Version} to safe version {previous.Version}.",
+            AuditSeverity.High,
+            new Dictionary<string, string>
+            {
+                ["fromVersion"] = current.Version.ToString(),
+                ["restoredSourceVersion"] = previous.Version.ToString(),
+                ["newVersion"] = saved.Version.ToString()
+            });
+
+        return saved;
     }
 
     /// <summary>
@@ -496,6 +550,12 @@ public sealed class AdminSiteSafetyRuleService(
     /// </summary>
     private static string Slug(string value) =>
         string.Join('-', value.Trim().ToLowerInvariant().Select(character => char.IsLetterOrDigit(character) ? character : '-')).Replace("--", "-", StringComparison.Ordinal).Trim('-');
+
+    /// <summary>
+    /// Builds a stable version pointer for audit and rollback metadata.
+    /// </summary>
+    private static string VersionId(AdminSiteSafetyRule rule) =>
+        $"{rule.RuleId}:v{rule.Version}";
 
     /// <summary>
     /// Loads a rule or fails with a clear application exception.

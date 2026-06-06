@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FluentValidation;
 using FluentValidation.Results;
+using HIP.Application.Review;
 using HIP.Application.SiteSafety;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -415,6 +416,7 @@ public sealed class AdminSiteSafetyRuleTests
         Assert.Multiple(() =>
         {
             Assert.That(updated.Version, Is.EqualTo(2));
+            Assert.That(updated.PreviousVersionId, Is.EqualTo("versioned-rule:v1"));
             Assert.That(updated.IsRollbackAvailable, Is.True);
             Assert.That(repository.GetPreviousVersionAsync(original.RuleId, CancellationToken.None).Result, Is.Not.Null);
         });
@@ -433,7 +435,36 @@ public sealed class AdminSiteSafetyRuleTests
 
         var restored = await service.RollbackAsync(original.RuleId, CancellationToken.None);
 
-        Assert.That(restored.Description, Is.EqualTo(original.Description));
+        Assert.Multiple(() =>
+        {
+            Assert.That(restored.Description, Is.EqualTo(original.Description));
+            Assert.That(restored.Version, Is.EqualTo(3));
+            Assert.That(restored.PreviousVersionId, Is.EqualTo("rollback-rule:v2"));
+        });
+    }
+
+    /// <summary>
+    /// Rollback writes a new audit entry without erasing earlier rule-change audit entries.
+    /// </summary>
+    [Test]
+    public async Task Rollback_does_not_erase_audit_history()
+    {
+        var repository = new InMemoryAdminSiteSafetyRuleRepository();
+        var audit = new AuditLogService();
+        var service = CreateService(repository, audit);
+        var original = await service.CreateAsync(ValidRule("Audited rollback"), CancellationToken.None);
+        await service.UpdateAsync(original with { Description = "Changed description.", UpdatedBy = "admin-a" }, CancellationToken.None);
+        var auditCountBeforeRollback = audit.List().Count;
+
+        await service.RollbackAsync(original.RuleId, "admin-b", CancellationToken.None);
+        var entries = audit.List();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(entries.Count, Is.GreaterThan(auditCountBeforeRollback));
+            Assert.That(entries.Any(entry => entry.Action == "Admin Site Safety rule updated"), Is.True);
+            Assert.That(entries.Any(entry => entry.Action == "Admin Site Safety rule rollback"), Is.True);
+        });
     }
 
     /// <summary>
@@ -475,6 +506,57 @@ public sealed class AdminSiteSafetyRuleTests
         var result = await CreateScanner(repository).ScanAsync(new SiteSafetyScanRequest("https://disabled-rule.example"), CancellationToken.None);
 
         Assert.That(result.MatchedRules ?? [], Has.None.Matches<SiteSafetyRuleResult>(rule => rule.RuleId == "disabled-rule"));
+    }
+
+    /// <summary>
+    /// Archived rules are historical records and must not run even if their conditions match.
+    /// </summary>
+    [Test]
+    public async Task Archived_rule_does_not_run()
+    {
+        var repository = new InMemoryAdminSiteSafetyRuleRepository();
+        await repository.SaveAsync(ApprovedRule("Archived rule") with
+        {
+            Status = AdminSiteSafetyRuleStatus.Archived,
+            Effects = new AdminSiteSafetyRuleEffects(IncreaseDownloadRisk: 90, AddReason: "Archived rule matched.")
+        }, CancellationToken.None);
+
+        var result = await CreateScanner(repository).ScanAsync(new SiteSafetyScanRequest("https://archived-rule.example"), CancellationToken.None);
+
+        Assert.That(result.MatchedRules ?? [], Has.None.Matches<SiteSafetyRuleResult>(rule => rule.RuleId == "archived-rule"));
+    }
+
+    /// <summary>
+    /// Rollback cannot restore a historical dangerous enforced rule that lacks approval metadata.
+    /// </summary>
+    [Test]
+    public async Task Dangerous_override_still_requires_approval_after_rollback()
+    {
+        var repository = new InMemoryAdminSiteSafetyRuleRepository();
+        var service = CreateService(repository);
+        var current = await service.CreateAsync(ValidRule("Unsafe rollback"), CancellationToken.None);
+        await repository.SaveVersionAsync(current with
+        {
+            Status = AdminSiteSafetyRuleStatus.Active,
+            Mode = AdminSiteSafetyRuleMode.Enforced,
+            Severity = SiteSafetyRuleSeverity.High,
+            Effects = new AdminSiteSafetyRuleEffects(SetStatusOverride: SiteSafetyScanStatus.Dangerous),
+            ApprovedBy = null,
+            ApprovedAtUtc = null
+        }, CancellationToken.None);
+
+        Assert.ThrowsAsync<ValidationException>(() => service.RollbackAsync(current.RuleId, "owner", CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Rollback rejects unknown or unversioned rule targets instead of creating a new rule by mistake.
+    /// </summary>
+    [Test]
+    public void Invalid_rollback_target_is_rejected()
+    {
+        var service = CreateService();
+
+        Assert.ThrowsAsync<InvalidOperationException>(() => service.RollbackAsync("missing-rule", "owner", CancellationToken.None));
     }
 
     /// <summary>
@@ -527,8 +609,8 @@ public sealed class AdminSiteSafetyRuleTests
     /// <summary>
     /// Creates the admin rule service with an optional repository.
     /// </summary>
-    private static AdminSiteSafetyRuleService CreateService(IAdminSiteSafetyRuleRepository? repository = null) =>
-        new(repository ?? new InMemoryAdminSiteSafetyRuleRepository(), new AdminSiteSafetyRuleValidator());
+    private static AdminSiteSafetyRuleService CreateService(IAdminSiteSafetyRuleRepository? repository = null, AuditLogService? auditLogService = null) =>
+        new(repository ?? new InMemoryAdminSiteSafetyRuleRepository(), new AdminSiteSafetyRuleValidator(), auditLogService ?? new AuditLogService());
 
     /// <summary>
     /// Creates a scanner with a test admin repository and no external providers.

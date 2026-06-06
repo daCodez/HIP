@@ -241,6 +241,35 @@ Guardrails:
 
 Simulation is intentionally diagnostic. The admin simulation response includes matched conditions, failed conditions, risk score impact, trust score impact, status impact, warnings, reasons, confidence impact, approval-required state, and whether admin review would be triggered. Simulation uses privacy-safe sample facts only and never calls external providers from the rule itself.
 
+### Rule Versioning And Rollback
+
+Admin-created Site Safety rules are versioned. A rule update stores the current rule as a version record before saving the new rule. The saved rule keeps:
+
+- `RuleId`
+- `Version`
+- `PreviousVersionId`
+- `CreatedAtUtc`
+- `UpdatedAtUtc`
+- `CreatedBy`
+- `UpdatedBy`
+- `ApprovedBy`
+- `ApprovedAtUtc`
+- `IsRollbackAvailable`
+
+`PreviousVersionId` points to the prior rule version using the format `{RuleId}:v{Version}`. Rollback restores the most recent stored version as a new version instead of deleting history or rewinding in place. For example, rolling back from version 2 to version 1 produces a new version 3 whose `PreviousVersionId` points to version 2.
+
+Rollback guardrails:
+
+- rollback validates the restored rule before saving it
+- rollback cannot restore raw-code rule data
+- rollback cannot bypass approval requirements
+- dangerous enforced overrides still require high/critical severity and approval metadata
+- disabled and archived rules do not run
+- old versions are preserved unless a future cleanup policy explicitly defines safe retention
+- rollback writes an audit log entry and does not erase earlier audit entries
+
+Current limitation: the MVP rollback API restores the most recent stored previous version. A future admin UI can add explicit version selection after version browsing and approval controls are built.
+
 The current EF implementation stores admin rules in HIP's SQLite-backed JSON record store. This keeps the repository boundary clean while leaving room for a more normalized production schema later.
 
 ## External Scanner Policy
