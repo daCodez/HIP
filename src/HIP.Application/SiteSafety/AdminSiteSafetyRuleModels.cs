@@ -139,12 +139,31 @@ public sealed record AdminSiteSafetyRuleSimulationInput(
     bool TrustDataAvailable = false);
 
 /// <summary>
+/// Privacy-safe condition diagnostic returned by admin rule simulation.
+/// </summary>
+/// <param name="Field">Allow-listed field evaluated by the condition.</param>
+/// <param name="Operator">Safe comparison operator used by the condition.</param>
+/// <param name="ExpectedValue">Expected comparison value supplied by the admin rule.</param>
+/// <param name="ActualValue">Privacy-safe actual value from the sample input.</param>
+/// <param name="Matched">Whether the condition matched the sample input.</param>
+/// <param name="Description">Plain-English condition summary for admin UI display.</param>
+public sealed record AdminSiteSafetyRuleConditionSimulationResult(
+    string Field,
+    AdminSiteSafetyRuleOperator Operator,
+    string ExpectedValue,
+    string ActualValue,
+    bool Matched,
+    string Description);
+
+/// <summary>
 /// Structured simulation output used by APIs and admins before a rule can enforce.
 /// </summary>
 public sealed record AdminSiteSafetyRuleSimulationResult(
     string RuleId,
     bool Matched,
+    IReadOnlyCollection<AdminSiteSafetyRuleConditionSimulationResult> ConditionResults,
     IReadOnlyCollection<string> MatchedConditions,
+    IReadOnlyCollection<string> FailedConditions,
     int MatchedCount,
     int RiskImpact,
     int TrustImpact,
@@ -155,7 +174,28 @@ public sealed record AdminSiteSafetyRuleSimulationResult(
     bool SendsToAdminReview,
     bool ApprovalRequired,
     AdminSiteSafetyRuleMode RecommendedMode,
-    string Recommendation);
+    string Recommendation)
+{
+    /// <summary>
+    /// Explicit alias used by admin UX to show risk score movement without relying on internal naming.
+    /// </summary>
+    public int RiskScoreImpact => RiskImpact;
+
+    /// <summary>
+    /// Explicit alias used by admin UX to show trust score movement without relying on internal naming.
+    /// </summary>
+    public int TrustScoreImpact => TrustImpact;
+
+    /// <summary>
+    /// Explicit alias used by admin UX to describe warnings that would be added by the rule.
+    /// </summary>
+    public IReadOnlyCollection<string> WarningsAdded => WarningsCreated;
+
+    /// <summary>
+    /// Explicit alias used by admin UX to show whether a matched rule would enter the review queue.
+    /// </summary>
+    public bool AdminReviewWouldBeTriggered => SendsToAdminReview;
+}
 
 /// <summary>
 /// Actor request used by admin endpoints that change rule lifecycle state.
@@ -265,11 +305,15 @@ public sealed class AdminSiteSafetyRuleValidator : AbstractValidator<AdminSiteSa
     [
         "PageText",
         "Password",
+        "PasswordValue",
         "Token",
         "Cookie",
         "FormValue",
+        "FormValues",
         "RawMessage",
-        "PrivateMessage"
+        "PrivateMessage",
+        "EmailContent",
+        "ChatLog"
     ];
 
     /// <summary>
@@ -313,11 +357,12 @@ public sealed class AdminSiteSafetyRuleValidator : AbstractValidator<AdminSiteSa
             .WithMessage("Admin rules cannot mark a site trusted or clean by themselves.");
         RuleFor(rule => rule)
             .Must(rule => rule.Effects.SetStatusOverride != SiteSafetyScanStatus.Dangerous ||
+                          rule.Mode != AdminSiteSafetyRuleMode.Enforced ||
                           (rule.Severity is SiteSafetyRuleSeverity.High or SiteSafetyRuleSeverity.Critical &&
                            rule.Status is AdminSiteSafetyRuleStatus.Approved or AdminSiteSafetyRuleStatus.Active &&
                            !string.IsNullOrWhiteSpace(rule.ApprovedBy) &&
                            rule.ApprovedAtUtc is not null))
-            .WithMessage("Dangerous overrides require high severity and approval.");
+            .WithMessage("Dangerous overrides require high severity and approval before enforced mode.");
     }
 
     /// <summary>
@@ -521,11 +566,19 @@ public static class AdminSiteSafetyRuleEvaluator
     /// </summary>
     public static AdminSiteSafetyRuleSimulationResult Simulate(AdminSiteSafetyRule rule, SiteSafetyRuleInput input)
     {
-        var matchedConditions = rule.Conditions
-            .Where(condition => ConditionMatches(condition, input))
-            .Select(DescribeCondition)
+        var isInactive = rule.Status is AdminSiteSafetyRuleStatus.Disabled or AdminSiteSafetyRuleStatus.Archived;
+        var conditionResults = rule.Conditions
+            .Select(condition => DescribeConditionResult(condition, input))
             .ToArray();
-        var matched = matchedConditions.Length == rule.Conditions.Count;
+        var matchedConditions = conditionResults
+            .Where(condition => condition.Matched)
+            .Select(condition => condition.Description)
+            .ToArray();
+        var failedConditions = conditionResults
+            .Where(condition => !condition.Matched)
+            .Select(condition => condition.Description)
+            .ToArray();
+        var matched = !isInactive && conditionResults.All(condition => condition.Matched);
         var results = matched ? BuildResults(rule with { Mode = AdminSiteSafetyRuleMode.Simulation }, isSimulationOnly: true) : [];
         var riskImpact = results.Select(result => result.RiskImpact).DefaultIfEmpty(0).Max();
         var trustImpact = results.Sum(result => result.TrustImpact);
@@ -539,7 +592,9 @@ public static class AdminSiteSafetyRuleEvaluator
         return new AdminSiteSafetyRuleSimulationResult(
             rule.RuleId,
             matched,
+            conditionResults,
             matchedConditions,
+            failedConditions,
             matchedConditions.Length,
             riskImpact,
             trustImpact,
@@ -550,7 +605,7 @@ public static class AdminSiteSafetyRuleEvaluator
             results.Any(result => result.SendToAdminReview),
             approvalRequired,
             recommendedMode,
-            matched ? Recommendation(approvalRequired, recommendedMode) : "The rule did not match the simulation input.");
+            SimulationRecommendation(matched, isInactive, approvalRequired, recommendedMode));
     }
 
     /// <summary>
@@ -588,7 +643,8 @@ public static class AdminSiteSafetyRuleEvaluator
         AddRisk(results, rule, SiteSafetyRiskCategory.Script, rule.Effects.IncreaseScriptRisk, "Admin rule increased script risk.", isSimulationOnly);
         AddRisk(results, rule, SiteSafetyRiskCategory.Download, rule.Effects.IncreaseDownloadRisk, "Admin rule increased download risk.", isSimulationOnly);
         AddRisk(results, rule, SiteSafetyRiskCategory.Form, rule.Effects.IncreaseFormRisk, "Admin rule increased form risk.", isSimulationOnly);
-        AddRisk(results, rule, SiteSafetyRiskCategory.Reputation, rule.Effects.IncreaseReputationRisk + rule.Effects.DecreaseDomainTrust + rule.Effects.DecreasePageTrust + rule.Effects.DecreaseContentTrust, "Admin rule decreased trust.", isSimulationOnly);
+        AddRisk(results, rule, SiteSafetyRiskCategory.Reputation, rule.Effects.IncreaseReputationRisk, "Admin rule increased reputation risk.", isSimulationOnly);
+        AddTrustReduction(results, rule, rule.Effects.DecreaseDomainTrust + rule.Effects.DecreasePageTrust + rule.Effects.DecreaseContentTrust, isSimulationOnly);
 
         if (rule.Effects.AddReason is not null || rule.Effects.AddWarning is not null || rule.Effects.SetStatusOverride is not null || rule.Effects.LowerConfidence > 0 || rule.Effects.SendToAdminReview)
         {
@@ -648,6 +704,37 @@ public static class AdminSiteSafetyRuleEvaluator
     }
 
     /// <summary>
+    /// Adds a trust reduction result without converting it into a generic reputation risk signal.
+    /// </summary>
+    private static void AddTrustReduction(ICollection<SiteSafetyRuleResult> results, AdminSiteSafetyRule rule, int impact, bool isSimulationOnly)
+    {
+        if (impact <= 0)
+        {
+            return;
+        }
+
+        results.Add(new SiteSafetyRuleResult(
+            rule.RuleId,
+            rule.Name,
+            rule.Description,
+            SiteSafetyRuleSource.Admin,
+            SiteSafetyRuleCollectionType.StatusRules,
+            SiteSafetyRiskCategory.Reputation,
+            0,
+            -Math.Clamp(impact, 0, 100),
+            rule.Effects.AddReason ?? "Admin rule decreased trust.",
+            rule.Effects.AddWarning,
+            rule.Severity,
+            rule.EvidenceQuality,
+            rule.Effects.SetStatusOverride,
+            rule.Effects.LowerConfidence,
+            rule.Effects.SendToAdminReview,
+            isSimulationOnly,
+            rule.Effects.AddPositiveSignal,
+            rule.Effects.AddNegativeSignal));
+    }
+
+    /// <summary>
     /// Selects the strongest status override from simulated or enforced rule results.
     /// </summary>
     private static SiteSafetyScanStatus? StrongestStatusOverride(IEnumerable<SiteSafetyRuleResult> results)
@@ -667,10 +754,35 @@ public static class AdminSiteSafetyRuleEvaluator
     }
 
     /// <summary>
-    /// Describes a matched condition without exposing private scan data.
+    /// Describes a condition result using only allow-listed privacy-safe simulation fields.
     /// </summary>
-    private static string DescribeCondition(AdminSiteSafetyRuleCondition condition) =>
-        $"{condition.Field} {condition.Operator} {condition.Value}";
+    private static AdminSiteSafetyRuleConditionSimulationResult DescribeConditionResult(AdminSiteSafetyRuleCondition condition, SiteSafetyRuleInput input)
+    {
+        var actual = FieldValue(condition.Field, input);
+        var matched = ConditionMatches(condition, input);
+        var expectedValue = condition.Value.ToString();
+        var actualValue = DisplayValue(actual);
+        var description = $"{condition.Field} {condition.Operator} {expectedValue} (actual: {actualValue})";
+
+        return new AdminSiteSafetyRuleConditionSimulationResult(
+            condition.Field,
+            condition.Operator,
+            expectedValue,
+            actualValue,
+            matched,
+            description);
+    }
+
+    /// <summary>
+    /// Formats allow-listed simulation facts for admin diagnostics without exposing private content.
+    /// </summary>
+    private static string DisplayValue(object? value) =>
+        value switch
+        {
+            null => "not set",
+            IEnumerable<string> values => string.Join(", ", values),
+            _ => value.ToString() ?? "not set"
+        };
 
     /// <summary>
     /// Decides whether a simulated rule needs approval before enforcement.
@@ -690,6 +802,19 @@ public static class AdminSiteSafetyRuleEvaluator
             : recommendedMode == AdminSiteSafetyRuleMode.Enforced
                 ? "Simulation matched with low impact. The rule can be considered for enforced mode after review."
                 : "Simulation matched. Start in watch-only mode before enforcement.";
+
+    /// <summary>
+    /// Builds a simulation recommendation that distinguishes inactive rules from unmatched active candidates.
+    /// </summary>
+    private static string SimulationRecommendation(bool matched, bool isInactive, bool approvalRequired, AdminSiteSafetyRuleMode recommendedMode)
+    {
+        if (isInactive)
+        {
+            return "The rule is disabled or archived, so simulation reports condition diagnostics but does not treat it as active.";
+        }
+
+        return matched ? Recommendation(approvalRequired, recommendedMode) : "The rule did not match the simulation input.";
+    }
 
     /// <summary>
     /// Gets a safe field value from the rule input.

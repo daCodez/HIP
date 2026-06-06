@@ -18,6 +18,7 @@ public sealed class AdminRuleBuilderPageTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(html, Does.Contain("Admin Rule Builder"));
         Assert.That(html, Does.Contain("Live JSON Preview"));
+        Assert.That(html, Does.Contain("Site Safety Rule Simulation"));
     }
 
     [Test]

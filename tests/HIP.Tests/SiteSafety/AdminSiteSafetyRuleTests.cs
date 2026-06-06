@@ -260,6 +260,117 @@ public sealed class AdminSiteSafetyRuleTests
     }
 
     /// <summary>
+    /// Simulation returns matched and failed conditions separately so admins can see why a rule did or did not fire.
+    /// </summary>
+    [Test]
+    public void Simulation_returns_matched_and_failed_conditions()
+    {
+        var service = CreateService();
+        var rule = ValidRule("Condition diagnostics") with
+        {
+            Conditions =
+            [
+                Condition("ExecutableDownloadCount", AdminSiteSafetyRuleOperator.GreaterThan, 0),
+                Condition("HasPaymentField", AdminSiteSafetyRuleOperator.Equals, true)
+            ],
+            Effects = new AdminSiteSafetyRuleEffects(IncreaseDownloadRisk: 20, AddReason: "Download condition matched.")
+        };
+
+        var result = service.Simulate(rule, new AdminSiteSafetyRuleSimulationInput(ExecutableDownloadCount: 1, HasPaymentField: false));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Matched, Is.False);
+            Assert.That(result.ConditionResults.Count, Is.EqualTo(2));
+            Assert.That(result.MatchedConditions, Has.Some.Contains("ExecutableDownloadCount"));
+            Assert.That(result.FailedConditions, Has.Some.Contains("HasPaymentField"));
+            Assert.That(result.RiskScoreImpact, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    /// Simulation exposes trust, status, warning, reason, and confidence impacts without enforcing them.
+    /// </summary>
+    [Test]
+    public void Simulation_output_includes_trust_status_warning_reason_and_confidence_impacts()
+    {
+        var service = CreateService();
+        var rule = ValidRule("Full diagnostics") with
+        {
+            Conditions = [Condition("Domain", AdminSiteSafetyRuleOperator.EndsWith, ".example")],
+            Effects = new AdminSiteSafetyRuleEffects(
+                DecreaseDomainTrust: 15,
+                AddReason: "Admin trust review matched.",
+                AddWarning: "Admin warning would be shown.",
+                SetStatusOverride: SiteSafetyScanStatus.Suspicious,
+                LowerConfidence: 25)
+        };
+
+        var result = service.Simulate(rule, new AdminSiteSafetyRuleSimulationInput(Url: "https://full-diagnostics.example"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Matched, Is.True);
+            Assert.That(result.TrustScoreImpact, Is.EqualTo(-15));
+            Assert.That(result.StatusImpact, Is.EqualTo(SiteSafetyScanStatus.Suspicious));
+            Assert.That(result.ReasonsAdded, Has.Some.EqualTo("Admin trust review matched."));
+            Assert.That(result.WarningsAdded, Has.Some.EqualTo("Admin warning would be shown."));
+            Assert.That(result.ConfidenceImpact, Is.EqualTo(25));
+        });
+    }
+
+    /// <summary>
+    /// Dangerous overrides can be simulated as a draft, but the output clearly requires approval and watch mode.
+    /// </summary>
+    [Test]
+    public void Dangerous_override_simulation_requires_approval()
+    {
+        var service = CreateService();
+        var rule = ValidRule("Dangerous simulation") with
+        {
+            Severity = SiteSafetyRuleSeverity.High,
+            Effects = new AdminSiteSafetyRuleEffects(
+                SetStatusOverride: SiteSafetyScanStatus.Dangerous,
+                AddWarning: "Dangerous override would require approval.")
+        };
+
+        var result = service.Simulate(rule, new AdminSiteSafetyRuleSimulationInput(Url: "https://dangerous-simulation.example"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Matched, Is.True);
+            Assert.That(result.StatusImpact, Is.EqualTo(SiteSafetyScanStatus.Dangerous));
+            Assert.That(result.ApprovalRequired, Is.True);
+            Assert.That(result.RecommendedMode, Is.EqualTo(AdminSiteSafetyRuleMode.WatchOnly));
+        });
+    }
+
+    /// <summary>
+    /// Disabled rule simulation can explain condition diagnostics but must not report active score impact.
+    /// </summary>
+    [Test]
+    public void Disabled_rule_does_not_simulate_as_active()
+    {
+        var service = CreateService();
+        var rule = ValidRule("Disabled simulation") with
+        {
+            Status = AdminSiteSafetyRuleStatus.Disabled,
+            Effects = new AdminSiteSafetyRuleEffects(IncreaseDownloadRisk: 80, AddReason: "Disabled impact.")
+        };
+
+        var result = service.Simulate(rule, new AdminSiteSafetyRuleSimulationInput(Url: "https://disabled-simulation.example"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Matched, Is.False);
+            Assert.That(result.ConditionResults.All(condition => condition.Matched), Is.True);
+            Assert.That(result.RiskScoreImpact, Is.EqualTo(0));
+            Assert.That(result.ReasonsAdded, Is.Empty);
+            Assert.That(result.Recommendation, Does.Contain("disabled"));
+        });
+    }
+
+    /// <summary>
     /// Admin rules cannot mark an otherwise unknown clean site as trusted by themselves.
     /// </summary>
     [Test]

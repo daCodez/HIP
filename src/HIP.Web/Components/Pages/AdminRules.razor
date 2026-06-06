@@ -6,6 +6,8 @@
 @inject IRuleJsonService RuleJsonService
 @inject IAdminRuleService AdminRuleService
 @inject IRuleRepository RuleRepository
+@inject IAdminSiteSafetyRuleRepository SiteSafetyRuleRepository
+@inject AdminSiteSafetyRuleService SiteSafetyRuleService
 
 <PageTitle>HIP Admin Rule Builder</PageTitle>
 
@@ -149,6 +151,120 @@
     </section>
 
     <section class="rule-builder-panel">
+        <h2>Site Safety Rule Simulation</h2>
+        <p>Run stored Site Safety rules against a privacy-safe sample input. Simulation reports what would happen without changing live scores.</p>
+        @if (_siteSafetyRules.Count == 0)
+        {
+            <p>No admin-managed Site Safety rules are saved yet.</p>
+        }
+        else
+        {
+            <div class="form-row">
+                <label>Rule
+                    <select @bind="_selectedSiteSafetyRuleId">
+                        @foreach (var rule in _siteSafetyRules)
+                        {
+                            <option value="@rule.RuleId">@rule.Name (@rule.Status / @rule.Mode)</option>
+                        }
+                    </select>
+                </label>
+                <button type="button" @onclick="RunSiteSafetySimulation">Run Privacy-Safe Sample</button>
+            </div>
+
+            @if (_siteSafetySimulationMessage is not null)
+            {
+                <p class="admin-message">@_siteSafetySimulationMessage</p>
+            }
+
+            @if (_siteSafetySimulation is not null)
+            {
+                <div class="simulation-grid">
+                    <span>Rule matched: <strong>@_siteSafetySimulation.Matched</strong></span>
+                    <span>Risk score impact: <strong>@_siteSafetySimulation.RiskScoreImpact</strong></span>
+                    <span>Trust score impact: <strong>@_siteSafetySimulation.TrustScoreImpact</strong></span>
+                    <span>Status impact: <strong>@(_siteSafetySimulation.StatusImpact?.ToString() ?? "None")</strong></span>
+                    <span>Confidence impact: <strong>@_siteSafetySimulation.ConfidenceImpact</strong></span>
+                    <span>Approval required: <strong>@_siteSafetySimulation.ApprovalRequired</strong></span>
+                    <span>Admin review: <strong>@_siteSafetySimulation.AdminReviewWouldBeTriggered</strong></span>
+                    <span>Recommended mode: <strong>@_siteSafetySimulation.RecommendedMode</strong></span>
+                </div>
+
+                <p>@_siteSafetySimulation.Recommendation</p>
+
+                <div class="rule-builder-grid compact">
+                    <div>
+                        <h3>Matched Conditions</h3>
+                        @if (_siteSafetySimulation.MatchedConditions.Count == 0)
+                        {
+                            <p>No conditions matched.</p>
+                        }
+                        else
+                        {
+                            <ul>
+                                @foreach (var condition in _siteSafetySimulation.MatchedConditions)
+                                {
+                                    <li>@condition</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                    <div>
+                        <h3>Failed Conditions</h3>
+                        @if (_siteSafetySimulation.FailedConditions.Count == 0)
+                        {
+                            <p>No conditions failed.</p>
+                        }
+                        else
+                        {
+                            <ul>
+                                @foreach (var condition in _siteSafetySimulation.FailedConditions)
+                                {
+                                    <li>@condition</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+
+                <div class="rule-builder-grid compact">
+                    <div>
+                        <h3>Reasons Added</h3>
+                        @if (_siteSafetySimulation.ReasonsAdded.Count == 0)
+                        {
+                            <p>No reasons would be added.</p>
+                        }
+                        else
+                        {
+                            <ul>
+                                @foreach (var reason in _siteSafetySimulation.ReasonsAdded)
+                                {
+                                    <li>@reason</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                    <div>
+                        <h3>Warnings Added</h3>
+                        @if (_siteSafetySimulation.WarningsAdded.Count == 0)
+                        {
+                            <p>No warnings would be added.</p>
+                        }
+                        else
+                        {
+                            <ul>
+                                @foreach (var warning in _siteSafetySimulation.WarningsAdded)
+                                {
+                                    <li>@warning</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </section>
+
+    <section class="rule-builder-panel">
         <h2>Saved Rules</h2>
         @if (_savedRules.Count == 0)
         {
@@ -191,12 +307,17 @@
     private bool _advancedMode;
     private RuleSimulationResult? _simulation;
     private IReadOnlyCollection<TrustRule> _savedRules = [];
+    private IReadOnlyCollection<AdminSiteSafetyRule> _siteSafetyRules = [];
+    private string? _selectedSiteSafetyRuleId;
+    private string? _siteSafetySimulationMessage;
+    private AdminSiteSafetyRuleSimulationResult? _siteSafetySimulation;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadRouteRuleAsync();
         SyncJsonFromForm();
         _savedRules = await AdminRuleService.ListAsync(CancellationToken.None);
+        await LoadSiteSafetyRulesAsync();
     }
 
     protected override async Task OnParametersSetAsync()
@@ -259,6 +380,55 @@
         _form.ConfidenceScore = _simulation.ConfidenceScore * 100m;
         SyncJsonFromForm();
     }
+
+    /// <summary>
+    /// Loads stored admin-managed Site Safety rules for the simulation UX panel.
+    /// </summary>
+    private async Task LoadSiteSafetyRulesAsync()
+    {
+        _siteSafetyRules = await SiteSafetyRuleRepository.ListAsync(CancellationToken.None);
+        _selectedSiteSafetyRuleId ??= _siteSafetyRules.FirstOrDefault()?.RuleId;
+    }
+
+    /// <summary>
+    /// Runs the selected Site Safety rule against privacy-safe sample facts without mutating live scoring.
+    /// </summary>
+    private async Task RunSiteSafetySimulation()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedSiteSafetyRuleId))
+        {
+            _siteSafetySimulationMessage = "Select a Site Safety rule before running simulation.";
+            return;
+        }
+
+        var rule = await SiteSafetyRuleRepository.GetByIdAsync(_selectedSiteSafetyRuleId, CancellationToken.None);
+        if (rule is null)
+        {
+            _siteSafetySimulationMessage = "The selected Site Safety rule was not found.";
+            return;
+        }
+
+        _siteSafetySimulation = SiteSafetyRuleService.Simulate(rule, PrivacySafeSampleInput());
+        _siteSafetySimulationMessage = "Simulation completed without changing live scoring.";
+    }
+
+    /// <summary>
+    /// Creates privacy-safe sample inputs for admin rule testing without page text, form values, or external calls.
+    /// </summary>
+    private static AdminSiteSafetyRuleSimulationInput PrivacySafeSampleInput() =>
+        new(
+            Url: "https://sample-rule.example/login",
+            Domain: "sample-rule.example",
+            Tld: "example",
+            HasHttps: true,
+            RedirectCount: 1,
+            ShortenedLinkCount: 1,
+            ObfuscatedLinkCount: 0,
+            ExecutableDownloadCount: 1,
+            HasLoginForm: true,
+            HasPasswordField: true,
+            MatchedRiskTerms: ["CrackedSoftware", "DisableAntivirus"],
+            TrustDataAvailable: false);
 
     private void EnableRule()
     {

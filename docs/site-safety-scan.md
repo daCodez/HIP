@@ -239,6 +239,8 @@ Guardrails:
 - Dangerous overrides require high/critical severity plus explicit approval metadata.
 - Rule updates store previous versions so rollback can restore the prior rule.
 
+Simulation is intentionally diagnostic. The admin simulation response includes matched conditions, failed conditions, risk score impact, trust score impact, status impact, warnings, reasons, confidence impact, approval-required state, and whether admin review would be triggered. Simulation uses privacy-safe sample facts only and never calls external providers from the rule itself.
+
 The current EF implementation stores admin rules in HIP's SQLite-backed JSON record store. This keeps the repository boundary clean while leaving room for a more normalized production schema later.
 
 ## External Scanner Policy

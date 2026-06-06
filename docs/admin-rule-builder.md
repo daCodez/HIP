@@ -82,6 +82,27 @@ Simulation returns pass/fail counts, detection rate, false-positive risk, false-
 
 The page shows the simulation result, confidence score, false-positive risk, false-negative risk, recommended action, and recommended mode. Auto-generated or high-impact rules should simulate before enforcement.
 
+## Site Safety Rule Simulation
+
+The `/admin/rules` page also includes a Site Safety rule simulation panel for admin-managed Site Safety rules. This uses stored structured rules and privacy-safe sample inputs only. It does not call external scanners, does not execute raw code, and does not send or display page text, passwords, tokens, cookies, form values, private messages, or chat logs.
+
+Simulation output shows:
+
+- whether the rule matched
+- matched conditions
+- failed conditions
+- risk score impact
+- trust score impact
+- status impact
+- warnings added
+- reasons added
+- confidence impact
+- whether approval is required
+- whether admin review would be triggered
+- recommended mode
+
+Simulation and watch-only rules can be inspected by admins but do not affect live user-facing scores. Disabled and archived rules can still show condition diagnostics, but they are not treated as active and return no live score impact.
+
 ## Approval Foundation
 
 High-impact rules require approval:
