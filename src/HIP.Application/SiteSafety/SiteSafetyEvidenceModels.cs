@@ -299,9 +299,10 @@ public sealed class ExternalSiteEvidenceOptions
 {
     /// <summary>
     /// Gets or sets whether third-party external evidence providers are allowed to run.
-    /// Disabled by default so HIP never calls external scanners accidentally.
+    /// Enabled by default for the MVP so HIP can collect live domain-only TLS evidence.
+    /// Operators can disable it through configuration or the admin settings page.
     /// </summary>
-    public bool ExternalProvidersEnabled { get; set; }
+    public bool ExternalProvidersEnabled { get; set; } = true;
 
     /// <summary>
     /// Gets or sets whether external providers may receive full URLs. Domain-only or hash-based checks are preferred.
@@ -321,7 +322,7 @@ public sealed class ExternalSiteEvidenceOptions
     /// <summary>
     /// Gets or sets SSL Labs/Qualys-style TLS provider configuration.
     /// </summary>
-    public ExternalProviderOptions SslLabs { get; set; } = new();
+    public ExternalProviderOptions SslLabs { get; set; } = new() { Enabled = true };
 
     /// <summary>
     /// Gets or sets Google Web Risk or Safe Browsing-style provider configuration.

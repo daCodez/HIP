@@ -325,27 +325,27 @@ The current EF implementation stores admin rules in HIP's SQLite-backed JSON rec
 
 ## External Scanner Policy
 
-External evidence providers are configurable and disabled by default. HIP can host provider adapters such as SSL Labs / Qualys-style TLS checks, Google Web Risk / Safe Browsing-style threat checks, VirusTotal, and future scanners, but HIP must not call third-party scanners unless an operator explicitly enables the global provider switch and the specific provider.
+External evidence providers are configurable. For the dev/MVP build, the global external-provider switch and the SSL Labs / Qualys-style TLS provider are enabled by default so operators can see live TLS evidence without extra setup. Credentialed threat-intelligence providers such as Google Web Risk / Safe Browsing and VirusTotal remain disabled until API credentials and concrete adapters are configured.
 
 Providers return normalized evidence only. They do not decide the final HIP score. HIP scoring combines provider evidence with browser-observed signals, HIP history, weighted feedback, admin review evidence, and built-in/admin rules.
 
 Current MVP provider foundations:
 
-- `SSL Labs / Qualys TLS`: disabled by default. When explicitly enabled, it calls the SSL Labs domain assessment endpoint with only the normalized domain. Strong TLS gives only a small trust boost; weak TLS lowers confidence. Pending or failed TLS checks do not make a site trusted.
-- `Google Web Risk / Safe Browsing`: normalizes future phishing/social-engineering matches as authoritative risk evidence.
-- `VirusTotal`: normalizes future malware or malicious URL/domain matches as authoritative risk evidence.
+- `SSL Labs / Qualys TLS`: enabled by default in dev/MVP configuration. It calls the SSL Labs domain assessment endpoint with only the normalized domain. Strong TLS gives only a small trust boost; weak TLS lowers confidence. Pending or failed TLS checks do not make a site trusted.
+- `Google Web Risk / Safe Browsing`: disabled until credentials and a concrete adapter are configured. It normalizes future phishing/social-engineering matches as authoritative risk evidence.
+- `VirusTotal`: disabled until credentials and a concrete adapter are configured. It normalizes future malware or malicious URL/domain matches as authoritative risk evidence.
 
 Configuration section:
 
 ```json
 {
   "ExternalSiteEvidence": {
-    "ExternalProvidersEnabled": false,
+    "ExternalProvidersEnabled": true,
     "AllowFullUrlChecks": false,
     "ProviderTimeout": "00:00:02",
     "DefaultCacheDuration": "06:00:00",
     "SslLabs": {
-      "Enabled": false,
+      "Enabled": true,
       "Endpoint": "https://api.ssllabs.com/api/v3/analyze"
     },
     "GoogleWebRisk": {
@@ -370,12 +370,12 @@ Runtime MVP controls:
 
 These runtime controls update the current running HIP process. Production deployments should persist the same values in configuration or a secure settings store and keep API keys in secret storage.
 
-To enable a provider, both switches must be on:
+To enable or disable a provider, use both the global switch and the provider-specific switch:
 
 - `ExternalSiteEvidence:ExternalProvidersEnabled`
 - `ExternalSiteEvidence:<ProviderName>:Enabled`
 
-The same switches are available in `/admin/settings` while the app is running.
+The same switches are available in `/admin/settings` while the app is running. To disable the default SSL Labs / Qualys TLS check, turn off either `ExternalProvidersEnabled` or `SslLabs.Enabled`.
 
 External provider rules:
 
@@ -486,7 +486,7 @@ The scan flow is covered by service-level tests rather than full Chromium automa
 - executable downloads raise content risk
 - login forms on unknown domains raise warnings
 - provider timeouts do not crash scoring
-- external providers are disabled by default
+- SSL Labs / Qualys TLS is enabled by default, while credentialed threat-intelligence providers stay disabled until configured
 - feedback is weighted evidence, not voting
 - high-risk low-confidence cases create generated admin review signals
 - popup responses expose the layered fields required by the extension

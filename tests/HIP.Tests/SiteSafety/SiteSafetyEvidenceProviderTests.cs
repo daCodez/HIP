@@ -11,10 +11,10 @@ namespace HIP.Tests.SiteSafety;
 public sealed class SiteSafetyEvidenceProviderTests
 {
     /// <summary>
-    /// Verifies third-party provider base classes do not call external scanners unless explicitly enabled.
+    /// Verifies third-party provider base classes do not call a specific scanner when that provider is disabled.
     /// </summary>
     [Test]
-    public async Task External_providers_are_disabled_by_default()
+    public async Task Provider_without_specific_enable_switch_makes_no_external_call()
     {
         var provider = new TestExternalProvider(new InMemoryExternalSiteEvidenceCache(), new ExternalSiteEvidenceOptions());
 
@@ -153,16 +153,17 @@ public sealed class SiteSafetyEvidenceProviderTests
     }
 
     /// <summary>
-    /// Verifies the concrete third-party providers exist but stay disabled until explicitly configured.
+    /// Verifies concrete providers follow the MVP defaults: SSL Labs is active, credentialed providers stay disabled.
     /// </summary>
     [Test]
-    public async Task Concrete_external_providers_are_disabled_by_default()
+    public async Task Concrete_external_providers_enable_ssl_labs_by_default_and_leave_credentialed_providers_disabled()
     {
         var options = new ExternalSiteEvidenceOptions();
         var cache = new InMemoryExternalSiteEvidenceCache();
+        var handler = new StubHttpMessageHandler(_ => JsonResponse("""{"status":"READY","endpoints":[{"grade":"A"}]}"""));
         ISiteSafetyEvidenceProvider[] providers =
         [
-            new SslLabsSiteEvidenceProvider(cache, options),
+            new SslLabsSiteEvidenceProvider(cache, options, new HttpClient(handler)),
             new GoogleWebRiskSiteEvidenceProvider(cache, options),
             new VirusTotalSiteEvidenceProvider(cache, options)
         ];
@@ -178,8 +179,10 @@ public sealed class SiteSafetyEvidenceProviderTests
             Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("SSL Labs / Qualys TLS"));
             Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("Google Web Risk / Safe Browsing"));
             Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("VirusTotal"));
-            Assert.That(evidence.SelectMany(item => item.Errors), Has.All.Contains("disabled"));
-            Assert.That(evidence.SelectMany(item => item.EvidenceItems), Is.Empty);
+            Assert.That(evidence.Single(item => item.ProviderName == "SSL Labs / Qualys TLS").EvidenceItems.Single().Category, Is.EqualTo("TlsGrade"));
+            Assert.That(evidence.Single(item => item.ProviderName == "SSL Labs / Qualys TLS").EvidenceItems.Single().Value, Is.EqualTo("A"));
+            Assert.That(evidence.Where(item => item.ProviderName != "SSL Labs / Qualys TLS").SelectMany(item => item.Errors), Has.All.Contains("disabled"));
+            Assert.That(evidence.Where(item => item.ProviderName != "SSL Labs / Qualys TLS").SelectMany(item => item.EvidenceItems), Is.Empty);
         });
     }
 

@@ -148,17 +148,17 @@ public sealed class EndToEndSiteSafetyScanFlowTests
     }
 
     /// <summary>
-    /// External providers stay disabled by default and cannot create trust unless explicitly configured.
+    /// SSL Labs / Qualys-style TLS evidence is enabled by default, while credentialed providers stay disabled.
     /// </summary>
     [Test]
-    public void External_providers_are_disabled_by_default()
+    public void Ssl_labs_provider_is_enabled_by_default_and_credentialed_providers_remain_disabled()
     {
         var options = new ExternalSiteEvidenceOptions();
 
         Assert.Multiple(() =>
         {
-            Assert.That(options.ExternalProvidersEnabled, Is.False);
-            Assert.That(options.SslLabs.Enabled, Is.False);
+            Assert.That(options.ExternalProvidersEnabled, Is.True);
+            Assert.That(options.SslLabs.Enabled, Is.True);
             Assert.That(options.GoogleWebRisk.Enabled, Is.False);
             Assert.That(options.VirusTotal.Enabled, Is.False);
         });
