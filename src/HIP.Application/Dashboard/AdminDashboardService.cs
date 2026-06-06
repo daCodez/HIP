@@ -68,7 +68,9 @@ public sealed class AdminDashboardService(
         var suspiciousLinksFound = browserScans.Sum(scan => scan.SuspiciousLinksFound);
         var dangerousLinksFound = browserScans.Sum(scan => scan.DangerousLinksFound);
         var trustedResults = browserScans.Count(IsTrustedScan);
+        var mostlyTrustedResults = browserScans.Count(IsMostlyTrustedScan);
         var limitedTrustResults = browserScans.Count(IsLimitedTrustScan);
+        var unknownResults = browserScans.Count(IsUnknownScan);
         var suspiciousResults = browserScans.Count(IsSuspiciousScan);
         var highRiskResults = browserScans.Count(IsHighRiskScan);
         var dangerousResults = browserScans.Count(IsDangerousScan);
@@ -99,6 +101,10 @@ public sealed class AdminDashboardService(
                             adminSiteSafetyRules.Count(rule => rule.Status is AdminSiteSafetyRuleStatus.Disabled or AdminSiteSafetyRuleStatus.Archived);
         var hasFeedbackData = feedback.Count > 0;
         var suspiciousFeedbackSpikes = CountSuspiciousFeedbackSpikes(feedback);
+        var externalProviderErrors = CountExternalProviderErrors(browserScans, generatedReviews);
+        var hasExternalProviderData = externalProviderErrors > 0 ||
+                                      generatedReviews.Any(item => item.Source == AdminReviewSource.ExternalProvider) ||
+                                      browserScans.Any(HasExternalProviderMetadata);
 
         var riskyFindings = findings.Count(finding => IsRisky(finding.RiskLevel));
         var dangerousDomains = findings
@@ -113,7 +119,9 @@ public sealed class AdminDashboardService(
             Card("totalScans", "Total Scans", totalScans, hasScanData ? "BrowserPluginScanResults" : "No Data", !hasScanData, "Stored privacy-safe browser plugin scans."),
             Card("scansToday", "Scans Today", scansToday, hasScanData ? "Today" : "No Data", !hasScanData, "Stored browser plugin scans received today in UTC."),
             Card("trustedResults", "Trusted Results", trustedResults, hasScanData ? "Real Data" : "No Data", !hasScanData, "Stored scans with Trusted status."),
+            Card("mostlyTrustedResults", "Mostly Trusted Results", mostlyTrustedResults, hasScanData ? "Real Data" : "No Data", !hasScanData, "Stored scans with MostlyTrusted or ProbablySafe status."),
             Card("limitedTrustResults", "Limited Trust Results", limitedTrustResults, hasScanData ? "Real Data" : "No Data", !hasScanData, "Stored scans where HIP has limited trust data."),
+            Card("unknownResults", "Unknown Results", unknownResults, hasScanData ? "Real Data" : "No Data", !hasScanData, "Stored scans with Unknown status."),
             Card("suspiciousResults", "Suspicious Results", suspiciousResults, hasScanData ? "Real Data" : "No Data", !hasScanData, "Stored scans with Suspicious or Caution status."),
             Card("highRiskResults", "High-Risk Results", highRiskResults, hasScanData ? "Real Data" : "No Data", !hasScanData, "Stored scans with HighRisk status."),
             Card("dangerousResults", "Dangerous Results", dangerousResults, hasScanData ? "Real Data" : "No Data", !hasScanData, "Stored scans with Dangerous or Critical status."),
@@ -147,7 +155,7 @@ public sealed class AdminDashboardService(
             Card("disabledRules", "Disabled Rules", disabledRules, "Rules", false, "Disabled trust or admin Site Safety rules."),
             Card("selfHealingCandidates", "Self-Healing Candidates", candidates.Count, "Candidates", false, "Generated rule candidates available for review."),
             Card("dangerousDomains", "Dangerous Domains", dangerousDomains, dangerousDomains > 0 ? "High Attention" : "Clear", false, "Unique domains with Dangerous or Critical findings."),
-            Card("externalProviderErrors", "External Provider Errors", 0, "Not connected yet", true, "Provider errors are not persisted for dashboard summaries yet."),
+            Card("externalProviderErrors", "External Provider Errors", externalProviderErrors, ExternalProviderStatus(externalProviderErrors, hasExternalProviderData), !hasExternalProviderData, "Provider failures from stored scan metadata and generated external-provider review signals."),
             Card("apiHealth", "API Health", 1, "Healthy", false, "Dashboard service responded successfully.")
         };
 
@@ -376,6 +384,94 @@ public sealed class AdminDashboardService(
             .Where(item => item.FeedbackType is HipFeedbackType.LooksSuspicious or HipFeedbackType.ReportIssue)
             .GroupBy(item => item.Domain, StringComparer.OrdinalIgnoreCase)
             .Count(group => group.Count() >= 5);
+
+    /// <summary>
+    /// Counts external provider failures from privacy-safe dashboard sources.
+    /// Provider errors may arrive as scan metadata from the browser/API path or as generated review signals;
+    /// the dashboard never calls external providers itself and never inspects provider raw response bodies.
+    /// </summary>
+    /// <param name="browserScans">Stored browser scan summaries.</param>
+    /// <param name="generatedReviews">Generated admin review signals.</param>
+    /// <returns>Number of known external provider errors.</returns>
+    private static int CountExternalProviderErrors(
+        IReadOnlyCollection<BrowserScanResultRecord> browserScans,
+        IReadOnlyCollection<AdminReviewQueueItem> generatedReviews)
+    {
+        var metadataErrors = browserScans.Sum(scan => ProviderErrorCount(scan.PrivacySafeMetadata));
+        var reviewErrors = generatedReviews.Count(IsExternalProviderErrorReview);
+        return metadataErrors + reviewErrors;
+    }
+
+    /// <summary>
+    /// Determines whether a generated review item represents an external provider failure rather than a provider threat hit.
+    /// Threat hits are shown in Recent Threats, while failures are counted as provider errors.
+    /// </summary>
+    /// <param name="item">Generated admin review item.</param>
+    /// <returns>True when the review represents an external provider error.</returns>
+    private static bool IsExternalProviderErrorReview(AdminReviewQueueItem item) =>
+        item.Source == AdminReviewSource.ExternalProvider &&
+        (ContainsProviderErrorText(item.ReviewReason) ||
+         ContainsProviderErrorText(item.Summary) ||
+         ContainsProviderErrorText(item.EvidenceSummary));
+
+    /// <summary>
+    /// Detects whether stored scan metadata includes any external provider summary fields.
+    /// The dashboard treats this as evidence that provider data is connected, even when the count is zero.
+    /// </summary>
+    /// <param name="scan">Stored browser scan summary.</param>
+    /// <returns>True when the scan contains provider metadata.</returns>
+    private static bool HasExternalProviderMetadata(BrowserScanResultRecord scan) =>
+        scan.PrivacySafeMetadata.Keys.Any(key => key.Contains("provider", StringComparison.OrdinalIgnoreCase) ||
+                                                 key.Contains("sslLabs", StringComparison.OrdinalIgnoreCase) ||
+                                                 key.Contains("virusTotal", StringComparison.OrdinalIgnoreCase) ||
+                                                 key.Contains("webRisk", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Reads known provider-error count metadata keys while ignoring malformed values.
+    /// This keeps bad or old plugin metadata from breaking the admin dashboard.
+    /// </summary>
+    /// <param name="metadata">Privacy-safe scan metadata.</param>
+    /// <returns>Provider error count from the metadata.</returns>
+    private static int ProviderErrorCount(IReadOnlyDictionary<string, string> metadata)
+    {
+        var total = 0;
+        foreach (var key in new[] { "externalProviderErrors", "providerErrors", "providerErrorCount", "siteSafetyProviderErrors" })
+        {
+            if (metadata.TryGetValue(key, out var value) && int.TryParse(value, out var parsed) && parsed > 0)
+            {
+                total += parsed;
+            }
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// Detects safe, generic provider failure words. This intentionally does not parse raw provider payloads.
+    /// </summary>
+    /// <param name="value">Review reason or summary text.</param>
+    /// <returns>True when the text identifies timeout/error/failure evidence.</returns>
+    private static bool ContainsProviderErrorText(string value) =>
+        value.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("failure", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("timeout", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Builds the provider-error card status from real evidence availability.
+    /// </summary>
+    /// <param name="errorCount">Known provider error count.</param>
+    /// <param name="hasExternalProviderData">Whether any provider data has reached dashboard storage.</param>
+    /// <returns>Short card status.</returns>
+    private static string ExternalProviderStatus(int errorCount, bool hasExternalProviderData)
+    {
+        if (!hasExternalProviderData)
+        {
+            return "Not connected yet";
+        }
+
+        return errorCount > 0 ? "Errors" : "Connected";
+    }
 
     /// <summary>
     /// Determines whether a stored browser scan represents a recent threat rather than a normal clean page.
@@ -658,12 +754,28 @@ public sealed class AdminDashboardService(
         MatchesScanStatus(scan, "Trusted");
 
     /// <summary>
+    /// Determines whether a stored scan is mostly trusted.
+    /// </summary>
+    /// <param name="scan">Stored browser scan summary.</param>
+    /// <returns>True when either risk label or status label indicates mostly trusted/probably safe.</returns>
+    private static bool IsMostlyTrustedScan(BrowserScanResultRecord scan) =>
+        MatchesScanStatus(scan, "MostlyTrusted", "ProbablySafe");
+
+    /// <summary>
     /// Determines whether a stored scan has limited trust data.
     /// </summary>
     /// <param name="scan">Stored browser scan summary.</param>
     /// <returns>True when either risk label or status label indicates limited trust data.</returns>
     private static bool IsLimitedTrustScan(BrowserScanResultRecord scan) =>
         MatchesScanStatus(scan, "LimitedTrustData", "LimitedData");
+
+    /// <summary>
+    /// Determines whether a stored scan is unknown.
+    /// </summary>
+    /// <param name="scan">Stored browser scan summary.</param>
+    /// <returns>True when either risk label or status label is Unknown.</returns>
+    private static bool IsUnknownScan(BrowserScanResultRecord scan) =>
+        MatchesScanStatus(scan, "Unknown");
 
     /// <summary>
     /// Determines whether a stored scan is suspicious or cautionary.

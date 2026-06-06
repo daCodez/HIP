@@ -11,7 +11,9 @@ Scan cards show:
 - total scans
 - scans today
 - trusted results
+- mostly trusted results
 - limited trust results
+- unknown results
 - suspicious results
 - high-risk results
 - dangerous results
@@ -57,7 +59,14 @@ If no stored browser scan data exists, the dashboard shows:
 
 No fake scan counts are generated.
 
-Feedback cards use persisted weighted trust feedback. Feedback is evidence, not voting; the dashboard only shows counts and spike indicators, never page text or reporter identity. External provider error counts are currently marked `Not connected yet` because provider error history is not persisted into a dashboard-ready store.
+Feedback cards use persisted weighted trust feedback. Feedback is evidence, not voting; the dashboard only shows counts and spike indicators, never page text or reporter identity.
+
+External provider error counts use real dashboard-ready evidence only:
+
+- privacy-safe provider error counters stored with browser scan metadata
+- generated admin review signals from `ExternalProvider`
+
+If neither source has provider data yet, the card shows `Not connected yet`. If provider metadata is present and no failures are known, the card shows `Connected`. Provider threat hits are shown in Recent Threats; provider failures are counted as provider errors.
 
 ## Recent Activity
 
@@ -88,6 +97,7 @@ Recent Threats shows only real HIP evidence that needs attention, such as:
 - HighRisk, Dangerous, or Critical privacy-safe finding reports
 - open or high-priority review items
 - generated admin review signals such as unknown login pages, external provider threat hits, suspicious redirects, risky downloads, or provider conflicts
+- admin rule signals, including high-impact rule triggers and Dangerous override review signals
 - repeated suspicious weighted feedback
 
 Normal clean pages, Trusted scans with no risk signals, and LimitedTrustData scans with no warnings do not appear in Recent Threats.
@@ -153,6 +163,20 @@ Support can view the dashboard as an operational overview. Rule management, over
 
 The summary response returns dashboard cards, recent activity summaries, recent threats, API health, generation timestamp, data source, no-data state, top risky domains, and recent scans.
 
+## Live Data Flow
+
+The dashboard does not run scans itself. It reads already-stored, privacy-safe outputs from HIP services:
+
+1. Browser plugin scan results provide scan totals, status counts, link counts, recent scans, and risky domain aggregates.
+2. Risk finding reports provide high-risk finding counts and recent finding activity.
+3. Manual and generated review queues provide pending review counts, high-severity review counts, and review-triggered threat rows.
+4. Weighted feedback provides feedback counts and repeated suspicious feedback signals.
+5. Built-in, trust, and admin rule repositories provide active/watch/simulation/disabled rule counts.
+6. Self-healing candidates provide generated rule candidate counts.
+7. Provider metadata and generated external-provider review signals provide provider error counts and provider threat rows.
+
+Missing sources are shown as `No Data`, `Not connected yet`, or `Placeholder`. HIP must never invent fake rows or counts to make the dashboard look active.
+
 ## Generating Test Scan Data
 
 1. Run HIP API/Web locally.
@@ -160,6 +184,8 @@ The summary response returns dashboard cards, recent activity summaries, recent 
 3. Visit a test page with a few links.
 4. Open the extension popup and confirm `Last submitted` shows success.
 5. Refresh `/admin` and verify cards reflect the stored scan result.
+6. Trigger a risky link, login/payment warning, provider review signal, or repeated suspicious feedback in development data.
+7. Refresh `/admin` and verify the item appears in Recent Threats while normal clean pages remain absent.
 
 ## Known Limitations
 

@@ -77,7 +77,9 @@ public sealed class AdminDashboardTests
         var repository = new InMemoryBrowserScanResultRepository();
         var now = DateTimeOffset.UtcNow;
         await repository.SaveAsync(Scan("trusted.example", 90, "Trusted", 1, 0, 0, now, "Trusted scan."), CancellationToken.None);
+        await repository.SaveAsync(Scan("mostly.example", 76, "MostlyTrusted", 1, 0, 0, now, "Mostly trusted scan."), CancellationToken.None);
         await repository.SaveAsync(Scan("limited.example", 56, "LimitedTrustData", 1, 0, 0, now, "Limited trust data."), CancellationToken.None);
+        await repository.SaveAsync(Scan("unknown.example", 45, "Unknown", 1, 0, 0, now, "Unknown scan."), CancellationToken.None);
         await repository.SaveAsync(Scan("suspicious.example", 34, "Suspicious", 1, 1, 0, now, "Suspicious scan."), CancellationToken.None);
         await repository.SaveAsync(Scan("high.example", 18, "HighRisk", 1, 1, 0, now, "High-risk scan."), CancellationToken.None);
         await repository.SaveAsync(Scan("danger.example", 5, "Dangerous", 1, 1, 1, now, "Dangerous scan."), CancellationToken.None);
@@ -88,7 +90,9 @@ public sealed class AdminDashboardTests
         Assert.Multiple(() =>
         {
             Assert.That(Card(summary, "trustedResults").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "mostlyTrustedResults").Value, Is.EqualTo(1));
             Assert.That(Card(summary, "limitedTrustResults").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "unknownResults").Value, Is.EqualTo(1));
             Assert.That(Card(summary, "suspiciousResults").Value, Is.EqualTo(1));
             Assert.That(Card(summary, "highRiskResults").Value, Is.EqualTo(1));
             Assert.That(Card(summary, "dangerousResults").Value, Is.EqualTo(1));
@@ -194,6 +198,94 @@ public sealed class AdminDashboardTests
     }
 
     [Test]
+    public async Task Dashboard_external_provider_errors_use_stored_scan_metadata()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        await repository.SaveAsync(Scan(
+            "provider-error.example",
+            52,
+            "LimitedTrustData",
+            4,
+            0,
+            0,
+            DateTimeOffset.UtcNow,
+            "Provider evidence was collected safely.",
+            new Dictionary<string, string>
+            {
+                ["externalProviderErrors"] = "2",
+                ["sslLabsStatus"] = "Timeout"
+            }), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+        var card = Card(summary, "externalProviderErrors");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(card.Value, Is.EqualTo(2));
+            Assert.That(card.Status, Is.EqualTo("Errors"));
+            Assert.That(card.IsPlaceholder, Is.False);
+        });
+    }
+
+    [Test]
+    public async Task Dashboard_external_provider_errors_use_generated_review_signals()
+    {
+        var generatedReviews = new InMemoryAdminReviewQueueRepository();
+        await generatedReviews.SaveAsync(AdminReview(
+            "provider-timeout",
+            "provider-timeout.example",
+            "ImportantProviderFailure",
+            AdminReviewSeverity.Medium,
+            AdminReviewSource.ExternalProvider,
+            DateTimeOffset.UtcNow,
+            "LimitedTrustData",
+            "External provider timeout was recorded safely."), CancellationToken.None);
+        var service = Dashboard(new InMemoryBrowserScanResultRepository(), generatedReviewRepository: generatedReviews);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+        var card = Card(summary, "externalProviderErrors");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(card.Value, Is.EqualTo(1));
+            Assert.That(card.Status, Is.EqualTo("Errors"));
+            Assert.That(card.IsPlaceholder, Is.False);
+        });
+    }
+
+    [Test]
+    public async Task Dashboard_external_provider_card_shows_connected_when_provider_data_has_no_errors()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        await repository.SaveAsync(Scan(
+            "provider-clean.example",
+            60,
+            "LimitedTrustData",
+            4,
+            0,
+            0,
+            DateTimeOffset.UtcNow,
+            "Provider evidence was collected safely.",
+            new Dictionary<string, string>
+            {
+                ["sslLabsStatus"] = "Clean",
+                ["providerErrorCount"] = "0"
+            }), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+        var card = Card(summary, "externalProviderErrors");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(card.Value, Is.EqualTo(0));
+            Assert.That(card.Status, Is.EqualTo("Connected"));
+            Assert.That(card.IsPlaceholder, Is.False);
+        });
+    }
+
+    [Test]
     public async Task Dashboard_no_data_state_works_when_no_scans_exist()
     {
         var service = Dashboard(new InMemoryBrowserScanResultRepository());
@@ -206,6 +298,23 @@ public sealed class AdminDashboardTests
             Assert.That(summary.DataSource, Is.EqualTo("NoStoredScanData"));
             Assert.That(Card(summary, "totalScans").IsPlaceholder, Is.True);
             Assert.That(Card(summary, "totalScans").Value, Is.EqualTo(0));
+        });
+    }
+
+    [Test]
+    public async Task Dashboard_empty_state_does_not_generate_fake_activity_or_threats()
+    {
+        var service = Dashboard(new InMemoryBrowserScanResultRepository());
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(summary.RecentThreats, Is.Empty);
+            Assert.That(summary.TopRiskyDomains, Is.Empty);
+            Assert.That(summary.RecentScans, Is.Empty);
+            Assert.That(Card(summary, "totalScans").Status, Is.EqualTo("No Data"));
+            Assert.That(Card(summary, "feedbackReceived").Status, Is.EqualTo("No Data"));
         });
     }
 
@@ -628,7 +737,8 @@ public sealed class AdminDashboardTests
         int riskyLinks,
         int dangerousLinks,
         DateTimeOffset lastCheckedUtc,
-        string reason) =>
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null) =>
         new(
             $"scan-{Guid.NewGuid():N}",
             domain,
@@ -645,7 +755,7 @@ public sealed class AdminDashboardTests
             dangerousLinks,
             lastCheckedUtc,
             dangerousLinks > 0 ? "RouteToSafetyPage" : "Allow",
-            new Dictionary<string, string>
+            metadata ?? new Dictionary<string, string>
             {
                 ["scanMode"] = "Normal"
             });
