@@ -1,4 +1,6 @@
+using System.Text.Json;
 using FluentValidation;
+using HIP.Application.Browser;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.SiteSafety;
@@ -94,7 +96,32 @@ public sealed class AdminReviewQueueSignalTests
 
         var items = await service.CreateSignalsFromFeedbackAsync(summary, CancellationToken.None);
 
-        Assert.That(items.Single().ReviewReason, Is.EqualTo("WeightedFeedbackReview"));
+        Assert.That(items.Single().ReviewReason, Is.EqualTo("RepeatedLooksSuspiciousFeedback"));
+    }
+
+    /// <summary>
+    /// Weighted safe feedback can create a false-positive review item without directly changing scoring.
+    /// </summary>
+    [Test]
+    public async Task Possible_false_positive_feedback_creates_review_signal()
+    {
+        var service = CreateService();
+        var summary = new WeightedFeedbackSummary(
+            "false-positive.example",
+            LooksSafeWeight: 18,
+            LooksSuspiciousWeight: 2,
+            ReportIssueWeight: 0,
+            RecentFeedbackCount: 9,
+            RepeatedReporterCount: 1,
+            SuspiciousFeedbackPattern: false,
+            ConflictingFeedbackSpike: false,
+            ConfidenceImpact: 10,
+            RecommendedReview: false,
+            ["Users say this warning may be a false positive."]);
+
+        var items = await service.CreateSignalsFromFeedbackAsync(summary, CancellationToken.None);
+
+        Assert.That(items.Single().ReviewReason, Is.EqualTo("PossibleFalsePositive"));
     }
 
     /// <summary>
@@ -112,6 +139,67 @@ public sealed class AdminReviewQueueSignalTests
             DownloadRisk: 55), CancellationToken.None);
 
         Assert.That(items.Single().ReviewReason, Is.EqualTo("TrustedDomainRiskyPageContent"));
+    }
+
+    /// <summary>
+    /// Dangerous admin-created rule overrides are forced into review before enforcement.
+    /// </summary>
+    [Test]
+    public async Task Dangerous_admin_rule_override_creates_review_signal()
+    {
+        var service = CreateService();
+
+        var items = await service.CreateSignalsFromAdminRuleAsync(AdminRule(SiteSafetyScanStatus.Dangerous), CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(items.Single().ReviewReason, Is.EqualTo("DangerousAdminRuleOverride"));
+            Assert.That(items.Single().Severity, Is.EqualTo(AdminReviewSeverity.Critical));
+            Assert.That(items.Single().RelatedRuleId, Is.EqualTo("admin-rule-dangerous"));
+        });
+    }
+
+    /// <summary>
+    /// Repeated suspicious browser scan summaries create one review item per domain.
+    /// </summary>
+    [Test]
+    public async Task Repeated_suspicious_scan_history_creates_review_signal()
+    {
+        var service = CreateService();
+        var scans = new[]
+        {
+            BrowserScan("scan-1", SuspiciousLinksFound: 1),
+            BrowserScan("scan-2", RiskyLinksFound: 1),
+            BrowserScan("scan-3", DangerousLinksFound: 1)
+        };
+
+        var items = await service.CreateSignalsFromScanHistoryAsync(scans, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(items.Single().ReviewReason, Is.EqualTo("RepeatedSuspiciousScanHistory"));
+            Assert.That(items.Single().UrlHash, Is.EqualTo("sha256:scan-3"));
+            Assert.That(items.Single().EvidenceSummary, Does.Not.Contain("https://"));
+        });
+    }
+
+    /// <summary>
+    /// Sudden score movement creates review evidence because reputation changes should be explainable.
+    /// </summary>
+    [Test]
+    public async Task Sudden_reputation_change_creates_review_signal()
+    {
+        var service = CreateService();
+
+        var items = await service.CreateSignalsFromReputationChangeAsync(
+            "reputation.example",
+            "domain:reputation.example",
+            previousScore: 76,
+            currentScore: 28,
+            reasonSummary: "Multiple confirmed privacy-safe abuse reports.",
+            CancellationToken.None);
+
+        Assert.That(items.Single().ReviewReason, Is.EqualTo("SuddenReputationChange"));
     }
 
     /// <summary>
@@ -159,6 +247,31 @@ public sealed class AdminReviewQueueSignalTests
         var item = await service.CreateSignalAsync(Signal(EvidenceSummary: "form value should not be stored"), CancellationToken.None);
 
         Assert.That(item.EvidenceSummary, Is.EqualTo("[privacy-safe review summary redacted]"));
+    }
+
+    /// <summary>
+    /// Scan-history review items never copy raw stored page URLs or private metadata into summaries.
+    /// </summary>
+    [Test]
+    public async Task Scan_history_review_signal_does_not_store_private_data()
+    {
+        var service = CreateService();
+        var scans = new[]
+        {
+            BrowserScan("scan-private-1", SuspiciousLinksFound: 1, StoredPageUrl: "https://example.com/login?token=secret"),
+            BrowserScan("scan-private-2", SuspiciousLinksFound: 1, StoredPageUrl: "https://example.com/login?password=secret"),
+            BrowserScan("scan-private-3", SuspiciousLinksFound: 1, StoredPageUrl: "https://example.com/login?cookie=secret")
+        };
+
+        var item = (await service.CreateSignalsFromScanHistoryAsync(scans, CancellationToken.None)).Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(item.Summary, Does.Not.Contain("token="));
+            Assert.That(item.EvidenceSummary, Does.Not.Contain("password"));
+            Assert.That(item.EvidenceSummary, Does.Not.Contain("cookie"));
+            Assert.That(item.EvidenceSummary, Does.Not.Contain("https://"));
+        });
     }
 
     /// <summary>
@@ -341,6 +454,59 @@ public sealed class AdminReviewQueueSignalTests
             [],
             IsAuthoritativeForRisk: false,
             IsAuthoritativeForTrust: false);
+
+    /// <summary>
+    /// Builds an admin-managed rule that requests a status override through the safe structured rule format.
+    /// </summary>
+    private static AdminSiteSafetyRule AdminRule(SiteSafetyScanStatus statusOverride) =>
+        new(
+            "admin-rule-dangerous",
+            "Dangerous override request",
+            "Requests a dangerous override for test evidence.",
+            AdminSiteSafetyRuleTargetType.PageContent,
+            [new AdminSiteSafetyRuleCondition("KnownAbuseReports", AdminSiteSafetyRuleOperator.GreaterThan, JsonSerializer.SerializeToElement(0))],
+            new AdminSiteSafetyRuleEffects(SetStatusOverride: statusOverride, SendToAdminReview: true),
+            SiteSafetyRuleSeverity.Critical,
+            SiteSafetyEvidenceQuality.Strong,
+            AdminSiteSafetyRuleStatus.PendingApproval,
+            AdminSiteSafetyRuleMode.Simulation,
+            "admin-test",
+            DateTimeOffset.UtcNow,
+            null,
+            null,
+            Version: 1,
+            PreviousVersionId: null,
+            IsRollbackAvailable: false);
+
+    /// <summary>
+    /// Builds a privacy-safe browser scan summary with a URL hash and no page content.
+    /// </summary>
+    private static BrowserScanResultRecord BrowserScan(
+        string scanId,
+        int RiskyLinksFound = 0,
+        int SuspiciousLinksFound = 0,
+        int DangerousLinksFound = 0,
+        string? StoredPageUrl = null) =>
+        new(
+            scanId,
+            "history.example",
+            $"sha256:{scanId}",
+            StoredPageUrl,
+            "BrowserPlugin",
+            Score: DangerousLinksFound > 0 ? 18 : 38,
+            RiskLevel: DangerousLinksFound > 0 ? "Dangerous" : "Suspicious",
+            Status: DangerousLinksFound > 0 ? "Dangerous" : "Suspicious",
+            ["Privacy-safe browser scan summary."],
+            LinksScanned: 12,
+            RiskyLinksFound,
+            SuspiciousLinksFound,
+            DangerousLinksFound,
+            DateTimeOffset.UtcNow.AddMinutes(scanId.EndsWith('3') ? 3 : 0),
+            RecommendedAction: "RouteToSafetyPage",
+            new Dictionary<string, string>
+            {
+                ["source"] = "BrowserPlugin"
+            });
 
     /// <summary>
     /// Builds a minimal review signal for direct service tests.

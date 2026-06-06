@@ -64,9 +64,33 @@ Signal decisions:
 - NeedsMoreData
 - NoAction
 
-Generated signals can be created for high-risk low-confidence scans, conflicting external provider evidence, trusted parent domains with risky page/content, unknown login or payment forms, repeated suspicious feedback, conflicting feedback, provider failures on important targets, and future self-healing or admin-rule cases.
+Generated signals can be created for high-risk low-confidence scans, conflicting external provider evidence, trusted parent domains with risky page/content, unknown login or payment forms, repeated suspicious feedback, trusted-weight suspicious feedback, possible false positives, dangerous admin rule override requests, repeated suspicious scan history, sudden reputation changes, provider failures on important targets, and future self-healing cases.
 
 Generated review signals store only privacy-safe fields: domain, URL hash, target type, source, score/status, confidence, summaries, and related IDs. They must not store page text, form values, passwords, tokens, cookies, private messages, raw private URLs, or private chat logs.
+
+### Generated Review Trigger Details
+
+HIP creates generated admin review items when privacy-safe evidence suggests that automated scoring needs human judgment. Current MVP triggers include:
+
+- `HighRiskLowConfidence`: a scan reports HighRisk or Dangerous while confidence is Low.
+- `ConflictingProviderEvidence`: normalized provider evidence conflicts and should not be silently trusted.
+- `TrustedDomainRiskyPageContent`: the parent domain has strong trust signals, but the exact page or content is risky.
+- `UnknownDomainLoginForm`: a limited-data domain contains login or password fields.
+- `UnknownDomainPaymentField`: a limited-data or suspicious domain contains payment fields.
+- `RepeatedLooksSuspiciousFeedback`: weighted feedback shows repeated suspicious reports.
+- `TrustedSuspiciousFeedback`: weighted suspicious feedback is strong enough to suggest a trusted or higher-quality reporter pattern.
+- `PossibleFalsePositive`: weighted safe feedback is strong enough to suggest HIP may have over-warned.
+- `DangerousAdminRuleOverride`: an admin-managed Site Safety rule requests a Dangerous override.
+- `RepeatedSuspiciousScanHistory`: browser scan summaries repeatedly show suspicious, high-risk, or dangerous signals for the same domain.
+- `SuddenReputationChange`: a domain reputation score moves sharply or crosses a major risk boundary.
+
+Duplicate handling is intentionally conservative. If an open, in-review, or escalated review item already exists for the same normalized domain, URL hash, and review reason, HIP reuses that item instead of creating queue spam.
+
+Scan-history review uses only domain-level summaries, URL hashes, counts, status, confidence, and reason summaries. It does not copy stored page URLs into the review item, even when a future opt-in policy allows raw URL storage elsewhere.
+
+Admin rule review is a guardrail, not a bypass. A rule requesting a Dangerous override is queued for review before enforcement, and the review item stores only the structured rule ID/name and summary. Admin rules cannot execute raw code, call external APIs, or access private fields.
+
+Sudden reputation-change review is an integration hook for reputation and override workflows. It creates review evidence when a change is large enough to deserve human scrutiny, but the review item itself does not mutate reputation.
 
 ## Appeal Process
 

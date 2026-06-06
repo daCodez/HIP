@@ -1,4 +1,5 @@
 using FluentValidation;
+using HIP.Application.Browser;
 using HIP.Application.Reputation;
 using HIP.Application.SiteSafety;
 using HIP.Domain.Audit;
@@ -271,6 +272,21 @@ public interface IAdminReviewQueueService
     /// Creates review signals from weighted feedback aggregation.
     /// </summary>
     Task<IReadOnlyCollection<AdminReviewQueueItem>> CreateSignalsFromFeedbackAsync(WeightedFeedbackSummary summary, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Creates review signals from repeated privacy-safe browser scan history.
+    /// </summary>
+    Task<IReadOnlyCollection<AdminReviewQueueItem>> CreateSignalsFromScanHistoryAsync(IReadOnlyCollection<BrowserScanResultRecord> scanHistory, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Creates review signals from high-impact admin-managed Site Safety rules.
+    /// </summary>
+    Task<IReadOnlyCollection<AdminReviewQueueItem>> CreateSignalsFromAdminRuleAsync(AdminSiteSafetyRule rule, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Creates review signals for sudden reputation changes that should not silently affect trust.
+    /// </summary>
+    Task<IReadOnlyCollection<AdminReviewQueueItem>> CreateSignalsFromReputationChangeAsync(string domain, string targetId, int previousScore, int currentScore, string reasonSummary, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -442,27 +458,114 @@ public sealed class AdminReviewQueueService(
     /// <inheritdoc />
     public async Task<IReadOnlyCollection<AdminReviewQueueItem>> CreateSignalsFromFeedbackAsync(WeightedFeedbackSummary summary, CancellationToken cancellationToken)
     {
-        if (!summary.RecommendedReview)
+        var possibleFalsePositive = IsPossibleFalsePositive(summary);
+        if (!summary.RecommendedReview && !possibleFalsePositive)
         {
             return [];
         }
 
-        var severity = summary.SuspiciousFeedbackPattern || summary.ConflictingFeedbackSpike ? AdminReviewSeverity.Medium : AdminReviewSeverity.Low;
+        var signals = BuildFeedbackSignals(summary, possibleFalsePositive);
+        var items = new List<AdminReviewQueueItem>();
+        foreach (var signal in signals)
+        {
+            items.Add(await CreateSignalAsync(signal, cancellationToken));
+        }
+
+        return items;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<AdminReviewQueueItem>> CreateSignalsFromScanHistoryAsync(IReadOnlyCollection<BrowserScanResultRecord> scanHistory, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scanHistory);
+        if (scanHistory.Count == 0)
+        {
+            return [];
+        }
+
+        var recentSuspicious = scanHistory
+            .Where(IsSuspiciousScan)
+            .GroupBy(scan => NormalizeDomain(scan.Domain), StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() >= 3)
+            .ToArray();
+
+        var items = new List<AdminReviewQueueItem>();
+        foreach (var group in recentSuspicious)
+        {
+            var latest = group.OrderByDescending(scan => scan.LastCheckedUtc).First();
+            items.Add(await CreateSignalAsync(new AdminReviewSignal(
+                latest.Domain,
+                latest.PageUrlHash,
+                AdminReviewTargetType.Scan,
+                "RepeatedSuspiciousScanHistory",
+                AdminReviewSeverity.High,
+                AdminReviewSource.HipHistory,
+                latest.ScanResultId,
+                null,
+                null,
+                latest.Score,
+                latest.Status,
+                "Medium",
+                "Repeated suspicious browser scan history needs admin review.",
+                $"HIP observed {group.Count()} privacy-safe suspicious scan summaries for this domain."), cancellationToken));
+        }
+
+        return items;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<AdminReviewQueueItem>> CreateSignalsFromAdminRuleAsync(AdminSiteSafetyRule rule, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        if (rule.Effects.SetStatusOverride != SiteSafetyScanStatus.Dangerous)
+        {
+            return [];
+        }
+
         var item = await CreateSignalAsync(new AdminReviewSignal(
-            summary.Domain,
+            "admin-rules",
             null,
-            AdminReviewTargetType.Feedback,
-            summary.ConflictingFeedbackSpike ? "ConflictingFeedbackReports" : "WeightedFeedbackReview",
-            severity,
-            AdminReviewSource.UserFeedback,
+            AdminReviewTargetType.Rule,
+            "DangerousAdminRuleOverride",
+            AdminReviewSeverity.Critical,
+            AdminReviewSource.AdminRule,
+            null,
+            rule.RuleId,
             null,
             null,
+            rule.Effects.SetStatusOverride.ToString(),
+            rule.Effects.LowerConfidence > 0 ? "Low" : "Medium",
+            "Admin rule requests a Dangerous status override.",
+            $"Rule {rule.RuleId} ({Sanitize(rule.Name)}) requests a Dangerous override and must be reviewed before enforcement."), cancellationToken);
+
+        return [item];
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<AdminReviewQueueItem>> CreateSignalsFromReputationChangeAsync(string domain, string targetId, int previousScore, int currentScore, string reasonSummary, CancellationToken cancellationToken)
+    {
+        var delta = Math.Abs(currentScore - previousScore);
+        var crossedRiskBoundary = previousScore >= 50 && currentScore < 40 || previousScore <= 40 && currentScore >= 70;
+        if (delta < 30 && !crossedRiskBoundary)
+        {
+            return [];
+        }
+
+        var item = await CreateSignalAsync(new AdminReviewSignal(
+            domain,
+            null,
+            AdminReviewTargetType.Domain,
+            "SuddenReputationChange",
+            delta >= 40 ? AdminReviewSeverity.High : AdminReviewSeverity.Medium,
+            AdminReviewSource.HipHistory,
             null,
             null,
-            null,
-            summary.ConfidenceImpact > 0 ? "Low" : "Medium",
-            "Weighted feedback recommends admin review.",
-            string.Join(" ", summary.Explanations)), cancellationToken);
+            targetId,
+            currentScore,
+            currentScore < 40 ? "HighRisk" : "Review",
+            "Medium",
+            "Sudden reputation change needs admin review.",
+            $"Reputation moved from {previousScore} to {currentScore}. {Sanitize(reasonSummary)}"), cancellationToken);
 
         return [item];
     }
@@ -508,6 +611,90 @@ public sealed class AdminReviewQueueService(
 
         return signals;
     }
+
+    /// <summary>
+    /// Builds review signals from feedback aggregates without treating feedback as raw voting.
+    /// </summary>
+    /// <param name="summary">Weighted feedback summary.</param>
+    /// <param name="possibleFalsePositive">Whether safe feedback suggests an over-warning.</param>
+    /// <returns>Review signals to create.</returns>
+    private static IReadOnlyCollection<AdminReviewSignal> BuildFeedbackSignals(WeightedFeedbackSummary summary, bool possibleFalsePositive)
+    {
+        var signals = new List<AdminReviewSignal>();
+        if (summary.RecommendedReview)
+        {
+            var severity = summary.SuspiciousFeedbackPattern || summary.ConflictingFeedbackSpike ? AdminReviewSeverity.Medium : AdminReviewSeverity.Low;
+            var reviewReason = summary.ConflictingFeedbackSpike
+                ? "ConflictingFeedbackReports"
+                : summary.SuspiciousFeedbackPattern
+                    ? "RepeatedLooksSuspiciousFeedback"
+                    : summary.LooksSuspiciousWeight + summary.ReportIssueWeight >= 8
+                    ? "TrustedSuspiciousFeedback"
+                    : "WeightedFeedbackReview";
+
+            signals.Add(new AdminReviewSignal(
+                summary.Domain,
+                null,
+                AdminReviewTargetType.Feedback,
+                reviewReason,
+                severity,
+                AdminReviewSource.UserFeedback,
+                null,
+                null,
+                null,
+                null,
+                null,
+                summary.ConfidenceImpact > 0 ? "Low" : "Medium",
+                "Weighted feedback recommends admin review.",
+                string.Join(" ", summary.Explanations)));
+        }
+
+        if (possibleFalsePositive)
+        {
+            signals.Add(new AdminReviewSignal(
+                summary.Domain,
+                null,
+                AdminReviewTargetType.Feedback,
+                "PossibleFalsePositive",
+                AdminReviewSeverity.Medium,
+                AdminReviewSource.UserFeedback,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "Medium",
+                "Weighted safe feedback suggests a possible false positive.",
+                string.Join(" ", summary.Explanations)));
+        }
+
+        return signals;
+    }
+
+    /// <summary>
+    /// Determines whether weighted safe feedback is strong enough to warrant false-positive review.
+    /// </summary>
+    /// <param name="summary">Weighted feedback summary.</param>
+    /// <returns>True when safe feedback dominates suspicious feedback by a review-worthy margin.</returns>
+    private static bool IsPossibleFalsePositive(WeightedFeedbackSummary summary) =>
+        summary.LooksSafeWeight >= 10 &&
+        summary.LooksSafeWeight >= summary.LooksSuspiciousWeight + summary.ReportIssueWeight + 5;
+
+    /// <summary>
+    /// Determines whether a browser scan summary is suspicious enough to count toward scan-history review.
+    /// </summary>
+    /// <param name="scan">Privacy-safe browser scan summary.</param>
+    /// <returns>True for suspicious, high-risk, dangerous, or repeatedly risky link scans.</returns>
+    private static bool IsSuspiciousScan(BrowserScanResultRecord scan) =>
+        scan.RiskyLinksFound > 0 ||
+        scan.SuspiciousLinksFound > 0 ||
+        scan.DangerousLinksFound > 0 ||
+        scan.RiskLevel.Contains("Suspicious", StringComparison.OrdinalIgnoreCase) ||
+        scan.RiskLevel.Contains("HighRisk", StringComparison.OrdinalIgnoreCase) ||
+        scan.RiskLevel.Contains("Dangerous", StringComparison.OrdinalIgnoreCase) ||
+        scan.Status.Contains("Suspicious", StringComparison.OrdinalIgnoreCase) ||
+        scan.Status.Contains("HighRisk", StringComparison.OrdinalIgnoreCase) ||
+        scan.Status.Contains("Dangerous", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets a review item or throws a clear exception.
