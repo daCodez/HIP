@@ -274,11 +274,13 @@ The current EF implementation stores admin rules in HIP's SQLite-backed JSON rec
 
 ## External Scanner Policy
 
-External evidence providers are configurable. Development/MVP configuration enables the SSL Labs / Qualys-style TLS provider by default because it sends only the normalized domain and never sends page body text, form values, passwords, tokens, cookies, or email content. Operators can disable it in `/admin/settings` or configuration. Google Web Risk, VirusTotal, Safe Browsing, and any other third-party scanner remain disabled until an operator explicitly configures them.
+External evidence providers are configurable and disabled by default. HIP can host provider adapters such as SSL Labs / Qualys-style TLS checks, Google Web Risk / Safe Browsing-style threat checks, VirusTotal, and future scanners, but HIP must not call third-party scanners unless an operator explicitly enables the global provider switch and the specific provider.
+
+Providers return normalized evidence only. They do not decide the final HIP score. HIP scoring combines provider evidence with browser-observed signals, HIP history, weighted feedback, admin review evidence, and built-in/admin rules.
 
 Current MVP provider foundations:
 
-- `SSL Labs / Qualys TLS`: calls the SSL Labs domain assessment endpoint with only the normalized domain. Strong TLS gives only a small trust boost; weak TLS lowers confidence. Pending or failed TLS checks do not make a site trusted.
+- `SSL Labs / Qualys TLS`: disabled by default. When explicitly enabled, it calls the SSL Labs domain assessment endpoint with only the normalized domain. Strong TLS gives only a small trust boost; weak TLS lowers confidence. Pending or failed TLS checks do not make a site trusted.
 - `Google Web Risk / Safe Browsing`: normalizes future phishing/social-engineering matches as authoritative risk evidence.
 - `VirusTotal`: normalizes future malware or malicious URL/domain matches as authoritative risk evidence.
 
@@ -287,12 +289,12 @@ Configuration section:
 ```json
 {
   "ExternalSiteEvidence": {
-    "ExternalProvidersEnabled": true,
+    "ExternalProvidersEnabled": false,
     "AllowFullUrlChecks": false,
     "ProviderTimeout": "00:00:02",
     "DefaultCacheDuration": "06:00:00",
     "SslLabs": {
-      "Enabled": true,
+      "Enabled": false,
       "Endpoint": "https://api.ssllabs.com/api/v3/analyze"
     },
     "GoogleWebRisk": {
@@ -317,10 +319,10 @@ Runtime MVP controls:
 
 These runtime controls update the current running HIP process. Production deployments should persist the same values in configuration or a secure settings store and keep API keys in secret storage.
 
-To disable the live TLS provider during development, turn off either:
+To enable a provider, both switches must be on:
 
 - `ExternalSiteEvidence:ExternalProvidersEnabled`
-- `ExternalSiteEvidence:SslLabs:Enabled`
+- `ExternalSiteEvidence:<ProviderName>:Enabled`
 
 The same switches are available in `/admin/settings` while the app is running.
 
@@ -336,6 +338,7 @@ External provider rules:
 - Do not send full URLs unless policy explicitly allows it.
 - Handle timeouts and failures safely.
 - Scanner failure must not crash HIP scoring.
+- Provider failures lower confidence only; they must not create trust or danger by themselves.
 - Pending SSL Labs scans are treated as limited evidence and do not create a trust boost.
 - Clean scanner results do not make unknown domains trusted.
 - No scanner result does not mean trusted.

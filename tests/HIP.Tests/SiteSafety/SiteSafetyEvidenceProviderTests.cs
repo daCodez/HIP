@@ -184,6 +184,52 @@ public sealed class SiteSafetyEvidenceProviderTests
     }
 
     /// <summary>
+    /// Verifies a provider-specific disabled switch prevents external collection even when the global switch is on.
+    /// </summary>
+    [Test]
+    public async Task Disabled_provider_makes_no_external_call()
+    {
+        var options = new ExternalSiteEvidenceOptions { ExternalProvidersEnabled = true };
+        var providerOptions = new ExternalProviderOptions { Enabled = false };
+        var provider = new TestExternalProvider(new InMemoryExternalSiteEvidenceCache(), options, providerOptions);
+
+        var evidence = await provider.CollectEvidenceAsync(Context(), CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(provider.ExternalCallCount, Is.EqualTo(0));
+            Assert.That(evidence.Errors, Has.Some.Contains("disabled by provider configuration"));
+            Assert.That(evidence.IsAuthoritativeForRisk, Is.False);
+            Assert.That(evidence.IsAuthoritativeForTrust, Is.False);
+        });
+    }
+
+    /// <summary>
+    /// Verifies enabled placeholder providers fail safely when API credentials or adapters are missing.
+    /// </summary>
+    [Test]
+    public async Task Missing_api_key_fails_safely_without_score_impact()
+    {
+        var options = new ExternalSiteEvidenceOptions
+        {
+            ExternalProvidersEnabled = true,
+            GoogleWebRisk = new ExternalProviderOptions { Enabled = true }
+        };
+        var provider = new GoogleWebRiskSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), options);
+
+        var evidence = await provider.CollectEvidenceAsync(Context(), CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(evidence.Errors, Has.Some.Contains("API credentials"));
+            Assert.That(evidence.EvidenceItems, Is.Empty);
+            Assert.That(evidence.Confidence, Is.EqualTo(0));
+            Assert.That(evidence.IsAuthoritativeForRisk, Is.False);
+            Assert.That(evidence.IsAuthoritativeForTrust, Is.False);
+        });
+    }
+
+    /// <summary>
     /// Verifies provider-specific enablement does not leak private content when a concrete adapter is not configured.
     /// </summary>
     [Test]
@@ -540,7 +586,10 @@ public sealed class SiteSafetyEvidenceProviderTests
     /// <summary>
     /// Test external provider that records whether external collection was invoked.
     /// </summary>
-    private sealed class TestExternalProvider(IExternalSiteEvidenceCache cache, ExternalSiteEvidenceOptions options)
+    private sealed class TestExternalProvider(
+        IExternalSiteEvidenceCache cache,
+        ExternalSiteEvidenceOptions options,
+        ExternalProviderOptions? providerOptions = null)
         : ExternalSiteEvidenceProviderBase(cache, options)
     {
         /// <summary>
@@ -553,6 +602,9 @@ public sealed class SiteSafetyEvidenceProviderTests
 
         /// <inheritdoc />
         public override SiteSafetyEvidenceProviderType ProviderType => SiteSafetyEvidenceProviderType.ThreatIntel;
+
+        /// <inheritdoc />
+        protected override ExternalProviderOptions ProviderOptions => providerOptions ?? new ExternalProviderOptions();
 
         /// <inheritdoc />
         protected override Task<SiteSafetyEvidence> CollectExternalEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken)
