@@ -110,7 +110,7 @@ public sealed class AdminAuthorizationTests
     }
 
     [Test]
-    public async Task Readonly_can_view_external_provider_settings_disabled_by_default()
+    public async Task Readonly_can_view_external_provider_settings_with_ssl_labs_enabled_for_dev()
     {
         await using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
@@ -122,8 +122,8 @@ public sealed class AdminAuthorizationTests
         var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         Assert.Multiple(() =>
         {
-            Assert.That(json.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.False);
-            Assert.That(json.RootElement.GetProperty("sslLabs").GetProperty("enabled").GetBoolean(), Is.False);
+            Assert.That(json.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.True);
+            Assert.That(json.RootElement.GetProperty("sslLabs").GetProperty("enabled").GetBoolean(), Is.True);
             Assert.That(json.RootElement.GetProperty("googleWebRisk").GetProperty("enabled").GetBoolean(), Is.False);
             Assert.That(json.RootElement.GetProperty("virusTotal").GetProperty("enabled").GetBoolean(), Is.False);
         });
