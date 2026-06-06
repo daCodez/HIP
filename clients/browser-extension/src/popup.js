@@ -265,7 +265,10 @@ async function renderSiteSafety(summary = {}) {
     return null;
   }
 
-  const request = client.buildSiteSafetyRequest(activeTabUrl, summary);
+  const request = client.buildSiteSafetyRequest(activeTabUrl, {
+    ...summary,
+    pluginVersion: elements.pluginVersion.textContent || null
+  });
   const result = await client.scanSiteSafety(request);
   activeSiteSafety = result;
   const viewModel = buildSiteSafetyViewModel(result);
