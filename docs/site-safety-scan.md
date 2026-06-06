@@ -43,7 +43,7 @@ The expected flow is:
 12. A status label is assigned.
 13. `ConfidenceLevel` is assigned.
 14. Plain-English reasons and warnings are generated.
-15. A privacy-safe scan result can be stored for lookup and dashboard use.
+15. A privacy-safe scan result is stored for lookup and dashboard use.
 16. The browser popup displays the layered details and is the primary user experience.
 17. The injected banner appears only when warning rules require interruption.
 18. Users can submit weighted feedback such as Looks Safe or Looks Suspicious.
@@ -121,6 +121,51 @@ The scanner must not receive or store:
 - full chat logs
 
 The browser plugin sends only structural facts such as counts, source URLs, download-link URLs for extension checks, and whether login fields exist.
+
+## Scan Result Storage
+
+The live Site Safety route stores a privacy-safe scan summary after a successful scan:
+
+```http
+POST /api/v1/site-safety/scan
+```
+
+Storage uses the same browser scan result repository that already feeds public lookup and the Admin Dashboard. This avoids a duplicate persistence path while keeping the flow easy to trace:
+
+```text
+Browser Plugin -> HIP API -> Site Safety Scan -> Stored Scan Result -> Admin Dashboard
+```
+
+Stored fields are limited to public-safe scan facts:
+
+- normalized domain
+- hashed page URL
+- target type
+- `DomainTrustScore`
+- `PageTrustScore`
+- `ContentRiskScore`
+- `FinalHipScore`
+- status and risk label
+- confidence label
+- plain-English reasons and warnings
+- provider names and provider error count
+- matched built-in/admin rule IDs
+- plugin version when the client sends it
+- scan timestamp
+
+The stored summary must not include:
+
+- page body text
+- form values
+- passwords
+- tokens
+- cookies
+- private messages
+- email body content
+- unrelated browsing history
+- raw full URLs unless a future explicit policy allows it
+
+The Admin Dashboard reads these stored summaries for live cards such as total scans, status counts, recent risky scans, provider error count, and recent threat rows. If no summaries exist, the dashboard should show a no-data state instead of fake data.
 
 ## Provider-Based Evidence
 

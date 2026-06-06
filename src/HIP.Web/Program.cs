@@ -554,12 +554,14 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     siteSafetyApi.MapPost("/scan", async (
         SiteSafetyScanRequest request,
         ISiteSafetyScanner scanner,
+        ISiteSafetyScanResultStorageService scanResultStorageService,
         IAdminReviewQueueService reviewQueueService,
         CancellationToken cancellationToken) =>
     {
         try
         {
             var result = await scanner.ScanAsync(request, cancellationToken);
+            await scanResultStorageService.SaveAsync(request, result, cancellationToken);
             await reviewQueueService.CreateSignalsFromScanAsync(result, cancellationToken);
             return Results.Ok(ToSiteSafetyScanResponse(result));
         }

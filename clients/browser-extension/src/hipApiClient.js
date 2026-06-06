@@ -94,7 +94,8 @@ export class HipApiClient {
   async scanSiteSafety(request) {
     const payload = {
       url: request?.url || "",
-      observedSignals: request?.observedSignals || null
+      observedSignals: request?.observedSignals || null,
+      pluginVersion: request?.pluginVersion || null
     };
     const apiUrl = `${this.config.apiBaseUrl}/api/v1/site-safety/scan`;
     const apiResponse = await this.postJson(apiUrl, payload);
@@ -137,6 +138,7 @@ export class HipApiClient {
   buildSiteSafetyRequest(pageUrl, summary = {}) {
     return {
       url: pageUrl,
+      pluginVersion: summary.pluginVersion || null,
       observedSignals: {
         downloadLinks: Array.isArray(summary.downloadLinks) ? summary.downloadLinks : [],
         hasLoginForm: (summary.loginFormsDetected ?? 0) > 0,

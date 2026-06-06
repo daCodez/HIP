@@ -52,6 +52,7 @@ public sealed record BrowserScanResultRecord(
 /// <param name="DangerousLinksFound">Number of dangerous/critical links found.</param>
 /// <param name="RecommendedAction">Recommended action for the scanned site.</param>
 /// <param name="PrivacySafeMetadata">Optional privacy-safe counts and context; private content is rejected by validation.</param>
+/// <param name="ScannedAtUtc">Optional scan timestamp supplied by HIP-owned scan services; browser submissions default to server receipt time.</param>
 public sealed record BrowserScanResultSaveRequest(
     string Domain,
     string PageUrl,
@@ -64,7 +65,8 @@ public sealed record BrowserScanResultSaveRequest(
     int SuspiciousLinksFound,
     int DangerousLinksFound,
     string RecommendedAction,
-    IReadOnlyDictionary<string, string>? PrivacySafeMetadata);
+    IReadOnlyDictionary<string, string>? PrivacySafeMetadata,
+    DateTimeOffset? ScannedAtUtc = null);
 
 /// <summary>
 /// API response returned after HIP stores a browser scan result.

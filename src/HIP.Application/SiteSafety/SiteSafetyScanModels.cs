@@ -48,9 +48,11 @@ public enum SiteSafetyScanStatus
 /// </summary>
 /// <param name="Url">Absolute HTTP or HTTPS URL to scan.</param>
 /// <param name="ObservedSignals">Optional privacy-safe observations collected by a HIP client.</param>
+/// <param name="PluginVersion">Optional HIP client version used only for debugging scan provenance in stored summaries.</param>
 public sealed record SiteSafetyScanRequest(
     string Url,
-    SiteSafetyObservedSignals? ObservedSignals = null);
+    SiteSafetyObservedSignals? ObservedSignals = null,
+    string? PluginVersion = null);
 
 /// <summary>
 /// Privacy-safe client observations used by the scanner without sending full page text or form values.

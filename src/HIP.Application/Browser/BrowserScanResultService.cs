@@ -40,7 +40,7 @@ public sealed class BrowserScanResultService(
         ValidateCounts(request);
         ValidateHttpUrl(request.PageUrl);
 
-        var now = DateTimeOffset.UtcNow;
+        var now = request.ScannedAtUtc ?? DateTimeOffset.UtcNow;
         var metadata = ValidateMetadata(request.PrivacySafeMetadata);
         var reasons = NormalizeReasons(request.Reasons);
         var record = new BrowserScanResultRecord(

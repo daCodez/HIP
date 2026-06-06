@@ -11,11 +11,13 @@ test("site safety request includes privacy-safe scan facts", () => {
     inlineScriptCount: 4,
     externalScriptUrls: ["https://cdn.example.com/app.js"],
     suspiciousScriptPatternCount: 0,
+    pluginVersion: "HIP Plugin v0.1.0-dev",
     pageText: "private page body",
     formValues: "password=secret"
   });
 
   assert.equal(request.url, "https://example.com/login");
+  assert.equal(request.pluginVersion, "HIP Plugin v0.1.0-dev");
   assert.deepEqual(request.observedSignals.downloadLinks, ["https://example.com/setup.exe"]);
   assert.equal(request.observedSignals.hasLoginForm, true);
   assert.equal(request.observedSignals.hasPasswordField, true);
@@ -38,7 +40,7 @@ test("scan site safety calls versioned API route", async () => {
 
   try {
     const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5260" });
-    await client.scanSiteSafety(client.buildSiteSafetyRequest("https://example.com", {}));
+    await client.scanSiteSafety(client.buildSiteSafetyRequest("https://example.com", { pluginVersion: "HIP Plugin v0.1.0-dev" }));
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -46,6 +48,7 @@ test("scan site safety calls versioned API route", async () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "http://localhost:5099/api/v1/site-safety/scan");
   assert.equal(calls[0].options.method, "POST");
+  assert.equal(JSON.parse(calls[0].options.body).pluginVersion, "HIP Plugin v0.1.0-dev");
 });
 
 test("scan site safety falls back to web host when API host route is missing", async () => {
