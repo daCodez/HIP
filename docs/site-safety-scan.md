@@ -23,6 +23,57 @@ The MVP scan accepts a public HTTP or HTTPS URL plus optional privacy-safe obser
 - impact on `DomainTrustScore`, `PageTrustScore`, `ContentRiskScore`, and final HIP score
 - normalized provider evidence used by the scan
 
+## End-To-End Scan Flow
+
+HIP's MVP scan flow is intentionally client-observed and provider-based. The server does not crawl random websites, download files, submit forms, read page body text, or inspect private content.
+
+The expected flow is:
+
+1. The browser plugin observes the current page safely.
+2. The plugin builds a privacy-safe signal payload using structural facts only.
+3. HIP API validation rejects malformed, unsafe, private-network, or private-content input.
+4. HIP checks short-lived cache/history before recomputing a scan.
+5. Evidence providers return normalized evidence. Providers collect evidence, not final scores.
+6. Built-in rules and approved admin rules evaluate the normalized signals.
+7. Malware, phishing, redirect, script, download, form, and reputation risk scores are calculated.
+8. `DomainTrustScore` is calculated.
+9. `PageTrustScore` is calculated.
+10. `ContentRiskScore` is calculated.
+11. `FinalHipScore` is calculated from the layered scores.
+12. A status label is assigned.
+13. `ConfidenceLevel` is assigned.
+14. Plain-English reasons and warnings are generated.
+15. A privacy-safe scan result can be stored for lookup and dashboard use.
+16. The browser popup displays the layered details and is the primary user experience.
+17. The injected banner appears only when warning rules require interruption.
+18. Users can submit weighted feedback such as Looks Safe or Looks Suspicious.
+19. The admin review queue receives important uncertain, risky, conflicting, or high-impact cases.
+
+MVP browser observations may include:
+
+- current domain
+- URL hash
+- link counts
+- risky link counts
+- redirect counts
+- download-like link URLs used for local extension checks
+- login/password/payment field presence
+- structural script counts
+- privacy-safe risk labels such as `CrackedSoftware` or `DisableAntivirus`
+
+MVP browser observations must not include:
+
+- page body text
+- form values
+- passwords
+- tokens
+- cookies
+- private messages
+- email body content
+- unrelated browsing history
+
+This means HIP can evaluate page risk without becoming a crawler or surveillance system.
+
 ## Status Labels
 
 - `Clean`: no obvious malware/phishing found and HIP has enough supporting trust data.
@@ -395,7 +446,7 @@ It does not replace domain reputation, identity verification, signed content ver
 
 ## Browser Plugin Display
 
-The browser plugin popup shows:
+The browser plugin popup is the default place for HIP details. It shows:
 
 - Site Safety status
 - malware risk
@@ -404,8 +455,42 @@ The browser plugin popup shows:
 - download risk
 - script risk
 - plain-English scan summary
+- `DomainTrustScore`
+- `PageTrustScore`
+- `ContentRiskScore`
+- `FinalHipScore`
+- confidence level
+- normalized external evidence summaries when available
 
 The plugin still avoids collecting page text and form contents.
+
+The injected banner is warning-only by default:
+
+- `Trusted`: no banner
+- `MostlyTrusted`: no banner
+- `LimitedTrustData`: no banner unless structural risk exists, such as login, payment, executable download, risky redirect, or trusted-domain risk mismatch
+- `Unknown`: no banner by default
+- `Suspicious`: soft warning banner
+- `HighRisk`: warning banner
+- `Dangerous`: strong warning banner
+
+This keeps HIP protective without forcing users to dismiss a banner on normal pages.
+
+## Flow Verification
+
+The scan flow is covered by service-level tests rather than full Chromium automation for now. These tests verify:
+
+- unknown clean sites remain `LimitedData` or `Unknown`
+- known trusted domains can have high `DomainTrustScore` without hiding page/content risk
+- GitHub repository-like pages are scored as mixed trust surfaces
+- executable downloads raise content risk
+- login forms on unknown domains raise warnings
+- provider timeouts do not crash scoring
+- external providers are disabled by default
+- feedback is weighted evidence, not voting
+- high-risk low-confidence cases create generated admin review signals
+- popup responses expose the layered fields required by the extension
+- banner policy keeps normal clean pages out of injected warning UI
 
 ## Known MVP Limits
 
