@@ -11,6 +11,45 @@ namespace HIP.Tests.SiteSafety;
 public sealed class SiteSafetyEvidenceProviderTests
 {
     /// <summary>
+    /// Verifies observed signal URL collections are stripped to public-safe origin/path values before scoring.
+    /// </summary>
+    [Test]
+    public void Observed_signal_sanitizer_strips_query_and_fragment_values()
+    {
+        var sanitized = SiteSafetyObservedSignalSanitizer.Sanitize(new SiteSafetyObservedSignals(
+            RedirectChain: ["https://example.com/redirect?token=secret#frag"],
+            ExternalScriptUrls: ["https://cdn.example.com/app.js?session=abc"],
+            DownloadLinks: ["https://files.example.com/tool.exe?downloadToken=secret"],
+            MatchedRiskTerms: ["CrackedSoftware"]));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(sanitized.RedirectChain!.Single(), Is.EqualTo("https://example.com/redirect"));
+            Assert.That(sanitized.ExternalScriptUrls!.Single(), Is.EqualTo("https://cdn.example.com/app.js"));
+            Assert.That(sanitized.DownloadLinks!.Single(), Is.EqualTo("https://files.example.com/tool.exe"));
+            Assert.That(sanitized.MatchedRiskTerms!.Single(), Is.EqualTo("CrackedSoftware"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies observed signal URLs cannot point at localhost or private-network targets.
+    /// </summary>
+    [Test]
+    public void Site_safety_validator_rejects_internal_observed_signal_urls()
+    {
+        var validator = new SiteSafetyScanValidator();
+        var result = validator.Validate(new SiteSafetyScanRequest(
+            "https://example.com",
+            new SiteSafetyObservedSignals(
+                RedirectChain: ["http://localhost/admin"],
+                ExternalScriptUrls: ["http://192.168.1.10/script.js"],
+                DownloadLinks: ["http://10.0.0.5/file.exe"])));
+
+        Assert.That(result.IsValid, Is.False);
+        Assert.That(result.Errors.Select(error => error.ErrorMessage), Has.Some.Contains("Observed redirect URLs must be public HTTP or HTTPS URLs."));
+    }
+
+    /// <summary>
     /// Verifies third-party provider base classes do not call a specific scanner when that provider is disabled.
     /// </summary>
     [Test]
@@ -153,10 +192,10 @@ public sealed class SiteSafetyEvidenceProviderTests
     }
 
     /// <summary>
-    /// Verifies concrete providers follow the MVP defaults: SSL Labs is active, credentialed providers stay disabled.
+    /// Verifies concrete providers follow the safe MVP default: no external calls until the global switch is enabled.
     /// </summary>
     [Test]
-    public async Task Concrete_external_providers_enable_ssl_labs_by_default_and_leave_credentialed_providers_disabled()
+    public async Task Concrete_external_providers_are_disabled_by_default()
     {
         var options = new ExternalSiteEvidenceOptions();
         var cache = new InMemoryExternalSiteEvidenceCache();
@@ -179,10 +218,8 @@ public sealed class SiteSafetyEvidenceProviderTests
             Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("SSL Labs / Qualys TLS"));
             Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("Google Web Risk / Safe Browsing"));
             Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("VirusTotal"));
-            Assert.That(evidence.Single(item => item.ProviderName == "SSL Labs / Qualys TLS").EvidenceItems.Single().Category, Is.EqualTo("TlsGrade"));
-            Assert.That(evidence.Single(item => item.ProviderName == "SSL Labs / Qualys TLS").EvidenceItems.Single().Value, Is.EqualTo("A"));
-            Assert.That(evidence.Where(item => item.ProviderName != "SSL Labs / Qualys TLS").SelectMany(item => item.Errors), Has.All.Contains("disabled"));
-            Assert.That(evidence.Where(item => item.ProviderName != "SSL Labs / Qualys TLS").SelectMany(item => item.EvidenceItems), Is.Empty);
+            Assert.That(evidence.SelectMany(item => item.Errors), Has.All.Contains("disabled"));
+            Assert.That(evidence.SelectMany(item => item.EvidenceItems), Is.Empty);
         });
     }
 

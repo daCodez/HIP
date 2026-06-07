@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
@@ -11,6 +12,7 @@ using HIP.Domain.Risk;
 using HIP.Domain.Rules;
 using HIP.Infrastructure.Persistence;
 using HIP.Infrastructure.Persistence.Repositories;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
@@ -52,6 +54,100 @@ public sealed class PersistenceRepositoryTests
         Assert.That(retrieved, Is.Not.Null);
         Assert.That(retrieved!.CurrentScore, Is.EqualTo(82));
         Assert.That(retrieved.Status, Is.EqualTo(RiskStatus.Trusted));
+    }
+
+    /// <summary>
+    /// Verifies repository payloads are encrypted before they reach the generic JSON record table.
+    /// </summary>
+    [Test]
+    public async Task RecordStoreEncryptsJsonPayloadAtRest()
+    {
+        await using var database = await CreateDatabaseAsync();
+        IReputationProfileRepository repository = new EfReputationProfileRepository(new HipRecordStore(database.Context));
+        var profile = new ReputationProfile(
+            "rep-domain-encrypted",
+            ReputationSubjectType.Domain,
+            "encrypted.example",
+            74,
+            RiskStatus.ProbablySafe,
+            1,
+            0,
+            0,
+            DateTimeOffset.UtcNow,
+            ["Encrypted storage test reason"]);
+
+        await repository.SaveAsync(profile, CancellationToken.None);
+
+        var rawJson = database.Context.Records.Single().Json;
+        Assert.Multiple(() =>
+        {
+            Assert.That(rawJson, Does.Contain("hip-record-envelope"));
+            Assert.That(rawJson, Does.Contain("AES-256-GCM"));
+            Assert.That(rawJson, Does.Not.Contain("encrypted.example"));
+            Assert.That(rawJson, Does.Not.Contain("Encrypted storage test reason"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies encrypted record storage remains backward compatible with old plaintext development rows.
+    /// </summary>
+    [Test]
+    public async Task RecordStoreCanReadLegacyPlaintextRows()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var profile = new ReputationProfile(
+            "rep-domain-legacy",
+            ReputationSubjectType.Domain,
+            "legacy.example",
+            63,
+            RiskStatus.ProbablySafe,
+            1,
+            0,
+            0,
+            DateTimeOffset.UtcNow,
+            ["Legacy plaintext row"]);
+        database.Context.Records.Add(new HipDbRecord
+        {
+            Partition = "reputation-profile",
+            Id = "domain:legacy.example",
+            Json = JsonSerializer.Serialize(profile, JsonOptions),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow
+        });
+        await database.Context.SaveChangesAsync();
+        IReputationProfileRepository repository = new EfReputationProfileRepository(new HipRecordStore(database.Context));
+
+        var retrieved = await repository.GetAsync(ReputationSubjectType.Domain, "legacy.example", CancellationToken.None);
+
+        Assert.That(retrieved?.CurrentScore, Is.EqualTo(63));
+    }
+
+    /// <summary>
+    /// Verifies production startup refuses unsafe EnsureCreated database setup when migrations are absent.
+    /// </summary>
+    [Test]
+    public void DatabaseInitializerRequiresMigrationsOutsideDevelopment()
+    {
+        var services = new ServiceCollection();
+        services.AddDbContext<HipDbContext>(options => options.UseSqlite("DataSource=:memory:"));
+        using var provider = services.BuildServiceProvider();
+
+        var exception = Assert.ThrowsAsync<InvalidOperationException>(() =>
+            HipDatabaseInitializer.EnsureCreatedAsync(provider, isLocalDevelopment: false));
+
+        Assert.That(exception?.Message, Does.Contain("migrations are required"));
+    }
+
+    /// <summary>
+    /// Verifies the development encryption key cannot be used when production safety is requested.
+    /// </summary>
+    [Test]
+    public void RecordEncryptorRejectsDevelopmentKeyOutsideDevelopment()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new DevelopmentHipRecordEncryptor(new HipRecordEncryptionOptions(AllowDevelopmentKey: false)));
+
+        Assert.That(exception?.Message, Does.Contain("Record encryption key"));
     }
 
     [Test]
@@ -277,6 +373,11 @@ public sealed class PersistenceRepositoryTests
 
         return new TestDatabase(connection, context);
     }
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
 
     private sealed class TestDatabase(SqliteConnection connection, HipDbContext context) : IAsyncDisposable
     {

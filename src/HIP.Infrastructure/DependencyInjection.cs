@@ -15,13 +15,26 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HIP.Infrastructure;
 
+/// <summary>
+/// Registers HIP infrastructure services such as EF Core repositories, record encryption, and secure hashing options.
+/// </summary>
 public static class DependencyInjection
 {
-    public static IServiceCollection AddHipInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    /// <summary>
+    /// Adds HIP infrastructure services and binds environment-aware security options.
+    /// </summary>
+    /// <param name="services">Service collection used by the host.</param>
+    /// <param name="configuration">Configuration containing connection strings and HIP security keys.</param>
+    /// <param name="isLocalDevelopment">Whether shared development keys and safe create behavior may be used.</param>
+    /// <returns>The same service collection for fluent registration.</returns>
+    public static IServiceCollection AddHipInfrastructure(this IServiceCollection services, IConfiguration configuration, bool isLocalDevelopment = true)
     {
         var connectionString = configuration.GetConnectionString("HipDatabase") ?? "Data Source=hip-dev.db";
 
         services.AddDbContext<HipDbContext>(options => options.UseSqlite(connectionString));
+        services.AddSingleton(BindRecordEncryptionOptions(configuration, isLocalDevelopment));
+        services.AddSingleton(BindPrivacyHashingOptions(configuration, isLocalDevelopment));
+        services.AddSingleton<IHipRecordEncryptor, DevelopmentHipRecordEncryptor>();
         services.AddScoped<HipRecordStore>();
 
         services.AddScoped<IHipIdentityRepository, EfHipIdentityRepository>();
@@ -42,4 +55,26 @@ public static class DependencyInjection
 
         return services;
     }
+
+    /// <summary>
+    /// Binds record encryption settings and disables default keys outside local Development.
+    /// </summary>
+    /// <param name="configuration">Application configuration.</param>
+    /// <param name="isLocalDevelopment">Whether the host is a local Development process.</param>
+    /// <returns>Record encryption options.</returns>
+    private static HipRecordEncryptionOptions BindRecordEncryptionOptions(IConfiguration configuration, bool isLocalDevelopment) =>
+        new(
+            configuration["HipSecurity:RecordEncryptionKey"] ?? DevelopmentHipRecordEncryptor.DevelopmentOnlyKey,
+            AllowDevelopmentKey: isLocalDevelopment);
+
+    /// <summary>
+    /// Binds privacy HMAC settings and disables default keys outside local Development.
+    /// </summary>
+    /// <param name="configuration">Application configuration.</param>
+    /// <param name="isLocalDevelopment">Whether the host is a local Development process.</param>
+    /// <returns>Privacy hashing options.</returns>
+    private static PrivacyHashingOptions BindPrivacyHashingOptions(IConfiguration configuration, bool isLocalDevelopment) =>
+        new(
+            configuration["HipSecurity:PrivacyHashingKey"] ?? Sha256PrivacyHashingService.DevelopmentOnlyKey,
+            AllowDevelopmentKey: isLocalDevelopment);
 }

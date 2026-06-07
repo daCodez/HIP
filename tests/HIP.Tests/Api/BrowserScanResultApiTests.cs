@@ -179,6 +179,34 @@ public sealed class BrowserScanResultApiTests
     }
 
     /// <summary>
+    /// Verifies repeated identical browser scan submissions are rejected before they can spam live dashboard data.
+    /// </summary>
+    [Test]
+    public async Task Scan_result_endpoint_rejects_duplicate_submission()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        var timestamp = DateTimeOffset.UtcNow;
+        var request = ValidRequest() with
+        {
+            Domain = $"duplicate-{Guid.NewGuid():N}.com",
+            ScannedAtUtc = timestamp,
+            PageUrlHash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            PageUrl = null,
+            PluginVersion = "HIP Plugin v0.1.0-dev"
+        };
+
+        var first = await client.PostAsJsonAsync("/api/v1/browser/scan-results", request);
+        var second = await client.PostAsJsonAsync("/api/v1/browser/scan-results", request);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        });
+    }
+
+    /// <summary>
     /// Verifies public lookup uses the stored browser scan result and includes source and count fields.
     /// </summary>
     [Test]

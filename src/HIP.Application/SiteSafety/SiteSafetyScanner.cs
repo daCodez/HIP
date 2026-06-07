@@ -81,7 +81,7 @@ public sealed class SiteSafetyScanner(
                 return cached;
             }
 
-            var signals = request.ObservedSignals ?? new SiteSafetyObservedSignals();
+            var signals = SiteSafetyObservedSignalSanitizer.Sanitize(request.ObservedSignals);
             var evidence = await CollectEvidenceAsync(uri, domain, signals, providers, cancellationToken);
             var options = ruleOptions ?? new SiteSafetyRuleOptions();
             var ruleInput = BuildRuleInput(uri, domain, signals, evidence);

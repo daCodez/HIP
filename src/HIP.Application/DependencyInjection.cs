@@ -11,6 +11,7 @@ using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.Safety;
 using HIP.Application.Scoring;
+using HIP.Application.Security;
 using HIP.Application.SecondLife;
 using HIP.Application.SelfHealing;
 using HIP.Application.Scans;
@@ -20,11 +21,20 @@ using HIP.Domain.Reporting;
 using HIP.Domain.Review;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace HIP.Application;
 
+/// <summary>
+/// Registers HIP application-layer services, validators, repositories, and security helpers.
+/// </summary>
 public static class DependencyInjection
 {
+    /// <summary>
+    /// Adds HIP application services without binding infrastructure-specific storage or secret configuration.
+    /// </summary>
+    /// <param name="services">Service collection used by the host.</param>
+    /// <returns>The same service collection for fluent registration.</returns>
     public static IServiceCollection AddHipApplication(this IServiceCollection services)
     {
         var assembly = typeof(DependencyInjection).Assembly;
@@ -67,7 +77,9 @@ public static class DependencyInjection
         services.AddScoped<IWeightedFeedbackAggregationService, WeightedFeedbackAggregationService>();
         services.AddScoped<IRiskFindingReportRepository, InMemoryRiskFindingReportRepository>();
         services.AddScoped<IRiskFindingIngestionService, RiskFindingIngestionService>();
+        services.TryAddSingleton(new PrivacyHashingOptions());
         services.AddSingleton<IPrivacyHashingService, Sha256PrivacyHashingService>();
+        services.AddSingleton<IDuplicateSubmissionGuard, InMemoryDuplicateSubmissionGuard>();
         services.AddSingleton<IReportRetentionPolicyService, ReportRetentionPolicyService>();
         services.AddSingleton<IPrivacySafeReportService, PrivacySafeReportService>();
         services.AddSingleton<IHipCryptoProvider, DevelopmentHipCryptoProvider>();

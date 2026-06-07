@@ -50,6 +50,37 @@ public sealed class PrivacySafeReportingTests
         Assert.That(stored.Single().UrlHash, Does.StartWith("sha256:"));
     }
 
+    /// <summary>
+    /// Verifies privacy hashes are keyed HMAC values, not plain SHA-256 hashes.
+    /// </summary>
+    [Test]
+    public void Privacy_hashing_uses_secret_key_material()
+    {
+        var first = new Sha256PrivacyHashingService(new PrivacyHashingOptions("hip-test-key-one", AllowDevelopmentKey: false));
+        var second = new Sha256PrivacyHashingService(new PrivacyHashingOptions("hip-test-key-two", AllowDevelopmentKey: false));
+
+        var firstHash = first.Hash("https://risk.example/path");
+        var secondHash = second.Hash("https://risk.example/path");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstHash, Does.StartWith("sha256:"));
+            Assert.That(firstHash, Is.Not.EqualTo(secondHash));
+        });
+    }
+
+    /// <summary>
+    /// Verifies production mode refuses the shared development privacy hashing key.
+    /// </summary>
+    [Test]
+    public void Privacy_hashing_rejects_development_key_outside_development()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new Sha256PrivacyHashingService(new PrivacyHashingOptions(AllowDevelopmentKey: false)));
+
+        Assert.That(exception?.Message, Does.Contain("Privacy hashing key"));
+    }
+
     [Test]
     public async Task Report_does_not_store_full_private_chat_logs()
     {

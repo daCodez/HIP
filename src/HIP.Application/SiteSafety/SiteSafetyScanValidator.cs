@@ -32,7 +32,21 @@ public sealed class SiteSafetyScanValidator : AbstractValidator<SiteSafetyScanRe
 
         RuleForEach(request => request.ObservedSignals!.DownloadLinks)
             .MaximumLength(2048)
+            .Must(SiteSafetyObservedSignalSanitizer.IsSafePublicHttpUrl)
+            .WithMessage("Observed download URLs must be public HTTP or HTTPS URLs.")
             .When(request => request.ObservedSignals?.DownloadLinks is not null);
+
+        RuleForEach(request => request.ObservedSignals!.RedirectChain)
+            .MaximumLength(2048)
+            .Must(SiteSafetyObservedSignalSanitizer.IsSafePublicHttpUrl)
+            .WithMessage("Observed redirect URLs must be public HTTP or HTTPS URLs.")
+            .When(request => request.ObservedSignals?.RedirectChain is not null);
+
+        RuleForEach(request => request.ObservedSignals!.ExternalScriptUrls)
+            .MaximumLength(2048)
+            .Must(SiteSafetyObservedSignalSanitizer.IsSafePublicHttpUrl)
+            .WithMessage("Observed script URLs must be public HTTP or HTTPS URLs.")
+            .When(request => request.ObservedSignals?.ExternalScriptUrls is not null);
     }
 
     /// <summary>

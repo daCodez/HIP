@@ -34,6 +34,14 @@ Current persisted record categories include:
 
 The first storage implementation uses a JSON-backed `hip_records` table keyed by partition and ID. This keeps the foundation small while preserving clean boundaries for later normalized PostgreSQL storage.
 
+## Encrypted Record Storage
+
+HIP protects generic record payloads before writing them to the `Json` column. The current development implementation stores an encrypted envelope using AES-256-GCM with a configured `HipSecurity:RecordEncryptionKey`.
+
+Development defaults are intentionally marked as development-only. Outside local Development, startup refuses the shared default key so production deployments must provide real secret material through configuration or a secret store.
+
+Existing plaintext development rows remain readable so local data created before this hardening patch can still be migrated or inspected. New writes use the encrypted envelope.
+
 ## Database Safety Rules
 
 - Do not use `EnsureDeleted`.
@@ -43,9 +51,11 @@ The first storage implementation uses a JSON-backed `hip_records` table keyed by
 
 The dev app uses safe create behavior for the initial SQLite table. It creates missing storage but does not delete existing data.
 
+Outside local Development, HIP no longer uses `EnsureCreated`. If EF migrations are present, startup applies them with `MigrateAsync`. If no migrations exist, startup fails closed with a clear error so production-like environments cannot silently create unmanaged schemas.
+
 ## Migrations
 
-No EF migration files are added yet. The initial development foundation uses safe table creation so the schema can stabilize before migration history is introduced.
+No EF migration files are added yet. The initial development foundation uses safe table creation so the schema can stabilize before migration history is introduced. Production deployments must add and review migrations before running outside Development.
 
 When migrations are added:
 

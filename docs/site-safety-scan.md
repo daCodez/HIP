@@ -120,7 +120,7 @@ The scanner must not receive or store:
 - private messages
 - full chat logs
 
-The browser plugin sends only structural facts such as counts, source URLs, download-link URLs for extension checks, and whether login fields exist.
+The browser plugin sends only structural facts such as counts, source URLs, download-link URLs for extension checks, and whether login fields exist. HIP sanitizes observed URL collections before scoring: query strings and fragments are stripped, collection sizes are bounded, and localhost/private-network URLs are rejected so scan payloads cannot become SSRF probes or accidental secret carriers.
 
 ## Scan Result Storage
 
@@ -167,6 +167,12 @@ The stored summary must not include:
 
 The Admin Dashboard reads these stored summaries for live cards such as total scans, status counts, recent risky scans, provider error count, and recent threat rows. If no summaries exist, the dashboard should show a no-data state instead of fake data.
 
+## Duplicate Submission Controls
+
+Public feedback, privacy-safe reports, browser scan results, and Site Safety scan requests use a short in-memory duplicate guard. The guard hashes normalized fingerprint parts and keeps only the fingerprint expiry, not the raw request body. This reduces accidental double-submits and simple replay spam during MVP testing.
+
+The guard is single-node only. Production should replace or supplement it with distributed rate limiting, signed HIP client requests, abuse scoring, and persistence-backed deduplication.
+
 ## Provider-Based Evidence
 
 Site Safety Scan is provider-based. Providers return normalized evidence; they do not directly decide the final HIP score.
@@ -176,7 +182,7 @@ Current provider types:
 - `BrowserObserved`: active in the MVP. Uses privacy-safe browser facts.
 - `UserFeedback`: active in the MVP. Uses weighted HIP trust feedback as weak evidence.
 - `AdminReview`: active in the MVP. Uses approved admin review decisions as transparent scoring evidence.
-- `TlsScanner`: SSL Labs / Qualys-style TLS provider. Enabled in development/MVP config and configurable at runtime.
+- `TlsScanner`: SSL Labs / Qualys-style TLS provider. Available for opt-in runtime configuration, but not called unless the global provider switch is enabled.
 - `ThreatIntel`: Google Web Risk / Safe Browsing-style provider foundation. Disabled by default.
 - `UrlReputation`: VirusTotal-style URL/domain reputation provider foundation. Disabled by default.
 
@@ -370,13 +376,13 @@ The current EF implementation stores admin rules in HIP's SQLite-backed JSON rec
 
 ## External Scanner Policy
 
-External evidence providers are configurable. For the dev/MVP build, the global external-provider switch and the SSL Labs / Qualys-style TLS provider are enabled by default so operators can see live TLS evidence without extra setup. Credentialed threat-intelligence providers such as Google Web Risk / Safe Browsing and VirusTotal remain disabled until API credentials and concrete adapters are configured.
+External evidence providers are configurable. For the dev/MVP build, the global external-provider switch is disabled by default so HIP never calls third-party scanners without explicit operator action. SSL Labs / Qualys-style TLS is the first provider ready for opt-in use once the global switch is enabled. Credentialed threat-intelligence providers such as Google Web Risk / Safe Browsing and VirusTotal remain disabled until API credentials and concrete adapters are configured.
 
 Providers return normalized evidence only. They do not decide the final HIP score. HIP scoring combines provider evidence with browser-observed signals, HIP history, weighted feedback, admin review evidence, and built-in/admin rules.
 
 Current MVP provider foundations:
 
-- `SSL Labs / Qualys TLS`: enabled by default in dev/MVP configuration. It calls the SSL Labs domain assessment endpoint with only the normalized domain. Strong TLS gives only a small trust boost; weak TLS lowers confidence. Pending or failed TLS checks do not make a site trusted.
+- `SSL Labs / Qualys TLS`: available for opt-in dev/MVP configuration. When globally enabled, it calls the SSL Labs domain assessment endpoint with only the normalized domain. Strong TLS gives only a small trust boost; weak TLS lowers confidence. Pending or failed TLS checks do not make a site trusted.
 - `Google Web Risk / Safe Browsing`: disabled until credentials and a concrete adapter are configured. It normalizes future phishing/social-engineering matches as authoritative risk evidence.
 - `VirusTotal`: disabled until credentials and a concrete adapter are configured. It normalizes future malware or malicious URL/domain matches as authoritative risk evidence.
 
@@ -420,7 +426,7 @@ To enable or disable a provider, use both the global switch and the provider-spe
 - `ExternalSiteEvidence:ExternalProvidersEnabled`
 - `ExternalSiteEvidence:<ProviderName>:Enabled`
 
-The same switches are available in `/admin/settings` while the app is running. To disable the default SSL Labs / Qualys TLS check, turn off either `ExternalProvidersEnabled` or `SslLabs.Enabled`.
+The same switches are available in `/admin/settings` while the app is running. To enable SSL Labs / Qualys TLS checks, turn on both `ExternalProvidersEnabled` and `SslLabs.Enabled`. Turning either switch off prevents outbound TLS scanner calls.
 
 External provider rules:
 
@@ -531,7 +537,8 @@ The scan flow is covered by service-level tests rather than full Chromium automa
 - executable downloads raise content risk
 - login forms on unknown domains raise warnings
 - provider timeouts do not crash scoring
-- SSL Labs / Qualys TLS is enabled by default, while credentialed threat-intelligence providers stay disabled until configured
+- external providers make no outbound calls unless `ExternalProvidersEnabled` is true and the specific provider is enabled
+- SSL Labs / Qualys TLS can be enabled for live TLS evidence, while credentialed threat-intelligence providers stay disabled until configured
 - feedback is weighted evidence, not voting
 - high-risk low-confidence cases create generated admin review signals
 - popup responses expose the layered fields required by the extension

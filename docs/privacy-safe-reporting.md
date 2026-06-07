@@ -103,7 +103,9 @@ HIP hashes privacy-sensitive identifiers before storage when raw values are supp
 - sender identity when a raw sender identifier is supplied
 - device or license identity when a raw device/license identifier is supplied
 
-The MVP hashing service uses SHA-256 with a `sha256:` prefix. This is for privacy minimization, not authentication.
+The MVP hashing service returns values with a `sha256:` compatibility prefix, but the value is now produced with keyed HMAC-SHA256. The key comes from `HipSecurity:PrivacyHashingKey`.
+
+Development defaults are intentionally marked as development-only. Outside local Development, HIP refuses the shared default key so deployments must provide real secret material. HMAC hashing is for privacy minimization and stable correlation of the same risky URL/sender/device within HIP; it is not authentication and must not replace HIP signatures.
 
 ## Retention Policy
 

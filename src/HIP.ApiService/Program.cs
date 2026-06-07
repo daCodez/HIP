@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Threading.RateLimiting;
 using HIP.Application;
 using HIP.Application.Browser;
@@ -5,6 +6,7 @@ using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
+using HIP.Application.Security;
 using HIP.Application.SiteSafety;
 using HIP.Domain.Reputation;
 using HIP.Infrastructure;
@@ -19,7 +21,7 @@ builder.AddServiceDefaults();
 builder.Services.AddSingleton(new DevelopmentHipCryptoProviderOptions(builder.Environment.IsDevelopment()));
 builder.Services.AddHipApplication();
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
-builder.Services.AddHipInfrastructure(builder.Configuration);
+builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("PublicHipReadOnly", policy =>
@@ -49,7 +51,7 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-await HipDatabaseInitializer.EnsureCreatedAsync(app.Services);
+await HipDatabaseInitializer.EnsureCreatedAsync(app.Services, app.Environment.IsDevelopment());
 
 if (app.Environment.IsDevelopment())
 {
@@ -102,6 +104,7 @@ publicApi.MapGet("/badge/domain/{domain}", async (
 
 publicApi.MapPost("/feedback", async (
     ReputationFeedbackRequest feedback,
+    IDuplicateSubmissionGuard duplicateGuard,
     IReputationService reputationService,
     IWeightedFeedbackAggregationService weightedFeedbackService,
     IAdminReviewQueueService reviewQueueService,
@@ -109,6 +112,11 @@ publicApi.MapPost("/feedback", async (
 {
     try
     {
+        if (IsDuplicateFeedback(feedback, duplicateGuard))
+        {
+            return Results.Conflict(new { error = "Duplicate feedback submission ignored." });
+        }
+
         await StoreWeightedFeedbackIfDomainAsync(feedback, weightedFeedbackService, reviewQueueService, cancellationToken);
         return Results.Ok(await reputationService.SubmitFeedbackAsync(feedback, cancellationToken));
     }
@@ -157,6 +165,90 @@ static async Task StoreWeightedFeedbackIfDomainAsync(
         var summary = await weightedFeedbackService.SubmitAsync(WeightedFeedbackAggregationService.FromReputationFeedback(feedback), cancellationToken);
         await reviewQueueService.CreateSignalsFromFeedbackAsync(summary, cancellationToken);
     }
+}
+
+/// <summary>
+/// Detects repeated public feedback submissions without storing raw feedback bodies as throttling keys.
+/// </summary>
+/// <param name="feedback">Submitted reputation feedback.</param>
+/// <param name="duplicateGuard">In-memory duplicate guard that hashes fingerprint parts internally.</param>
+/// <returns>True when the same feedback was already accepted recently.</returns>
+static bool IsDuplicateFeedback(ReputationFeedbackRequest feedback, IDuplicateSubmissionGuard duplicateGuard) =>
+    !duplicateGuard.TryAccept(
+        "api-public-feedback",
+        [
+            feedback.TargetType.ToString(),
+            feedback.TargetId,
+            feedback.EventType.ToString(),
+            feedback.Severity.ToString(),
+            feedback.ReporterTrustLevel.ToString(),
+            feedback.Platform,
+            feedback.UrlHash,
+            feedback.Reason
+        ],
+        TimeSpan.FromMinutes(5));
+
+/// <summary>
+/// Detects replayed browser scan summaries while allowing fresh scans with new timestamps or URL hashes.
+/// </summary>
+/// <param name="request">Browser plugin scan result request.</param>
+/// <param name="duplicateGuard">In-memory duplicate guard that hashes fingerprint parts internally.</param>
+/// <returns>True when an equivalent scan result was already accepted recently.</returns>
+static bool IsDuplicateBrowserScanResult(BrowserScanResultSaveRequest request, IDuplicateSubmissionGuard duplicateGuard) =>
+    !duplicateGuard.TryAccept(
+        "api-browser-scan-result",
+        [
+            request.Domain,
+            request.PageUrlHash ?? request.PageUrl,
+            request.Score.ToString(CultureInfo.InvariantCulture),
+            request.Status,
+            request.RiskLevel,
+            request.LinksScanned.ToString(CultureInfo.InvariantCulture),
+            request.RiskyLinksFound.ToString(CultureInfo.InvariantCulture),
+            request.SuspiciousLinksFound.ToString(CultureInfo.InvariantCulture),
+            request.DangerousLinksFound.ToString(CultureInfo.InvariantCulture),
+            request.PluginVersion,
+            request.ScannedAtUtc?.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+            request.PrivacySafeMetadata is null ? null : string.Join(';', request.PrivacySafeMetadata.OrderBy(pair => pair.Key).Select(pair => $"{pair.Key}={pair.Value}"))
+        ],
+        TimeSpan.FromSeconds(30));
+
+/// <summary>
+/// Detects repeated Site Safety scan requests so public clients cannot rapidly replay the same signal payload.
+/// </summary>
+/// <param name="request">Site Safety scan request.</param>
+/// <param name="duplicateGuard">In-memory duplicate guard that hashes fingerprint parts internally.</param>
+/// <returns>True when an equivalent scan request was already accepted recently.</returns>
+static bool IsDuplicateSiteSafetyScan(SiteSafetyScanRequest request, IDuplicateSubmissionGuard duplicateGuard) =>
+    !duplicateGuard.TryAccept(
+        "api-site-safety-scan",
+        SiteSafetyFingerprintParts(request),
+        TimeSpan.FromSeconds(20));
+
+/// <summary>
+/// Builds a privacy-safe fingerprint from structured scan fields rather than raw page content.
+/// </summary>
+/// <param name="request">Site Safety scan request.</param>
+/// <returns>Stable fingerprint parts used only by the duplicate guard.</returns>
+static IEnumerable<string?> SiteSafetyFingerprintParts(SiteSafetyScanRequest request)
+{
+    var signals = request.ObservedSignals;
+    yield return request.Url;
+    yield return request.PluginVersion;
+    yield return signals?.InlineScriptCount.ToString(CultureInfo.InvariantCulture);
+    yield return signals?.SuspiciousScriptPatternCount.ToString(CultureInfo.InvariantCulture);
+    yield return signals?.HasLoginForm.ToString();
+    yield return signals?.HasPasswordField.ToString();
+    yield return signals?.HasPaymentField.ToString();
+    yield return signals?.KnownAbuseReports.ToString(CultureInfo.InvariantCulture);
+    yield return signals?.ShortenedLinkCount.ToString(CultureInfo.InvariantCulture);
+    yield return signals?.ObfuscatedLinkCount.ToString(CultureInfo.InvariantCulture);
+    yield return signals?.DomainReputationScore?.ToString(CultureInfo.InvariantCulture);
+    yield return signals?.PageReputationScore?.ToString(CultureInfo.InvariantCulture);
+    yield return signals?.RedirectChain is null ? null : string.Join('|', signals.RedirectChain);
+    yield return signals?.ExternalScriptUrls is null ? null : string.Join('|', signals.ExternalScriptUrls);
+    yield return signals?.DownloadLinks is null ? null : string.Join('|', signals.DownloadLinks);
+    yield return signals?.MatchedRiskTerms is null ? null : string.Join('|', signals.MatchedRiskTerms);
 }
 
 /// <summary>
@@ -218,11 +310,17 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
 
     browserApi.MapPost("/scan-results", async (
         BrowserScanResultSaveRequest request,
+        IDuplicateSubmissionGuard duplicateGuard,
         IBrowserScanResultService scanResultService,
         CancellationToken cancellationToken) =>
     {
         try
         {
+            if (IsDuplicateBrowserScanResult(request, duplicateGuard))
+            {
+                return Results.Conflict(new BrowserScanResultErrorResponse("Duplicate browser scan result ignored."));
+            }
+
             return Results.Ok(await scanResultService.SaveAsync(request, cancellationToken));
         }
         catch (ArgumentException ex)
@@ -263,6 +361,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
 {
     siteSafetyApi.MapPost("/scan", async (
         SiteSafetyScanRequest request,
+        IDuplicateSubmissionGuard duplicateGuard,
         ISiteSafetyScanner scanner,
         ISiteSafetyScanResultStorageService scanResultStorageService,
         IAdminReviewQueueService reviewQueueService,
@@ -270,6 +369,11 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     {
         try
         {
+            if (IsDuplicateSiteSafetyScan(request, duplicateGuard))
+            {
+                return Results.Conflict(new { error = "Duplicate site safety scan ignored." });
+            }
+
             var result = await scanner.ScanAsync(request, cancellationToken);
             await scanResultStorageService.SaveAsync(request, result, cancellationToken);
             await reviewQueueService.CreateSignalsFromScanAsync(result, cancellationToken);
