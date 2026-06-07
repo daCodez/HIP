@@ -156,7 +156,7 @@ Default local endpoints:
 
 ```js
 apiBaseUrl: "http://localhost:5099"
-webBaseUrl: "http://localhost:5260"
+webBaseUrl: "http://localhost:5123"
 ```
 
 These match the default HTTP launch profiles used by Aspire for `hip-api` and `hip-web`. Update these in settings if local launch profiles use different ports.
@@ -283,7 +283,7 @@ The extension test suite includes browser-banner visual smoke coverage in `tests
 22. Add a login form or executable download to a `LimitedTrustData` test page and confirm a soft warning banner appears.
 23. Dismiss the banner, reload the same page, and confirm the page-scoped dismissal is respected.
 24. Visit a different Dangerous page and confirm the prior dismissal does not hide the new warning.
-25. Visit the configured HIP Web host, such as `http://localhost:5260/lookup/example.com`, and confirm the content script does not log site-score API errors for the HIP UI itself.
+25. Visit the configured HIP Web host, such as `http://localhost:5123/lookup/example.com`, and confirm the content script does not log site-score API errors for the HIP UI itself.
 
 ## Popup Privacy Behavior
 

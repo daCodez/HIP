@@ -4,7 +4,7 @@ import test from "node:test";
 import { HipApiClient } from "../src/hipApiClient.js";
 
 test("site safety request includes privacy-safe scan facts", () => {
-  const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5260" });
+  const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
   const request = client.buildSiteSafetyRequest("https://example.com/login", {
     downloadLinks: ["https://example.com/setup.exe"],
     loginFormsDetected: 1,
@@ -39,7 +39,7 @@ test("scan site safety calls versioned API route", async () => {
   };
 
   try {
-    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5260" });
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
     await client.scanSiteSafety(client.buildSiteSafetyRequest("https://example.com", { pluginVersion: "HIP Plugin v0.1.0-dev" }));
   } finally {
     globalThis.fetch = originalFetch;
@@ -73,7 +73,7 @@ test("scan site safety falls back to web host when API host route is missing", a
 
   let result;
   try {
-    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5260" });
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
     result = await client.scanSiteSafety(client.buildSiteSafetyRequest("https://example.com", {}));
   } finally {
     globalThis.fetch = originalFetch;
@@ -81,7 +81,7 @@ test("scan site safety falls back to web host when API host route is missing", a
 
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "http://localhost:5099/api/v1/site-safety/scan");
-  assert.equal(calls[1].url, "http://localhost:5260/api/v1/site-safety/scan");
+  assert.equal(calls[1].url, "http://localhost:5123/api/v1/site-safety/scan");
   assert.equal(result.source, "web-fallback");
 });
 
