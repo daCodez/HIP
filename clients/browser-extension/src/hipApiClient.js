@@ -1,6 +1,6 @@
 export const HIP_CONFIG = Object.freeze({
   apiBaseUrl: "http://localhost:5099",
-  webBaseUrl: "http://localhost:5260"
+  webBaseUrl: "http://localhost:5123"
 });
 
 export const HIP_EXTENSION_CHANNEL = "dev";

@@ -190,7 +190,7 @@ test("plugin calls scan-results endpoint", async () => {
   };
 
   try {
-    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5260" });
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
     await client.saveScanResult(buildScanResultPayload({
       domain: "example.com",
       pageUrl: "https://example.com/page",
@@ -218,7 +218,7 @@ test("plugin scan result request sends URL hash and plugin version to API", asyn
   };
 
   try {
-    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5260" });
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
     await client.saveScanResult(buildScanResultPayload({
       domain: "example.com",
       pageUrl: "https://example.com/page?token=secret",
@@ -247,7 +247,7 @@ test("submission failure rejects without requiring popup failure", async () => {
   });
 
   try {
-    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5260" });
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
     await assert.rejects(
       () => client.saveScanResult(buildScanResultPayload({
         domain: "example.com",
@@ -272,7 +272,7 @@ test("submitScanResults false is preserved in settings", () => {
 });
 
 test("invalid API base URL is handled safely", async () => {
-  const client = new HipApiClient({ apiBaseUrl: "not a url", webBaseUrl: "http://localhost:5260" });
+  const client = new HipApiClient({ apiBaseUrl: "not a url", webBaseUrl: "http://localhost:5123" });
 
   await assert.rejects(
     () => client.saveScanResult(buildScanResultPayload({
@@ -286,7 +286,7 @@ test("invalid API base URL is handled safely", async () => {
 });
 
 test("site safety request includes structural observations", () => {
-  const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5260" });
+  const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
   const request = client.buildSiteSafetyRequest("https://example.com/login", {
     pluginVersion: "HIP Plugin v0.1.0-dev",
     downloadLinks: ["https://example.com/setup.exe"],
@@ -326,10 +326,10 @@ test("plugin version is formatted from manifest version", () => {
 test("hip owned web pages are skipped by content scanning guard", () => {
   const settings = {
     apiBaseUrl: "http://localhost:5099",
-    webBaseUrl: "http://localhost:5260"
+    webBaseUrl: "http://localhost:5123"
   };
 
-  assert.equal(isHipOwnedPageUrl("http://localhost:5260/lookup/example.com", settings), true);
+  assert.equal(isHipOwnedPageUrl("http://localhost:5123/lookup/example.com", settings), true);
   assert.equal(isHipOwnedPageUrl("http://localhost:5099/swagger", settings), true);
   assert.equal(isHipOwnedPageUrl("https://example.com", settings), false);
 });
