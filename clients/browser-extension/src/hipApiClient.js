@@ -142,11 +142,15 @@ export class HipApiClient {
       observedSignals: {
         downloadLinks: Array.isArray(summary.downloadLinks) ? summary.downloadLinks : [],
         hasLoginForm: (summary.loginFormsDetected ?? 0) > 0,
-        hasPasswordField: (summary.loginFormsDetected ?? 0) > 0,
+        hasPasswordField: (summary.passwordFieldsDetected ?? summary.loginFormsDetected ?? 0) > 0,
+        hasPaymentField: (summary.paymentFieldsDetected ?? 0) > 0,
         inlineScriptCount: summary.inlineScriptCount ?? 0,
         externalScriptUrls: Array.isArray(summary.externalScriptUrls) ? summary.externalScriptUrls : [],
         suspiciousScriptPatternCount: summary.suspiciousScriptPatternCount ?? 0,
-        trustDataAvailable: summary.scanResultDataSource === "BrowserPluginScan"
+        trustDataAvailable: summary.scanResultDataSource === "BrowserPluginScan",
+        shortenedLinkCount: summary.shortenedLinkCandidates ?? 0,
+        obfuscatedLinkCount: summary.obfuscatedLinkCandidates ?? 0,
+        redirectChain: Array.isArray(summary.redirectSignals) ? summary.redirectSignals : []
       }
     };
   }
@@ -329,12 +333,14 @@ export function formatPluginVersion(manifestVersion, channel = HIP_EXTENSION_CHA
  * Builds the privacy-safe scan result payload submitted after a content scan.
  * The payload intentionally excludes page text, form values, passwords, tokens, and private messages.
  */
-export function buildScanResultPayload({ domain, pageUrl, lookup, summary = {}, settings = {}, submittedAtUtc = new Date().toISOString() }) {
+export function buildScanResultPayload({ domain, pageUrl, pageUrlHash = null, lookup, summary = {}, settings = {}, pluginVersion = null, submittedAtUtc = new Date().toISOString() }) {
   const assessment = browserScanAssessment(lookup, summary);
   const status = assessment.status;
   return {
     domain,
     pageUrl,
+    pageUrlHash,
+    pluginVersion,
     score: assessment.score,
     riskLevel: status,
     status,
@@ -348,12 +354,20 @@ export function buildScanResultPayload({ domain, pageUrl, lookup, summary = {}, 
       scanMode: settings.scanMode || "Normal",
       apiStatus: summary.apiStatus || "Unknown",
       scanTimestampUtc: submittedAtUtc,
+      isHttps: String(summary.isHttps === true),
       downloadCandidates: String(summary.downloadCandidates ?? 0),
+      executableDownloadCandidates: String(summary.executableDownloadCandidates ?? 0),
       formsDetected: String(summary.formsDetected ?? 0),
       loginFormsDetected: String(summary.loginFormsDetected ?? 0),
+      passwordFieldsDetected: String(summary.passwordFieldsDetected ?? 0),
+      paymentFieldsDetected: String(summary.paymentFieldsDetected ?? 0),
       crossDomainLoginForms: String(summary.crossDomainLoginForms ?? 0),
+      shortenedLinkCandidates: String(summary.shortenedLinkCandidates ?? 0),
+      obfuscatedLinkCandidates: String(summary.obfuscatedLinkCandidates ?? 0),
+      redirectCandidates: String(summary.redirectCandidates ?? 0),
       socialLinkCandidates: String(summary.socialLinkCandidates ?? 0),
-      webmailLinkCandidates: String(summary.webmailLinkCandidates ?? 0)
+      webmailLinkCandidates: String(summary.webmailLinkCandidates ?? 0),
+      pluginVersion: pluginVersion || summary.pluginVersion || "Unknown"
     }
   };
 }

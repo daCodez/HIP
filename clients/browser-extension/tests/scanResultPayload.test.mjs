@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   browserScanAssessment,
@@ -31,10 +32,14 @@ test("plugin creates privacy-safe scan result payload", () => {
     settings: {
       scanMode: "Normal"
     },
+    pageUrlHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    pluginVersion: "HIP Plugin v0.1.0-dev",
     submittedAtUtc: "2026-06-01T00:00:00Z"
   });
 
   assert.equal(payload.domain, "example.com");
+  assert.equal(payload.pageUrlHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  assert.equal(payload.pluginVersion, "HIP Plugin v0.1.0-dev");
   assert.equal(payload.score, 84);
   assert.equal(payload.status, "Trusted");
   assert.deepEqual(payload.reasons, ["No risky links found"]);
@@ -43,6 +48,40 @@ test("plugin creates privacy-safe scan result payload", () => {
   assert.equal(payload.suspiciousLinksFound, 2);
   assert.equal(payload.dangerousLinksFound, 0);
   assert.equal(payload.privacySafeMetadata.scanTimestampUtc, "2026-06-01T00:00:00Z");
+  assert.equal(payload.privacySafeMetadata.pluginVersion, "HIP Plugin v0.1.0-dev");
+});
+
+test("scan result payload includes privacy-safe observed page signals", () => {
+  const payload = buildScanResultPayload({
+    domain: "example.com",
+    pageUrl: "https://example.com/login",
+    pageUrlHash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    pluginVersion: "HIP Plugin v0.1.0-dev",
+    lookup: { status: "LimitedTrustData", score: 56 },
+    summary: {
+      isHttps: true,
+      downloadCandidates: 3,
+      executableDownloadCandidates: 1,
+      formsDetected: 2,
+      loginFormsDetected: 1,
+      passwordFieldsDetected: 1,
+      paymentFieldsDetected: 1,
+      shortenedLinkCandidates: 2,
+      obfuscatedLinkCandidates: 1,
+      redirectCandidates: 2
+    }
+  });
+
+  assert.equal(payload.privacySafeMetadata.isHttps, "true");
+  assert.equal(payload.privacySafeMetadata.downloadCandidates, "3");
+  assert.equal(payload.privacySafeMetadata.executableDownloadCandidates, "1");
+  assert.equal(payload.privacySafeMetadata.formsDetected, "2");
+  assert.equal(payload.privacySafeMetadata.loginFormsDetected, "1");
+  assert.equal(payload.privacySafeMetadata.passwordFieldsDetected, "1");
+  assert.equal(payload.privacySafeMetadata.paymentFieldsDetected, "1");
+  assert.equal(payload.privacySafeMetadata.shortenedLinkCandidates, "2");
+  assert.equal(payload.privacySafeMetadata.obfuscatedLinkCandidates, "1");
+  assert.equal(payload.privacySafeMetadata.redirectCandidates, "2");
 });
 
 test("no-data lookup state persists actual browser scan result", () => {
@@ -112,6 +151,8 @@ test("scan result payload excludes page text and form values", () => {
   assert.equal("pageText" in payload, false);
   assert.equal("formValues" in payload, false);
   assert.equal("password" in payload.privacySafeMetadata, false);
+  assert.equal(JSON.stringify(payload).includes("private body text"), false);
+  assert.equal(JSON.stringify(payload).includes("password=secret"), false);
 });
 
 test("plugin calls scan-results endpoint", async () => {
@@ -140,6 +181,36 @@ test("plugin calls scan-results endpoint", async () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "http://localhost:5099/api/v1/browser/scan-results");
   assert.equal(calls[0].options.method, "POST");
+});
+
+test("plugin scan result request sends URL hash and plugin version to API", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      json: async () => ({ saved: true })
+    };
+  };
+
+  try {
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5260" });
+    await client.saveScanResult(buildScanResultPayload({
+      domain: "example.com",
+      pageUrl: "https://example.com/page?token=secret",
+      pageUrlHash: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      pluginVersion: "HIP Plugin v0.1.0-dev",
+      lookup: { status: "Trusted", score: 84 },
+      summary: {}
+    }));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const body = JSON.parse(calls[0].options.body);
+  assert.equal(body.pageUrlHash, "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+  assert.equal(body.pluginVersion, "HIP Plugin v0.1.0-dev");
 });
 
 test("submission failure rejects without requiring popup failure", async () => {
@@ -187,6 +258,40 @@ test("invalid API base URL is handled safely", async () => {
     })),
     /Invalid HIP API base URL/
   );
+});
+
+test("site safety request includes structural observations", () => {
+  const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5260" });
+  const request = client.buildSiteSafetyRequest("https://example.com/login", {
+    pluginVersion: "HIP Plugin v0.1.0-dev",
+    downloadLinks: ["https://example.com/setup.exe"],
+    loginFormsDetected: 1,
+    passwordFieldsDetected: 1,
+    paymentFieldsDetected: 1,
+    shortenedLinkCandidates: 2,
+    obfuscatedLinkCandidates: 1,
+    redirectSignals: ["https://example.com/out?url=https%3A%2F%2Ftarget.example"],
+    inlineScriptCount: 3,
+    externalScriptUrls: ["https://cdn.example.com/app.js"]
+  });
+
+  assert.equal(request.pluginVersion, "HIP Plugin v0.1.0-dev");
+  assert.equal(request.observedSignals.hasLoginForm, true);
+  assert.equal(request.observedSignals.hasPasswordField, true);
+  assert.equal(request.observedSignals.hasPaymentField, true);
+  assert.equal(request.observedSignals.shortenedLinkCount, 2);
+  assert.equal(request.observedSignals.obfuscatedLinkCount, 1);
+  assert.deepEqual(request.observedSignals.redirectChain, ["https://example.com/out?url=https%3A%2F%2Ftarget.example"]);
+});
+
+test("content script contains duplicate scan submission guards", async () => {
+  const contentScript = await readFile(new URL("../src/content.js", import.meta.url), "utf8");
+  const backgroundScript = await readFile(new URL("../src/background.js", import.meta.url), "utf8");
+
+  assert.match(contentScript, /pendingScanSubmissions/);
+  assert.match(contentScript, /pageUrlHash/);
+  assert.match(backgroundScript, /pendingScanResultSaves/);
+  assert.match(backgroundScript, /duplicateSuppressed/);
 });
 
 test("plugin version is formatted from manifest version", () => {
