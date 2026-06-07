@@ -10,7 +10,8 @@ import {
   HipApiClient,
   isHipOwnedPageUrl,
   normalizeHipSettings,
-  shouldShowTrustBanner
+  shouldShowTrustBanner,
+  stripQueryAndFragment
 } from "../src/hipApiClient.js";
 
 test("plugin creates privacy-safe scan result payload", () => {
@@ -38,6 +39,7 @@ test("plugin creates privacy-safe scan result payload", () => {
   });
 
   assert.equal(payload.domain, "example.com");
+  assert.equal(payload.pageUrl, null);
   assert.equal(payload.pageUrlHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(payload.pluginVersion, "HIP Plugin v0.1.0-dev");
   assert.equal(payload.score, 84);
@@ -49,6 +51,27 @@ test("plugin creates privacy-safe scan result payload", () => {
   assert.equal(payload.dangerousLinksFound, 0);
   assert.equal(payload.privacySafeMetadata.scanTimestampUtc, "2026-06-01T00:00:00Z");
   assert.equal(payload.privacySafeMetadata.pluginVersion, "HIP Plugin v0.1.0-dev");
+});
+
+test("scan result payload sends stripped raw page URL only when explicitly enabled", () => {
+  const payload = buildScanResultPayload({
+    domain: "example.com",
+    pageUrl: "https://example.com/private?token=secret#section",
+    lookup: { status: "Trusted", score: 84 },
+    summary: {},
+    settings: {
+      allowRawPageUrlSubmission: true
+    }
+  });
+
+  assert.equal(payload.pageUrl, "https://example.com/private");
+  assert.equal(JSON.stringify(payload).includes("token=secret"), false);
+});
+
+test("strip query helper rejects unsafe protocols", () => {
+  assert.equal(stripQueryAndFragment("https://example.com/path?token=secret#fragment"), "https://example.com/path");
+  assert.equal(stripQueryAndFragment("javascript:alert(1)"), null);
+  assert.equal(stripQueryAndFragment("not a url"), null);
 });
 
 test("scan result payload includes privacy-safe observed page signals", () => {
@@ -209,8 +232,10 @@ test("plugin scan result request sends URL hash and plugin version to API", asyn
   }
 
   const body = JSON.parse(calls[0].options.body);
+  assert.equal(body.pageUrl, null);
   assert.equal(body.pageUrlHash, "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
   assert.equal(body.pluginVersion, "HIP Plugin v0.1.0-dev");
+  assert.equal(JSON.stringify(body).includes("token=secret"), false);
 });
 
 test("submission failure rejects without requiring popup failure", async () => {
