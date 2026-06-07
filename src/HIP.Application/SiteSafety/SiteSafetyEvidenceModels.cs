@@ -297,6 +297,8 @@ public interface IExternalSiteEvidenceProvider : ISiteSafetyEvidenceProvider
 /// </summary>
 public sealed class ExternalSiteEvidenceOptions
 {
+    private static readonly AsyncLocal<ExternalSiteEvidenceOptions?> ScopedOverride = new();
+
     /// <summary>
     /// Gets or sets whether third-party external evidence providers are allowed to run.
     /// Enabled for the SSL Labs/Qualys TLS provider in dev/MVP so operators see live TLS evidence.
@@ -333,6 +335,50 @@ public sealed class ExternalSiteEvidenceOptions
     /// Gets or sets VirusTotal provider configuration.
     /// </summary>
     public ExternalProviderOptions VirusTotal { get; set; } = new();
+
+    /// <summary>
+    /// Gets the request-scoped provider settings when one has been selected for the current scan.
+    /// </summary>
+    /// <returns>The scoped settings if present; otherwise this default options instance.</returns>
+    public ExternalSiteEvidenceOptions GetEffectiveOptions() => ScopedOverride.Value ?? this;
+
+    /// <summary>
+    /// Applies provider settings for the current async request without mutating process-global defaults.
+    /// </summary>
+    /// <param name="overrideOptions">Scoped provider options selected for a user or browser instance.</param>
+    /// <returns>A disposable that restores the previous scoped settings.</returns>
+    public IDisposable UseScopedOverride(ExternalSiteEvidenceOptions? overrideOptions)
+    {
+        var previous = ScopedOverride.Value;
+        ScopedOverride.Value = overrideOptions;
+        return new ScopedExternalProviderOptions(previous);
+    }
+
+    /// <summary>
+    /// Creates a detached copy so scoped settings cannot mutate the default singleton options by reference.
+    /// </summary>
+    /// <returns>Detached copy of these options.</returns>
+    public ExternalSiteEvidenceOptions Clone() =>
+        new()
+        {
+            ExternalProvidersEnabled = ExternalProvidersEnabled,
+            AllowFullUrlChecks = AllowFullUrlChecks,
+            ProviderTimeout = ProviderTimeout,
+            DefaultCacheDuration = DefaultCacheDuration,
+            SslLabs = SslLabs.Clone(),
+            GoogleWebRisk = GoogleWebRisk.Clone(),
+            VirusTotal = VirusTotal.Clone()
+        };
+
+    /// <summary>
+    /// Restores the previous request-scoped provider settings when scan execution completes.
+    /// </summary>
+    /// <param name="previous">Previous scoped settings value.</param>
+    private sealed class ScopedExternalProviderOptions(ExternalSiteEvidenceOptions? previous) : IDisposable
+    {
+        /// <inheritdoc />
+        public void Dispose() => ScopedOverride.Value = previous;
+    }
 }
 
 /// <summary>
@@ -364,6 +410,75 @@ public sealed class ExternalProviderOptions
     /// Gets or sets the cache duration for this provider.
     /// </summary>
     public TimeSpan? CacheDuration { get; set; }
+
+    /// <summary>
+    /// Creates a detached copy of one provider's configuration so per-user settings cannot share mutable references.
+    /// </summary>
+    /// <returns>Detached provider configuration.</returns>
+    public ExternalProviderOptions Clone() =>
+        new()
+        {
+            Enabled = Enabled,
+            Endpoint = Endpoint,
+            ApiKey = ApiKey,
+            AllowFullUrl = AllowFullUrl,
+            CacheDuration = CacheDuration
+        };
+}
+
+/// <summary>
+/// Stores per-user or per-browser-instance external evidence provider settings.
+/// </summary>
+public interface IExternalSiteEvidenceSettingsStore
+{
+    /// <summary>
+    /// Loads scoped provider settings if an override exists.
+    /// </summary>
+    /// <param name="scopeKey">Stable user or browser-instance settings scope.</param>
+    /// <param name="cancellationToken">Token used to cancel the lookup.</param>
+    /// <returns>Scoped settings or null when the default options should apply.</returns>
+    Task<ExternalSiteEvidenceOptions?> GetAsync(string scopeKey, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Saves scoped provider settings without mutating the process-global defaults.
+    /// </summary>
+    /// <param name="scopeKey">Stable user or browser-instance settings scope.</param>
+    /// <param name="options">Provider settings to store for this scope.</param>
+    /// <param name="cancellationToken">Token used to cancel the save.</param>
+    /// <returns>Stored detached settings.</returns>
+    Task<ExternalSiteEvidenceOptions> SaveAsync(string scopeKey, ExternalSiteEvidenceOptions options, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// In-memory scoped provider settings store for dev/MVP usage.
+/// </summary>
+public sealed class InMemoryExternalSiteEvidenceSettingsStore : IExternalSiteEvidenceSettingsStore
+{
+    private readonly Dictionary<string, ExternalSiteEvidenceOptions> scopedOptions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object gate = new();
+
+    /// <inheritdoc />
+    public Task<ExternalSiteEvidenceOptions?> GetAsync(string scopeKey, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (gate)
+        {
+            return Task.FromResult(scopedOptions.TryGetValue(scopeKey, out var options) ? options.Clone() : null);
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<ExternalSiteEvidenceOptions> SaveAsync(string scopeKey, ExternalSiteEvidenceOptions options, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var detached = options.Clone();
+        lock (gate)
+        {
+            scopedOptions[scopeKey] = detached;
+        }
+
+        return Task.FromResult(detached.Clone());
+    }
 }
 
 /// <summary>
@@ -554,7 +669,7 @@ public abstract class ExternalSiteEvidenceProviderBase(
     /// <summary>
     /// Gets external provider options shared by concrete providers.
     /// </summary>
-    protected ExternalSiteEvidenceOptions Options => options;
+    protected ExternalSiteEvidenceOptions Options => options.GetEffectiveOptions();
 
     /// <inheritdoc />
     public abstract string ProviderName { get; }
@@ -576,7 +691,8 @@ public abstract class ExternalSiteEvidenceProviderBase(
             return cached;
         }
 
-        if (!options.ExternalProvidersEnabled)
+        var activeOptions = Options;
+        if (!activeOptions.ExternalProvidersEnabled)
         {
             return EmptyDisabledEvidence(context);
         }
@@ -587,7 +703,7 @@ public abstract class ExternalSiteEvidenceProviderBase(
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(options.ProviderTimeout);
+        timeout.CancelAfter(activeOptions.ProviderTimeout);
 
         var evidence = await CollectExternalEvidenceAsync(context, timeout.Token);
         cache.Store(evidence);
@@ -612,7 +728,7 @@ public abstract class ExternalSiteEvidenceProviderBase(
             [],
             Confidence: 0,
             context.CheckedAtUtc,
-            context.CheckedAtUtc.Add(options.DefaultCacheDuration),
+            context.CheckedAtUtc.Add(Options.DefaultCacheDuration),
             ["External provider disabled by configuration."],
             IsAuthoritativeForRisk: false,
             IsAuthoritativeForTrust: false);

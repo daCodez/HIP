@@ -79,4 +79,51 @@ public sealed class BrowserPluginApiServiceTests
         Assert.That(json.RootElement.TryGetProperty("domainTrustScore", out _), Is.True);
         Assert.That(json.RootElement.ToString().Contains("password="), Is.False);
     }
+
+    /// <summary>
+    /// Verifies browser-instance provider settings can be saved on the API host without changing other instances.
+    /// </summary>
+    [Test]
+    public async Task Api_service_provider_preferences_are_scoped_per_browser_instance()
+    {
+        await using var factory = new WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
+        using var firstClient = factory.CreateClient();
+        using var secondClient = factory.CreateClient();
+        firstClient.DefaultRequestHeaders.Add("X-HIP-Instance-Id", "api-first-instance");
+        secondClient.DefaultRequestHeaders.Add("X-HIP-Instance-Id", "api-second-instance");
+
+        var update = await firstClient.PostAsJsonAsync("/api/v1/site-safety/external-providers", new
+        {
+            ExternalProvidersEnabled = false,
+            AllowFullUrlChecks = true,
+            ProviderTimeout = "00:00:10",
+            DefaultCacheDuration = "06:00:00",
+            SslLabs = new { Enabled = false, Endpoint = "http://attacker.invalid", ApiKey = "secret", AllowFullUrl = true, CacheDuration = (string?)null },
+            GoogleWebRisk = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = true, CacheDuration = (string?)null },
+            VirusTotal = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = true, CacheDuration = (string?)null }
+        });
+
+        var firstRead = await firstClient.GetAsync("/api/v1/site-safety/external-providers");
+        var secondRead = await secondClient.GetAsync("/api/v1/site-safety/external-providers");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(update.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(firstRead.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(secondRead.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        });
+
+        var firstJson = await JsonDocument.ParseAsync(await firstRead.Content.ReadAsStreamAsync());
+        var secondJson = await JsonDocument.ParseAsync(await secondRead.Content.ReadAsStreamAsync());
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstJson.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.False);
+            Assert.That(firstJson.RootElement.GetProperty("allowFullUrlChecks").GetBoolean(), Is.False);
+            Assert.That(firstJson.RootElement.GetProperty("sslLabs").GetProperty("enabled").GetBoolean(), Is.False);
+            Assert.That(firstJson.RootElement.GetProperty("sslLabs").GetProperty("endpoint").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(firstJson.RootElement.GetProperty("sslLabs").GetProperty("apiKey").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(secondJson.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.True);
+            Assert.That(secondJson.RootElement.GetProperty("sslLabs").GetProperty("enabled").GetBoolean(), Is.True);
+        });
+    }
 }

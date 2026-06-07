@@ -65,6 +65,7 @@ Current setting keys:
 - `sslLabsEnabled`
 - `googleWebRiskEnabled`
 - `virusTotalEnabled`
+- `instanceId`
 
 External provider switches:
 
@@ -73,7 +74,9 @@ External provider switches:
 - `Google Web Risk / Safe Browsing`: disabled until credentials and concrete adapter setup are configured.
 - `VirusTotal`: disabled until credentials and concrete adapter setup are configured.
 
-The options page stores these provider preferences locally and attempts to synchronize them with `/api/v1/admin/site-safety/external-providers`. The HIP API remains authoritative. If the admin API is unavailable or rejects the request, scoring behavior does not change just because the extension switch was toggled.
+The options page stores these provider preferences locally and synchronizes them with `/api/v1/site-safety/external-providers` on the configured HIP API host. HIP scopes those preferences to a generated `X-HIP-Instance-Id`, so one extension install can enable or disable providers without changing global defaults for every user.
+
+The HIP API remains authoritative. The extension can toggle providers for its own scan flow, but it cannot supply scanner endpoints, API keys, full-URL permission, or raw provider configuration through the per-instance endpoint. If the API is unavailable or rejects the request, scoring continues with server defaults.
 
 Banner display modes:
 

@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 const string PublicScanPolicy = "PublicScanPolicy";
 const string PublicFeedbackPolicy = "PublicFeedbackPolicy";
+const string HipInstanceIdHeader = "X-HIP-Instance-Id";
 
 builder.AddServiceDefaults();
 builder.Services.AddSingleton(new DevelopmentHipCryptoProviderOptions(builder.Environment.IsDevelopment()));
@@ -145,6 +146,50 @@ app.Run();
 /// </remarks>
 static bool ShouldUseHttpsRedirection(WebApplication app) =>
     !app.Environment.IsDevelopment();
+
+/// <summary>
+/// Resolves the provider settings scope from a privacy-safe browser instance id.
+/// </summary>
+/// <param name="httpContext">Current HTTP context.</param>
+/// <returns>Stable scope key used to isolate provider preferences.</returns>
+static string ResolveProviderSettingsScope(HttpContext httpContext)
+{
+    var instanceId = NormalizeSettingsScopeSegment(httpContext.Request.Headers[HipInstanceIdHeader].FirstOrDefault());
+    return $"instance:{instanceId}";
+}
+
+/// <summary>
+/// Normalizes a user or instance settings scope so untrusted header values cannot affect storage keys.
+/// </summary>
+/// <param name="value">Raw user or browser instance identifier.</param>
+/// <returns>Safe bounded scope segment.</returns>
+static string NormalizeSettingsScopeSegment(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        return "default";
+    }
+
+    var chars = value.Trim()
+        .Where(character => char.IsLetterOrDigit(character) || character is '-' or '_' or '.' or '@')
+        .Take(96)
+        .ToArray();
+
+    return chars.Length == 0 ? "default" : new string(chars);
+}
+
+/// <summary>
+/// Loads provider settings for the browser instance that initiated the request.
+/// </summary>
+/// <param name="httpContext">Current HTTP context.</param>
+/// <param name="settingsStore">Scoped provider settings store.</param>
+/// <param name="cancellationToken">Token used to cancel the lookup.</param>
+/// <returns>Scoped options or null when defaults should apply.</returns>
+static Task<ExternalSiteEvidenceOptions?> LoadScopedExternalProviderOptionsAsync(
+    HttpContext httpContext,
+    IExternalSiteEvidenceSettingsStore settingsStore,
+    CancellationToken cancellationToken) =>
+    settingsStore.GetAsync(ResolveProviderSettingsScope(httpContext), cancellationToken);
 
 /// <summary>
 /// Stores public feedback as weak weighted site-safety evidence when the target is a domain-like HIP target.
@@ -359,9 +404,40 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
 /// </remarks>
 static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
 {
+    siteSafetyApi.MapGet("/external-providers", async (
+        HttpContext httpContext,
+        ExternalSiteEvidenceOptions defaultOptions,
+        IExternalSiteEvidenceSettingsStore settingsStore,
+        CancellationToken cancellationToken) =>
+    {
+        var scopeKey = ResolveProviderSettingsScope(httpContext);
+        var options = await settingsStore.GetAsync(scopeKey, cancellationToken) ?? defaultOptions.Clone();
+        return Results.Ok(ExternalProviderSettingsResponse.From(options, scopeKey));
+    })
+    .WithName("ApiServiceGetExternalProviderPreferences");
+
+    siteSafetyApi.MapPost("/external-providers", async (
+        ExternalProviderSettingsUpdateRequest request,
+        HttpContext httpContext,
+        ExternalSiteEvidenceOptions defaultOptions,
+        IExternalSiteEvidenceSettingsStore settingsStore,
+        CancellationToken cancellationToken) =>
+    {
+        var scopeKey = ResolveProviderSettingsScope(httpContext);
+        var options = defaultOptions.Clone();
+        ApplyClientExternalProviderSettings(options, request);
+        var saved = await settingsStore.SaveAsync(scopeKey, options, cancellationToken);
+        return Results.Ok(ExternalProviderSettingsResponse.From(saved, scopeKey));
+    })
+    .WithName("ApiServiceUpdateExternalProviderPreferences")
+    .RequireRateLimiting(PublicScanPolicy);
+
     siteSafetyApi.MapPost("/scan", async (
         SiteSafetyScanRequest request,
+        HttpContext httpContext,
         IDuplicateSubmissionGuard duplicateGuard,
+        ExternalSiteEvidenceOptions defaultOptions,
+        IExternalSiteEvidenceSettingsStore settingsStore,
         ISiteSafetyScanner scanner,
         ISiteSafetyScanResultStorageService scanResultStorageService,
         IAdminReviewQueueService reviewQueueService,
@@ -374,6 +450,8 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
                 return Results.Conflict(new { error = "Duplicate site safety scan ignored." });
             }
 
+            var scopedOptions = await LoadScopedExternalProviderOptionsAsync(httpContext, settingsStore, cancellationToken);
+            using var _ = defaultOptions.UseScopedOverride(scopedOptions);
             var result = await scanner.ScanAsync(request, cancellationToken);
             await scanResultStorageService.SaveAsync(request, result, cancellationToken);
             await reviewQueueService.CreateSignalsFromScanAsync(result, cancellationToken);
@@ -386,6 +464,22 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     })
     .WithName("ApiServiceSiteSafetyScan")
     .RequireRateLimiting(PublicScanPolicy);
+}
+
+/// <summary>
+/// Applies browser-instance provider preferences without accepting endpoints, API keys, or full-URL permission.
+/// </summary>
+/// <param name="options">Detached options cloned from server defaults.</param>
+/// <param name="request">Client preferences from the extension options page.</param>
+static void ApplyClientExternalProviderSettings(ExternalSiteEvidenceOptions options, ExternalProviderSettingsUpdateRequest request)
+{
+    options.ExternalProvidersEnabled = request.ExternalProvidersEnabled;
+    options.AllowFullUrlChecks = false;
+    options.ProviderTimeout = request.ProviderTimeout is { Ticks: > 0 } ? request.ProviderTimeout.Value : TimeSpan.FromSeconds(10);
+    options.DefaultCacheDuration = request.DefaultCacheDuration is { Ticks: > 0 } ? request.DefaultCacheDuration.Value : TimeSpan.FromHours(6);
+    options.SslLabs.Enabled = request.SslLabs.Enabled;
+    options.GoogleWebRisk.Enabled = request.GoogleWebRisk.Enabled;
+    options.VirusTotal.Enabled = request.VirusTotal.Enabled;
 }
 
 /// <summary>
@@ -443,6 +537,88 @@ static object ToSiteSafetyScanResponse(SiteSafetyScanResult result) => new
     }).ToArray(),
     result.ScoreImpact
 };
+
+/// <summary>
+/// Client-safe provider settings response scoped to one browser instance.
+/// </summary>
+/// <param name="SettingsScope">Server-side scope key used for diagnostics only.</param>
+/// <param name="ExternalProvidersEnabled">Whether external evidence may run for this scope.</param>
+/// <param name="AllowFullUrlChecks">Always false for browser-scoped preferences because full URLs remain private by default.</param>
+/// <param name="ProviderTimeout">Provider timeout.</param>
+/// <param name="DefaultCacheDuration">Default provider cache duration.</param>
+/// <param name="SslLabs">SSL Labs/Qualys-style TLS provider preferences.</param>
+/// <param name="GoogleWebRisk">Google Web Risk/Safe Browsing-style provider preferences.</param>
+/// <param name="VirusTotal">VirusTotal-style provider preferences.</param>
+sealed record ExternalProviderSettingsResponse(
+    string SettingsScope,
+    bool ExternalProvidersEnabled,
+    bool AllowFullUrlChecks,
+    TimeSpan ProviderTimeout,
+    TimeSpan DefaultCacheDuration,
+    ExternalProviderSettings SslLabs,
+    ExternalProviderSettings GoogleWebRisk,
+    ExternalProviderSettings VirusTotal)
+{
+    /// <summary>
+    /// Converts runtime options into a client-safe response without returning stored secrets.
+    /// </summary>
+    /// <param name="options">Runtime external evidence options.</param>
+    /// <param name="settingsScope">Settings scope used for the response.</param>
+    /// <returns>Safe provider settings response.</returns>
+    public static ExternalProviderSettingsResponse From(ExternalSiteEvidenceOptions options, string settingsScope) =>
+        new(
+            settingsScope,
+            options.ExternalProvidersEnabled,
+            false,
+            options.ProviderTimeout,
+            options.DefaultCacheDuration,
+            ExternalProviderSettings.From(options.SslLabs),
+            ExternalProviderSettings.From(options.GoogleWebRisk),
+            ExternalProviderSettings.From(options.VirusTotal));
+}
+
+/// <summary>
+/// Browser-instance request for changing provider preferences.
+/// </summary>
+/// <param name="ExternalProvidersEnabled">Whether external evidence may run for this instance.</param>
+/// <param name="AllowFullUrlChecks">Ignored for browser-instance settings to preserve privacy.</param>
+/// <param name="ProviderTimeout">Provider timeout.</param>
+/// <param name="DefaultCacheDuration">Default provider cache duration.</param>
+/// <param name="SslLabs">SSL Labs/Qualys-style provider switch.</param>
+/// <param name="GoogleWebRisk">Google Web Risk/Safe Browsing-style provider switch.</param>
+/// <param name="VirusTotal">VirusTotal-style provider switch.</param>
+sealed record ExternalProviderSettingsUpdateRequest(
+    bool ExternalProvidersEnabled,
+    bool AllowFullUrlChecks,
+    TimeSpan? ProviderTimeout,
+    TimeSpan? DefaultCacheDuration,
+    ExternalProviderSettings SslLabs,
+    ExternalProviderSettings GoogleWebRisk,
+    ExternalProviderSettings VirusTotal);
+
+/// <summary>
+/// Provider-specific preference shape accepted from the extension options page.
+/// </summary>
+/// <param name="Enabled">Whether this provider can run when external providers are enabled.</param>
+/// <param name="Endpoint">Ignored for browser-instance settings to avoid client-controlled scanner endpoints.</param>
+/// <param name="ApiKey">Ignored for browser-instance settings to avoid storing secrets from the extension.</param>
+/// <param name="AllowFullUrl">Ignored for browser-instance settings to avoid client-enabling full URL disclosure.</param>
+/// <param name="CacheDuration">Ignored for browser-instance settings; server defaults remain authoritative.</param>
+sealed record ExternalProviderSettings(
+    bool Enabled,
+    string? Endpoint,
+    string? ApiKey,
+    bool AllowFullUrl,
+    TimeSpan? CacheDuration)
+{
+    /// <summary>
+    /// Converts runtime provider options into a safe response that strips API keys and endpoints from public clients.
+    /// </summary>
+    /// <param name="options">Provider options.</param>
+    /// <returns>Client-safe provider settings.</returns>
+    public static ExternalProviderSettings From(ExternalProviderOptions options) =>
+        new(options.Enabled, null, null, false, options.CacheDuration);
+}
 
 /// <summary>
 /// Marker type used by integration tests to boot the standalone HIP API service.

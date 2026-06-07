@@ -110,7 +110,7 @@ public sealed class AdminAuthorizationTests
     }
 
     [Test]
-    public async Task Readonly_can_view_external_provider_settings_disabled_by_default()
+    public async Task Readonly_can_view_external_provider_settings_enabled_for_dev_tls_by_default()
     {
         await using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
@@ -122,10 +122,11 @@ public sealed class AdminAuthorizationTests
         var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         Assert.Multiple(() =>
         {
-            Assert.That(json.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.False);
+            Assert.That(json.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.True);
             Assert.That(json.RootElement.GetProperty("sslLabs").GetProperty("enabled").GetBoolean(), Is.True);
             Assert.That(json.RootElement.GetProperty("googleWebRisk").GetProperty("enabled").GetBoolean(), Is.False);
             Assert.That(json.RootElement.GetProperty("virusTotal").GetProperty("enabled").GetBoolean(), Is.False);
+            Assert.That(json.RootElement.GetProperty("sslLabs").GetProperty("apiKey").ValueKind, Is.EqualTo(JsonValueKind.Null));
         });
     }
 
@@ -212,6 +213,53 @@ public sealed class AdminAuthorizationTests
         Assert.That(json.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.True);
         Assert.That(json.RootElement.GetProperty("sslLabs").GetProperty("enabled").GetBoolean(), Is.True);
         Assert.That(json.RootElement.GetProperty("virusTotal").GetProperty("enabled").GetBoolean(), Is.True);
+        Assert.That(json.RootElement.GetProperty("virusTotal").GetProperty("apiKey").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    /// <summary>
+    /// Verifies admin provider settings are scoped by user and browser instance instead of mutating process-global defaults.
+    /// </summary>
+    [Test]
+    public async Task Admin_external_provider_settings_are_scoped_per_user_and_instance()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var firstClient = factory.CreateClient();
+        using var secondClient = factory.CreateClient();
+        AddRole(firstClient, "Admin");
+        AddRole(secondClient, "Admin");
+        firstClient.DefaultRequestHeaders.Add("X-HIP-Instance-Id", "first-instance");
+        secondClient.DefaultRequestHeaders.Add("X-HIP-Instance-Id", "second-instance");
+
+        var update = await firstClient.PostAsJsonAsync("/api/v1/admin/site-safety/external-providers", new
+        {
+            ExternalProvidersEnabled = false,
+            AllowFullUrlChecks = false,
+            ProviderTimeout = "00:00:10",
+            DefaultCacheDuration = "06:00:00",
+            SslLabs = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = false, CacheDuration = (string?)null },
+            GoogleWebRisk = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = false, CacheDuration = (string?)null },
+            VirusTotal = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = false, CacheDuration = (string?)null }
+        });
+
+        var firstRead = await firstClient.GetAsync("/api/v1/admin/site-safety/external-providers");
+        var secondRead = await secondClient.GetAsync("/api/v1/admin/site-safety/external-providers");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(update.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(firstRead.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(secondRead.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        });
+
+        var firstJson = await JsonDocument.ParseAsync(await firstRead.Content.ReadAsStreamAsync());
+        var secondJson = await JsonDocument.ParseAsync(await secondRead.Content.ReadAsStreamAsync());
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstJson.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.False);
+            Assert.That(firstJson.RootElement.GetProperty("sslLabs").GetProperty("enabled").GetBoolean(), Is.False);
+            Assert.That(secondJson.RootElement.GetProperty("externalProvidersEnabled").GetBoolean(), Is.True);
+            Assert.That(secondJson.RootElement.GetProperty("sslLabs").GetProperty("enabled").GetBoolean(), Is.True);
+        });
     }
 
     [Test]

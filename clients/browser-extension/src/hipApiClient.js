@@ -22,7 +22,8 @@ export const DEFAULT_HIP_SETTINGS = Object.freeze({
   externalProvidersEnabled: true,
   sslLabsEnabled: true,
   googleWebRiskEnabled: false,
-  virusTotalEnabled: false
+  virusTotalEnabled: false,
+  instanceId: null
 });
 
 export class HipApiClient {
@@ -130,10 +131,21 @@ export class HipApiClient {
       method: "POST",
       headers: {
         "Accept": "application/json",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...this.instanceHeaders()
       },
       body: JSON.stringify(payload)
     });
+  }
+
+  /**
+   * Builds per-instance request headers so HIP can apply the right provider settings during scans.
+   * The value is a random extension-install identifier, not a user name or browsing-history identifier.
+   */
+  instanceHeaders() {
+    return this.config.instanceId
+      ? { "X-HIP-Instance-Id": this.config.instanceId }
+      : {};
   }
 
   /**
@@ -209,12 +221,12 @@ export class HipApiClient {
    * The endpoint is admin-protected on the HIP side, so callers must handle authorization failures safely.
    */
   async getExternalProviderSettings() {
-    const url = `${this.config.apiBaseUrl}/api/v1/admin/site-safety/external-providers`;
+    const url = `${this.config.apiBaseUrl}/api/v1/site-safety/external-providers`;
     const response = await fetch(url, {
       method: "GET",
-      credentials: "include",
       headers: {
-        "Accept": "application/json"
+        "Accept": "application/json",
+        ...this.instanceHeaders()
       }
     });
 
@@ -230,13 +242,13 @@ export class HipApiClient {
    * The browser extension sends only provider configuration flags and never sends page text or form values.
    */
   async updateExternalProviderSettings(settings) {
-    const url = `${this.config.apiBaseUrl}/api/v1/admin/site-safety/external-providers`;
+    const url = `${this.config.apiBaseUrl}/api/v1/site-safety/external-providers`;
     const response = await fetch(url, {
       method: "POST",
-      credentials: "include",
       headers: {
         "Accept": "application/json",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...this.instanceHeaders()
       },
       body: JSON.stringify(settings)
     });
@@ -267,21 +279,40 @@ export class HipApiClient {
 
 export async function loadHipSettings() {
   if (!globalThis.chrome?.storage?.sync) {
-    return normalizeHipSettings(DEFAULT_HIP_SETTINGS);
+    return normalizeHipSettings({
+      ...DEFAULT_HIP_SETTINGS,
+      instanceId: createInstanceId()
+    });
   }
 
   const stored = await chrome.storage.sync.get(DEFAULT_HIP_SETTINGS);
-  return normalizeHipSettings({
+  const settings = normalizeHipSettings({
     ...DEFAULT_HIP_SETTINGS,
     ...stored
   });
+
+  if (!settings.instanceId) {
+    settings.instanceId = createInstanceId();
+    await chrome.storage.sync.set({ instanceId: settings.instanceId });
+  }
+
+  return settings;
 }
 
 export async function saveHipSettings(settings) {
+  const existing = globalThis.chrome?.storage?.sync && !settings.instanceId
+    ? await chrome.storage.sync.get({ instanceId: null })
+    : {};
   const normalized = normalizeHipSettings({
     ...DEFAULT_HIP_SETTINGS,
+    ...existing,
     ...settings
   });
+
+  if (!normalized.instanceId) {
+    normalized.instanceId = createInstanceId();
+  }
+
   await chrome.storage.sync.set(normalized);
   return normalized;
 }
@@ -312,8 +343,28 @@ export function normalizeHipSettings(settings = {}) {
     externalProvidersEnabled: settings.externalProvidersEnabled ?? true,
     sslLabsEnabled: settings.sslLabsEnabled ?? true,
     googleWebRiskEnabled: settings.googleWebRiskEnabled ?? false,
-    virusTotalEnabled: settings.virusTotalEnabled ?? false
+    virusTotalEnabled: settings.virusTotalEnabled ?? false,
+    instanceId: typeof settings.instanceId === "string" && settings.instanceId.trim()
+      ? settings.instanceId.trim()
+      : null
   };
+}
+
+/**
+ * Creates a stable random extension instance identifier for per-instance server preferences.
+ * This is intentionally not derived from the browser profile, user name, tab URL, or page content.
+ */
+export function createInstanceId() {
+  const random = new Uint8Array(16);
+  if (globalThis.crypto?.getRandomValues) {
+    crypto.getRandomValues(random);
+  } else {
+    for (let index = 0; index < random.length; index += 1) {
+      random[index] = Math.floor(Math.random() * 256);
+    }
+  }
+
+  return `hip-ext-${Array.from(random).map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
 /**

@@ -418,8 +418,14 @@ Runtime MVP controls:
 - Admin page: `/admin/settings`
 - Admin API: `GET /api/v1/admin/site-safety/external-providers`
 - Admin API: `POST /api/v1/admin/site-safety/external-providers`
+- Browser/API preference endpoint: `GET /api/v1/site-safety/external-providers`
+- Browser/API preference endpoint: `POST /api/v1/site-safety/external-providers`
 
 These runtime controls update the current running HIP process. Production deployments should persist the same values in configuration or a secure settings store and keep API keys in secret storage.
+
+The admin endpoints are protected and scope settings by the authenticated admin plus optional `X-HIP-Instance-Id`. The browser/API preference endpoints scope settings only by `X-HIP-Instance-Id`, which the browser extension generates and stores locally. That lets one extension install disable or enable provider checks for its own scans without mutating global defaults for every user.
+
+The browser/API preference endpoint accepts only provider switches and safe timeout/cache values. It ignores client-supplied endpoints, API keys, and full-URL permissions so a browser extension cannot turn HIP into a client-controlled outbound scanner or secret store.
 
 To enable or disable a provider, use both the global switch and the provider-specific switch:
 

@@ -126,7 +126,7 @@ async function lookupDomain(domain) {
     return cached.value;
   }
 
-  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
   const value = await client.lookupDomain(normalized);
   lookupCache.set(cacheKey, { createdAt: Date.now(), value });
   return value;
@@ -141,7 +141,7 @@ async function scoreSite(request) {
     return cached.value;
   }
 
-  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
   const value = await client.scoreSite(request);
   if (domain) {
     lookupCache.set(cacheKey, { createdAt: Date.now(), value });
@@ -152,19 +152,19 @@ async function scoreSite(request) {
 
 async function scanLinks(pageUrl, links) {
   const settings = await loadHipSettings();
-  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
   return client.scanLinks(pageUrl, links);
 }
 
 async function safetyPageUrl(originalUrl, sourceDomain, riskStatus) {
   const settings = await loadHipSettings();
-  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
   return client.safetyPageUrl(originalUrl, sourceDomain, riskStatus);
 }
 
 async function reportRiskFinding(report) {
   const settings = await loadHipSettings();
-  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
   return client.reportRiskFinding(report);
 }
 
@@ -186,7 +186,7 @@ async function saveScanResult(result) {
   pendingScanResultSaves.add(saveKey);
   try {
     const settings = await loadHipSettings();
-    const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+    const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
     return await client.saveScanResult(result);
   } finally {
     pendingScanResultSaves.delete(saveKey);

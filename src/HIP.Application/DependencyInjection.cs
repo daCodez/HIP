@@ -108,6 +108,7 @@ public static class DependencyInjection
         services.AddSingleton(_ => new HttpClient());
         services.AddSingleton<IExternalSiteEvidenceCache, InMemoryExternalSiteEvidenceCache>();
         services.AddSingleton(new ExternalSiteEvidenceOptions());
+        services.AddSingleton<IExternalSiteEvidenceSettingsStore, InMemoryExternalSiteEvidenceSettingsStore>();
         services.AddScoped<ISiteSafetyEvidenceProvider, BrowserObservedSignalProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, WeightedFeedbackSiteSafetyEvidenceProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, AdminReviewEvidenceProvider>();
