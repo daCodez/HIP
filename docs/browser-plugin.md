@@ -32,11 +32,15 @@ Stored fields:
 
 - domain
 - hashed page URL
+- HTTPS status
+- HIP plugin version
 - scan source (`BrowserPlugin`)
 - score, risk level, and status
 - plain-English reasons
 - links scanned count
 - risky, suspicious, and dangerous link counts
+- login, password, and payment field presence as counts/booleans only
+- download, executable download, shortener, obfuscation, and redirect candidate counts
 - last checked UTC
 - recommended action
 - small privacy-safe metadata such as scan mode and candidate counts
@@ -44,6 +48,8 @@ Stored fields:
 HIP does not store full page text, form values, passwords, tokens, usernames, email body text, private messages, or unrelated browsing history from this browser scan flow. The full page URL is hashed by default; raw URL storage is reserved for a future explicit safe-storage policy.
 
 If scan-result submission fails, link scanning and the popup continue to work. The extension records a small `Failure` state in the popup summary and logs only a safe development warning. It does not retry aggressively.
+
+The content script and background worker both guard rapid duplicate submissions. The content script de-duplicates by domain plus page URL hash during the active scan, and the background worker suppresses duplicate in-flight saves using the same hash when available.
 
 Example save request:
 
@@ -56,6 +62,8 @@ Content-Type: application/json
 {
   "domain": "example.com",
   "pageUrl": "https://example.com/page",
+  "pageUrlHash": "sha256:...",
+  "pluginVersion": "HIP Plugin v0.1.0-dev",
   "score": 84,
   "riskLevel": "Trusted",
   "status": "Trusted",
@@ -69,7 +77,17 @@ Content-Type: application/json
   "recommendedAction": "Allow",
   "privacySafeMetadata": {
     "scanMode": "Normal",
-    "apiStatus": "Available"
+    "apiStatus": "Available",
+    "isHttps": "true",
+    "loginFormsDetected": "0",
+    "passwordFieldsDetected": "0",
+    "paymentFieldsDetected": "0",
+    "downloadCandidates": "0",
+    "executableDownloadCandidates": "0",
+    "shortenedLinkCandidates": "0",
+    "obfuscatedLinkCandidates": "0",
+    "redirectCandidates": "0",
+    "pluginVersion": "HIP Plugin v0.1.0-dev"
   }
 }
 ```
@@ -192,6 +210,15 @@ The plugin may send the current URL/domain, href URLs needed for link scoring, U
 
 The plugin must not send page body text, form values, passwords, usernames, email text, message bodies, or private chat content.
 
-Manual test: run `dotnet run --project src/HIP.Web/HIP.Web.csproj --launch-profile https`, load `clients/browser-extension` as an unpacked Chromium extension, visit a test page, and confirm the popup score plus attention-only link badges.
+Manual test:
+
+1. Run HIP API and Web through Aspire or Visual Studio.
+2. In the extension settings, set `hipApiBaseUrl` to the running API host and `webBaseUrl` to the running Web host.
+3. Load `clients/browser-extension` as an unpacked Chromium extension.
+4. Visit a normal HTTP/HTTPS test page.
+5. Open the popup and confirm the plugin version, score, link counts, Site Safety section, and `Last submitted: Success`.
+6. Open `GET /api/v1/browser/scan-results/{domain}` on the API host and confirm `privacySafeMetadata` includes HTTPS, form flags, download counts, shortener/redirect counts, and plugin version.
+7. Refresh the page or click popup refresh rapidly and confirm only one in-flight save is attempted at a time.
+8. Visit the HIP admin dashboard and click Refresh to confirm the stored scan appears in live scan counts.
 
 Known limitations: link analysis is mostly domain-based with a shortener heuristic, risk reports use a placeholder HIP signature, and file content, AI page analysis, full social parsing, and webmail parsing are deferred.

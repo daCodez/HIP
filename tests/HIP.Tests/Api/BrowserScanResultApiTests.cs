@@ -59,6 +59,74 @@ public sealed class BrowserScanResultApiTests
     }
 
     /// <summary>
+    /// Verifies newer browser plugin builds can submit a URL hash without requiring HIP to store a raw full URL.
+    /// </summary>
+    [Test]
+    public async Task Scan_result_endpoint_accepts_client_url_hash_and_plugin_version()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        var domain = $"hashed-scan-{Guid.NewGuid():N}.com";
+
+        var response = await client.PostAsJsonAsync("/api/v1/browser/scan-results", ValidRequest() with
+        {
+            Domain = domain,
+            PageUrl = null,
+            PageUrlHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            PluginVersion = "HIP Plugin v0.1.0-dev",
+            PrivacySafeMetadata = new Dictionary<string, string>
+            {
+                ["isHttps"] = "true",
+                ["loginFormsDetected"] = "1",
+                ["passwordFieldsDetected"] = "1",
+                ["paymentFieldsDetected"] = "1",
+                ["downloadCandidates"] = "2",
+                ["shortenedLinkCandidates"] = "1",
+                ["redirectCandidates"] = "1"
+            }
+        });
+        var stored = await client.GetAsync($"/api/v1/browser/scan-results/{domain}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(stored.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        });
+
+        var json = await JsonDocument.ParseAsync(await stored.Content.ReadAsStreamAsync());
+        var metadata = json.RootElement.GetProperty("privacySafeMetadata");
+        Assert.Multiple(() =>
+        {
+            Assert.That(metadata.GetProperty("pluginVersion").GetString(), Is.EqualTo("HIP Plugin v0.1.0-dev"));
+            Assert.That(metadata.GetProperty("isHttps").GetString(), Is.EqualTo("true"));
+            Assert.That(metadata.GetProperty("loginFormsDetected").GetString(), Is.EqualTo("1"));
+            Assert.That(metadata.GetProperty("passwordFieldsDetected").GetString(), Is.EqualTo("1"));
+            Assert.That(metadata.GetProperty("paymentFieldsDetected").GetString(), Is.EqualTo("1"));
+            Assert.That(metadata.GetProperty("downloadCandidates").GetString(), Is.EqualTo("2"));
+            Assert.That(metadata.GetProperty("shortenedLinkCandidates").GetString(), Is.EqualTo("1"));
+            Assert.That(metadata.GetProperty("redirectCandidates").GetString(), Is.EqualTo("1"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies malformed URL hashes are rejected instead of being trusted as safe storage keys.
+    /// </summary>
+    [Test]
+    public async Task Scan_result_endpoint_rejects_invalid_url_hash()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/browser/scan-results", ValidRequest() with
+        {
+            PageUrl = null,
+            PageUrlHash = "sha256:not-a-real-hash"
+        });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    /// <summary>
     /// Verifies the retrieve response avoids private URL, page text, and form content fields.
     /// </summary>
     [Test]
@@ -78,6 +146,7 @@ public sealed class BrowserScanResultApiTests
             Assert.That(json, Does.Not.Contain("pageText"));
             Assert.That(json, Does.Not.Contain("formContents"));
             Assert.That(json, Does.Not.Contain("token=secret"));
+            Assert.That(json, Does.Not.Contain("password=secret"));
         });
     }
 

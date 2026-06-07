@@ -2,6 +2,7 @@ import { formatPluginVersion, HipApiClient, loadHipSettings, normalizeHost } fro
 
 const lookupCache = new Map();
 const scanSummaries = new Map();
+const pendingScanResultSaves = new Set();
 const cacheTtlMs = 5 * 60 * 1000;
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -172,9 +173,32 @@ async function reportRiskFinding(report) {
  * This keeps storage in the background script so content scripts never handle API secrets later.
  */
 async function saveScanResult(result) {
-  const settings = await loadHipSettings();
-  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
-  return client.saveScanResult(result);
+  const saveKey = scanResultSaveKey(result);
+  if (pendingScanResultSaves.has(saveKey)) {
+    return {
+      saved: false,
+      domain: normalizeHost(result?.domain),
+      lastCheckedUtc: new Date().toISOString(),
+      duplicateSuppressed: true
+    };
+  }
+
+  pendingScanResultSaves.add(saveKey);
+  try {
+    const settings = await loadHipSettings();
+    const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+    return await client.saveScanResult(result);
+  } finally {
+    pendingScanResultSaves.delete(saveKey);
+  }
+}
+
+/**
+ * Builds a short duplicate-prevention key for rapid scan submissions from the same page.
+ * It prefers the page URL hash so the background worker does not need to store or compare raw full URLs.
+ */
+function scanResultSaveKey(result = {}) {
+  return `${normalizeHost(result.domain)}:${result.pageUrlHash || result.pageUrl || "unknown"}`;
 }
 
 /**

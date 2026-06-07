@@ -13,6 +13,7 @@ public sealed class BrowserScanResultService(
     private const int MaxReasonLength = 300;
     private const int MaxMetadataKeyLength = 80;
     private const int MaxMetadataValueLength = 200;
+    private const int MaxPluginVersionLength = 80;
 
     private static readonly HashSet<string> PrivateMetadataKeys = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -38,15 +39,15 @@ public sealed class BrowserScanResultService(
         var domain = DomainInputValidator.ValidateAndNormalize(request.Domain);
         ValidateScore(request.Score);
         ValidateCounts(request);
-        ValidateHttpUrl(request.PageUrl);
+        var pageUrlHash = ResolvePageUrlHash(request);
 
         var now = request.ScannedAtUtc ?? DateTimeOffset.UtcNow;
-        var metadata = ValidateMetadata(request.PrivacySafeMetadata);
+        var metadata = AddPluginVersion(ValidateMetadata(request.PrivacySafeMetadata), request.PluginVersion);
         var reasons = NormalizeReasons(request.Reasons);
         var record = new BrowserScanResultRecord(
             $"browser-scan:{domain}:{Guid.NewGuid():N}",
             domain,
-            hashingService.Hash(request.PageUrl),
+            pageUrlHash,
             null,
             "BrowserPlugin",
             request.Score,
@@ -123,6 +124,43 @@ public sealed class BrowserScanResultService(
     }
 
     /// <summary>
+    /// Resolves the stored URL hash from the browser-provided hash or by hashing a valid HTTP URL.
+    /// </summary>
+    /// <param name="request">Browser plugin scan result request.</param>
+    /// <returns>Safe hash value used for storage.</returns>
+    /// <remarks>
+    /// New extension builds send <see cref="BrowserScanResultSaveRequest.PageUrlHash" /> so HIP does not need a raw
+    /// full URL for persistence. Older builds can still send <see cref="BrowserScanResultSaveRequest.PageUrl" />,
+    /// which HIP validates and hashes immediately.
+    /// </remarks>
+    private string ResolvePageUrlHash(BrowserScanResultSaveRequest request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.PageUrlHash))
+        {
+            return ValidateSha256Hash(request.PageUrlHash);
+        }
+
+        ValidateHttpUrl(RequiredText(request.PageUrl, "A valid HTTP or HTTPS page URL or page URL hash is required."));
+        return hashingService.Hash(request.PageUrl!);
+    }
+
+    /// <summary>
+    /// Validates a client-provided SHA-256 URL hash before accepting it for storage.
+    /// </summary>
+    /// <param name="hash">Client-supplied hash.</param>
+    /// <returns>Normalized hash.</returns>
+    private static string ValidateSha256Hash(string hash)
+    {
+        var trimmed = hash.Trim().ToLowerInvariant();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(trimmed, "^sha256:[0-9a-f]{64}$"))
+        {
+            throw new ArgumentException("Page URL hash must be a sha256 hash.");
+        }
+
+        return trimmed;
+    }
+
+    /// <summary>
     /// Normalizes user-facing reasons and trims oversized entries so responses stay display-safe.
     /// </summary>
     /// <param name="reasons">Optional plain-English reasons.</param>
@@ -171,6 +209,26 @@ public sealed class BrowserScanResultService(
             result[trimmedKey] = safeValue.Length > MaxMetadataValueLength
                 ? safeValue[..MaxMetadataValueLength]
                 : safeValue;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Adds plugin version provenance to metadata after bounding its length and avoiding duplicate hardcoded fields.
+    /// </summary>
+    /// <param name="metadata">Validated metadata.</param>
+    /// <param name="pluginVersion">Optional plugin version from the browser extension.</param>
+    /// <returns>Metadata with plugin version when provided.</returns>
+    private static IReadOnlyDictionary<string, string> AddPluginVersion(IReadOnlyDictionary<string, string> metadata, string? pluginVersion)
+    {
+        var result = new Dictionary<string, string>(metadata, StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(pluginVersion))
+        {
+            var safeVersion = pluginVersion.Trim();
+            result["pluginVersion"] = safeVersion.Length > MaxPluginVersionLength
+                ? safeVersion[..MaxPluginVersionLength]
+                : safeVersion;
         }
 
         return result;

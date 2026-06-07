@@ -41,7 +41,7 @@ public sealed record BrowserScanResultRecord(
 /// API request from the browser plugin for saving a privacy-safe scan summary.
 /// </summary>
 /// <param name="Domain">Domain scanned by the plugin.</param>
-/// <param name="PageUrl">Current page URL; HIP hashes this by default and does not store page text.</param>
+/// <param name="PageUrl">Optional current page URL for older clients; HIP hashes this immediately when <paramref name="PageUrlHash" /> is not supplied.</param>
 /// <param name="Score">HIP score from 0 through 100.</param>
 /// <param name="RiskLevel">Risk level associated with the scan.</param>
 /// <param name="Status">Status label associated with the scan.</param>
@@ -53,9 +53,11 @@ public sealed record BrowserScanResultRecord(
 /// <param name="RecommendedAction">Recommended action for the scanned site.</param>
 /// <param name="PrivacySafeMetadata">Optional privacy-safe counts and context; private content is rejected by validation.</param>
 /// <param name="ScannedAtUtc">Optional scan timestamp supplied by HIP-owned scan services; browser submissions default to server receipt time.</param>
+/// <param name="PageUrlHash">Optional client-side page URL hash; HIP hashes <paramref name="PageUrl" /> when this is not supplied.</param>
+/// <param name="PluginVersion">Optional browser plugin version used to debug loaded-extension and live-scan reliability.</param>
 public sealed record BrowserScanResultSaveRequest(
     string Domain,
-    string PageUrl,
+    string? PageUrl,
     int Score,
     string RiskLevel,
     string Status,
@@ -66,7 +68,9 @@ public sealed record BrowserScanResultSaveRequest(
     int DangerousLinksFound,
     string RecommendedAction,
     IReadOnlyDictionary<string, string>? PrivacySafeMetadata,
-    DateTimeOffset? ScannedAtUtc = null);
+    DateTimeOffset? ScannedAtUtc = null,
+    string? PageUrlHash = null,
+    string? PluginVersion = null);
 
 /// <summary>
 /// API response returned after HIP stores a browser scan result.

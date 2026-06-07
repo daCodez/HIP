@@ -4,7 +4,9 @@
   const ignoredProtocols = new Set(["javascript:", "mailto:", "tel:", "data:", "blob:"]);
   const downloadExtensions = new Set([".exe", ".zip", ".msi", ".dmg", ".pdf", ".docx", ".scr"]);
   const executableDownloadExtensions = new Set([".exe", ".msi", ".dmg", ".scr"]);
+  const shortenerDomains = new Set(["bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd", "buff.ly", "cutt.ly", "shorturl.at", "rebrand.ly"]);
   const reportedDomains = new Set();
+  const pendingScanSubmissions = new Set();
 
   const currentDomain = normalizeHost(window.location.hostname);
   let settings = null;
@@ -86,6 +88,16 @@
       if (target.isDownloadCandidate) {
         lastSummary.downloadCandidates++;
         lastSummary.downloadLinks.push(target.url.href);
+      }
+      if (isShortenerDomain(target.domain)) {
+        lastSummary.shortenedLinkCandidates++;
+      }
+      if (isObfuscatedLinkLike(target.url, anchor)) {
+        lastSummary.obfuscatedLinkCandidates++;
+      }
+      if (isRedirectLike(target.url)) {
+        lastSummary.redirectCandidates++;
+        lastSummary.redirectSignals.push(target.url.href);
       }
       if (isExecutableDownloadLike(target.url)) {
         lastSummary.executableDownloadCandidates++;
@@ -326,10 +338,23 @@
     }
 
     lastSummary.scanResultSubmission = "Pending";
+    lastSummary.pluginVersion = pluginVersion;
+    lastSummary.isHttps = window.location.protocol === "https:";
+    lastSummary.pageUrlHash = await sha256(window.location.href);
+    const submissionKey = `${currentDomain}:${lastSummary.pageUrlHash}`;
+    if (pendingScanSubmissions.has(submissionKey)) {
+      lastSummary.scanResultSubmission = "Pending";
+      lastSummary.scanResultDataSource = "AlreadySubmitting";
+      return;
+    }
+
+    pendingScanSubmissions.add(submissionKey);
     const assessment = browserScanAssessment(currentLookup, lastSummary);
     const payload = {
       domain: currentDomain,
       pageUrl: window.location.href,
+      pageUrlHash: lastSummary.pageUrlHash,
+      pluginVersion,
       score: assessment.score,
       riskLevel: assessment.status,
       status: assessment.status,
@@ -343,26 +368,38 @@
         scanMode: settings.scanMode,
         apiStatus: lastSummary.apiStatus,
         scanTimestampUtc: new Date().toISOString(),
+        isHttps: String(lastSummary.isHttps),
         downloadCandidates: String(lastSummary.downloadCandidates),
+        executableDownloadCandidates: String(lastSummary.executableDownloadCandidates),
         formsDetected: String(lastSummary.formsDetected),
         loginFormsDetected: String(lastSummary.loginFormsDetected),
+        passwordFieldsDetected: String(lastSummary.passwordFieldsDetected),
+        paymentFieldsDetected: String(lastSummary.paymentFieldsDetected),
         crossDomainLoginForms: String(lastSummary.crossDomainLoginForms),
+        shortenedLinkCandidates: String(lastSummary.shortenedLinkCandidates),
+        obfuscatedLinkCandidates: String(lastSummary.obfuscatedLinkCandidates),
+        redirectCandidates: String(lastSummary.redirectCandidates),
         socialLinkCandidates: String(lastSummary.socialLinkCandidates),
-        webmailLinkCandidates: String(lastSummary.webmailLinkCandidates)
+        webmailLinkCandidates: String(lastSummary.webmailLinkCandidates),
+        pluginVersion
       }
     };
 
-    const response = await chrome.runtime.sendMessage({ type: "HIP_SAVE_SCAN_RESULT", result: payload });
-    if (!response?.ok) {
-      lastSummary.scanResultSubmission = "Failure";
-      lastSummary.scanResultError = response?.error || "Submission failed";
-      console.warn("HIP scan result was not persisted.", response?.error);
-      return;
-    }
+    try {
+      const response = await chrome.runtime.sendMessage({ type: "HIP_SAVE_SCAN_RESULT", result: payload });
+      if (!response?.ok) {
+        lastSummary.scanResultSubmission = "Failure";
+        lastSummary.scanResultError = response?.error || "Submission failed";
+        console.warn("HIP scan result was not persisted.", response?.error);
+        return;
+      }
 
-    lastSummary.scanResultSubmission = "Success";
-    lastSummary.scanResultDataSource = "BrowserPluginScan";
-    lastSummary.lastSubmittedUtc = response.result?.lastCheckedUtc || new Date().toISOString();
+      lastSummary.scanResultSubmission = "Success";
+      lastSummary.scanResultDataSource = "BrowserPluginScan";
+      lastSummary.lastSubmittedUtc = response.result?.lastCheckedUtc || new Date().toISOString();
+    } finally {
+      pendingScanSubmissions.delete(submissionKey);
+    }
   }
 
   async function lookupDomain(domain) {
@@ -478,6 +515,35 @@
   function isExecutableDownloadLike(url) {
     const pathname = url.pathname.toLowerCase();
     return executableDownloadExtensions.has(pathname.slice(pathname.lastIndexOf(".")));
+  }
+
+  /**
+   * Detects common URL shortener hosts from href structure only.
+   * HIP stores only the count for scan summaries, avoiding page text and private content.
+   */
+  function isShortenerDomain(domain) {
+    return shortenerDomains.has(normalizeHost(domain));
+  }
+
+  /**
+   * Detects obfuscated URL structure without reading surrounding page body text.
+   */
+  function isObfuscatedLinkLike(url, anchor) {
+    const rawHref = anchor.getAttribute("href") || "";
+    return rawHref.includes("hxxp") ||
+      rawHref.includes("[.]") ||
+      /%[0-9a-f]{2}/i.test(url.href) ||
+      /@/.test(url.username || "") ||
+      /\d+\.\d+\.\d+\.\d+/.test(url.hostname);
+  }
+
+  /**
+   * Detects redirect-style links using URL path and parameter names only.
+   */
+  function isRedirectLike(url) {
+    const redirectParameterNames = ["url", "u", "redirect", "redirect_url", "target", "dest", "destination", "next"];
+    return redirectParameterNames.some(name => url.searchParams.has(name)) ||
+      /\/(redirect|out|away|go|link)\b/i.test(url.pathname);
   }
 
   function detectLinkContext(anchor) {
@@ -829,6 +895,10 @@
       downloadCandidates: 0,
       executableDownloadCandidates: 0,
       downloadLinks: [],
+      shortenedLinkCandidates: 0,
+      obfuscatedLinkCandidates: 0,
+      redirectCandidates: 0,
+      redirectSignals: [],
       formsDetected: 0,
       loginFormsDetected: 0,
       passwordFieldsDetected: 0,
@@ -842,7 +912,10 @@
       scanResultSubmission: "Pending",
       scanResultDataSource: "Pending",
       lastSubmittedUtc: null,
-      scanResultError: null
+      scanResultError: null,
+      pageUrlHash: null,
+      isHttps: window.location.protocol === "https:",
+      pluginVersion
     };
   }
 
