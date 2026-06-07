@@ -5,6 +5,7 @@ const status = document.getElementById("status");
 const pluginVersion = document.getElementById("pluginVersion");
 const providerStatus = document.getElementById("providerStatus");
 let currentProviderSettings = null;
+let currentInstanceId = null;
 const fields = {
   apiBaseUrl: document.getElementById("apiBaseUrl"),
   webBaseUrl: document.getElementById("webBaseUrl"),
@@ -53,6 +54,7 @@ initialize().catch(error => {
 async function initialize() {
   pluginVersion.textContent = await loadPluginVersion();
   const settings = await loadHipSettings();
+  currentInstanceId = settings.instanceId;
   render(settings);
   await refreshProviderSettings(settings);
 }
@@ -96,7 +98,8 @@ function readForm() {
     externalProvidersEnabled: fields.externalProvidersEnabled.checked,
     sslLabsEnabled: fields.sslLabsEnabled.checked,
     googleWebRiskEnabled: fields.googleWebRiskEnabled.checked,
-    virusTotalEnabled: fields.virusTotalEnabled.checked
+    virusTotalEnabled: fields.virusTotalEnabled.checked,
+    instanceId: currentInstanceId
   };
 }
 
@@ -106,7 +109,7 @@ function readForm() {
  */
 async function refreshProviderSettings(settings = null) {
   const activeSettings = settings || readForm();
-  const client = new HipApiClient({ apiBaseUrl: activeSettings.apiBaseUrl, webBaseUrl: activeSettings.webBaseUrl });
+  const client = new HipApiClient({ apiBaseUrl: activeSettings.apiBaseUrl, webBaseUrl: activeSettings.webBaseUrl, instanceId: activeSettings.instanceId });
   providerStatus.textContent = "Checking provider settings...";
 
   try {
@@ -133,7 +136,7 @@ function renderProviderSettings(providerSettings) {
  * Attempts to synchronize provider switches to the HIP admin API while preserving existing provider details.
  */
 async function syncProviderSettings(settings) {
-  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
   const base = currentProviderSettings || defaultProviderSettings();
   const request = {
     ...base,

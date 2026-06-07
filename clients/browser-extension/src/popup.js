@@ -86,7 +86,7 @@ initialize().catch(error => showUnavailable(error));
 async function initialize() {
   settings = await loadHipSettings();
   elements.pluginVersion.textContent = await loadPluginVersion();
-  client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl });
+  client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   activeTabId = tab?.id ?? null;
   const currentUrl = tab?.url ? new URL(tab.url) : null;

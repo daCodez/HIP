@@ -39,7 +39,7 @@ test("scan site safety calls versioned API route", async () => {
   };
 
   try {
-    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123", instanceId: "test-instance" });
     await client.scanSiteSafety(client.buildSiteSafetyRequest("https://example.com", { pluginVersion: "HIP Plugin v0.1.0-dev" }));
   } finally {
     globalThis.fetch = originalFetch;
@@ -48,6 +48,7 @@ test("scan site safety calls versioned API route", async () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "http://localhost:5099/api/v1/site-safety/scan");
   assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].options.headers["X-HIP-Instance-Id"], "test-instance");
   assert.equal(JSON.parse(calls[0].options.body).pluginVersion, "HIP Plugin v0.1.0-dev");
 });
 
@@ -94,7 +95,7 @@ test("provider toggles default to SSL Labs enabled only", () => {
   assert.equal(settings.virusTotalEnabled, false);
 });
 
-test("external provider settings lookup uses admin route with credentials", async () => {
+test("external provider settings lookup uses instance-scoped API route with instance header", async () => {
   const calls = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
@@ -106,16 +107,17 @@ test("external provider settings lookup uses admin route with credentials", asyn
   };
 
   try {
-    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123", instanceId: "provider-instance" });
     await client.getExternalProviderSettings();
   } finally {
     globalThis.fetch = originalFetch;
   }
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "http://localhost:5099/api/v1/admin/site-safety/external-providers");
+  assert.equal(calls[0].url, "http://localhost:5099/api/v1/site-safety/external-providers");
   assert.equal(calls[0].options.method, "GET");
-  assert.equal(calls[0].options.credentials, "include");
+  assert.equal("credentials" in calls[0].options, false);
+  assert.equal(calls[0].options.headers["X-HIP-Instance-Id"], "provider-instance");
 });
 
 test("external provider settings update posts complete safe config", async () => {
@@ -140,16 +142,17 @@ test("external provider settings update posts complete safe config", async () =>
   };
 
   try {
-    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123", instanceId: "provider-instance" });
     await client.updateExternalProviderSettings(request);
   } finally {
     globalThis.fetch = originalFetch;
   }
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "http://localhost:5099/api/v1/admin/site-safety/external-providers");
+  assert.equal(calls[0].url, "http://localhost:5099/api/v1/site-safety/external-providers");
   assert.equal(calls[0].options.method, "POST");
-  assert.equal(calls[0].options.credentials, "include");
+  assert.equal("credentials" in calls[0].options, false);
+  assert.equal(calls[0].options.headers["X-HIP-Instance-Id"], "provider-instance");
   assert.equal(JSON.parse(calls[0].options.body).sslLabs.enabled, true);
 });
 
