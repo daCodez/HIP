@@ -1194,6 +1194,18 @@ h1:focus {
     min-width: 280px;
 }
 
+.hip-scan-table td {
+    vertical-align: top;
+}
+
+.scan-plugin-version {
+    display: block;
+    margin-top: 6px;
+    color: #6f829e;
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+}
+
 .hip-primary-action,
 .hip-button-row button,
 .hip-button-row a {

@@ -342,6 +342,132 @@ public sealed class AdminDashboardTests
         Assert.That(summary.RecentScans.Select(scan => scan.Domain).First(), Is.EqualTo("caution.example"));
     }
 
+    /// <summary>
+    /// Verifies recent scan rows include the layered score and provenance fields needed by the admin table.
+    /// </summary>
+    [Test]
+    public async Task Dashboard_recent_scan_rows_include_layered_scores_confidence_and_plugin_version()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        await repository.SaveAsync(Scan(
+            "layered.example",
+            44,
+            "Suspicious",
+            12,
+            3,
+            1,
+            DateTimeOffset.UtcNow,
+            "Executable download and redirect signals were observed.",
+            new Dictionary<string, string>
+            {
+                ["domainTrustScore"] = "91",
+                ["pageTrustScore"] = "37",
+                ["contentRiskScore"] = "22",
+                ["confidence"] = "Medium",
+                ["source"] = "SiteSafetyScan",
+                ["pluginVersion"] = "HIP Plugin v0.1.0-dev"
+            }), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+        var row = summary.RecentScans.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.Domain, Is.EqualTo("layered.example"));
+            Assert.That(row.Status, Is.EqualTo("Suspicious"));
+            Assert.That(row.Score, Is.EqualTo(44));
+            Assert.That(row.DomainTrustScore, Is.EqualTo(91));
+            Assert.That(row.PageTrustScore, Is.EqualTo(37));
+            Assert.That(row.ContentRiskScore, Is.EqualTo(22));
+            Assert.That(row.ConfidenceLevel, Is.EqualTo("Medium"));
+            Assert.That(row.Source, Is.EqualTo("SiteSafetyScan"));
+            Assert.That(row.PluginVersion, Is.EqualTo("HIP Plugin v0.1.0-dev"));
+            Assert.That(row.ReasonSummary, Does.Contain("Executable download"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies recent scan rows fall back safely when older stored scans do not have layered metadata.
+    /// </summary>
+    [Test]
+    public async Task Dashboard_recent_scan_rows_use_safe_unknowns_when_metadata_is_missing()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        await repository.SaveAsync(Scan("old.example", 56, "LimitedTrustData", 3, 0, 0, DateTimeOffset.UtcNow, "Older scan."), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var row = (await service.GetSummaryAsync(CancellationToken.None)).RecentScans.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.DomainTrustScore, Is.Null);
+            Assert.That(row.PageTrustScore, Is.Null);
+            Assert.That(row.ContentRiskScore, Is.Null);
+            Assert.That(row.ConfidenceLevel, Is.EqualTo("Unknown"));
+            Assert.That(row.Source, Is.EqualTo("BrowserPlugin"));
+            Assert.That(row.PluginVersion, Is.EqualTo("Unknown"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies recent scan rows remain privacy-safe and do not surface raw URL or private-content markers.
+    /// </summary>
+    [Test]
+    public async Task Dashboard_recent_scan_rows_do_not_expose_private_fields()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        await repository.SaveAsync(Scan(
+            "privacy.example",
+            40,
+            "Suspicious",
+            8,
+            2,
+            0,
+            DateTimeOffset.UtcNow,
+            "Suspicious link signals were observed.",
+            new Dictionary<string, string>
+            {
+                ["pluginVersion"] = "HIP Plugin v0.1.0-dev",
+                ["source"] = "BrowserPlugin",
+                ["confidence"] = "High"
+            }), CancellationToken.None);
+        var service = Dashboard(repository);
+
+        var json = JsonSerializer.Serialize((await service.GetSummaryAsync(CancellationToken.None)).RecentScans);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(json, Does.Not.Contain("pageUrl"));
+            Assert.That(json, Does.Not.Contain("password"));
+            Assert.That(json, Does.Not.Contain("token"));
+            Assert.That(json, Does.Not.Contain("cookie"));
+            Assert.That(json, Does.Not.Contain("formValues"));
+            Assert.That(json, Does.Not.Contain("private messages"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies the admin dashboard markup contains the recent scan table columns and empty-state copy.
+    /// </summary>
+    [Test]
+    public async Task Dashboard_route_contains_recent_scan_table_columns_and_empty_state()
+    {
+        var source = ReadDashboardSource();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("Recent Scans"));
+            Assert.That(source, Does.Contain("Final Score"));
+            Assert.That(source, Does.Contain("Domain Trust"));
+            Assert.That(source, Does.Contain("Page Trust"));
+            Assert.That(source, Does.Contain("Content Risk"));
+            Assert.That(source, Does.Contain("Confidence"));
+            Assert.That(source, Does.Contain("No scans yet."));
+            Assert.That(source, Does.Contain("Scan history not connected yet").Or.Contain("Run the browser plugin"));
+        });
+    }
+
     [Test]
     public async Task Recent_threats_do_not_show_clean_pages()
     {

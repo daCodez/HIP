@@ -165,13 +165,20 @@ public sealed class AdminDashboardService(
             .Select(scan => new AdminRecentScanItem(
                 scan.ScanResultId,
                 scan.Domain,
+                scan.Status,
                 scan.Score,
+                MetadataInt(scan, "domainTrustScore"),
+                MetadataInt(scan, "pageTrustScore"),
+                MetadataInt(scan, "contentRiskScore"),
+                MetadataValue(scan, "confidence", MetadataValue(scan, "confidenceLevel", "Unknown")),
                 scan.RiskLevel,
                 scan.LinksScanned,
                 scan.RiskyLinksFound,
                 scan.DangerousLinksFound,
                 scan.LastCheckedUtc,
-                FirstReason(scan)))
+                FirstReason(scan),
+                SourceLabel(scan),
+                MetadataValue(scan, "pluginVersion", "Unknown")))
             .ToArray();
 
         var topRiskyDomains = browserScans
@@ -364,6 +371,40 @@ public sealed class AdminDashboardService(
     private static string FirstReason(BrowserScanResultRecord scan) =>
         scan.Reasons.FirstOrDefault(reason => !string.IsNullOrWhiteSpace(reason))
         ?? "Browser plugin scan summary.";
+
+    /// <summary>
+    /// Reads a privacy-safe metadata value without throwing when old scan records do not contain the key.
+    /// </summary>
+    /// <param name="scan">Stored browser scan summary.</param>
+    /// <param name="key">Metadata key.</param>
+    /// <param name="fallback">Value used when metadata is missing.</param>
+    /// <returns>Stored metadata value or fallback.</returns>
+    private static string MetadataValue(BrowserScanResultRecord scan, string key, string fallback) =>
+        scan.PrivacySafeMetadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? SanitizeThreatSummary(value)
+            : fallback;
+
+    /// <summary>
+    /// Reads an optional integer score from privacy-safe scan metadata.
+    /// </summary>
+    /// <param name="scan">Stored browser scan summary.</param>
+    /// <param name="key">Metadata key.</param>
+    /// <returns>Parsed score, or null when unavailable.</returns>
+    private static int? MetadataInt(BrowserScanResultRecord scan, string key) =>
+        scan.PrivacySafeMetadata.TryGetValue(key, out var value) && int.TryParse(value, out var parsed)
+            ? Math.Clamp(parsed, 0, 100)
+            : null;
+
+    /// <summary>
+    /// Builds a source label that identifies where the stored scan came from without exposing raw URLs.
+    /// </summary>
+    /// <param name="scan">Stored browser scan summary.</param>
+    /// <returns>Dashboard-safe source label.</returns>
+    private static string SourceLabel(BrowserScanResultRecord scan)
+    {
+        var metadataSource = MetadataValue(scan, "source", string.Empty);
+        return string.IsNullOrWhiteSpace(metadataSource) ? scan.ScanSource : metadataSource;
+    }
 
     /// <summary>
     /// Parses stored risk text for recent activity display.

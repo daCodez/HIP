@@ -193,42 +193,63 @@
             <div class="result-header">
                 <div>
                     <h2>Recent Scans</h2>
-                    <p>Newest stored browser plugin scans, with privacy-safe summaries only.</p>
+                    <p>Newest stored scan results, with privacy-safe summaries only. Raw full URLs, form values, cookies, tokens, passwords, page text, and private messages are not shown.</p>
                 </div>
             </div>
 
             @if (_summary.RecentScans.Count == 0)
             {
-                <p>No recent browser plugin scans yet.</p>
+                <div class="hip-threat-empty">
+                    <strong>No scans yet.</strong>
+                    <span>@(_summary.HasScanData ? "Scan history not connected yet." : "Run the browser plugin on a test page, then refresh this dashboard.")</span>
+                </div>
             }
             else
             {
-                <div class="table-wrap">
-                    <table>
+                <div class="hip-table-wrap">
+                    <table class="hip-data-table hip-scan-table">
                         <thead>
                             <tr>
-                                <th>Time</th>
                                 <th>Domain</th>
-                                <th>Score</th>
-                                <th>Risk</th>
-                                <th>Links</th>
-                                <th>Risky</th>
-                                <th>Dangerous</th>
+                                <th>Status</th>
+                                <th>Final Score</th>
+                                <th>Domain Trust</th>
+                                <th>Page Trust</th>
+                                <th>Content Risk</th>
+                                <th>Confidence</th>
                                 <th>Reason</th>
+                                <th>Scanned</th>
+                                <th>Source</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var scan in _summary.RecentScans)
                             {
                                 <tr>
-                                    <td>@scan.LastCheckedUtc.UtcDateTime.ToString("u")</td>
-                                    <td><a href="@($"/admin/scans/{Uri.EscapeDataString(scan.ScanResultId)}")">@scan.Domain</a></td>
-                                    <td>@scan.Score</td>
-                                    <td>@scan.RiskLevel</td>
-                                    <td>@scan.LinksScanned</td>
-                                    <td>@scan.RiskyLinksFound</td>
-                                    <td>@scan.DangerousLinksFound</td>
-                                    <td>@scan.ReasonSummary</td>
+                                    <td>
+                                        <div class="hip-threat-domain">
+                                            <span class="hip-threat-icon @ThreatStatusClass(scan.Status)">!</span>
+                                            <div>
+                                                <a href="@($"/admin/scans/{Uri.EscapeDataString(scan.ScanResultId)}")">@scan.Domain</a>
+                                                <small>@scan.RiskyLinksFound risky / @scan.DangerousLinksFound dangerous</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="hip-pill @ThreatStatusClass(scan.Status)">@DisplayStatus(scan.Status)</span></td>
+                                    <td><strong class="hip-threat-score">@scan.Score</strong></td>
+                                    <td>@ScoreOrUnknown(scan.DomainTrustScore)</td>
+                                    <td>@ScoreOrUnknown(scan.PageTrustScore)</td>
+                                    <td>@ScoreOrUnknown(scan.ContentRiskScore)</td>
+                                    <td>@scan.ConfidenceLevel</td>
+                                    <td class="hip-threat-reason">
+                                        <span>@scan.ReasonSummary</span>
+                                        <small>@scan.LinksScanned links scanned</small>
+                                    </td>
+                                    <td class="hip-threat-time">@scan.LastCheckedUtc.UtcDateTime.ToString("u")</td>
+                                    <td>
+                                        <span class="hip-source-pill">@scan.Source</span>
+                                        <small class="scan-plugin-version">@scan.PluginVersion</small>
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -365,6 +386,14 @@
             "ReviewSignal" => "Review Signal",
             _ => status
         };
+
+    /// <summary>
+    /// Displays optional layered scan scores without implying unavailable scores are zero.
+    /// </summary>
+    /// <param name="score">Optional score from scan metadata.</param>
+    /// <returns>Score text or Unknown.</returns>
+    private static string ScoreOrUnknown(int? score) =>
+        score?.ToString() ?? "Unknown";
 
     /// <summary>
     /// Refreshes dashboard data from the privacy-safe admin summary service.

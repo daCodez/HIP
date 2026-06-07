@@ -81,23 +81,37 @@ public sealed record AdminRiskyDomainItem(
 /// </summary>
 /// <param name="ScanResultId">Stable stored browser scan identifier used for admin detail navigation.</param>
 /// <param name="Domain">Scanned domain.</param>
+/// <param name="Status">Display status label for the final scan result.</param>
 /// <param name="Score">HIP score.</param>
+/// <param name="DomainTrustScore">Domain-level trust score, when stored in scan metadata.</param>
+/// <param name="PageTrustScore">Page-level trust score, when stored in scan metadata.</param>
+/// <param name="ContentRiskScore">Content-level safety score, when stored in scan metadata.</param>
+/// <param name="ConfidenceLevel">Confidence label from Site Safety metadata, or Unknown when not available.</param>
 /// <param name="RiskLevel">Risk level label.</param>
 /// <param name="LinksScanned">Number of links scanned.</param>
 /// <param name="RiskyLinksFound">Number of risky links found.</param>
 /// <param name="DangerousLinksFound">Number of dangerous links found.</param>
 /// <param name="LastCheckedUtc">UTC scan timestamp.</param>
 /// <param name="ReasonSummary">Plain-English reason summary.</param>
+/// <param name="Source">Privacy-safe scan source label.</param>
+/// <param name="PluginVersion">Browser plugin version when supplied by the client.</param>
 public sealed record AdminRecentScanItem(
     string ScanResultId,
     string Domain,
+    string Status,
     int Score,
+    int? DomainTrustScore,
+    int? PageTrustScore,
+    int? ContentRiskScore,
+    string ConfidenceLevel,
     string RiskLevel,
     int LinksScanned,
     int RiskyLinksFound,
     int DangerousLinksFound,
     DateTimeOffset LastCheckedUtc,
-    string ReasonSummary);
+    string ReasonSummary,
+    string Source,
+    string PluginVersion);
 
 /// <summary>
 /// Privacy-safe recent threat row for the dashboard. It intentionally carries only domain-level

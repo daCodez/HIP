@@ -125,7 +125,23 @@ The dashboard includes:
 - Top Risky Domains: sorted by dangerous links first, then total risky links.
 - Recent Scans: newest stored browser plugin scans first.
 
-Both sections are domain-level summaries only.
+Recent Scans shows:
+
+- domain
+- status
+- final score
+- domain trust score, when the scan stored one
+- page trust score, when the scan stored one
+- content risk score, when the scan stored one
+- confidence
+- short reason
+- scanned time
+- source
+- plugin version, when supplied by the browser extension
+
+If no scan rows are available, the page shows `No scans yet.` If the dashboard service is present but scan history is not connected, the empty state says `Scan history not connected yet.`
+
+Both sections are privacy-safe summaries only. They do not show page text, form values, passwords, tokens, cookies, private messages, browsing history, or raw full URLs.
 
 ## Quick Links
 
@@ -201,9 +217,10 @@ Missing sources are shown as `No Data`, `Not connected yet`, or `Placeholder`. H
 5. Open `/admin`.
 6. Click `Refresh`.
 7. Verify `Last updated` changes and cards reflect the stored scan result.
-8. If no scans exist yet, verify the dashboard shows `No scan data yet` instead of fake activity.
-9. Trigger a risky link, login/payment warning, provider review signal, or repeated suspicious feedback in development data.
-10. Click `Refresh` on `/admin` and verify the item appears in Recent Threats while normal clean pages remain absent.
+8. Verify Recent Scans shows the visited domain, status, final score, layered scores if available, confidence, short reason, scanned time, source, and plugin version.
+9. If no scans exist yet, verify the dashboard shows `No scan data yet` and `No scans yet` instead of fake activity.
+10. Trigger a risky link, login/payment warning, provider review signal, or repeated suspicious feedback in development data.
+11. Click `Refresh` on `/admin` and verify the item appears in Recent Threats while normal clean pages remain absent.
 
 ## Known Limitations
 
