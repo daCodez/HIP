@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { HipApiClient } from "../src/hipApiClient.js";
+import { HipApiClient, normalizeHipSettings } from "../src/hipApiClient.js";
 
 test("site safety request includes privacy-safe scan facts", () => {
   const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
@@ -83,6 +83,74 @@ test("scan site safety falls back to web host when API host route is missing", a
   assert.equal(calls[0].url, "http://localhost:5099/api/v1/site-safety/scan");
   assert.equal(calls[1].url, "http://localhost:5123/api/v1/site-safety/scan");
   assert.equal(result.source, "web-fallback");
+});
+
+test("provider toggles default to SSL Labs enabled only", () => {
+  const settings = normalizeHipSettings({});
+
+  assert.equal(settings.externalProvidersEnabled, true);
+  assert.equal(settings.sslLabsEnabled, true);
+  assert.equal(settings.googleWebRiskEnabled, false);
+  assert.equal(settings.virusTotalEnabled, false);
+});
+
+test("external provider settings lookup uses admin route with credentials", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      json: async () => ({ externalProvidersEnabled: true })
+    };
+  };
+
+  try {
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
+    await client.getExternalProviderSettings();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://localhost:5099/api/v1/admin/site-safety/external-providers");
+  assert.equal(calls[0].options.method, "GET");
+  assert.equal(calls[0].options.credentials, "include");
+});
+
+test("external provider settings update posts complete safe config", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      json: async () => JSON.parse(options.body)
+    };
+  };
+
+  const request = {
+    externalProvidersEnabled: true,
+    allowFullUrlChecks: false,
+    providerTimeout: "00:00:10",
+    defaultCacheDuration: "06:00:00",
+    sslLabs: { enabled: true, endpoint: "https://api.ssllabs.com/api/v3/analyze", apiKey: null, allowFullUrl: false, cacheDuration: null },
+    googleWebRisk: { enabled: false, endpoint: null, apiKey: null, allowFullUrl: false, cacheDuration: null },
+    virusTotal: { enabled: false, endpoint: null, apiKey: null, allowFullUrl: false, cacheDuration: null }
+  };
+
+  try {
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
+    await client.updateExternalProviderSettings(request);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://localhost:5099/api/v1/admin/site-safety/external-providers");
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].options.credentials, "include");
+  assert.equal(JSON.parse(calls[0].options.body).sslLabs.enabled, true);
 });
 
 test("popup contains site safety display fields", async () => {

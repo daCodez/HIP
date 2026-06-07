@@ -41,6 +41,7 @@ Settings:
 - Banner display mode
 - Enable safety routing
 - Scan mode
+- External provider toggles for local dev/admin testing
 
 Scan modes:
 
@@ -60,6 +61,19 @@ Current setting keys:
 - `showRiskyLinkIcons`
 - `scanMode`
 - `bannerDisplayMode`
+- `externalProvidersEnabled`
+- `sslLabsEnabled`
+- `googleWebRiskEnabled`
+- `virusTotalEnabled`
+
+External provider switches:
+
+- `Allow external providers`: global server-side provider switch.
+- `SSL Labs / Qualys TLS`: domain-only TLS evidence provider. Enabled by default for MVP testing.
+- `Google Web Risk / Safe Browsing`: disabled until credentials and concrete adapter setup are configured.
+- `VirusTotal`: disabled until credentials and concrete adapter setup are configured.
+
+The options page stores these provider preferences locally and attempts to synchronize them with `/api/v1/admin/site-safety/external-providers`. The HIP API remains authoritative. If the admin API is unavailable or rejects the request, scoring behavior does not change just because the extension switch was toggled.
 
 Banner display modes:
 

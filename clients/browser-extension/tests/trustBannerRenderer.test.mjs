@@ -66,3 +66,12 @@ test("options page exposes banner display mode foundation", () => {
   assert.equal(optionsSource.includes("AlwaysShow"), true);
   assert.equal(optionsSource.includes("NeverShow"), true);
 });
+
+test("options page exposes provider switches", () => {
+  assert.equal(optionsSource.includes("External evidence providers"), true);
+  assert.equal(optionsSource.includes("externalProvidersEnabled"), true);
+  assert.equal(optionsSource.includes("sslLabsEnabled"), true);
+  assert.equal(optionsSource.includes("googleWebRiskEnabled"), true);
+  assert.equal(optionsSource.includes("virusTotalEnabled"), true);
+  assert.equal(optionsSource.includes("role=\"switch\""), true);
+});
