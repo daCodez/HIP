@@ -761,7 +761,9 @@ public sealed class SslLabsSiteEvidenceProvider : ExternalSiteEvidenceProviderBa
     {
         var endpoint = string.IsNullOrWhiteSpace(ProviderOptions.Endpoint) ? DefaultEndpoint : ProviderOptions.Endpoint.Trim();
         var builder = new UriBuilder(endpoint);
-        var query = $"host={Uri.EscapeDataString(domain)}&publish=off&startNew=on&all=done&ignoreMismatch=on";
+        // Do not force a brand-new SSL Labs assessment for every HIP scan. SSL Labs assessments are asynchronous;
+        // repeatedly sending startNew=on keeps returning pending/Unknown evidence instead of reusing completed grades.
+        var query = $"host={Uri.EscapeDataString(domain)}&publish=off&startNew=off&all=done&ignoreMismatch=on";
 
         builder.Query = string.IsNullOrWhiteSpace(builder.Query)
             ? query
@@ -783,7 +785,7 @@ public sealed class SslLabsSiteEvidenceProvider : ExternalSiteEvidenceProviderBa
         {
             var statusSummary = status.Equals("ERROR", StringComparison.OrdinalIgnoreCase)
                 ? "SSL Labs could not complete the TLS assessment."
-                : "SSL Labs TLS assessment is still pending; HIP did not apply a trust boost.";
+                : $"SSL Labs TLS assessment is {status}; HIP did not apply a trust boost yet.";
 
             return CreateStatusEvidence(context, status, statusSummary, status.Equals("ERROR", StringComparison.OrdinalIgnoreCase));
         }

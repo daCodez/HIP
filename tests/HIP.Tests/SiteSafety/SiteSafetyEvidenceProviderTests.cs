@@ -315,6 +315,8 @@ public sealed class SiteSafetyEvidenceProviderTests
         Assert.Multiple(() =>
         {
             Assert.That(requestUri, Does.Contain("host=example.com"));
+            Assert.That(requestUri, Does.Contain("startNew=off"));
+            Assert.That(requestUri, Does.Not.Contain("startNew=on"));
             Assert.That(requestUri, Does.Not.Contain("login"));
             Assert.That(requestUri, Does.Not.Contain("password=secret"));
             Assert.That(item.Category, Is.EqualTo("TlsGrade"));
@@ -366,6 +368,7 @@ public sealed class SiteSafetyEvidenceProviderTests
         Assert.Multiple(() =>
         {
             Assert.That(item.Category, Is.EqualTo("TlsAssessmentStatus"));
+            Assert.That(item.Summary, Does.Contain("IN_PROGRESS"));
             Assert.That(item.TrustImpact, Is.EqualTo(0));
             Assert.That(evidence.IsAuthoritativeForTrust, Is.False);
             Assert.That(evidence.Errors, Is.Empty);
