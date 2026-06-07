@@ -41,30 +41,75 @@
         </select>
       </label>
 
-      <label class="checkbox-row">
-        <input id="enableLinkBadges" type="checkbox">
-        Enable link badges
-      </label>
+      <section class="settings-section" aria-labelledby="scanBehaviorHeading">
+        <h2 id="scanBehaviorHeading">Scan behavior</h2>
 
-      <label class="checkbox-row">
-        <input id="enableLinkScanning" type="checkbox">
-        Enable link scanning
-      </label>
+        <label class="switch-row">
+          <span>Enable link badges</span>
+          <input id="enableLinkBadges" type="checkbox" role="switch">
+        </label>
 
-      <label class="checkbox-row">
-        <input id="enableWarningBanner" type="checkbox">
-        Enable warning banner
-      </label>
+        <label class="switch-row">
+          <span>Enable link scanning</span>
+          <input id="enableLinkScanning" type="checkbox" role="switch">
+        </label>
 
-      <label class="checkbox-row">
-        <input id="enableSafetyRouting" type="checkbox">
-        Enable safety page routing
-      </label>
+        <label class="switch-row">
+          <span>Enable warning banner</span>
+          <input id="enableWarningBanner" type="checkbox" role="switch">
+        </label>
 
-      <label class="checkbox-row">
-        <input id="submitScanResults" type="checkbox">
-        Submit privacy-safe scan results
-      </label>
+        <label class="switch-row">
+          <span>Enable safety page routing</span>
+          <input id="enableSafetyRouting" type="checkbox" role="switch">
+        </label>
+
+        <label class="switch-row">
+          <span>Submit privacy-safe scan results</span>
+          <input id="submitScanResults" type="checkbox" role="switch">
+        </label>
+      </section>
+
+      <section class="settings-section" aria-labelledby="providerHeading">
+        <div class="section-heading">
+          <div>
+            <h2 id="providerHeading">External evidence providers</h2>
+            <p>Server-enforced provider settings. HIP still decides final scoring.</p>
+          </div>
+          <button id="refreshProviders" class="secondary-button" type="button">Refresh</button>
+        </div>
+
+        <label class="switch-row">
+          <span>Allow external providers</span>
+          <input id="externalProvidersEnabled" type="checkbox" role="switch">
+        </label>
+
+        <label class="switch-row provider-row">
+          <span>
+            SSL Labs / Qualys TLS
+            <small>Domain-only TLS evidence. Enabled for MVP testing.</small>
+          </span>
+          <input id="sslLabsEnabled" type="checkbox" role="switch">
+        </label>
+
+        <label class="switch-row provider-row">
+          <span>
+            Google Web Risk / Safe Browsing
+            <small>Disabled until credentials and adapter setup are configured.</small>
+          </span>
+          <input id="googleWebRiskEnabled" type="checkbox" role="switch">
+        </label>
+
+        <label class="switch-row provider-row">
+          <span>
+            VirusTotal
+            <small>Disabled until credentials and adapter setup are configured.</small>
+          </span>
+          <input id="virusTotalEnabled" type="checkbox" role="switch">
+        </label>
+
+        <p id="providerStatus" class="status muted-status">Provider settings not checked yet.</p>
+      </section>
 
       <div class="button-row">
         <button type="submit">Save Settings</button>

@@ -18,7 +18,11 @@ export const DEFAULT_HIP_SETTINGS = Object.freeze({
   enableSafetyRouting: true,
   allowRawPageUrlSubmission: false,
   scanMode: "Normal",
-  bannerDisplayMode: "WarningsOnly"
+  bannerDisplayMode: "WarningsOnly",
+  externalProvidersEnabled: true,
+  sslLabsEnabled: true,
+  googleWebRiskEnabled: false,
+  virusTotalEnabled: false
 });
 
 export class HipApiClient {
@@ -200,6 +204,50 @@ export class HipApiClient {
     return response.json();
   }
 
+  /**
+   * Loads the HIP server-side external provider settings for the dev/MVP options page.
+   * The endpoint is admin-protected on the HIP side, so callers must handle authorization failures safely.
+   */
+  async getExternalProviderSettings() {
+    const url = `${this.config.apiBaseUrl}/api/v1/admin/site-safety/external-providers`;
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        "Accept": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HIP provider settings lookup failed with status ${response.status}.`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Updates HIP server-side external provider settings using the complete safe settings document.
+   * The browser extension sends only provider configuration flags and never sends page text or form values.
+   */
+  async updateExternalProviderSettings(settings) {
+    const url = `${this.config.apiBaseUrl}/api/v1/admin/site-safety/external-providers`;
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(settings)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HIP provider settings update failed with status ${response.status}.`);
+    }
+
+    return response.json();
+  }
+
   safetyPageUrl(originalUrl, sourceDomain, riskStatus) {
     const url = new URL("/safety", this.config.webBaseUrl);
     url.searchParams.set("url", originalUrl);
@@ -260,7 +308,11 @@ export function normalizeHipSettings(settings = {}) {
     enableSafetyRouting: enableSafetyPageRouting,
     enableWarningBanner: settings.enableWarningBanner ?? true,
     scanMode: settings.scanMode || "Normal",
-    bannerDisplayMode: normalizeBannerDisplayMode(settings.bannerDisplayMode)
+    bannerDisplayMode: normalizeBannerDisplayMode(settings.bannerDisplayMode),
+    externalProvidersEnabled: settings.externalProvidersEnabled ?? true,
+    sslLabsEnabled: settings.sslLabsEnabled ?? true,
+    googleWebRiskEnabled: settings.googleWebRiskEnabled ?? false,
+    virusTotalEnabled: settings.virusTotalEnabled ?? false
   };
 }
 
