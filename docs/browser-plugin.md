@@ -47,6 +47,8 @@ Stored fields:
 
 HIP does not store full page text, form values, passwords, tokens, usernames, email body text, private messages, or unrelated browsing history from this browser scan flow. The full page URL is hashed by default; raw URL storage is reserved for a future explicit safe-storage policy.
 
+By default, extension setting `allowRawPageUrlSubmission` is `false`. Normal scan submissions send `pageUrlHash` and set `pageUrl` to `null`. If a future development diagnostic explicitly enables raw URL submission, the plugin strips query strings and fragments before sending the URL.
+
 If scan-result submission fails, link scanning and the popup continue to work. The extension records a small `Failure` state in the popup summary and logs only a safe development warning. It does not retry aggressively.
 
 The content script and background worker both guard rapid duplicate submissions. The content script de-duplicates by domain plus page URL hash during the active scan, and the background worker suppresses duplicate in-flight saves using the same hash when available.
@@ -61,7 +63,7 @@ Content-Type: application/json
 ```json
 {
   "domain": "example.com",
-  "pageUrl": "https://example.com/page",
+  "pageUrl": null,
   "pageUrlHash": "sha256:...",
   "pluginVersion": "HIP Plugin v0.1.0-dev",
   "score": 84,

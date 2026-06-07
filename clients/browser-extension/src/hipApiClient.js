@@ -16,6 +16,7 @@ export const DEFAULT_HIP_SETTINGS = Object.freeze({
   enableLinkBadges: true,
   enableWarningBanner: true,
   enableSafetyRouting: true,
+  allowRawPageUrlSubmission: false,
   scanMode: "Normal",
   bannerDisplayMode: "WarningsOnly"
 });
@@ -338,7 +339,7 @@ export function buildScanResultPayload({ domain, pageUrl, pageUrlHash = null, lo
   const status = assessment.status;
   return {
     domain,
-    pageUrl,
+    pageUrl: settings.allowRawPageUrlSubmission === true ? stripQueryAndFragment(pageUrl) : null,
     pageUrlHash,
     pluginVersion,
     score: assessment.score,
@@ -370,6 +371,29 @@ export function buildScanResultPayload({ domain, pageUrl, pageUrlHash = null, lo
       pluginVersion: pluginVersion || summary.pluginVersion || "Unknown"
     }
   };
+}
+
+/**
+ * Removes query strings and fragments from optional raw URLs before any explicit submission.
+ * Normal scan submissions send only pageUrlHash; this helper protects future opt-in raw URL diagnostics.
+ */
+export function stripQueryAndFragment(pageUrl) {
+  if (!pageUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(pageUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 /**

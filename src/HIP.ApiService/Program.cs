@@ -1,5 +1,7 @@
+using System.Threading.RateLimiting;
 using HIP.Application;
 using HIP.Application.Browser;
+using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
@@ -7,10 +9,14 @@ using HIP.Application.SiteSafety;
 using HIP.Domain.Reputation;
 using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+const string PublicScanPolicy = "PublicScanPolicy";
+const string PublicFeedbackPolicy = "PublicFeedbackPolicy";
 
 builder.AddServiceDefaults();
+builder.Services.AddSingleton(new DevelopmentHipCryptoProviderOptions(builder.Environment.IsDevelopment()));
 builder.Services.AddHipApplication();
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration);
@@ -20,6 +26,24 @@ builder.Services.AddCors(options =>
         policy.AllowAnyOrigin()
             .WithMethods("GET", "POST")
             .AllowAnyHeader());
+});
+builder.Services.AddRateLimiter(options =>
+{
+    // Baseline public limits reduce unauthenticated scan/report abuse until HIP client signatures are introduced.
+    options.AddFixedWindowLimiter(PublicScanPolicy, limiter =>
+    {
+        limiter.PermitLimit = 60;
+        limiter.Window = TimeSpan.FromMinutes(1);
+        limiter.QueueLimit = 0;
+        limiter.AutoReplenishment = true;
+    });
+    options.AddFixedWindowLimiter(PublicFeedbackPolicy, limiter =>
+    {
+        limiter.PermitLimit = 30;
+        limiter.Window = TimeSpan.FromMinutes(1);
+        limiter.QueueLimit = 0;
+        limiter.AutoReplenishment = true;
+    });
 });
 builder.Services.AddOpenApi();
 
@@ -37,6 +61,7 @@ if (ShouldUseHttpsRedirection(app))
     app.UseHttpsRedirection();
 }
 app.UseCors("PublicHipReadOnly");
+app.UseRateLimiter();
 app.MapDefaultEndpoints();
 
 var publicApi = app.MapGroup("/api/v1/public");
@@ -92,7 +117,8 @@ publicApi.MapPost("/feedback", async (
         return Results.BadRequest(new { error = ex.Message });
     }
 })
-.WithName("PublicFeedback");
+.WithName("PublicFeedback")
+.RequireRateLimiting(PublicFeedbackPolicy);
 
 MapBrowserApis(browserApi);
 MapSiteSafetyApis(siteSafetyApi);
@@ -170,7 +196,8 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
-    .WithName("BrowserScoreSite");
+    .WithName("BrowserScoreSite")
+    .RequireRateLimiting(PublicScanPolicy);
 
     browserApi.MapPost("/scan-links", async (
         BrowserScanLinksRequest request,
@@ -186,7 +213,8 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
-    .WithName("BrowserScanLinks");
+    .WithName("BrowserScanLinks")
+    .RequireRateLimiting(PublicScanPolicy);
 
     browserApi.MapPost("/scan-results", async (
         BrowserScanResultSaveRequest request,
@@ -202,7 +230,8 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
             return Results.BadRequest(new BrowserScanResultErrorResponse(ex.Message));
         }
     })
-    .WithName("BrowserSaveScanResult");
+    .WithName("BrowserSaveScanResult")
+    .RequireRateLimiting(PublicScanPolicy);
 
     browserApi.MapGet("/scan-results/{domain}", async (
         string domain,
@@ -251,7 +280,8 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
-    .WithName("ApiServiceSiteSafetyScan");
+    .WithName("ApiServiceSiteSafetyScan")
+    .RequireRateLimiting(PublicScanPolicy);
 }
 
 /// <summary>

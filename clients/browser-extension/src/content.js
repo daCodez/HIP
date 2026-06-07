@@ -352,7 +352,7 @@
     const assessment = browserScanAssessment(currentLookup, lastSummary);
     const payload = {
       domain: currentDomain,
-      pageUrl: window.location.href,
+      pageUrl: settings.allowRawPageUrlSubmission === true ? stripQueryAndFragment(window.location.href) : null,
       pageUrlHash: lastSummary.pageUrlHash,
       pluginVersion,
       score: assessment.score,
@@ -435,6 +435,25 @@
     }
 
     return response.result;
+  }
+
+  /**
+   * Removes query strings and fragments before any explicitly enabled raw URL diagnostic submission.
+   * Normal background scan submissions send only pageUrlHash, because query strings often contain private tokens.
+   */
+  function stripQueryAndFragment(pageUrl) {
+    try {
+      const url = new URL(pageUrl);
+      if (!["http:", "https:"].includes(url.protocol)) {
+        return null;
+      }
+
+      url.search = "";
+      url.hash = "";
+      return url.toString();
+    } catch {
+      return null;
+    }
   }
 
   async function loadSettings() {

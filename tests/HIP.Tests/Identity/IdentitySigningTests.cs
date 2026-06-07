@@ -191,6 +191,19 @@ public sealed class IdentitySigningTests
         Assert.That(DevelopmentHipCryptoProvider.Algorithm, Does.Contain("Placeholder"));
     }
 
+    /// <summary>
+    /// Ensures dependency injection cannot accidentally use the placeholder signing provider outside Development.
+    /// </summary>
+    [Test]
+    public void Placeholder_crypto_refuses_non_development_environment()
+    {
+        var options = new DevelopmentHipCryptoProviderOptions(AllowDevelopmentProvider: false);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => new DevelopmentHipCryptoProvider(options));
+
+        Assert.That(exception!.Message, Does.Contain("cannot be used outside Development"));
+    }
+
     private static HipIdentityService Service(out DevelopmentHipCryptoProvider crypto)
     {
         crypto = new DevelopmentHipCryptoProvider();

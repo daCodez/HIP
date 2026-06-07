@@ -152,6 +152,43 @@ public sealed class AdminAuthorizationTests
         });
     }
 
+    /// <summary>
+    /// Verifies the development login helper is invisible to non-local hosts so it cannot become a remote backdoor.
+    /// </summary>
+    [Test]
+    public async Task Development_admin_login_is_blocked_for_non_local_host()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/dev/admin-login/Admin");
+        request.Headers.Host = "hip.example.com";
+
+        var response = await client.SendAsync(request);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    /// <summary>
+    /// Verifies forged dev header authentication is accepted only for local development requests.
+    /// </summary>
+    [Test]
+    public async Task Development_header_auth_is_blocked_for_non_local_host()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/admin/audit-logs");
+        request.Headers.Host = "hip.example.com";
+        request.Headers.Add("X-HIP-Admin-Role", "Owner");
+        request.Headers.Add("X-HIP-Admin-User", "remote-attacker");
+
+        var response = await client.SendAsync(request);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
     [Test]
     public async Task Admin_can_enable_external_provider_settings()
     {

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -118,8 +119,13 @@ public static class Extensions
                     {
                         options.RecordException = true;
                         options.Filter = context => !IsHealthProbe(context.Request.Path);
+                        options.EnrichWithHttpRequest = RedactIncomingRequestTags;
                     })
-                    .AddHttpClientInstrumentation(options => options.RecordException = true);
+                    .AddHttpClientInstrumentation(options =>
+                    {
+                        options.RecordException = true;
+                        options.EnrichWithHttpRequestMessage = RedactOutgoingRequestTags;
+                    });
 
                 if (HasOtlpEndpoint(builder))
                 {
@@ -161,4 +167,80 @@ public static class Extensions
     private static bool IsHealthProbe(PathString path) =>
         path.StartsWithSegments("/health") ||
         path.StartsWithSegments("/alive");
+
+    /// <summary>
+    /// Replaces inbound request URL telemetry with a query-free value and masks sensitive headers.
+    /// </summary>
+    /// <param name="activity">Trace activity being enriched.</param>
+    /// <param name="request">Inbound HTTP request.</param>
+    private static void RedactIncomingRequestTags(Activity activity, HttpRequest request)
+    {
+        var sanitizedUrl = $"{request.Scheme}://{request.Host}{request.Path}";
+        activity.SetTag("url.full", sanitizedUrl);
+        activity.SetTag("http.url", sanitizedUrl);
+        activity.SetTag("http.target", request.Path.Value ?? "/");
+        activity.SetTag("url.query", null);
+        RedactSensitiveHeaders(activity, request.Headers.Keys, "http.request.header.");
+    }
+
+    /// <summary>
+    /// Replaces outgoing HTTP client URL telemetry with a query-free value and masks sensitive headers.
+    /// </summary>
+    /// <param name="activity">Trace activity being enriched.</param>
+    /// <param name="request">Outgoing HTTP request message.</param>
+    private static void RedactOutgoingRequestTags(Activity activity, HttpRequestMessage request)
+    {
+        if (request.RequestUri is not null)
+        {
+            var sanitizedUrl = RedactUrl(request.RequestUri);
+            activity.SetTag("url.full", sanitizedUrl);
+            activity.SetTag("http.url", sanitizedUrl);
+            activity.SetTag("url.query", null);
+        }
+
+        RedactSensitiveHeaders(activity, request.Headers.Select(header => header.Key), "http.request.header.");
+    }
+
+    /// <summary>
+    /// Removes query strings and fragments from a telemetry URL.
+    /// </summary>
+    /// <param name="uri">Original URI.</param>
+    /// <returns>URL without query string or fragment.</returns>
+    private static string RedactUrl(Uri uri)
+    {
+        var builder = new UriBuilder(uri)
+        {
+            Query = string.Empty,
+            Fragment = string.Empty
+        };
+
+        return builder.Uri.ToString();
+    }
+
+    /// <summary>
+    /// Masks telemetry header tags that may carry credentials, tokens, cookies, or API keys.
+    /// </summary>
+    /// <param name="activity">Trace activity being enriched.</param>
+    /// <param name="headerNames">Header names observed on the request.</param>
+    /// <param name="tagPrefix">Telemetry tag prefix used for request headers.</param>
+    private static void RedactSensitiveHeaders(Activity activity, IEnumerable<string> headerNames, string tagPrefix)
+    {
+        foreach (var headerName in headerNames.Where(IsSensitiveHeaderName))
+        {
+            activity.SetTag($"{tagPrefix}{headerName.ToLowerInvariant()}", "[redacted]");
+        }
+    }
+
+    /// <summary>
+    /// Identifies headers that should never appear in raw telemetry.
+    /// </summary>
+    /// <param name="headerName">Header name.</param>
+    /// <returns>True when the header likely carries sensitive data.</returns>
+    private static bool IsSensitiveHeaderName(string headerName) =>
+        headerName.Contains("authorization", StringComparison.OrdinalIgnoreCase) ||
+        headerName.Contains("auth", StringComparison.OrdinalIgnoreCase) ||
+        headerName.Contains("cookie", StringComparison.OrdinalIgnoreCase) ||
+        headerName.Contains("token", StringComparison.OrdinalIgnoreCase) ||
+        headerName.Contains("key", StringComparison.OrdinalIgnoreCase) ||
+        headerName.Contains("secret", StringComparison.OrdinalIgnoreCase);
 }

@@ -11,6 +11,8 @@ namespace HIP.Web.Security;
 /// <remarks>
 /// Production deployments must replace this handler with real authentication. In development it accepts
 /// explicit test headers for API tests and a local dev cookie so browser navigation can exercise protected UI.
+/// These development credentials are accepted only for localhost requests so accidental Development deployments
+/// do not expose an admin bypass on a network host.
 /// </remarks>
 public sealed class HipDevHeaderAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -35,6 +37,12 @@ public sealed class HipDevHeaderAuthenticationHandler(
         if (!environment.IsDevelopment())
         {
             return Task.FromResult(AuthenticateResult.NoResult());
+        }
+
+        if (!LocalDevelopmentRequestGuard.IsLocalDevelopmentRequest(Request, environment))
+        {
+            Logger.LogWarning("Blocked non-local HIP development auth attempt for host {Host}.", Request.Host.Value);
+            return Task.FromResult(AuthenticateResult.Fail("HIP development authentication is local-only."));
         }
 
         if (!Request.Headers.TryGetValue(RoleHeaderName, out var roleValues))

@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Threading.RateLimiting;
 using HIP.Application;
 using HIP.Application.Ai;
 using HIP.Application.Browser;
@@ -30,10 +31,12 @@ using HIP.Infrastructure.Persistence;
 using HIP.Web;
 using HIP.Web.Components;
 using HIP.Web.Security;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.Services.AddSingleton(new DevelopmentHipCryptoProviderOptions(builder.Environment.IsDevelopment()));
 builder.Services.AddHipApplication();
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration);
@@ -45,6 +48,36 @@ builder.Services.AddCors(options =>
         policy.AllowAnyOrigin()
             .WithMethods("GET", "POST")
             .AllowAnyHeader());
+});
+builder.Services.AddRateLimiter(options =>
+{
+    // Baseline public limits reduce data poisoning and DoS risk until HIP client signatures and stronger trust controls exist.
+    options.AddFixedWindowLimiter(RateLimitPolicies.PublicScanPolicy, limiter =>
+    {
+        limiter.PermitLimit = 60;
+        limiter.Window = TimeSpan.FromMinutes(1);
+        limiter.QueueLimit = 0;
+        limiter.AutoReplenishment = true;
+    });
+    options.AddFixedWindowLimiter(RateLimitPolicies.PublicFeedbackPolicy, limiter =>
+    {
+        limiter.PermitLimit = 30;
+        limiter.Window = TimeSpan.FromMinutes(1);
+        limiter.QueueLimit = 0;
+        limiter.AutoReplenishment = true;
+    });
+    options.AddFixedWindowLimiter(RateLimitPolicies.IdentityDevPolicy, limiter =>
+    {
+        limiter.PermitLimit = 10;
+        limiter.Window = TimeSpan.FromMinutes(1);
+        limiter.QueueLimit = 0;
+        limiter.AutoReplenishment = true;
+    });
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        await context.HttpContext.Response.WriteAsJsonAsync(new { error = "Too many HIP requests. Try again shortly." }, cancellationToken);
+    };
 });
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -69,6 +102,7 @@ if (ShouldUseHttpsRedirection(app))
     app.UseHttpsRedirection();
 }
 app.UseCors("PublicHipReadOnly");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -202,6 +236,12 @@ static void MapDevelopmentAuthEndpoints(WebApplication app)
 
     app.MapGet("/dev/admin-login/{role}", (string role, HttpContext httpContext) =>
     {
+        if (!LocalDevelopmentRequestGuard.IsLocalDevelopmentRequest(httpContext.Request, app.Environment))
+        {
+            app.Logger.LogWarning("Blocked non-local HIP dev admin login attempt for host {Host}.", httpContext.Request.Host.Value);
+            return Results.NotFound();
+        }
+
         if (!AdminRoles.All.Contains(role))
         {
             return Results.BadRequest("Unsupported HIP admin role.");
@@ -219,7 +259,8 @@ static void MapDevelopmentAuthEndpoints(WebApplication app)
         httpContext.Response.Cookies.Append(HipDevHeaderAuthenticationHandler.DevAdminUserCookieName, "hip-dev-browser-admin", options);
 
         return Results.Redirect("/admin/settings");
-    }).AllowAnonymous();
+    }).AllowAnonymous()
+        .RequireRateLimiting(RateLimitPolicies.IdentityDevPolicy);
 
     app.MapGet("/dev/logout", (HttpContext httpContext) =>
     {
@@ -333,7 +374,8 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 
     publicApi.MapPost("/feedback", async (
         ReputationFeedbackRequest feedback,
@@ -351,7 +393,8 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 
     publicApi.MapPost("/risk-findings", async (
         RiskFindingReport report,
@@ -360,7 +403,8 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
     {
         var response = await ingestionService.IngestAsync(report, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
-    });
+    })
+        .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 }
 
 static void MapReportApis(RouteGroupBuilder reportApi)
@@ -372,7 +416,8 @@ static void MapReportApis(RouteGroupBuilder reportApi)
     {
         var result = await reportService.SubmitAsync(report, cancellationToken);
         return result.Accepted ? Results.Ok(result) : Results.BadRequest(result);
-    });
+    })
+        .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 }
 
 /// <summary>
@@ -473,7 +518,8 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     browserApi.MapPost("/scan-links", async (
         BrowserScanLinksRequest request,
@@ -488,7 +534,8 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     browserApi.MapPost("/scan-results", async (
         BrowserScanResultSaveRequest request,
@@ -503,7 +550,8 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
         {
             return Results.BadRequest(new BrowserScanResultErrorResponse(ex.Message));
         }
-    });
+    })
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     browserApi.MapGet("/scan-results/{domain}", async (
         string domain,
@@ -536,13 +584,16 @@ static void MapSafetyApis(RouteGroupBuilder safetyApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     safetyApi.MapPost("/report-safe", (SafetyReportRequest request) =>
-        Results.Ok(SafetyReportResponse.CreateAccepted(request.Url, request.Source, "Report as safe was accepted for MVP review.")));
+        Results.Ok(SafetyReportResponse.CreateAccepted(SafetyUrlDisplay.StripQueryAndFragment(request.Url), request.Source, "Report as safe was accepted for MVP review.")))
+        .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 
     safetyApi.MapPost("/report-dangerous", (SafetyReportRequest request) =>
-        Results.Ok(SafetyReportResponse.CreateAccepted(request.Url, request.Source, "Report as dangerous was accepted for MVP review.")));
+        Results.Ok(SafetyReportResponse.CreateAccepted(SafetyUrlDisplay.StripQueryAndFragment(request.Url), request.Source, "Report as dangerous was accepted for MVP review.")))
+        .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 }
 
 /// <summary>
@@ -569,7 +620,8 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 }
 
 /// <summary>
@@ -1305,18 +1357,25 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
 {
     identityApi.MapPost("/register", async (
         IdentityRegistrationRequest request,
+        HttpContext httpContext,
         IHipIdentityService identityService,
         CancellationToken cancellationToken) =>
     {
         try
         {
+            if (!LocalDevelopmentRequestGuard.IsLocalDevelopmentRequest(httpContext.Request, httpContext.RequestServices.GetRequiredService<IWebHostEnvironment>()))
+            {
+                return Results.NotFound();
+            }
+
             return Results.Ok(await identityService.RegisterAsync(request, cancellationToken));
         }
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireRateLimiting(RateLimitPolicies.IdentityDevPolicy);
 
     identityApi.MapPost("/websites/register", async (
         WebsiteIdentityRegistrationRequest request,
@@ -1414,18 +1473,25 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
 
     identityApi.MapPost("/sign", async (
         SignContentRequest request,
+        HttpContext httpContext,
         IHipIdentityService identityService,
         CancellationToken cancellationToken) =>
     {
         try
         {
+            if (!LocalDevelopmentRequestGuard.IsLocalDevelopmentRequest(httpContext.Request, httpContext.RequestServices.GetRequiredService<IWebHostEnvironment>()))
+            {
+                return Results.NotFound();
+            }
+
             return Results.Ok(await identityService.SignAsync(request, cancellationToken));
         }
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireRateLimiting(RateLimitPolicies.IdentityDevPolicy);
 
     identityApi.MapPost("/verify", async (
         VerifySignatureRequest request,
@@ -1526,9 +1592,9 @@ public sealed record SafetyEvaluateResponse(
             : string.Empty;
 
         return new SafetyEvaluateResponse(
-            result.OriginalUrl,
+            SafetyUrlDisplay.StripQueryAndFragment(result.OriginalUrl),
             domain,
-            result.FinalDestinationUrl,
+            result.FinalDestinationUrl is null ? null : SafetyUrlDisplay.StripQueryAndFragment(result.FinalDestinationUrl),
             SafetyRoutingService.DisplayRiskLevel(result.RiskLevel),
             result.DomainScore,
             result.DomainScore,

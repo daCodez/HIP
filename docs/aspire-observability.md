@@ -54,6 +54,15 @@ Do not log private content. HIP logs must not include:
 
 Tracing captures inbound ASP.NET Core requests and outbound HTTP calls.
 
+HIP redacts request telemetry before export:
+
+- `url.full` and `http.url` are rewritten without query strings or fragments.
+- `http.target` is rewritten to the request path only.
+- `url.query` is cleared.
+- sensitive request header tags such as authorization, auth, cookie, token, key, and secret headers are masked as `[redacted]`.
+
+This is a defense-in-depth layer. Application code should still avoid putting passwords, tokens, private messages, form values, or page text in URLs, headers, logs, spans, or exception messages.
+
 Health probes are filtered from traces:
 
 - `/health`

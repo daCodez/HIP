@@ -75,6 +75,24 @@ public sealed class SafetyApiTests
         Assert.That(json, Does.Not.Contain("browsingHistory"));
     }
 
+    /// <summary>
+    /// Confirms safety API responses strip query strings and fragments from display URLs to avoid leaking tokens.
+    /// </summary>
+    [Test]
+    public async Task Safety_evaluation_strips_query_and_fragment_from_response_url()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/safety/evaluate", new { Url = "https://bit.ly/example?token=secret#private", Source = "browser" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.That(json.RootElement.GetProperty("url").GetString(), Is.EqualTo("https://bit.ly/example"));
+        Assert.That(json.RootElement.GetRawText(), Does.Not.Contain("token=secret"));
+        Assert.That(json.RootElement.GetRawText(), Does.Not.Contain("#private"));
+    }
+
     [Test]
     public async Task Safety_url_handling_avoids_open_redirect()
     {

@@ -11,6 +11,8 @@ The current implementation uses a development-only header authentication scheme:
 
 This scheme only authenticates in the Development environment. It is not production-safe and must be replaced with production authentication before deployment.
 
+The development scheme is also local-only. HIP rejects development admin cookies, `X-HIP-Admin-Role`, and `/dev/admin-login/{role}` attempts when the request host is not loopback (`localhost`, `127.0.0.1`, or `::1`). This keeps the MVP convenience path from becoming a remote administrative backdoor during local tunneling or accidental exposure.
+
 Example development API request:
 
 ```powershell
@@ -110,7 +112,7 @@ Public routes remain public:
 - `/lookup/domain/{domain}`
 - `/safety`
 
-Identity routes under `/api/v1/identity/...` remain public for the current identity-signing foundation.
+Identity read/verification routes under `/api/v1/identity/...` remain public-safe for the current identity-signing foundation. Development identity registration and signing routes are restricted to local Development requests and rate limited, because the current signing provider is a non-production placeholder.
 
 ## Production Warning
 

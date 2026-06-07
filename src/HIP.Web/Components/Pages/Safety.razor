@@ -21,7 +21,7 @@
             <dl>
                 <div>
                     <dt>Original URL</dt>
-                    <dd>@_result.OriginalUrl</dd>
+                    <dd>@DisplayOriginalUrl</dd>
                 </div>
                 <div>
                     <dt>Final destination</dt>
@@ -82,6 +82,10 @@
     private string? _error;
 
     private string DisplaySource => string.IsNullOrWhiteSpace(Source) ? "Unknown" : Source;
+
+    private string DisplayOriginalUrl => _result is null
+        ? "Unknown"
+        : SafetyUrlDisplay.StripQueryAndFragment(_result.OriginalUrl);
 
     private string Heading => _result?.RiskLevel == RiskStatus.Critical
         ? "HIP blocked this critical-risk link"
