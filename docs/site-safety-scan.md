@@ -376,7 +376,7 @@ The current EF implementation stores admin rules in HIP's SQLite-backed JSON rec
 
 ## External Scanner Policy
 
-External evidence providers are configurable. For the dev/MVP build, the global external-provider switch is disabled by default so HIP never calls third-party scanners without explicit operator action. SSL Labs / Qualys-style TLS is the first provider ready for opt-in use once the global switch is enabled. Credentialed threat-intelligence providers such as Google Web Risk / Safe Browsing and VirusTotal remain disabled until API credentials and concrete adapters are configured.
+External evidence providers are configurable. For the dev/MVP build, SSL Labs / Qualys-style TLS checks are enabled by default so HIP can show live TLS evidence during testing. Operators can disable outbound TLS checks by setting either `ExternalProvidersEnabled` or `SslLabs.Enabled` to `false`. Credentialed threat-intelligence providers such as Google Web Risk / Safe Browsing and VirusTotal remain disabled until API credentials and concrete adapters are configured.
 
 Providers return normalized evidence only. They do not decide the final HIP score. HIP scoring combines provider evidence with browser-observed signals, HIP history, weighted feedback, admin review evidence, and built-in/admin rules.
 
@@ -393,7 +393,7 @@ Configuration section:
   "ExternalSiteEvidence": {
     "ExternalProvidersEnabled": true,
     "AllowFullUrlChecks": false,
-    "ProviderTimeout": "00:00:02",
+    "ProviderTimeout": "00:00:10",
     "DefaultCacheDuration": "06:00:00",
     "SslLabs": {
       "Enabled": true,
@@ -426,7 +426,7 @@ To enable or disable a provider, use both the global switch and the provider-spe
 - `ExternalSiteEvidence:ExternalProvidersEnabled`
 - `ExternalSiteEvidence:<ProviderName>:Enabled`
 
-The same switches are available in `/admin/settings` while the app is running. To enable SSL Labs / Qualys TLS checks, turn on both `ExternalProvidersEnabled` and `SslLabs.Enabled`. Turning either switch off prevents outbound TLS scanner calls.
+The same switches are available in `/admin/settings` while the app is running. SSL Labs / Qualys TLS checks are on by default for MVP testing because both `ExternalProvidersEnabled` and `SslLabs.Enabled` default to `true`. Turning either switch off prevents outbound TLS scanner calls.
 
 External provider rules:
 
@@ -537,8 +537,8 @@ The scan flow is covered by service-level tests rather than full Chromium automa
 - executable downloads raise content risk
 - login forms on unknown domains raise warnings
 - provider timeouts do not crash scoring
-- external providers make no outbound calls unless `ExternalProvidersEnabled` is true and the specific provider is enabled
-- SSL Labs / Qualys TLS can be enabled for live TLS evidence, while credentialed threat-intelligence providers stay disabled until configured
+- SSL Labs / Qualys TLS makes domain-only outbound calls by default unless `ExternalProvidersEnabled` or `SslLabs.Enabled` is turned off
+- credentialed threat-intelligence providers stay disabled until configured
 - feedback is weighted evidence, not voting
 - high-risk low-confidence cases create generated admin review signals
 - popup responses expose the layered fields required by the extension

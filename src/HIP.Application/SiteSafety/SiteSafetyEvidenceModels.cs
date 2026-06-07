@@ -299,9 +299,10 @@ public sealed class ExternalSiteEvidenceOptions
 {
     /// <summary>
     /// Gets or sets whether third-party external evidence providers are allowed to run.
-    /// Disabled by default so HIP never calls external scanners unless an operator explicitly opts in.
+    /// Enabled for the SSL Labs/Qualys TLS provider in dev/MVP so operators see live TLS evidence.
+    /// Credentialed providers still require their own explicit provider switch and credentials.
     /// </summary>
-    public bool ExternalProvidersEnabled { get; set; }
+    public bool ExternalProvidersEnabled { get; set; } = true;
 
     /// <summary>
     /// Gets or sets whether external providers may receive full URLs. Domain-only or hash-based checks are preferred.
@@ -311,7 +312,7 @@ public sealed class ExternalSiteEvidenceOptions
     /// <summary>
     /// Gets or sets the maximum time an external provider should spend before HIP fails safely.
     /// </summary>
-    public TimeSpan ProviderTimeout { get; set; } = TimeSpan.FromSeconds(2);
+    public TimeSpan ProviderTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Gets or sets the default evidence cache duration.

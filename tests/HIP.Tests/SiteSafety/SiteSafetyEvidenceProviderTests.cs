@@ -192,10 +192,10 @@ public sealed class SiteSafetyEvidenceProviderTests
     }
 
     /// <summary>
-    /// Verifies concrete providers follow the safe MVP default: no external calls until the global switch is enabled.
+    /// Verifies concrete providers follow the MVP default: SSL Labs is live, credentialed providers remain disabled.
     /// </summary>
     [Test]
-    public async Task Concrete_external_providers_are_disabled_by_default()
+    public async Task Concrete_external_providers_enable_ssl_labs_by_default_only()
     {
         var options = new ExternalSiteEvidenceOptions();
         var cache = new InMemoryExternalSiteEvidenceCache();
@@ -218,8 +218,9 @@ public sealed class SiteSafetyEvidenceProviderTests
             Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("SSL Labs / Qualys TLS"));
             Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("Google Web Risk / Safe Browsing"));
             Assert.That(evidence.Select(item => item.ProviderName), Does.Contain("VirusTotal"));
-            Assert.That(evidence.SelectMany(item => item.Errors), Has.All.Contains("disabled"));
-            Assert.That(evidence.SelectMany(item => item.EvidenceItems), Is.Empty);
+            Assert.That(handler.RequestUris, Has.Count.EqualTo(1));
+            Assert.That(evidence.Single(item => item.ProviderName == "SSL Labs / Qualys TLS").EvidenceItems.Single().Value, Is.EqualTo("A"));
+            Assert.That(evidence.Where(item => item.ProviderName != "SSL Labs / Qualys TLS").SelectMany(item => item.Errors), Has.All.Contains("disabled"));
         });
     }
 
