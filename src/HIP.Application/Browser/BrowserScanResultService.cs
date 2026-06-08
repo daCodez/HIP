@@ -1,19 +1,23 @@
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
+using HIP.Application.Scalability;
 
 namespace HIP.Application.Browser;
 
 /// <summary>
 /// Validates and stores browser plugin scan summaries while preserving HIP privacy boundaries.
 /// </summary>
-public sealed class BrowserScanResultService(
-    IBrowserScanResultRepository repository,
-    IPrivacyHashingService hashingService) : IBrowserScanResultService
+public sealed class BrowserScanResultService : IBrowserScanResultService
 {
     private const int MaxReasonLength = 300;
     private const int MaxMetadataKeyLength = 80;
     private const int MaxMetadataValueLength = 200;
     private const int MaxPluginVersionLength = 80;
+    private static readonly TimeSpan HotPathCacheDuration = TimeSpan.FromMinutes(15);
+    private readonly IBrowserScanResultRepository repository;
+    private readonly IPrivacyHashingService hashingService;
+    private readonly IScanResultCache scanResultCache;
+    private readonly IDashboardScanAggregateStore dashboardAggregateStore;
 
     private static readonly HashSet<string> PrivateMetadataKeys = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -29,6 +33,37 @@ public sealed class BrowserScanResultService(
     };
 
     /// <summary>
+    /// Creates the service with no-op scalability adapters for isolated tests or simple single-node hosts.
+    /// </summary>
+    /// <param name="repository">Repository used for durable scan result storage.</param>
+    /// <param name="hashingService">Privacy hashing service used when clients send raw page URLs.</param>
+    public BrowserScanResultService(
+        IBrowserScanResultRepository repository,
+        IPrivacyHashingService hashingService)
+        : this(repository, hashingService, new InMemoryScanResultCache(), new InMemoryDashboardScanAggregateStore())
+    {
+    }
+
+    /// <summary>
+    /// Creates the service with explicit scalability adapters.
+    /// </summary>
+    /// <param name="repository">Repository used for durable scan result storage.</param>
+    /// <param name="hashingService">Privacy hashing service used when clients send raw page URLs.</param>
+    /// <param name="scanResultCache">Hot-path cache for latest domain scan summaries.</param>
+    /// <param name="dashboardAggregateStore">Pre-aggregated dashboard counter store.</param>
+    public BrowserScanResultService(
+        IBrowserScanResultRepository repository,
+        IPrivacyHashingService hashingService,
+        IScanResultCache scanResultCache,
+        IDashboardScanAggregateStore dashboardAggregateStore)
+    {
+        this.repository = repository;
+        this.hashingService = hashingService;
+        this.scanResultCache = scanResultCache;
+        this.dashboardAggregateStore = dashboardAggregateStore;
+    }
+
+    /// <summary>
     /// Saves a browser scan summary after normalizing the domain, hashing the page URL, and rejecting private metadata.
     /// </summary>
     /// <param name="request">Browser plugin scan result request.</param>
@@ -42,7 +77,7 @@ public sealed class BrowserScanResultService(
         var pageUrlHash = ResolvePageUrlHash(request);
 
         var now = request.ScannedAtUtc ?? DateTimeOffset.UtcNow;
-        var metadata = AddPluginVersion(ValidateMetadata(request.PrivacySafeMetadata), request.PluginVersion);
+        var metadata = AddScalabilityMetadata(AddPluginVersion(ValidateMetadata(request.PrivacySafeMetadata), request.PluginVersion), request);
         var reasons = NormalizeReasons(request.Reasons);
         var record = new BrowserScanResultRecord(
             $"browser-scan:{domain}:{Guid.NewGuid():N}",
@@ -63,6 +98,8 @@ public sealed class BrowserScanResultService(
             metadata);
 
         await repository.SaveAsync(record, cancellationToken);
+        await scanResultCache.StoreAsync(record, HotPathCacheDuration, cancellationToken);
+        await dashboardAggregateStore.UpdateAsync(record, cancellationToken);
         return new BrowserScanResultSaveResponse(true, domain, now);
     }
 
@@ -75,6 +112,12 @@ public sealed class BrowserScanResultService(
     public async Task<BrowserScanResultResponse?> GetLatestByDomainAsync(string domain, CancellationToken cancellationToken)
     {
         var normalizedDomain = DomainInputValidator.ValidateAndNormalize(domain);
+        var cached = await scanResultCache.GetFreshAsync(normalizedDomain, cancellationToken);
+        if (cached is not null)
+        {
+            return BrowserScanResultResponse.From(cached.Result);
+        }
+
         var record = await repository.GetLatestByDomainAsync(normalizedDomain, cancellationToken);
         return record is null ? null : BrowserScanResultResponse.From(record);
     }
@@ -230,6 +273,23 @@ public sealed class BrowserScanResultService(
                 ? safeVersion[..MaxPluginVersionLength]
                 : safeVersion;
         }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Adds privacy-safe scalability metadata used for dedupe, cache provenance, and dashboard live-data tracing.
+    /// </summary>
+    /// <param name="metadata">Validated metadata.</param>
+    /// <param name="request">Original save request.</param>
+    /// <returns>Metadata with a deterministic signal hash.</returns>
+    private static IReadOnlyDictionary<string, string> AddScalabilityMetadata(IReadOnlyDictionary<string, string> metadata, BrowserScanResultSaveRequest request)
+    {
+        var result = new Dictionary<string, string>(metadata, StringComparer.OrdinalIgnoreCase)
+        {
+            ["signalHash"] = ScanScalabilityKeys.CreateSignalHash(request),
+            ["scalabilityPath"] = "HotPathStoredSummary"
+        };
 
         return result;
     }
