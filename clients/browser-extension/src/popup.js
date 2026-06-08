@@ -1,4 +1,4 @@
-import { HipApiClient, DEFAULT_HIP_SETTINGS, loadHipSettings, normalizeHost } from "./hipApiClient.js";
+import { buildSiteFeedbackRequest, HipApiClient, DEFAULT_HIP_SETTINGS, loadHipSettings, normalizeHost } from "./hipApiClient.js";
 import {
   buildPopupViewModel,
   buildSiteSafetyViewModel,
@@ -350,8 +350,8 @@ async function submitPopupFeedback(feedbackType) {
   elements.feedbackState.className = "feedback-state";
 
   try {
-    const report = await buildPopupFeedbackReport(feedbackType);
-    const response = await chrome.runtime.sendMessage({ type: "HIP_REPORT_RISK_FINDING", report });
+    const feedback = await buildPopupFeedbackRequest(feedbackType);
+    const response = await chrome.runtime.sendMessage({ type: "HIP_SUBMIT_SITE_FEEDBACK", feedback });
     if (!response?.ok) {
       throw new Error(response?.error || "HIP feedback unavailable");
     }
@@ -368,41 +368,22 @@ async function submitPopupFeedback(feedbackType) {
 }
 
 /**
- * Builds the popup feedback report with only a domain, hashed URL, displayed score/status, and feedback type.
+ * Builds the popup feedback request with only a domain, hashed URL, displayed score/status, and feedback type.
+ * Popup feedback is weighted reputation evidence, not a risk-finding report or raw popularity vote.
  */
-async function buildPopupFeedbackReport(feedbackType) {
-  const looksSafe = feedbackType === "LooksSafe";
-  return {
-    reportId: "",
-    sourceClient: "BrowserPlugin",
-    platform: "Web",
-    targetType: "Website",
+async function buildPopupFeedbackRequest(feedbackType) {
+  return buildSiteFeedbackRequest({
+    feedbackType,
     domain: activeLookup?.domain || "",
-    urlHash: await sha256(activeTabUrl),
-    originalUrl: null,
-    senderHash: null,
-    riskLevel: looksSafe ? "ProbablySafe" : "Suspicious",
-    reason: looksSafe
-      ? "Browser plugin popup feedback: user reported the site looks safe."
-      : "Browser plugin popup feedback: user reported the site looks suspicious.",
-    detectedAtUtc: new Date().toISOString(),
-    reporterTrustLevel: "Medium",
-    privacySafeEvidence: {
-      evidenceType: "browser-popup-feedback",
-      summary: "Browser plugin popup feedback submitted without page text, form values, passwords, tokens, or private content.",
-      facts: {
-        source: "BrowserPluginPopup",
-        feedbackType,
-        domain: activeLookup?.domain || "",
-        displayedStatus: activeLookup?.status || activeSiteSafety?.status || "Unknown",
-        displayedScore: String(activeLookup?.finalHipScore ?? activeLookup?.score ?? "Unknown"),
-        pluginVersion: elements.pluginVersion.textContent || "Unknown",
-        scanMode: settings.scanMode || "Normal"
-      },
-      containsPrivateContent: false
+    pageUrl: activeTabUrl,
+    source: "BrowserPluginPopup",
+    lookup: {
+      ...activeLookup,
+      status: activeLookup?.status || activeSiteSafety?.status || "Unknown"
     },
-    hipSignature: "browser-plugin-popup-feedback-placeholder"
-  };
+    settings,
+    hashUrl: sha256
+  });
 }
 
 /**

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   browserScanAssessment,
   buildBannerFeedbackReport,
+  buildSiteFeedbackRequest,
   buildScanResultPayload,
   formatPluginVersion,
   hasRiskyLimitedTrustSignals,
@@ -411,7 +412,7 @@ test("warnings only mode shows warning statuses and risky limited trust only", (
   assert.equal(shouldShowTrustBanner({ status: "LimitedTrustData" }, { paymentFieldsDetected: 1 }, settings), true);
 });
 
-test("banner feedback creates privacy-safe suspicious evidence", async () => {
+test("banner feedback creates privacy-safe suspicious reputation evidence", async () => {
   const payload = await buildBannerFeedbackReport({
     feedbackType: "LooksSuspicious",
     domain: "example.com",
@@ -422,13 +423,14 @@ test("banner feedback creates privacy-safe suspicious evidence", async () => {
     hashUrl: async () => "sha256:test-hash"
   });
 
-  assert.equal(payload.sourceClient, "BrowserPlugin");
-  assert.equal(payload.riskLevel, "Suspicious");
+  assert.equal(payload.targetId, "example.com");
+  assert.equal(payload.targetType, 5);
+  assert.equal(payload.eventType, 2);
+  assert.equal(payload.severity, 1);
+  assert.equal(payload.reporterTrustLevel, 0);
   assert.equal(payload.urlHash, "sha256:test-hash");
-  assert.equal(payload.originalUrl, null);
-  assert.equal(payload.privacySafeEvidence.evidenceType, "browser-banner-feedback");
-  assert.equal(payload.privacySafeEvidence.containsPrivateContent, false);
-  assert.equal(payload.privacySafeEvidence.facts.source, "BrowserPluginBanner");
+  assert.equal(payload.metadata.source, "BrowserPluginBanner");
+  assert.equal(payload.metadata.feedbackType, "LooksSuspicious");
   assert.equal(JSON.stringify(payload).includes("token=secret"), false);
 });
 
@@ -441,10 +443,11 @@ test("banner looks safe feedback is evidence not raw voting", async () => {
     hashUrl: async () => "sha256:test-hash"
   });
 
-  assert.equal(payload.riskLevel, "ProbablySafe");
-  assert.equal(payload.reporterTrustLevel, "Medium");
+  assert.equal(payload.eventType, 0);
+  assert.equal(payload.severity, 0);
+  assert.equal(payload.reporterTrustLevel, 0);
   assert.equal(payload.reason.includes("looks safe"), true);
-  assert.equal("vote" in payload.privacySafeEvidence.facts, false);
+  assert.equal("vote" in payload.metadata, false);
 });
 
 test("banner feedback excludes page text and form values", async () => {
@@ -459,4 +462,26 @@ test("banner feedback excludes page text and form values", async () => {
   assert.equal("pageText" in payload, false);
   assert.equal("formValues" in payload, false);
   assert.equal(JSON.stringify(payload).includes("password=secret"), false);
+});
+
+test("popup report issue feedback maps to high severity reputation feedback", async () => {
+  const payload = await buildSiteFeedbackRequest({
+    feedbackType: "ReportIssue",
+    domain: "example.com",
+    pageUrl: "https://example.com/account?token=private",
+    source: "BrowserPluginPopup",
+    lookup: { status: "LimitedTrustData", finalHipScore: 56 },
+    settings: { scanMode: "Strict" },
+    reportedAtUtc: "2026-06-01T00:00:00Z",
+    hashUrl: async () => "sha256:test-hash"
+  });
+
+  assert.equal(payload.targetType, 5);
+  assert.equal(payload.targetId, "example.com");
+  assert.equal(payload.eventType, 2);
+  assert.equal(payload.severity, 2);
+  assert.equal(payload.reporterTrustLevel, 0);
+  assert.equal(payload.metadata.source, "BrowserPluginPopup");
+  assert.equal(payload.metadata.scanMode, "Strict");
+  assert.equal(JSON.stringify(payload).includes("token=private"), false);
 });

@@ -282,38 +282,29 @@
    */
   async function submitBannerFeedback(feedbackType, lookup) {
     const looksSafe = feedbackType === "LooksSafe";
-    const report = {
-      reportId: "",
-      sourceClient: "BrowserPlugin",
-      platform: "Web",
-      targetType: "Website",
-      domain: lookup?.domain || currentDomain,
-      urlHash: await sha256(window.location.href),
-      originalUrl: null,
-      senderHash: null,
-      riskLevel: looksSafe ? "ProbablySafe" : "Suspicious",
+    // These values mirror HIP.Domain.Reputation enum ordinals so the current API can bind feedback safely.
+    const enumValues = {
+      targetTypeWebsite: 5,
+      eventPositiveReport: 0,
+      eventSuspiciousReport: 2,
+      severityLow: 0,
+      severityMedium: 1,
+      reporterTrustAnonymous: 0
+    };
+    const feedback = {
+      targetType: enumValues.targetTypeWebsite,
+      targetId: lookup?.domain || currentDomain,
+      eventType: looksSafe ? enumValues.eventPositiveReport : enumValues.eventSuspiciousReport,
+      severity: looksSafe ? enumValues.severityLow : enumValues.severityMedium,
+      reporterTrustLevel: enumValues.reporterTrustAnonymous,
       reason: looksSafe
-        ? "Browser plugin banner feedback: user reported the site looks safe."
-        : "Browser plugin banner feedback: user reported the site looks suspicious.",
-      detectedAtUtc: new Date().toISOString(),
-      reporterTrustLevel: "Medium",
-      privacySafeEvidence: {
-        evidenceType: "browser-banner-feedback",
-        summary: "Browser plugin banner feedback submitted without page text, form values, or private content.",
-        facts: {
-          source: "BrowserPluginBanner",
-          feedbackType,
-          domain: lookup?.domain || currentDomain,
-          displayedStatus: lookup?.status || "Unknown",
-          displayedScore: String(lookup?.finalHipScore ?? lookup?.score ?? "Unknown"),
-          scanMode: settings.scanMode
-        },
-        containsPrivateContent: false
-      },
-      hipSignature: "browser-plugin-banner-feedback-placeholder"
+        ? "Browser plugin feedback: user reported the site looks safe."
+        : "Browser plugin feedback: user reported the site looks suspicious.",
+      platform: "Web",
+      urlHash: await sha256(window.location.href)
     };
 
-    const response = await chrome.runtime.sendMessage({ type: "HIP_REPORT_RISK_FINDING", report });
+    const response = await chrome.runtime.sendMessage({ type: "HIP_SUBMIT_SITE_FEEDBACK", feedback });
     if (!response?.ok) {
       throw new Error(response?.error || "HIP feedback unavailable");
     }

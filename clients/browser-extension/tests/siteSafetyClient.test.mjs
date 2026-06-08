@@ -52,6 +52,41 @@ test("scan site safety calls versioned API route", async () => {
   assert.equal(JSON.parse(calls[0].options.body).pluginVersion, "HIP Plugin v0.1.0-dev");
 });
 
+test("site feedback calls public feedback route with instance header", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      json: async () => ({ currentScore: 74 })
+    };
+  };
+
+  try {
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123", instanceId: "feedback-instance" });
+    await client.submitSiteFeedback({
+      // ASP.NET's current minimal API binding accepts enum ordinals for this endpoint.
+      targetType: 5,
+      targetId: "example.com",
+      eventType: 0,
+      severity: 0,
+      reporterTrustLevel: 0,
+      reason: "Browser plugin feedback: user reported the site looks safe.",
+      platform: "Web",
+      urlHash: "sha256:test"
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://localhost:5099/api/v1/public/feedback");
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].options.headers["X-HIP-Instance-Id"], "feedback-instance");
+  assert.equal(JSON.parse(calls[0].options.body).reporterTrustLevel, 0);
+});
+
 test("scan site safety falls back to web host when API host route is missing", async () => {
   const calls = [];
   const originalFetch = globalThis.fetch;
