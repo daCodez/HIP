@@ -1,0 +1,27 @@
+# Git and local editor state
+.git/
+.vs/
+.vscode/
+
+# Build output
+**/bin/
+**/obj/
+**/artifacts/
+TestResults/
+coverage/
+
+# Local runtime data and logs
+*.log
+hip-dev.db*
+src/HIP.Web/hip-dev.db*
+src/HIP.Web/*.log
+
+# Local secrets
+.env
+appsettings.Local.json
+**/appsettings.Local.json
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store

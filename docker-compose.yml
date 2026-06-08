@@ -1,0 +1,108 @@
+name: hip
+
+services:
+  hip-postgres:
+    image: postgres:17-alpine
+    container_name: hip-postgres
+    environment:
+      POSTGRES_DB: ${HIP_POSTGRES_DB:?Set HIP_POSTGRES_DB in .env}
+      POSTGRES_USER: ${HIP_POSTGRES_USER:?Set HIP_POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${HIP_POSTGRES_PASSWORD:?Set HIP_POSTGRES_PASSWORD in .env}
+    ports:
+      - "${HIP_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - hip-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  hip-redis:
+    image: redis:7-alpine
+    container_name: hip-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${HIP_REDIS_PORT:-6379}:6379"
+    volumes:
+      - hip-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  hip-queue:
+    image: rabbitmq:4-management-alpine
+    container_name: hip-queue
+    environment:
+      RABBITMQ_DEFAULT_USER: ${HIP_RABBITMQ_USER:?Set HIP_RABBITMQ_USER in .env}
+      RABBITMQ_DEFAULT_PASS: ${HIP_RABBITMQ_PASSWORD:?Set HIP_RABBITMQ_PASSWORD in .env}
+    ports:
+      - "${HIP_RABBITMQ_PORT:-5672}:5672"
+      - "${HIP_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - hip-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  hip-api:
+    build:
+      context: .
+      dockerfile: src/HIP.ApiService/Dockerfile
+    container_name: hip-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__HipDatabase: Data Source=/data/hip-api-dev.db
+      HipSecurity__RecordEncryptionKey: ${HIP_RECORD_ENCRYPTION_KEY:?Set HIP_RECORD_ENCRYPTION_KEY in .env}
+      HipSecurity__PrivacyHashingKey: ${HIP_PRIVACY_HASHING_KEY:?Set HIP_PRIVACY_HASHING_KEY in .env}
+      ExternalSiteEvidence__ExternalProvidersEnabled: "true"
+      ExternalSiteEvidence__SslLabs__Enabled: "true"
+      ExternalSiteEvidence__GoogleWebRisk__Enabled: "false"
+      ExternalSiteEvidence__VirusTotal__Enabled: "false"
+    ports:
+      - "${HIP_API_PORT:-5099}:8080"
+    volumes:
+      - hip-api-data:/data
+    depends_on:
+      hip-postgres:
+        condition: service_healthy
+      hip-redis:
+        condition: service_healthy
+      hip-queue:
+        condition: service_healthy
+
+  hip-web:
+    build:
+      context: .
+      dockerfile: src/HIP.Web/Dockerfile
+    container_name: hip-web
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__HipDatabase: Data Source=/data/hip-web-dev.db
+      HipSecurity__RecordEncryptionKey: ${HIP_RECORD_ENCRYPTION_KEY:?Set HIP_RECORD_ENCRYPTION_KEY in .env}
+      HipSecurity__PrivacyHashingKey: ${HIP_PRIVACY_HASHING_KEY:?Set HIP_PRIVACY_HASHING_KEY in .env}
+      services__hip-api__http__0: http://hip-api:8080
+      ExternalSiteEvidence__ExternalProvidersEnabled: "true"
+      ExternalSiteEvidence__SslLabs__Enabled: "true"
+      ExternalSiteEvidence__GoogleWebRisk__Enabled: "false"
+      ExternalSiteEvidence__VirusTotal__Enabled: "false"
+    ports:
+      - "${HIP_WEB_PORT:-5123}:8080"
+    volumes:
+      - hip-web-data:/data
+    depends_on:
+      hip-api:
+        condition: service_healthy
+
+volumes:
+  hip-postgres-data:
+  hip-redis-data:
+  hip-rabbitmq-data:
+  hip-api-data:
+  hip-web-data:
