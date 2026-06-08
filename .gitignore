@@ -27,6 +27,7 @@ Desktop.ini
 
 # ASP.NET local settings
 appsettings.Local.json
+.env
 
 # Local HIP development database
 hip-dev.db*
