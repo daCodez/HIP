@@ -87,6 +87,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "HIP_SUBMIT_SITE_FEEDBACK") {
+    submitSiteFeedback(message.feedback)
+      .then(result => sendResponse({ ok: true, result }))
+      .catch(error => {
+        console.warn("HIP site feedback unavailable.", error);
+        sendResponse({ ok: false, error: "HIP feedback unavailable" });
+      });
+
+    return true;
+  }
+
   if (message?.type === "HIP_SAVE_SCAN_RESULT") {
     saveScanResult(message.result)
       .then(result => sendResponse({ ok: true, result }))
@@ -166,6 +177,16 @@ async function reportRiskFinding(report) {
   const settings = await loadHipSettings();
   const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
   return client.reportRiskFinding(report);
+}
+
+/**
+ * Submits weak, weighted site feedback through HIP's public reputation feedback API.
+ * Browser feedback is unauthenticated in the MVP, so the server treats it as Anonymous evidence.
+ */
+async function submitSiteFeedback(feedback) {
+  const settings = await loadHipSettings();
+  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
+  return client.submitSiteFeedback(feedback);
 }
 
 /**

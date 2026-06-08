@@ -5,6 +5,24 @@ export const HIP_CONFIG = Object.freeze({
 
 export const HIP_EXTENSION_CHANNEL = "dev";
 
+export const REPUTATION_FEEDBACK_ENUMS = Object.freeze({
+  targetType: Object.freeze({
+    Website: 5
+  }),
+  eventType: Object.freeze({
+    PositiveReport: 0,
+    SuspiciousReport: 2
+  }),
+  severity: Object.freeze({
+    Low: 0,
+    Medium: 1,
+    High: 2
+  }),
+  reporterTrustLevel: Object.freeze({
+    Anonymous: 0
+  })
+});
+
 export const DEFAULT_HIP_SETTINGS = Object.freeze({
   hipApiBaseUrl: HIP_CONFIG.apiBaseUrl,
   apiBaseUrl: HIP_CONFIG.apiBaseUrl,
@@ -185,6 +203,30 @@ export class HipApiClient {
 
     if (!response.ok) {
       throw new Error(`HIP risk finding report failed with status ${response.status}.`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Submits weighted public site feedback through the reputation feedback endpoint.
+   * This is separate from risk findings so "Looks Safe" feedback is accepted as weak trust evidence,
+   * not misclassified as a threat report.
+   */
+  async submitSiteFeedback(feedback) {
+    const url = `${this.config.apiBaseUrl}/api/v1/public/feedback`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        ...this.instanceHeaders()
+      },
+      body: JSON.stringify(feedback)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HIP site feedback failed with status ${response.status}.`);
     }
 
     return response.json();
@@ -500,41 +542,69 @@ export function stripQueryAndFragment(pageUrl) {
 }
 
 /**
- * Builds the privacy-safe feedback report submitted by the injected trust banner.
- * Feedback is trust evidence, not a raw vote; HIP should weight it by reporter trust server-side.
+ * Builds the privacy-safe feedback request submitted by the injected trust banner.
+ * Feedback is trust evidence, not a raw vote; HIP weights anonymous browser feedback conservatively server-side.
  */
 export async function buildBannerFeedbackReport({ feedbackType, domain, pageUrl, lookup = {}, settings = {}, reportedAtUtc = new Date().toISOString(), hashUrl = defaultSha256 }) {
-  const looksSafe = feedbackType === "LooksSafe";
-  return {
-    reportId: "",
-    sourceClient: "BrowserPlugin",
-    platform: "Web",
-    targetType: "Website",
+  return buildSiteFeedbackRequest({
+    feedbackType,
     domain,
-    urlHash: await hashUrl(pageUrl),
-    originalUrl: null,
-    senderHash: null,
-    riskLevel: looksSafe ? "ProbablySafe" : "Suspicious",
+    pageUrl,
+    source: "BrowserPluginBanner",
+    lookup,
+    settings,
+    reportedAtUtc,
+    hashUrl
+  });
+}
+
+/**
+ * Builds the privacy-safe feedback request used by popup and banner controls.
+ * The payload matches HIP's public reputation feedback contract and intentionally excludes raw page text,
+ * form values, cookies, tokens, passwords, and full URLs.
+ */
+export async function buildSiteFeedbackRequest({ feedbackType, domain, pageUrl, source = "BrowserPluginPopup", lookup = {}, settings = {}, reportedAtUtc = new Date().toISOString(), hashUrl = defaultSha256 }) {
+  const normalizedFeedbackType = normalizeFeedbackType(feedbackType);
+  const looksSafe = normalizedFeedbackType === "LooksSafe";
+  const reportIssue = normalizedFeedbackType === "ReportIssue";
+  const severity = looksSafe
+    ? REPUTATION_FEEDBACK_ENUMS.severity.Low
+    : reportIssue
+      ? REPUTATION_FEEDBACK_ENUMS.severity.High
+      : REPUTATION_FEEDBACK_ENUMS.severity.Medium;
+
+  return {
+    targetType: REPUTATION_FEEDBACK_ENUMS.targetType.Website,
+    targetId: domain,
+    eventType: looksSafe ? REPUTATION_FEEDBACK_ENUMS.eventType.PositiveReport : REPUTATION_FEEDBACK_ENUMS.eventType.SuspiciousReport,
+    severity,
+    reporterTrustLevel: REPUTATION_FEEDBACK_ENUMS.reporterTrustLevel.Anonymous,
     reason: looksSafe
-      ? "Browser plugin banner feedback: user reported the site looks safe."
-      : "Browser plugin banner feedback: user reported the site looks suspicious.",
-    detectedAtUtc: reportedAtUtc,
-    reporterTrustLevel: "Medium",
-    privacySafeEvidence: {
-      evidenceType: "browser-banner-feedback",
-      summary: "Browser plugin banner feedback submitted without page text, form values, or private content.",
-      facts: {
-        source: "BrowserPluginBanner",
-        feedbackType,
-        domain,
-        displayedStatus: lookup?.status || "Unknown",
-        displayedScore: String(lookup?.finalHipScore ?? lookup?.score ?? "Unknown"),
-        scanMode: settings.scanMode || "Normal"
-      },
-      containsPrivateContent: false
+      ? "Browser plugin feedback: user reported the site looks safe."
+      : reportIssue
+        ? "Browser plugin feedback: user reported an issue with this site."
+        : "Browser plugin feedback: user reported the site looks suspicious.",
+    platform: "Web",
+    urlHash: await hashUrl(pageUrl),
+    metadata: {
+      source,
+      feedbackType: normalizedFeedbackType,
+      domain,
+      displayedStatus: lookup?.status || "Unknown",
+      displayedScore: String(lookup?.finalHipScore ?? lookup?.score ?? "Unknown"),
+      scanMode: settings.scanMode || "Normal",
+      reportedAtUtc
     },
-    hipSignature: "browser-plugin-banner-feedback-placeholder"
   };
+}
+
+/**
+ * Normalizes trusted feedback button values so unexpected UI labels cannot create arbitrary event types.
+ */
+export function normalizeFeedbackType(feedbackType) {
+  return ["LooksSafe", "LooksSuspicious", "ReportIssue"].includes(feedbackType)
+    ? feedbackType
+    : "LooksSuspicious";
 }
 
 /**
