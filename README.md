@@ -51,6 +51,8 @@ dotnet test HIP.slnx
 For normal local development without Docker or Aspire, run the Docker-free local host:
 
 ```powershell
+dotnet restore HIP.slnx
+dotnet build HIP.slnx
 dotnet run --project src/HIP.LocalHost/HIP.LocalHost.csproj
 ```
 
