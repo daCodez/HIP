@@ -59,6 +59,9 @@ Aspire starts:
 
 - API: `http://localhost:5099`
 - Web/Admin: `http://localhost:5123`
+- PostgreSQL container resource: `postgres`
+- HIP PostgreSQL database resource: `HipDatabase`
+- Redis container resource: `redis`
 
 The browser extension should use those same base URLs.
 
