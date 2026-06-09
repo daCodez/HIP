@@ -20,6 +20,8 @@ The runner starts:
 
 Press `Ctrl+C` in the runner terminal to stop both services. The runner kills the child process trees so stale localhost listeners do not remain behind.
 
+Run `dotnet restore HIP.slnx` and `dotnet build HIP.slnx` once after pulling new package or code changes. The local runner starts child services with `--no-build --no-restore` so local startup does not fail just because NuGet.org is temporarily unavailable.
+
 ## Visual Studio
 
 For a Docker-free local run, set `HIP.LocalHost` as the startup project.

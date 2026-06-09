@@ -89,27 +89,38 @@ internal static class Program
     }
 
     /// <summary>
-    /// Starts a HIP service through dotnet run on a fixed localhost HTTP endpoint.
+    /// Starts a HIP service from its already-built assembly on a fixed localhost HTTP endpoint.
     /// </summary>
     /// <param name="name">Display name used in console logs.</param>
-    /// <param name="repositoryRoot">Repository root used as the child process working directory.</param>
+    /// <param name="repositoryRoot">Repository root used to resolve project output paths.</param>
     /// <param name="projectPath">Project path relative to the repository root.</param>
     /// <param name="url">HTTP URL the child service should bind to.</param>
     /// <returns>The started child process.</returns>
+    /// <remarks>
+    /// The runner intentionally avoids child <c>dotnet run</c> because that can trigger NuGet restore/build probes
+    /// during startup. Local startup should be boring: build once, then launch the compiled API and Web DLLs.
+    /// </remarks>
     private static Process StartService(string name, string repositoryRoot, string projectPath, string url)
     {
+        var projectDirectory = Path.GetFullPath(Path.GetDirectoryName(Path.Combine(repositoryRoot, projectPath)) ?? repositoryRoot);
+        var projectName = Path.GetFileNameWithoutExtension(projectPath);
+        var assemblyPath = Path.Combine(projectDirectory, "bin", "Debug", "net10.0", $"{projectName}.dll");
+        if (!File.Exists(assemblyPath))
+        {
+            throw new FileNotFoundException(
+                $"The built service assembly was not found for {name}. Run 'dotnet build HIP.slnx' before starting HIP.LocalHost.",
+                assemblyPath);
+        }
+
         var startInfo = new ProcessStartInfo("dotnet")
         {
-            WorkingDirectory = repositoryRoot,
+            WorkingDirectory = projectDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false
         };
 
-        startInfo.ArgumentList.Add("run");
-        startInfo.ArgumentList.Add("--project");
-        startInfo.ArgumentList.Add(projectPath);
-        startInfo.ArgumentList.Add("--no-launch-profile");
+        startInfo.ArgumentList.Add(assemblyPath);
         startInfo.ArgumentList.Add("--urls");
         startInfo.ArgumentList.Add(url);
         startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";

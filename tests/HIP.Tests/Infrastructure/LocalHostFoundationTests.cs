@@ -26,7 +26,9 @@ public sealed class LocalHostFoundationTests
 
         Assert.That(source, Does.Contain("http://localhost:5099"));
         Assert.That(source, Does.Contain("http://localhost:5123"));
-        Assert.That(source, Does.Contain("--no-launch-profile"));
+        Assert.That(source, Does.Contain("bin\", \"Debug\", \"net10.0"));
+        Assert.That(source, Does.Contain("Run 'dotnet build HIP.slnx' before starting HIP.LocalHost."));
+        Assert.That(source, Does.Not.Contain("startInfo.ArgumentList.Add(\"run\")"));
     }
 
     /// <summary>
