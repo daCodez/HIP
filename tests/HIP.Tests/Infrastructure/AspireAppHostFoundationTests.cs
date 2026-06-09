@@ -20,6 +20,40 @@ public sealed class AspireAppHostFoundationTests
     }
 
     /// <summary>
+    /// Confirms Aspire declares real local container resources instead of relying on undocumented manual Docker setup.
+    /// </summary>
+    [Test]
+    public void AppHost_declares_postgres_and_redis_container_resources()
+    {
+        var source = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.AppHost", "Program.cs"));
+        var project = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.AppHost", "HIP.AppHost.csproj"));
+
+        Assert.That(source, Does.Contain("AddPostgres(\"postgres\")"));
+        Assert.That(source, Does.Contain("postgres.AddDatabase(\"HipDatabase\")"));
+        Assert.That(source, Does.Contain("AddRedis(\"redis\")"));
+        Assert.That(source, Does.Contain(".WithReference(hipDatabase)"));
+        Assert.That(source, Does.Contain(".WithReference(redis)"));
+        Assert.That(source, Does.Contain(".WithEnvironment(\"HipInfrastructure__DatabaseProvider\", \"PostgreSQL\")"));
+        Assert.That(project, Does.Contain("Aspire.Hosting.PostgreSQL"));
+        Assert.That(project, Does.Contain("Aspire.Hosting.Redis"));
+    }
+
+    /// <summary>
+    /// Confirms HIP can use Aspire's PostgreSQL connection while retaining SQLite for direct local runs and tests.
+    /// </summary>
+    [Test]
+    public void Infrastructure_supports_postgresql_provider_switch_for_aspire()
+    {
+        var source = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.Infrastructure", "DependencyInjection.cs"));
+        var project = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.Infrastructure", "HIP.Infrastructure.csproj"));
+
+        Assert.That(source, Does.Contain("UseNpgsql(connectionString)"));
+        Assert.That(source, Does.Contain("UseSqlite(connectionString)"));
+        Assert.That(source, Does.Contain("HipInfrastructure:DatabaseProvider"));
+        Assert.That(project, Does.Contain("Npgsql.EntityFrameworkCore.PostgreSQL"));
+    }
+
+    /// <summary>
     /// Confirms the stable local ports are owned by the project launch profiles that Aspire consumes.
     /// </summary>
     [Test]

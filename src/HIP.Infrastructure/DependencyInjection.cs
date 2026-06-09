@@ -30,8 +30,9 @@ public static class DependencyInjection
     public static IServiceCollection AddHipInfrastructure(this IServiceCollection services, IConfiguration configuration, bool isLocalDevelopment = true)
     {
         var connectionString = configuration.GetConnectionString("HipDatabase") ?? "Data Source=hip-dev.db";
+        var databaseProvider = configuration["HipInfrastructure:DatabaseProvider"];
 
-        services.AddDbContext<HipDbContext>(options => options.UseSqlite(connectionString));
+        services.AddDbContext<HipDbContext>(options => ConfigureDatabaseProvider(options, connectionString, databaseProvider));
         services.AddSingleton(BindRecordEncryptionOptions(configuration, isLocalDevelopment));
         services.AddSingleton(BindPrivacyHashingOptions(configuration, isLocalDevelopment));
         services.AddSingleton<IHipRecordEncryptor, DevelopmentHipRecordEncryptor>();
@@ -55,6 +56,36 @@ public static class DependencyInjection
 
         return services;
     }
+
+    /// <summary>
+    /// Selects the EF Core provider from configuration so Aspire can inject PostgreSQL while direct local runs keep SQLite.
+    /// </summary>
+    /// <param name="options">EF Core options builder being configured for HIP persistence.</param>
+    /// <param name="connectionString">Database connection string supplied by configuration or Aspire service discovery.</param>
+    /// <param name="databaseProvider">Optional provider name, such as PostgreSQL or SQLite.</param>
+    private static void ConfigureDatabaseProvider(DbContextOptionsBuilder options, string connectionString, string? databaseProvider)
+    {
+        if (ShouldUsePostgreSql(connectionString, databaseProvider))
+        {
+            options.UseNpgsql(connectionString);
+            return;
+        }
+
+        options.UseSqlite(connectionString);
+    }
+
+    /// <summary>
+    /// Detects PostgreSQL configuration without treating every arbitrary connection string as safe for Npgsql.
+    /// </summary>
+    /// <param name="connectionString">Configured database connection string.</param>
+    /// <param name="databaseProvider">Optional explicit provider name from configuration.</param>
+    /// <returns>True when HIP should use the PostgreSQL EF Core provider.</returns>
+    private static bool ShouldUsePostgreSql(string connectionString, string? databaseProvider) =>
+        string.Equals(databaseProvider, "PostgreSQL", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(databaseProvider, "Postgres", StringComparison.OrdinalIgnoreCase)
+        || connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
+        || connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
+        || connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Binds record encryption settings and disables default keys outside local Development.
