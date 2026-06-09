@@ -16,7 +16,6 @@ HIP is intended to help users understand whether a website, link, sender, file, 
 src/
   HIP.AppHost
   HIP.ApiService
-  HIP.LocalHost
   HIP.Web
   HIP.Application
   HIP.Domain
@@ -48,15 +47,15 @@ dotnet test HIP.slnx
 
 ## Run
 
-For normal local development without Docker or Aspire, run the Docker-free local host:
+For normal local development, set `HIP.AppHost` as the Visual Studio startup project and run it. Aspire starts the HIP API and Web/Admin projects together.
+
+CLI equivalent:
 
 ```powershell
-dotnet restore HIP.slnx
-dotnet build HIP.slnx
-dotnet run --project src/HIP.LocalHost/HIP.LocalHost.csproj
+dotnet run --project src/HIP.AppHost/HIP.AppHost.csproj --launch-profile http
 ```
 
-It starts:
+Aspire starts:
 
 - API: `http://localhost:5099`
 - Web/Admin: `http://localhost:5123`
@@ -70,7 +69,7 @@ dotnet run --project src/HIP.ApiService/HIP.ApiService.csproj
 dotnet run --project src/HIP.Web/HIP.Web.csproj
 ```
 
-The Aspire AppHost project remains available for orchestration, but it requires Docker Desktop/DCP to be healthy. If Aspire appears to do nothing locally, run `docker info` first. If Docker is inaccessible, use `HIP.LocalHost`.
+The Aspire AppHost is the primary local orchestration entry point.
 
 ## Status
 

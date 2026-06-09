@@ -98,7 +98,7 @@ docker compose ps
 
 ## Aspire And Docker Compose
 
-Aspire remains the Visual Studio/local orchestration path for the .NET projects.
+Aspire is the Visual Studio/local orchestration path for the .NET projects.
 
 Docker Compose is the container deployment foundation:
 
@@ -106,16 +106,6 @@ Docker Compose is the container deployment foundation:
 - use Docker Compose when validating container startup and local dependency services
 
 The Compose stack does not wipe or replace Aspire configuration.
-
-## Docker-Free Local Development
-
-If Docker Desktop or Aspire DCP is unavailable, use the Docker-free local runner:
-
-```powershell
-dotnet run --project src/HIP.LocalHost/HIP.LocalHost.csproj
-```
-
-This starts `HIP.ApiService` on `http://localhost:5099` and `HIP.Web` on `http://localhost:5123` without launching containers or the Aspire dashboard. It is the preferred local fallback when `docker info` fails.
 
 ## Safe Dev Secrets Handling
 
