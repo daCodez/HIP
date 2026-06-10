@@ -115,7 +115,9 @@ publicApi.MapPost("/feedback", async (
     {
         if (IsDuplicateFeedback(feedback, duplicateGuard))
         {
-            return Results.Conflict(new { error = "Duplicate feedback submission ignored." });
+            // Duplicate suppression is an abuse-control decision, not a user-facing failure.
+            // Returning OK keeps the browser plugin UX stable when a user double-clicks or retries a submitted signal.
+            return Results.Ok(new { accepted = true, duplicateSuppressed = true, message = "Duplicate feedback submission already accepted recently." });
         }
 
         await StoreWeightedFeedbackIfDomainAsync(feedback, weightedFeedbackService, reviewQueueService, cancellationToken);

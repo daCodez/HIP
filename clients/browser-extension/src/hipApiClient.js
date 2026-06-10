@@ -225,6 +225,14 @@ export class HipApiClient {
       body: JSON.stringify(feedback)
     });
 
+    if (response.status === 409) {
+      return {
+        accepted: true,
+        duplicateSuppressed: true,
+        message: "Duplicate feedback submission already accepted recently."
+      };
+    }
+
     if (!response.ok) {
       throw new Error(`HIP site feedback failed with status ${response.status}.`);
     }
