@@ -87,6 +87,35 @@ test("site feedback calls public feedback route with instance header", async () 
   assert.equal(JSON.parse(calls[0].options.body).reporterTrustLevel, 0);
 });
 
+test("site feedback treats duplicate suppression as accepted", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 409,
+    json: async () => ({ error: "Duplicate feedback submission ignored." })
+  });
+
+  let result;
+  try {
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
+    result = await client.submitSiteFeedback({
+      targetType: 5,
+      targetId: "example.com",
+      eventType: 2,
+      severity: 1,
+      reporterTrustLevel: 0,
+      reason: "Browser plugin feedback: user reported the site looks suspicious.",
+      platform: "Web",
+      urlHash: "sha256:test"
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(result.accepted, true);
+  assert.equal(result.duplicateSuppressed, true);
+});
+
 test("scan site safety falls back to web host when API host route is missing", async () => {
   const calls = [];
   const originalFetch = globalThis.fetch;
