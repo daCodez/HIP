@@ -78,6 +78,39 @@ External providers run through provider policy and resilience objects:
 
 These policies are intentionally small and strongly typed. HIP should prefer policy objects and specification/rule objects over long conditional chains in scan and scoring services.
 
+## Framework Performance Controls
+
+HIP now has explicit host-level performance controls for the public hot path:
+
+- `HipPerformance` options configure public lookup cache duration, badge cache duration, future safety/site-safety cache durations, and public request limits.
+- `HIP.ApiService` and `HIP.Web` both register ASP.NET Core output caching.
+- When Aspire injects a Redis connection string, both hosts use Aspire's Redis-backed output-cache integration.
+- Direct local project runs still work without Redis because the hosts fall back to the normal in-process output-cache store.
+- Public domain lookup and live badge endpoints opt into named output-cache policies.
+- Public write-heavy endpoints use partitioned ASP.NET Core rate-limit policies keyed by the best available privacy-safe identifier: API key, HIP signer, HIP instance ID, domain, or client IP.
+- Response compression is enabled for JSON, badge scripts, and web assets to reduce bandwidth without changing stored or returned trust data.
+
+These controls are intentionally outside the scoring engine. Caching a lookup or badge response must never create trust, hide warnings, or bypass provider/rule evaluation once a fresh scan result is stored. Cache durations should stay short until HIP has production cache invalidation and event-driven projection updates.
+
+Example configuration:
+
+```json
+{
+  "HipPerformance": {
+    "UseRedisOutputCacheWhenAvailable": true,
+    "PublicLookupCacheSeconds": 30,
+    "BadgeCacheSeconds": 60,
+    "SafetyCacheSeconds": 10,
+    "SiteSafetyCacheSeconds": 15,
+    "PublicScanRequestsPerMinute": 60,
+    "PublicFeedbackRequestsPerMinute": 30,
+    "IdentityRequestsPerMinute": 10
+  }
+}
+```
+
+Aspire owns the local Redis resource. `HIP.AppHost` passes that Redis reference to both `hip-api` and `hip-web`, so Visual Studio/Aspire local runs can exercise distributed cache wiring without manual Docker commands.
+
 ## Dashboard Aggregation
 
 The dashboard can still compute directly from stored scan history for MVP usage. At scale, dashboard cards should read a pre-aggregated summary updated as scans are stored or workers finish slow-path enrichment.
@@ -110,4 +143,5 @@ Allowed scalability keys use hashes:
 3. Add an outbox processor that dispatches scan/provider/review events with inbox idempotency.
 4. Persist provider evidence as first-class records for dashboard visibility.
 5. Move dashboard cards to pre-aggregated summaries for large datasets.
-6. Add production rate limits keyed by API key, user, device, or privacy-safe client hash.
+6. Add distributed Redis-backed rate-limit stores when HIP moves beyond single-node MVP deployments.
+7. Add EF Core compiled queries, projections, and indexes for dashboard and public lookup read models.

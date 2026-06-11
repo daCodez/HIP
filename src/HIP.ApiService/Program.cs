@@ -1,8 +1,10 @@
+using System.IO.Compression;
 using System.Globalization;
 using System.Threading.RateLimiting;
 using HIP.Application;
 using HIP.Application.Browser;
 using HIP.Application.Identity;
+using HIP.Application.Performance;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
@@ -11,7 +13,9 @@ using HIP.Application.SiteSafety;
 using HIP.Domain.Reputation;
 using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.ResponseCompression;
 
 var builder = WebApplication.CreateBuilder(args);
 const string PublicScanPolicy = "PublicScanPolicy";
@@ -19,10 +23,28 @@ const string PublicFeedbackPolicy = "PublicFeedbackPolicy";
 const string HipInstanceIdHeader = "X-HIP-Instance-Id";
 
 builder.AddServiceDefaults();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(new DevelopmentHipCryptoProviderOptions(builder.Environment.IsDevelopment()));
 builder.Services.AddHipApplication();
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
+builder.Services.AddOptions<HipPerformanceOptions>()
+    .Bind(builder.Configuration.GetSection(HipPerformanceOptions.SectionName))
+    .Validate(ValidateHipPerformanceOptions, "HIP performance options must use positive cache durations and request limits.")
+    .ValidateOnStart();
+if (ShouldUseRedisOutputCache(builder.Configuration))
+{
+    builder.AddRedisOutputCache("redis");
+}
+builder.Services.AddOutputCache(options => ConfigureOutputCachePolicies(options, builder.Configuration));
+builder.Services.AddResponseCompression(options =>
+{
+    // Compress public JSON responses while keeping payload contents privacy-safe and unchanged.
+    options.EnableForHttps = true;
+    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["application/json", "application/javascript"]);
+});
+builder.Services.Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
+builder.Services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("PublicHipReadOnly", policy =>
@@ -32,21 +54,12 @@ builder.Services.AddCors(options =>
 });
 builder.Services.AddRateLimiter(options =>
 {
+    var performance = BindHipPerformanceOptions(builder.Configuration);
     // Baseline public limits reduce unauthenticated scan/report abuse until HIP client signatures are introduced.
-    options.AddFixedWindowLimiter(PublicScanPolicy, limiter =>
-    {
-        limiter.PermitLimit = 60;
-        limiter.Window = TimeSpan.FromMinutes(1);
-        limiter.QueueLimit = 0;
-        limiter.AutoReplenishment = true;
-    });
-    options.AddFixedWindowLimiter(PublicFeedbackPolicy, limiter =>
-    {
-        limiter.PermitLimit = 30;
-        limiter.Window = TimeSpan.FromMinutes(1);
-        limiter.QueueLimit = 0;
-        limiter.AutoReplenishment = true;
-    });
+    options.AddPolicy(PublicScanPolicy, httpContext =>
+        CreateFixedWindowPartition(httpContext, "scan", performance.PublicScanRequestsPerMinute));
+    options.AddPolicy(PublicFeedbackPolicy, httpContext =>
+        CreateFixedWindowPartition(httpContext, "feedback", performance.PublicFeedbackRequestsPerMinute));
 });
 builder.Services.AddOpenApi();
 
@@ -64,7 +77,9 @@ if (ShouldUseHttpsRedirection(app))
     app.UseHttpsRedirection();
 }
 app.UseCors("PublicHipReadOnly");
+app.UseResponseCompression();
 app.UseRateLimiter();
+app.UseOutputCache();
 app.MapDefaultEndpoints();
 
 var publicApi = app.MapGroup("/api/v1/public");
@@ -85,7 +100,8 @@ publicApi.MapGet("/lookup/domain/{domain}", async (
         return Results.BadRequest(new { error = ex.Message });
     }
 })
-.WithName("PublicDomainLookup");
+.WithName("PublicDomainLookup")
+.CacheOutput(HipOutputCachePolicies.PublicLookup);
 
 publicApi.MapGet("/badge/domain/{domain}", async (
     string domain,
@@ -101,7 +117,8 @@ publicApi.MapGet("/badge/domain/{domain}", async (
         return Results.BadRequest(new { error = ex.Message });
     }
 })
-.WithName("PublicDomainBadge");
+.WithName("PublicDomainBadge")
+.CacheOutput(HipOutputCachePolicies.Badge);
 
 publicApi.MapPost("/feedback", async (
     ReputationFeedbackRequest feedback,
@@ -148,6 +165,98 @@ app.Run();
 /// </remarks>
 static bool ShouldUseHttpsRedirection(WebApplication app) =>
     !app.Environment.IsDevelopment();
+
+/// <summary>
+/// Determines whether Redis-backed output caching should be enabled for the API service.
+/// </summary>
+/// <param name="configuration">Application configuration that may include an Aspire Redis connection string.</param>
+/// <returns>True when Redis output caching is both configured and allowed by HIP performance options.</returns>
+static bool ShouldUseRedisOutputCache(IConfiguration configuration)
+{
+    var options = BindHipPerformanceOptions(configuration);
+    return options.UseRedisOutputCacheWhenAvailable && !string.IsNullOrWhiteSpace(configuration.GetConnectionString("redis"));
+}
+
+/// <summary>
+/// Configures named output-cache policies for public API reads.
+/// </summary>
+/// <param name="options">ASP.NET Core output-cache options.</param>
+/// <param name="configuration">Application configuration used to bind cache durations.</param>
+static void ConfigureOutputCachePolicies(OutputCacheOptions options, IConfiguration configuration)
+{
+    var performance = BindHipPerformanceOptions(configuration);
+    options.AddPolicy(HipOutputCachePolicies.PublicLookup, policy =>
+        policy.Expire(TimeSpan.FromSeconds(performance.PublicLookupCacheSeconds)).Tag("hip-public-lookup"));
+    options.AddPolicy(HipOutputCachePolicies.Badge, policy =>
+        policy.Expire(TimeSpan.FromSeconds(performance.BadgeCacheSeconds)).Tag("hip-badge"));
+    options.AddPolicy(HipOutputCachePolicies.Safety, policy =>
+        policy.Expire(TimeSpan.FromSeconds(performance.SafetyCacheSeconds)).Tag("hip-safety"));
+    options.AddPolicy(HipOutputCachePolicies.SiteSafety, policy =>
+        policy.Expire(TimeSpan.FromSeconds(performance.SiteSafetyCacheSeconds)).Tag("hip-site-safety"));
+}
+
+/// <summary>
+/// Binds HIP performance options with safe defaults for local API runs.
+/// </summary>
+/// <param name="configuration">Application configuration.</param>
+/// <returns>Bound performance options.</returns>
+static HipPerformanceOptions BindHipPerformanceOptions(IConfiguration configuration)
+{
+    var options = new HipPerformanceOptions();
+    configuration.GetSection(HipPerformanceOptions.SectionName).Bind(options);
+    return options;
+}
+
+/// <summary>
+/// Validates performance options before the API accepts traffic.
+/// </summary>
+/// <param name="options">Bound performance options.</param>
+/// <returns>True when all durations and request limits are positive.</returns>
+static bool ValidateHipPerformanceOptions(HipPerformanceOptions options) =>
+    options.PublicLookupCacheSeconds > 0
+    && options.BadgeCacheSeconds > 0
+    && options.SafetyCacheSeconds > 0
+    && options.SiteSafetyCacheSeconds > 0
+    && options.PublicScanRequestsPerMinute > 0
+    && options.PublicFeedbackRequestsPerMinute > 0
+    && options.IdentityRequestsPerMinute > 0;
+
+/// <summary>
+/// Creates a fixed-window rate-limit partition from privacy-safe client identifiers.
+/// </summary>
+/// <param name="httpContext">Current HTTP request context.</param>
+/// <param name="policyPrefix">Policy prefix used to keep budgets separate.</param>
+/// <param name="permitLimit">Requests allowed per minute for this partition.</param>
+/// <returns>Partitioned fixed-window limiter for the request.</returns>
+static RateLimitPartition<string> CreateFixedWindowPartition(HttpContext httpContext, string policyPrefix, int permitLimit) =>
+    RateLimitPartition.GetFixedWindowLimiter(
+        ResolveRateLimitPartitionKey(httpContext, policyPrefix),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = permitLimit,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+
+/// <summary>
+/// Resolves a bounded rate-limit key from API key, signer, browser instance, domain, or client IP.
+/// </summary>
+/// <param name="httpContext">Current HTTP request context.</param>
+/// <param name="policyPrefix">Policy prefix used to isolate named limits.</param>
+/// <returns>Privacy-safe rate-limit partition key.</returns>
+static string ResolveRateLimitPartitionKey(HttpContext httpContext, string policyPrefix)
+{
+    var candidate =
+        httpContext.Request.Headers["X-HIP-API-Key"].FirstOrDefault()
+        ?? httpContext.Request.Headers["X-HIP-Signer"].FirstOrDefault()
+        ?? httpContext.Request.Headers[HipInstanceIdHeader].FirstOrDefault()
+        ?? httpContext.Request.RouteValues["domain"]?.ToString()
+        ?? httpContext.Connection.RemoteIpAddress?.ToString()
+        ?? "anonymous";
+
+    return $"{policyPrefix}:{NormalizeSettingsScopeSegment(candidate)}";
+}
 
 /// <summary>
 /// Resolves the provider settings scope from a privacy-safe browser instance id.

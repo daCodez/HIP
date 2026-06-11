@@ -22,6 +22,8 @@ var apiService = builder.AddProject<Projects.HIP_ApiService>("hip-api", launchPr
 builder.AddProject<Projects.HIP_Web>("hip-web", launchProfileName: "http")
     .WithExternalHttpEndpoints()
     .WithReference(apiService)
-    .WaitFor(apiService);
+    .WaitFor(apiService)
+    .WithReference(redis)
+    .WaitFor(redis);
 
 builder.Build().Run();
