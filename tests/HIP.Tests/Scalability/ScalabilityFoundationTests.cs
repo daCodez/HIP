@@ -1,6 +1,7 @@
 using HIP.Application.Browser;
 using HIP.Application.Reporting;
 using HIP.Application.Scalability;
+using HIP.Application.Security;
 using HIP.Application.SiteSafety;
 using NUnit.Framework;
 
@@ -200,6 +201,132 @@ public sealed class ScalabilityFoundationTests
     }
 
     /// <summary>
+    /// Verifies browser scan result writes can be consumed through a separate query boundary.
+    /// </summary>
+    [Test]
+    public async Task Browser_scan_write_and_query_boundaries_are_separate()
+    {
+        var service = new BrowserScanResultService(new InMemoryBrowserScanResultRepository(), new Sha256PrivacyHashingService());
+        IBrowserScanResultWriteService writer = service;
+        IBrowserScanResultQueryService query = service;
+
+        await writer.SaveAsync(ValidRequest(), CancellationToken.None);
+        var result = await query.GetLatestByDomainAsync("example.com", CancellationToken.None);
+
+        Assert.That(result!.Domain, Is.EqualTo("example.com"));
+    }
+
+    /// <summary>
+    /// Verifies saving a browser scan can emit a retry-safe outbox event without raw URLs.
+    /// </summary>
+    [Test]
+    public async Task Browser_scan_save_writes_privacy_safe_outbox_event()
+    {
+        var outbox = new InMemoryOutboxEventRepository();
+        var service = new BrowserScanResultService(
+            new InMemoryBrowserScanResultRepository(),
+            new Sha256PrivacyHashingService(),
+            new InMemoryScanResultCache(),
+            new InMemoryDashboardScanAggregateStore(),
+            new DefaultPrivacyStoragePolicy(),
+            new OutboxEventWriter(outbox));
+
+        await service.SaveAsync(ValidRequest(), CancellationToken.None);
+        var pending = await outbox.ListPendingAsync(10, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pending.Single().EventType, Is.EqualTo("BrowserScanResultStored"));
+            Assert.That(pending.Single().PayloadJson, Does.Contain("example.com"));
+            Assert.That(pending.Single().PayloadJson, Does.Not.Contain("not-stored"));
+            Assert.That(pending.Single().PrivacyLevel, Is.EqualTo(HipDurableEventPrivacyLevel.HashedSensitive));
+        });
+    }
+
+    /// <summary>
+    /// Verifies inbox processing records prevent duplicate event consumption.
+    /// </summary>
+    [Test]
+    public async Task Inbox_rejects_duplicate_event_for_same_consumer()
+    {
+        var inbox = new InMemoryInboxEventRepository();
+
+        var first = await inbox.TryStartProcessingAsync("evt:1", "dashboard-projection", CancellationToken.None);
+        var second = await inbox.TryStartProcessingAsync("evt:1", "dashboard-projection", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first, Is.EqualTo(true));
+            Assert.That(second, Is.EqualTo(false));
+        });
+    }
+
+    /// <summary>
+    /// Verifies privacy storage policy blocks raw URL and private metadata storage.
+    /// </summary>
+    [Test]
+    public void Privacy_storage_policy_blocks_private_fields_and_raw_urls()
+    {
+        var policy = new DefaultPrivacyStoragePolicy();
+
+        var metadataDecision = policy.CanStoreMetadataKey("password");
+        var urlDecision = policy.CanStoreRawUrl("BrowserScanResult");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(metadataDecision.Allowed, Is.EqualTo(false));
+            Assert.That(urlDecision.Allowed, Is.EqualTo(false));
+        });
+    }
+
+    /// <summary>
+    /// Verifies external provider submission policy blocks full URL submissions unless explicitly allowed globally.
+    /// </summary>
+    [Test]
+    public void Provider_submission_policy_rejects_full_url_when_global_policy_blocks_it()
+    {
+        var policy = new DefaultProviderSubmissionPolicy();
+        var context = EvidenceContext();
+        var options = new ExternalSiteEvidenceOptions
+        {
+            ExternalProvidersEnabled = true,
+            AllowFullUrlChecks = false
+        };
+        var provider = new ExternalProviderOptions
+        {
+            Enabled = true,
+            AllowFullUrl = true
+        };
+
+        var decision = policy.CanSubmit("Example Provider", context, options, provider);
+
+        Assert.That(decision.Allowed, Is.EqualTo(false));
+    }
+
+    /// <summary>
+    /// Verifies circuit breaker isolation opens after repeated provider failures.
+    /// </summary>
+    [Test]
+    public async Task External_provider_circuit_opens_after_repeated_failures()
+    {
+        var policy = new InMemoryExternalProviderResiliencePolicy();
+
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.ThrowsAsync<InvalidOperationException>(() =>
+                policy.ExecuteAsync<string>(
+                    "FailingProvider",
+                    _ => throw new InvalidOperationException("safe test failure"),
+                    CancellationToken.None));
+        }
+
+        var exception = Assert.ThrowsAsync<ExternalProviderCircuitOpenException>(() =>
+            policy.ExecuteAsync("FailingProvider", _ => Task.FromResult("ok"), CancellationToken.None));
+
+        Assert.That(exception!.Message, Does.Contain("temporarily isolated"));
+    }
+
+    /// <summary>
     /// Creates a valid browser scan result save request.
     /// </summary>
     /// <returns>Valid save request.</returns>
@@ -221,6 +348,18 @@ public sealed class ScalabilityFoundationTests
                 ["pluginVersion"] = "0.1.0-dev",
                 ["downloadCandidates"] = "0"
             });
+
+    /// <summary>
+    /// Creates a privacy-safe provider evidence context for policy tests.
+    /// </summary>
+    /// <returns>Evidence context.</returns>
+    private static SiteSafetyEvidenceContext EvidenceContext() =>
+        new(
+            new Uri("https://example.com/path"),
+            "example.com",
+            "sha256:" + new string('9', 64),
+            new SiteSafetyObservedSignals(),
+            DateTimeOffset.UtcNow);
 
     /// <summary>
     /// Creates a stored scan result for cache and aggregate tests.

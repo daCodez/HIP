@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using HIP.Application.Security;
 
 namespace HIP.Application.SiteSafety;
 
@@ -664,8 +665,13 @@ public sealed class BrowserObservedSignalProvider : ISiteSafetyEvidenceProvider
 /// </summary>
 public abstract class ExternalSiteEvidenceProviderBase(
     IExternalSiteEvidenceCache cache,
-    ExternalSiteEvidenceOptions options) : IExternalSiteEvidenceProvider
+    ExternalSiteEvidenceOptions options,
+    IExternalProviderResiliencePolicy? resiliencePolicy = null,
+    IProviderSubmissionPolicy? submissionPolicy = null) : IExternalSiteEvidenceProvider
 {
+    private readonly IExternalProviderResiliencePolicy resiliencePolicy = resiliencePolicy ?? new InMemoryExternalProviderResiliencePolicy();
+    private readonly IProviderSubmissionPolicy submissionPolicy = submissionPolicy ?? new DefaultProviderSubmissionPolicy();
+
     /// <summary>
     /// Gets external provider options shared by concrete providers.
     /// </summary>
@@ -692,20 +698,19 @@ public abstract class ExternalSiteEvidenceProviderBase(
         }
 
         var activeOptions = Options;
-        if (!activeOptions.ExternalProvidersEnabled)
+        var decision = this.submissionPolicy.CanSubmit(ProviderName, context, activeOptions, ProviderOptions);
+        if (!decision.Allowed)
         {
-            return EmptyDisabledEvidence(context);
-        }
-
-        if (!ProviderOptions.Enabled)
-        {
-            return EmptyProviderDisabledEvidence(context);
+            return EmptyPolicyBlockedEvidence(context, decision.Reason);
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(activeOptions.ProviderTimeout);
 
-        var evidence = await CollectExternalEvidenceAsync(context, timeout.Token);
+        var evidence = await this.resiliencePolicy.ExecuteAsync(
+            ProviderName,
+            token => CollectExternalEvidenceAsync(context, token),
+            timeout.Token);
         cache.Store(evidence);
         return evidence;
     }
@@ -718,7 +723,7 @@ public abstract class ExternalSiteEvidenceProviderBase(
     /// <summary>
     /// Returns an empty evidence record explaining that the external provider is disabled.
     /// </summary>
-    private SiteSafetyEvidence EmptyDisabledEvidence(SiteSafetyEvidenceContext context) =>
+    private SiteSafetyEvidence EmptyPolicyBlockedEvidence(SiteSafetyEvidenceContext context, string reason) =>
         new(
             ProviderName,
             ProviderType,
@@ -728,26 +733,8 @@ public abstract class ExternalSiteEvidenceProviderBase(
             [],
             Confidence: 0,
             context.CheckedAtUtc,
-            context.CheckedAtUtc.Add(Options.DefaultCacheDuration),
-            ["External provider disabled by configuration."],
-            IsAuthoritativeForRisk: false,
-            IsAuthoritativeForTrust: false);
-
-    /// <summary>
-    /// Returns an empty evidence record explaining that this named provider is disabled.
-    /// </summary>
-    private SiteSafetyEvidence EmptyProviderDisabledEvidence(SiteSafetyEvidenceContext context) =>
-        new(
-            ProviderName,
-            ProviderType,
-            SiteSafetyEvidenceTargetType.Domain,
-            context.Domain,
-            context.UrlHash,
-            [],
-            Confidence: 0,
-            context.CheckedAtUtc,
-            context.CheckedAtUtc.Add(ProviderOptions.CacheDuration ?? options.DefaultCacheDuration),
-            [$"{ProviderName} disabled by provider configuration."],
+            context.CheckedAtUtc.Add(ProviderOptions.CacheDuration ?? Options.DefaultCacheDuration),
+            [reason],
             IsAuthoritativeForRisk: false,
             IsAuthoritativeForTrust: false);
 }
@@ -774,8 +761,10 @@ public sealed class SslLabsSiteEvidenceProvider : ExternalSiteEvidenceProviderBa
     public SslLabsSiteEvidenceProvider(
         IExternalSiteEvidenceCache cache,
         ExternalSiteEvidenceOptions options,
-        HttpClient? httpClient = null)
-        : base(cache, options)
+        HttpClient? httpClient = null,
+        IExternalProviderResiliencePolicy? resiliencePolicy = null,
+        IProviderSubmissionPolicy? submissionPolicy = null)
+        : base(cache, options, resiliencePolicy, submissionPolicy)
     {
         this.httpClient = httpClient ?? new HttpClient();
     }
@@ -1024,7 +1013,9 @@ public sealed class SslLabsSiteEvidenceProvider : ExternalSiteEvidenceProviderBa
 /// </remarks>
 public sealed class GoogleWebRiskSiteEvidenceProvider(
     IExternalSiteEvidenceCache cache,
-    ExternalSiteEvidenceOptions options) : ExternalSiteEvidenceProviderBase(cache, options)
+    ExternalSiteEvidenceOptions options,
+    IExternalProviderResiliencePolicy? resiliencePolicy = null,
+    IProviderSubmissionPolicy? submissionPolicy = null) : ExternalSiteEvidenceProviderBase(cache, options, resiliencePolicy, submissionPolicy)
 {
     /// <inheritdoc />
     public override string ProviderName => "Google Web Risk / Safe Browsing";
@@ -1068,7 +1059,9 @@ public sealed class GoogleWebRiskSiteEvidenceProvider(
 /// </remarks>
 public sealed class VirusTotalSiteEvidenceProvider(
     IExternalSiteEvidenceCache cache,
-    ExternalSiteEvidenceOptions options) : ExternalSiteEvidenceProviderBase(cache, options)
+    ExternalSiteEvidenceOptions options,
+    IExternalProviderResiliencePolicy? resiliencePolicy = null,
+    IProviderSubmissionPolicy? submissionPolicy = null) : ExternalSiteEvidenceProviderBase(cache, options, resiliencePolicy, submissionPolicy)
 {
     /// <inheritdoc />
     public override string ProviderName => "VirusTotal";

@@ -1,13 +1,14 @@
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
 using HIP.Application.Scalability;
+using HIP.Application.Security;
 
 namespace HIP.Application.Browser;
 
 /// <summary>
 /// Validates and stores browser plugin scan summaries while preserving HIP privacy boundaries.
 /// </summary>
-public sealed class BrowserScanResultService : IBrowserScanResultService
+public sealed class BrowserScanResultService : IBrowserScanResultService, IBrowserScanResultWriteService, IBrowserScanResultQueryService
 {
     private const int MaxReasonLength = 300;
     private const int MaxMetadataKeyLength = 80;
@@ -18,19 +19,8 @@ public sealed class BrowserScanResultService : IBrowserScanResultService
     private readonly IPrivacyHashingService hashingService;
     private readonly IScanResultCache scanResultCache;
     private readonly IDashboardScanAggregateStore dashboardAggregateStore;
-
-    private static readonly HashSet<string> PrivateMetadataKeys = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "pageText",
-        "bodyText",
-        "formContents",
-        "password",
-        "username",
-        "token",
-        "privateMessage",
-        "emailBody",
-        "chatLog"
-    };
+    private readonly IPrivacyStoragePolicy privacyStoragePolicy;
+    private readonly IOutboxEventWriter? outboxEventWriter;
 
     /// <summary>
     /// Creates the service with no-op scalability adapters for isolated tests or simple single-node hosts.
@@ -40,7 +30,13 @@ public sealed class BrowserScanResultService : IBrowserScanResultService
     public BrowserScanResultService(
         IBrowserScanResultRepository repository,
         IPrivacyHashingService hashingService)
-        : this(repository, hashingService, new InMemoryScanResultCache(), new InMemoryDashboardScanAggregateStore())
+        : this(
+            repository,
+            hashingService,
+            new InMemoryScanResultCache(),
+            new InMemoryDashboardScanAggregateStore(),
+            new DefaultPrivacyStoragePolicy(),
+            null)
     {
     }
 
@@ -56,11 +52,33 @@ public sealed class BrowserScanResultService : IBrowserScanResultService
         IPrivacyHashingService hashingService,
         IScanResultCache scanResultCache,
         IDashboardScanAggregateStore dashboardAggregateStore)
+        : this(repository, hashingService, scanResultCache, dashboardAggregateStore, new DefaultPrivacyStoragePolicy(), null)
+    {
+    }
+
+    /// <summary>
+    /// Creates the service with explicit scalability adapters, storage policy, and optional outbox writer.
+    /// </summary>
+    /// <param name="repository">Repository used for durable scan result storage.</param>
+    /// <param name="hashingService">Privacy hashing service used when clients send raw page URLs.</param>
+    /// <param name="scanResultCache">Hot-path cache for latest domain scan summaries.</param>
+    /// <param name="dashboardAggregateStore">Pre-aggregated dashboard counter store.</param>
+    /// <param name="privacyStoragePolicy">Policy that decides which metadata can be stored.</param>
+    /// <param name="outboxEventWriter">Optional durable outbox writer used for retry-safe downstream workflows.</param>
+    public BrowserScanResultService(
+        IBrowserScanResultRepository repository,
+        IPrivacyHashingService hashingService,
+        IScanResultCache scanResultCache,
+        IDashboardScanAggregateStore dashboardAggregateStore,
+        IPrivacyStoragePolicy privacyStoragePolicy,
+        IOutboxEventWriter? outboxEventWriter = null)
     {
         this.repository = repository;
         this.hashingService = hashingService;
         this.scanResultCache = scanResultCache;
         this.dashboardAggregateStore = dashboardAggregateStore;
+        this.privacyStoragePolicy = privacyStoragePolicy;
+        this.outboxEventWriter = outboxEventWriter;
     }
 
     /// <summary>
@@ -100,6 +118,7 @@ public sealed class BrowserScanResultService : IBrowserScanResultService
         await repository.SaveAsync(record, cancellationToken);
         await scanResultCache.StoreAsync(record, HotPathCacheDuration, cancellationToken);
         await dashboardAggregateStore.UpdateAsync(record, cancellationToken);
+        await EnqueueScanStoredEventAsync(record, cancellationToken);
         return new BrowserScanResultSaveResponse(true, domain, now);
     }
 
@@ -120,6 +139,18 @@ public sealed class BrowserScanResultService : IBrowserScanResultService
 
         var record = await repository.GetLatestByDomainAsync(normalizedDomain, cancellationToken);
         return record is null ? null : BrowserScanResultResponse.From(record);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<BrowserScanResultResponse>> ListRecentAsync(int maxCount, CancellationToken cancellationToken)
+    {
+        var boundedMax = Math.Clamp(maxCount, 0, 200);
+        var records = await repository.ListAsync(cancellationToken);
+        return records
+            .OrderByDescending(record => record.LastCheckedUtc)
+            .Take(boundedMax)
+            .Select(BrowserScanResultResponse.From)
+            .ToArray();
     }
 
     /// <summary>
@@ -227,7 +258,7 @@ public sealed class BrowserScanResultService : IBrowserScanResultService
     /// </summary>
     /// <param name="metadata">Client-provided metadata dictionary.</param>
     /// <returns>Sanitized metadata dictionary.</returns>
-    private static IReadOnlyDictionary<string, string> ValidateMetadata(IReadOnlyDictionary<string, string>? metadata)
+    private IReadOnlyDictionary<string, string> ValidateMetadata(IReadOnlyDictionary<string, string>? metadata)
     {
         if (metadata is null || metadata.Count == 0)
         {
@@ -238,9 +269,10 @@ public sealed class BrowserScanResultService : IBrowserScanResultService
         foreach (var (key, value) in metadata.Take(20))
         {
             var trimmedKey = RequiredText(key, "Metadata keys cannot be empty.");
-            if (PrivateMetadataKeys.Contains(trimmedKey))
+            var decision = privacyStoragePolicy.CanStoreMetadataKey(trimmedKey);
+            if (!decision.Allowed)
             {
-                throw new ArgumentException($"Metadata field '{trimmedKey}' is not privacy-safe.");
+                throw new ArgumentException(decision.Reason);
             }
 
             if (trimmedKey.Length > MaxMetadataKeyLength)
@@ -248,13 +280,45 @@ public sealed class BrowserScanResultService : IBrowserScanResultService
                 throw new ArgumentException("Metadata keys are too long.");
             }
 
-            var safeValue = value?.Trim() ?? string.Empty;
-            result[trimmedKey] = safeValue.Length > MaxMetadataValueLength
-                ? safeValue[..MaxMetadataValueLength]
-                : safeValue;
+            result[trimmedKey] = privacyStoragePolicy.SanitizeMetadataValue(value, MaxMetadataValueLength);
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Emits a privacy-safe outbox event so downstream scan history, dashboard, and review workers can retry safely.
+    /// </summary>
+    /// <param name="record">Saved browser scan record.</param>
+    /// <param name="cancellationToken">Token used to cancel outbox persistence.</param>
+    private async Task EnqueueScanStoredEventAsync(BrowserScanResultRecord record, CancellationToken cancellationToken)
+    {
+        if (outboxEventWriter is null)
+        {
+            return;
+        }
+
+        var durableEvent = HipDurableEventFactory.Create(
+            "BrowserScanResultStored",
+            "BrowserScanResult",
+            record.ScanResultId,
+            new
+            {
+                record.Domain,
+                record.PageUrlHash,
+                record.Score,
+                record.Status,
+                record.RiskLevel,
+                record.RecommendedAction,
+                record.LinksScanned,
+                record.RiskyLinksFound,
+                record.LastCheckedUtc,
+                PluginVersion = record.PrivacySafeMetadata.TryGetValue("pluginVersion", out var version) ? version : null,
+                SignalHash = record.PrivacySafeMetadata.TryGetValue("signalHash", out var signalHash) ? signalHash : null
+            },
+            HipDurableEventPrivacyLevel.HashedSensitive);
+
+        await outboxEventWriter.EnqueueAsync(durableEvent, cancellationToken);
     }
 
     /// <summary>

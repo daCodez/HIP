@@ -4,6 +4,7 @@ using HIP.Application.Reporting;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Rules;
+using HIP.Application.Scalability;
 using HIP.Application.SelfHealing;
 using HIP.Application.SiteSafety;
 using HIP.Application.Simulation;
@@ -53,6 +54,8 @@ public static class DependencyInjection
         services.AddScoped<IAdminSiteSafetyRuleRepository, EfAdminSiteSafetyRuleRepository>();
         services.AddScoped<IWeightedFeedbackRepository, EfWeightedFeedbackRepository>();
         services.AddScoped<IAdminReviewQueueRepository, EfAdminReviewQueueRepository>();
+        services.AddScoped<IOutboxEventRepository, EfOutboxEventRepository>();
+        services.AddScoped<IInboxEventRepository, EfInboxEventRepository>();
 
         return services;
     }

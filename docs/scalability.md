@@ -51,15 +51,32 @@ HIP must not call SSL Labs, Google Web Risk, VirusTotal, or similar providers fo
 
 The application layer now includes:
 
+- `IBrowserScanResultWriteService`
+- `IBrowserScanResultQueryService`
 - `IScanResultCache`
 - `IScanIngestionQueue`
 - `IScanResultDedupeService`
 - `IDashboardScanAggregateStore`
 - `ISubmissionRateLimiter`
+- `IOutboxEventRepository`
+- `IInboxEventRepository`
 
-The current implementations are in-memory development adapters. Production should replace them with Redis and a durable queue without changing scanner or dashboard callers.
+The current cache, queue, dedupe, and aggregate implementations are in-memory development adapters. Production should replace them with Redis and a durable queue without changing scanner or dashboard callers.
+
+Scan writes and dashboard/public lookup reads should stay separated. `IBrowserScanResultWriteService` is the scan ingestion boundary. `IBrowserScanResultQueryService` is the read boundary for public lookup and dashboards, and can later point at Redis, PostgreSQL projections, or materialized views.
+
+HIP also has outbox/inbox interfaces so scan, provider, and review events can become durable and retry-safe. The EF-backed MVP repositories use HIP's encrypted record store; production workers should process pending outbox events and use inbox records for idempotency.
 
 Provider evidence already has expiry through `IExternalSiteEvidenceCache`. External evidence should be reused until expired, and provider failures should lower confidence or create review signals without creating trust or danger by themselves.
+
+External providers run through provider policy and resilience objects:
+
+- `IProviderSubmissionPolicy` decides whether a provider may receive the current target.
+- `IExternalProviderResiliencePolicy` isolates provider calls with circuit breaker and bulkhead behavior.
+- `IPrivacyStoragePolicy` centralizes storage decisions for raw URLs and private metadata fields.
+- `IFeedbackWeightingPolicy` keeps feedback as weighted evidence, not voting.
+
+These policies are intentionally small and strongly typed. HIP should prefer policy objects and specification/rule objects over long conditional chains in scan and scoring services.
 
 ## Dashboard Aggregation
 
@@ -88,9 +105,9 @@ Allowed scalability keys use hashes:
 
 ## Next Steps
 
-1. Add PostgreSQL EF provider configuration beside SQLite without removing SQLite dev mode.
-2. Replace in-memory scan cache and dedupe with Redis adapters.
-3. Add a durable queue adapter and worker project for slow-path provider checks.
+1. Replace in-memory scan cache and dedupe with Redis adapters.
+2. Add a durable queue adapter and worker project for slow-path provider checks.
+3. Add an outbox processor that dispatches scan/provider/review events with inbox idempotency.
 4. Persist provider evidence as first-class records for dashboard visibility.
 5. Move dashboard cards to pre-aggregated summaries for large datasets.
 6. Add production rate limits keyed by API key, user, device, or privacy-safe client hash.

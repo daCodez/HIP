@@ -79,6 +79,9 @@ public static class DependencyInjection
         services.AddScoped<IRiskFindingReportRepository, InMemoryRiskFindingReportRepository>();
         services.AddScoped<IRiskFindingIngestionService, RiskFindingIngestionService>();
         services.TryAddSingleton(new PrivacyHashingOptions());
+        services.TryAddSingleton<IPrivacyStoragePolicy, DefaultPrivacyStoragePolicy>();
+        services.TryAddSingleton<IProviderSubmissionPolicy, DefaultProviderSubmissionPolicy>();
+        services.TryAddSingleton<IFeedbackWeightingPolicy, DefaultFeedbackWeightingPolicy>();
         services.AddSingleton<IPrivacyHashingService, Sha256PrivacyHashingService>();
         services.AddSingleton<IDuplicateSubmissionGuard, InMemoryDuplicateSubmissionGuard>();
         services.AddSingleton<IScanResultCache, InMemoryScanResultCache>();
@@ -86,6 +89,9 @@ public static class DependencyInjection
         services.AddSingleton<IScanResultDedupeService, InMemoryScanResultDedupeService>();
         services.AddSingleton<IDashboardScanAggregateStore, InMemoryDashboardScanAggregateStore>();
         services.AddSingleton<ISubmissionRateLimiter, DevelopmentSubmissionRateLimiter>();
+        services.AddSingleton<IOutboxEventRepository, InMemoryOutboxEventRepository>();
+        services.AddSingleton<IInboxEventRepository, InMemoryInboxEventRepository>();
+        services.AddScoped<IOutboxEventWriter, OutboxEventWriter>();
         services.AddSingleton<IReportRetentionPolicyService, ReportRetentionPolicyService>();
         services.AddSingleton<IPrivacySafeReportService, PrivacySafeReportService>();
         services.AddSingleton<IHipCryptoProvider, DevelopmentHipCryptoProvider>();
@@ -100,6 +106,8 @@ public static class DependencyInjection
         services.AddScoped<IBrowserPluginService, BrowserPluginService>();
         services.AddScoped<IBrowserScanResultRepository, InMemoryBrowserScanResultRepository>();
         services.AddScoped<IBrowserScanResultService, BrowserScanResultService>();
+        services.AddScoped<IBrowserScanResultWriteService>(provider => (BrowserScanResultService)provider.GetRequiredService<IBrowserScanResultService>());
+        services.AddScoped<IBrowserScanResultQueryService>(provider => (BrowserScanResultService)provider.GetRequiredService<IBrowserScanResultService>());
         services.AddScoped<IAdminScanDetailService, AdminScanDetailService>();
         services.AddScoped<ISiteSafetyScanner, SiteSafetyScanner>();
         services.AddScoped<ISiteSafetyScanResultStorageService, SiteSafetyScanResultStorageService>();
@@ -115,6 +123,7 @@ public static class DependencyInjection
         services.AddSingleton<IExternalSiteEvidenceCache, InMemoryExternalSiteEvidenceCache>();
         services.AddSingleton(new ExternalSiteEvidenceOptions());
         services.AddSingleton<IExternalSiteEvidenceSettingsStore, InMemoryExternalSiteEvidenceSettingsStore>();
+        services.AddSingleton<IExternalProviderResiliencePolicy, InMemoryExternalProviderResiliencePolicy>();
         services.AddScoped<ISiteSafetyEvidenceProvider, BrowserObservedSignalProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, WeightedFeedbackSiteSafetyEvidenceProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, AdminReviewEvidenceProvider>();
