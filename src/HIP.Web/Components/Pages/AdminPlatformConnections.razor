@@ -1,4 +1,7 @@
 @page "/admin/platforms"
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@rendermode InteractiveServer
+@inject IAdminDashboardService DashboardService
 
 <PageTitle>HIP Platform Connections</PageTitle>
 
@@ -7,45 +10,77 @@
         <h1>Platform Connections</h1>
         <p>Manage platforms that HIP monitors for threats.</p>
     </div>
-    <button class="hip-primary-action" type="button">+ Add Platform</button>
+    <button class="hip-primary-action" type="button" disabled>+ Add Platform</button>
 </section>
 
-<section class="hip-card-row three">
-    <article class="hip-mini-stat good"><strong>4</strong><span>Connected</span></article>
-    <article class="hip-mini-stat"><strong>3</strong><span>Verified</span></article>
-    <article class="hip-mini-stat"><strong>2,909</strong><span>Messages Scanned</span></article>
-</section>
+@if (_summary is null)
+{
+    <section class="hip-panel padded narrow">
+        <h2>Loading platform status</h2>
+        <p>HIP is reading connected data sources.</p>
+    </section>
+}
+else
+{
+    <section class="hip-card-row three">
+        <article class="hip-mini-stat good"><strong>1</strong><span>Connected Client Type</span></article>
+        <article class="hip-mini-stat"><strong>@CardValue("totalScans")</strong><span>Browser Scans</span></article>
+        <article class="hip-mini-stat"><strong>0</strong><span>Message Platforms</span></article>
+    </section>
 
-<section class="hip-stack">
-    <h2>Connected (4)</h2>
-    @foreach (var platform in Platforms)
-    {
+    <section class="hip-stack">
+        <h2>Connected Sources</h2>
         <article class="hip-platform-row">
-            <span class="platform-avatar">@platform.Initials</span>
+            <span class="platform-avatar">BP</span>
             <div>
-                <h3>@platform.Name <span class="hip-pill good">@platform.Verification</span> <span class="hip-pill good">active</span></h3>
-                <p>@platform.Scanned messages scanned · Last sync: @platform.Sync</p>
+                <h3>Browser Plugin <span class="hip-pill good">Connected</span> <span class="hip-pill good">active</span></h3>
+                <p>@CardValue("totalScans") stored privacy-safe scan(s) · Last scan: @LatestScanLabel()</p>
                 <div>
-                    @foreach (var permission in platform.Permissions)
-                    {
-                        <small>@permission</small>
-                    }
+                    <small>Read current domain</small>
+                    <small>Scan links</small>
+                    <small>Submit URL hashes</small>
+                    <small>Route risky links to safety page</small>
                 </div>
             </div>
-            <button type="button">Sync</button>
-            <button class="danger" type="button">Disconnect</button>
         </article>
-    }
-</section>
+
+        <article class="hip-platform-row">
+            <span class="platform-avatar">--</span>
+            <div>
+                <h3>Messaging Platforms <span class="hip-pill caution">Not connected yet</span></h3>
+                <p>Second Life, Discord, Telegram, and email connectors do not have live connector records yet.</p>
+                <div>
+                    <small>No fake connected platform rows are shown.</small>
+                </div>
+            </div>
+        </article>
+    </section>
+}
 
 @code {
-    private static readonly PlatformRow[] Platforms =
-    [
-        new("SL", "Second Life", "Verified", "432", "1 min ago", ["Read public chat", "Read group chat", "Read private IMs", "Send HUD warnings"]),
-        new("DC", "Discord", "Verified", "884", "3 hr ago", ["Read messages", "Read DMs", "Flag content"]),
-        new("TG", "Telegram", "Unverified", "1,204", "5 min ago", ["Read messages", "Block senders"]),
-        new("EM", "Email", "Verified", "389", "6 hr ago", ["Read headers", "Scan links", "Flag senders"])
-    ];
+    private AdminDashboardSummary? _summary;
 
-    private sealed record PlatformRow(string Initials, string Name, string Verification, string Scanned, string Sync, string[] Permissions);
+    /// <summary>
+    /// Loads live platform-adjacent scan data.
+    /// </summary>
+    protected override async Task OnInitializedAsync() =>
+        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Gets a live dashboard card value.
+    /// </summary>
+    /// <param name="key">Dashboard card key.</param>
+    /// <returns>Card value or zero.</returns>
+    private int CardValue(string key) =>
+        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
+
+    /// <summary>
+    /// Returns a human-readable latest scan label from live dashboard cards.
+    /// </summary>
+    /// <returns>Latest scan label.</returns>
+    private string LatestScanLabel()
+    {
+        var latestScan = _summary?.Cards.FirstOrDefault(card => card.Key.Equals("latestScan", StringComparison.OrdinalIgnoreCase));
+        return latestScan is null || latestScan.IsPlaceholder ? "No scan data yet" : $"{latestScan.Value} minutes ago";
+    }
 }

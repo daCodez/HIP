@@ -1,4 +1,7 @@
 @page "/admin/message-shield"
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@rendermode InteractiveServer
+@inject IAdminDashboardService DashboardService
 
 <PageTitle>HIP Message Shield</PageTitle>
 
@@ -9,35 +12,90 @@
     </div>
 </section>
 
-<section class="hip-card-row four">
-    <article class="hip-mini-stat"><strong>14,829</strong><span>Messages Scanned</span></article>
-    <article class="hip-mini-stat hot"><strong>312</strong><span>Blocked</span></article>
-    <article class="hip-mini-stat"><strong>891</strong><span>Links Checked</span></article>
-    <article class="hip-mini-stat good"><strong>98%</strong><span>Privacy Safe</span></article>
-</section>
+@if (_summary is null)
+{
+    <section class="hip-panel padded narrow">
+        <h2>Loading live shield data</h2>
+        <p>HIP is reading connected scan and review signals.</p>
+    </section>
+}
+else
+{
+    <section class="hip-card-row four">
+        <article class="hip-mini-stat"><strong>0</strong><span>Messages Scanned</span></article>
+        <article class="hip-mini-stat hot"><strong>@CardValue("dangerousResults")</strong><span>Dangerous Scan Results</span></article>
+        <article class="hip-mini-stat"><strong>@CardValue("linksScanned")</strong><span>Links Checked</span></article>
+        <article class="hip-mini-stat good"><strong>@PrivacyModeLabel</strong><span>Privacy Mode</span></article>
+    </section>
 
-<section class="hip-panel padded narrow">
-    <h2>Active Protections</h2>
-    <div class="hip-protection-grid">
-        <span>Broken-up URL detection</span>
-        <span>Shortener risk checks</span>
-        <span>Sender reputation scoring</span>
-        <span>Identity signature checks</span>
-        <span>Safety page routing</span>
-        <span>Privacy-safe reporting</span>
-    </div>
-</section>
+    <section class="hip-panel padded narrow">
+        <h2>Connected Data</h2>
+        <div class="hip-protection-grid">
+            <span>Browser plugin scans: @CardValue("totalScans")</span>
+            <span>Risky links found: @CardValue("riskyLinksFound")</span>
+            <span>Open reviews: @CardValue("openReviewItems")</span>
+            <span>Feedback records: @CardValue("feedbackReceived")</span>
+            <span>Message platforms: not connected yet</span>
+            <span>No fake message rows generated</span>
+        </div>
+    </section>
 
-<section class="hip-panel padded narrow">
-    <h2>Recent Shield Events</h2>
-    <div class="hip-table-wrap">
-        <table class="hip-data-table">
-            <thead><tr><th>Sender</th><th>Platform</th><th>Reason</th><th>Action</th></tr></thead>
-            <tbody>
-                <tr><td>unknown_9821</td><td>Telegram</td><td>Broken-up phishing URL</td><td><span class="hip-pill danger">Blocked</span></td></tr>
-                <tr><td>deals_hunter99</td><td>Discord</td><td>Shortener to new domain</td><td><span class="hip-pill suspicious">Flagged</span></td></tr>
-                <tr><td>SL_GiftBot</td><td>Second Life</td><td>Reward scam wording</td><td><span class="hip-pill caution">Reviewing</span></td></tr>
-            </tbody>
-        </table>
-    </div>
-</section>
+    <section class="hip-panel padded narrow">
+        <h2>Recent Shield Events</h2>
+        @if (_summary.RecentThreats.Count == 0)
+        {
+            <p>No live message shield events yet. Message platform ingestion is not connected.</p>
+        }
+        else
+        {
+            <div class="hip-table-wrap">
+                <table class="hip-data-table">
+                    <thead><tr><th>Domain</th><th>Source</th><th>Reason</th><th>Action</th></tr></thead>
+                    <tbody>
+                        @foreach (var threat in _summary.RecentThreats)
+                        {
+                            <tr>
+                                <td>@threat.Domain</td>
+                                <td>@threat.Source</td>
+                                <td>@threat.ReasonSummary</td>
+                                <td><span class="hip-pill @Tone(threat.Severity)">@threat.SiteSafetyStatus</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    private const string PrivacyModeLabel = "Safe";
+    private AdminDashboardSummary? _summary;
+
+    /// <summary>
+    /// Loads live shield-adjacent scan and review signals.
+    /// </summary>
+    protected override async Task OnInitializedAsync() =>
+        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Gets a dashboard card value by key.
+    /// </summary>
+    /// <param name="key">Dashboard card key.</param>
+    /// <returns>Card value or zero when no live source exists.</returns>
+    private int CardValue(string key) =>
+        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
+
+    /// <summary>
+    /// Maps severity to a HIP visual tone.
+    /// </summary>
+    /// <param name="severity">Severity label.</param>
+    /// <returns>CSS tone.</returns>
+    private static string Tone(string severity) =>
+        severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
+        severity.Equals("High", StringComparison.OrdinalIgnoreCase)
+            ? "danger"
+            : severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)
+                ? "suspicious"
+                : "caution";
+}

@@ -1,47 +1,91 @@
 @page "/admin/alerts"
+@attribute [Authorize(Policy = AdminPolicies.CanReviewReports)]
+@rendermode InteractiveServer
+@inject IAdminDashboardService DashboardService
 
 <PageTitle>HIP Alert Center</PageTitle>
 
 <section class="hip-page-heading compact">
     <div>
         <h1>Alert Center</h1>
-        <p>Unified inbox of all security alerts requiring attention.</p>
+        <p>Unified inbox of live HIP security signals requiring attention.</p>
     </div>
-    <span class="hip-pill danger">4 new</span>
+    <span class="hip-pill @(_alerts.Count == 0 ? "good" : "danger")">@_alerts.Count active</span>
 </section>
 
 <section class="hip-tabs">
-    <button class="active">All <span>7</span></button>
-    <button>New <span>4</span></button>
-    <button>Reviewing <span>1</span></button>
-    <button>Resolved <span>2</span></button>
+    <button class="active">All <span>@_alerts.Count</span></button>
+    <button>High Risk <span>@_alerts.Count(alert => alert.Severity is "High" or "Critical")</span></button>
+    <button>Provider <span>@_alerts.Count(alert => alert.Source.Contains("Provider", StringComparison.OrdinalIgnoreCase))</span></button>
+    <button>Feedback <span>@_alerts.Count(alert => alert.Source.Contains("Feedback", StringComparison.OrdinalIgnoreCase))</span></button>
 </section>
 
 <section class="hip-list-panel">
-    @foreach (var alert in Alerts)
+    @if (_isLoading)
     {
         <article class="hip-alert-row">
-            <span class="hip-alert-icon @alert.Tone">!</span>
+            <span class="hip-alert-icon info">i</span>
             <div>
-                <h2>@alert.Title <span class="hip-pill @alert.Tone">@alert.Severity</span> <span class="hip-pill info">@alert.Status</span></h2>
-                <p>@alert.Summary</p>
-                <small>@alert.Product · @alert.Platform · @alert.Age</small>
+                <h2>Loading live alerts</h2>
+                <p>HIP is reading stored scan, review, feedback, and provider signals.</p>
             </div>
-            <button type="button" aria-label="Dismiss alert">x</button>
         </article>
+    }
+    else if (_alerts.Count == 0)
+    {
+        <article class="hip-alert-row">
+            <span class="hip-alert-icon good">i</span>
+            <div>
+                <h2>No live alerts</h2>
+                <p>HIP has no current high-risk or uncertain security signals in the connected data sources.</p>
+                <small>No artificial alert rows are generated.</small>
+            </div>
+        </article>
+    }
+    else
+    {
+        @foreach (var alert in _alerts)
+        {
+            <article class="hip-alert-row">
+                <span class="hip-alert-icon @Tone(alert.Severity)">!</span>
+                <div>
+                    <h2>@alert.Domain <span class="hip-pill @Tone(alert.Severity)">@alert.Severity</span> <span class="hip-pill info">@alert.SiteSafetyStatus</span></h2>
+                    <p>@alert.ReasonSummary</p>
+                    <small>@alert.Source · @alert.TargetType · @alert.CreatedAtUtc.UtcDateTime.ToString("u")</small>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(alert.RelatedScanId))
+                {
+                    <a class="hip-source-pill" href="@($"/admin/scans/{Uri.EscapeDataString(alert.RelatedScanId)}")">Details</a>
+                }
+            </article>
+        }
     }
 </section>
 
 @code {
-    private static readonly AlertRow[] Alerts =
-    [
-        new("Phishing link detected in group chat", "critical", "New", "Sender unknown_9821 sent a broken-up URL resolving to scam-prize.xyz, a known phishing domain. Message was auto-blocked.", "Message Shield", "Telegram", "2m ago", "danger"),
-        new("Impersonation attempt: admin_support0x", "high", "New", "Account name matches impersonation pattern for platform admins. No verified identity signature found.", "Identity", "Telegram", "14m ago", "danger"),
-        new("Malware URL: free-gift.ru", "high", "Reviewing", "Domain free-gift.ru is on threat intelligence blocklists. Domain registered 5 days ago.", "Link Scanner", "Email", "1h ago", "danger"),
-        new("New sender with shortened URL", "medium", "New", "First-time sender deals_hunter99 sent a tinyurl.com link. Destination domain is 14 days old.", "Rules Engine", "Discord", "1h ago", "suspicious"),
-        new("Reward scam language in SL chat", "medium", "New", "SL_GiftBot sent a message matching the reward scam pattern.", "Second Life HUD", "Second Life", "2h ago", "suspicious"),
-        new("Domain mismatch on email sender", "low", "Resolved", "Sender header claimed technewsdaily.com but DKIM record points to a different domain.", "Message Shield", "Email", "3h ago", "caution")
-    ];
+    private IReadOnlyCollection<AdminRecentThreatItem> _alerts = [];
+    private bool _isLoading = true;
 
-    private sealed record AlertRow(string Title, string Severity, string Status, string Summary, string Product, string Platform, string Age, string Tone);
+    /// <summary>
+    /// Loads live dashboard threat signals for the alert center.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        var summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+        _alerts = summary.RecentThreats;
+        _isLoading = false;
+    }
+
+    /// <summary>
+    /// Maps live severity labels to existing HIP visual tones.
+    /// </summary>
+    /// <param name="severity">Threat severity label.</param>
+    /// <returns>CSS tone name.</returns>
+    private static string Tone(string severity) =>
+        severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
+        severity.Equals("High", StringComparison.OrdinalIgnoreCase)
+            ? "danger"
+            : severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)
+                ? "suspicious"
+                : "caution";
 }

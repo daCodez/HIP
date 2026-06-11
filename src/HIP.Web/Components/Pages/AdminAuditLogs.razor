@@ -22,20 +22,25 @@
                 <tr><th>Time</th><th>Action</th><th>User</th><th>Detail</th><th>Severity</th></tr>
             </thead>
             <tbody>
-                @foreach (var entry in AuditLogService.List())
+                @if (!AuditLogService.List().Any())
                 {
                     <tr>
-                        <td>@entry.CreatedAtUtc.UtcDateTime.ToString("u")</td>
-                        <td>@entry.Action</td>
-                        <td><span class="hip-pill info">@entry.ActorId</span></td>
-                        <td>@entry.Summary</td>
-                        <td>@entry.Severity</td>
+                        <td colspan="5">No audit log entries yet. HIP is not showing artificial activity.</td>
                     </tr>
                 }
-                <tr><td>5m ago</td><td>Rule created</td><td><span class="hip-pill info">Alex Rivera</span></td><td>Block links from .ru TLD</td><td>Info</td></tr>
-                <tr><td>12m ago</td><td>Threat blocked</td><td><span class="hip-pill info">System</span></td><td>Phishing email quarantined</td><td>Warning</td></tr>
-                <tr><td>34m ago</td><td>Login</td><td><span class="hip-pill info">Jordan Kim</span></td><td>Login from 192.168.1.42</td><td>Info</td></tr>
-                <tr><td>1h ago</td><td>Settings changed</td><td><span class="hip-pill info">Alex Rivera</span></td><td>Notification threshold updated</td><td>Info</td></tr>
+                else
+                {
+                    @foreach (var entry in AuditLogService.List())
+                    {
+                        <tr>
+                            <td>@entry.CreatedAtUtc.UtcDateTime.ToString("u")</td>
+                            <td>@entry.Action</td>
+                            <td><span class="hip-pill info">@entry.ActorId</span></td>
+                            <td>@entry.Summary</td>
+                            <td>@entry.Severity</td>
+                        </tr>
+                    }
+                }
             </tbody>
         </table>
     </section>

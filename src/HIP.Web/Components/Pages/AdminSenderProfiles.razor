@@ -1,4 +1,7 @@
 @page "/admin/reputation/senders"
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@rendermode InteractiveServer
+@inject IAdminDashboardService DashboardService
 
 <PageTitle>HIP Sender Profiles</PageTitle>
 
@@ -9,57 +12,75 @@
     </div>
 </section>
 
-<section class="hip-profile-layout">
-    <aside class="hip-sender-list">
-        <h2>Known Senders</h2>
-        @foreach (var sender in Senders)
-        {
-            <button class="@(sender.Selected ? "selected" : null)" type="button">
-                <span>@sender.Initial</span>
-                <strong>@sender.Name<small>@sender.Platform</small></strong>
-                <em class="@sender.Tone">@sender.Score</em>
+@if (_summary is null)
+{
+    <section class="hip-panel padded narrow">
+        <h2>Loading sender profile data</h2>
+        <p>HIP is reading connected scan and review signals.</p>
+    </section>
+}
+else
+{
+    <section class="hip-profile-layout">
+        <aside class="hip-sender-list">
+            <h2>Known Senders</h2>
+            <button class="selected" type="button">
+                <span>--</span>
+                <strong>Sender profiles not connected<small>No sender repository yet</small></strong>
+                <em class="caution">0</em>
             </button>
-        }
-    </aside>
+        </aside>
 
-    <div class="hip-profile-main">
-        <article class="hip-panel padded sender-summary">
-            <div class="risk-ring danger"><strong>4</strong><span>/100</span></div>
-            <div>
-                <h2>unknown_9821 <span class="hip-pill danger">High Risk</span></h2>
-                <p>First seen: Apr 28, 2026</p>
-                <p>Links sent: 8 · Messages: 22 · Flags: <strong>22</strong></p>
-                <small>Known aliases: unknown9821, u_9821, anon_prize</small>
-            </div>
-        </article>
+        <div class="hip-profile-main">
+            <article class="hip-panel padded sender-summary">
+                <div class="risk-ring caution"><strong>@CardValue("riskyFindings")</strong><span>signals</span></div>
+                <div>
+                    <h2>Sender Reputation <span class="hip-pill caution">Not connected yet</span></h2>
+                    <p>HIP has live domain, scan, feedback, and review signals, but not a real sender-profile data source.</p>
+                    <p>Recent threats: @_summary.RecentThreats.Count · Feedback records: @CardValue("feedbackReceived")</p>
+                    <small>No fake sender names, aliases, or private message details are shown.</small>
+                </div>
+            </article>
 
-        <article class="hip-panel padded">
-            <h2>Risk Reasons</h2>
-            <ul class="hip-x-list warning">
-                <li>All messages flagged as dangerous</li>
-                <li>Broken-up URLs detected</li>
-                <li>Phishing domain in redirect chain</li>
-                <li>No identity signature</li>
-                <li>New account pattern</li>
-            </ul>
-        </article>
+            <article class="hip-panel padded">
+                <h2>Live Risk Reasons</h2>
+                @if (_summary.RecentThreats.Count == 0)
+                {
+                    <p>No live sender-related risk reasons yet.</p>
+                }
+                else
+                {
+                    <ul class="hip-x-list warning">
+                        @foreach (var threat in _summary.RecentThreats.Take(5))
+                        {
+                            <li>@threat.Domain: @threat.ReasonSummary</li>
+                        }
+                    </ul>
+                }
+            </article>
 
-        <article class="hip-panel padded">
-            <h2>Trust Timeline</h2>
-            <div class="hip-timeline">
-                <span></span><span></span><span></span>
-            </div>
-        </article>
-    </div>
-</section>
+            <article class="hip-panel padded">
+                <h2>Trust Timeline</h2>
+                <p>Sender timeline storage is not connected yet.</p>
+            </article>
+        </div>
+    </section>
+}
 
 @code {
-    private static readonly SenderRow[] Senders =
-    [
-        new("U", "unknown_9821", "Telegram", 4, "danger", true),
-        new("D", "deals_hunter99", "Discord, Telegram", 28, "danger", false),
-        new("A", "alice_w", "Discord, Email", 91, "good", false)
-    ];
+    private AdminDashboardSummary? _summary;
 
-    private sealed record SenderRow(string Initial, string Name, string Platform, int Score, string Tone, bool Selected);
+    /// <summary>
+    /// Loads live risk summary data for the sender profile shell.
+    /// </summary>
+    protected override async Task OnInitializedAsync() =>
+        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Gets a live dashboard card value.
+    /// </summary>
+    /// <param name="key">Dashboard card key.</param>
+    /// <returns>Card value or zero.</returns>
+    private int CardValue(string key) =>
+        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
 }

@@ -1,62 +1,92 @@
 @page "/admin/feedback"
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@rendermode InteractiveServer
+@inject IAdminDashboardService DashboardService
 
 <PageTitle>HIP Feedback Loop</PageTitle>
 
 <section class="hip-page-heading compact">
     <div>
         <h1>Feedback Loop</h1>
-        <p>Help HIP learn from mistakes. Feedback improves detection for everyone.</p>
+        <p>Weighted trust feedback from HIP clients. Feedback is evidence, not voting.</p>
     </div>
 </section>
 
-<section class="hip-card-row">
-    <article class="hip-action-card good">
-        <span>👍</span>
-        <div><h2>Mark as Helpful</h2><p>Confirm that a warning was accurate and useful.</p></div>
-    </article>
-    <article class="hip-action-card suspicious">
-        <span>△</span>
-        <div><h2>Report False Positive</h2><p>Tell HIP it flagged something safe by mistake.</p></div>
-    </article>
-    <article class="hip-action-card danger">
-        <span>↓</span>
-        <div><h2>Report False Negative</h2><p>Flag something HIP missed as a threat.</p></div>
-    </article>
-</section>
-
-<section class="hip-panel padded narrow">
-    <h2>Try It — Recent Flagged Messages</h2>
-    <p>Rate each warning below to see how feedback adjusts sender reputation.</p>
-    @foreach (var item in Messages)
-    {
-        <article class="hip-feedback-item">
-            <div>
-                <strong>@item.Sender</strong>
-                <span>@item.Platform</span>
-                <span class="hip-pill @item.Tone">@item.Risk</span>
-            </div>
-            <p>"@item.Message"</p>
-            <div class="hip-button-row">
-                <span>Was this warning accurate?</span>
-                <button type="button">Yes, helpful</button>
-                <button type="button">Not helpful</button>
-                <button type="button">False positive</button>
-                @if (item.AllowMissedThreat)
-                {
-                    <button type="button">Missed threat</button>
-                }
-            </div>
+@if (_summary is null)
+{
+    <section class="hip-panel padded narrow">
+        <h2>Loading feedback</h2>
+        <p>HIP is reading stored feedback summaries.</p>
+    </section>
+}
+else
+{
+    <section class="hip-card-row">
+        <article class="hip-action-card good">
+            <span>✓</span>
+            <div><h2>Looks Safe</h2><p>@CardValue("looksSafeFeedback") weighted feedback signal(s).</p></div>
         </article>
-    }
-</section>
+        <article class="hip-action-card suspicious">
+            <span>!</span>
+            <div><h2>Looks Suspicious</h2><p>@CardValue("looksSuspiciousFeedback") weighted feedback signal(s).</p></div>
+        </article>
+        <article class="hip-action-card danger">
+            <span>!</span>
+            <div><h2>Reported Issues</h2><p>@CardValue("reportIssueFeedback") issue feedback signal(s).</p></div>
+        </article>
+    </section>
+
+    <section class="hip-panel padded narrow">
+        <h2>Feedback-Driven Review Signals</h2>
+        @if (_summary.RecentThreats.All(threat => !threat.Source.Contains("Feedback", StringComparison.OrdinalIgnoreCase)))
+        {
+            <p>No feedback-driven review signals yet. HIP is not showing fake private messages here.</p>
+        }
+        else
+        {
+            @foreach (var threat in _summary.RecentThreats.Where(threat => threat.Source.Contains("Feedback", StringComparison.OrdinalIgnoreCase)))
+            {
+                <article class="hip-feedback-item">
+                    <div>
+                        <strong>@threat.Domain</strong>
+                        <span>@threat.Source</span>
+                        <span class="hip-pill @Tone(threat.Severity)">@threat.Severity</span>
+                    </div>
+                    <p>@threat.ReasonSummary</p>
+                    <small>@threat.CreatedAtUtc.UtcDateTime.ToString("u")</small>
+                </article>
+            }
+        }
+    </section>
+}
 
 @code {
-    private static readonly FeedbackMessage[] Messages =
-    [
-        new("SL_GiftBot", "Second Life", "dangerous", "Click here to claim your 500L$ reward now!", "danger", false),
-        new("alice_w", "Discord, Email", "caution", "Hey, are you joining the meetup Saturday?", "caution", true),
-        new("deals_hunter99", "Telegram", "suspicious", "Limited time: Check out this deal https://tinyurl.com/deal9", "suspicious", false)
-    ];
+    private AdminDashboardSummary? _summary;
 
-    private sealed record FeedbackMessage(string Sender, string Platform, string Risk, string Message, string Tone, bool AllowMissedThreat);
+    /// <summary>
+    /// Loads live feedback and review summaries.
+    /// </summary>
+    protected override async Task OnInitializedAsync() =>
+        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Gets a live dashboard card value.
+    /// </summary>
+    /// <param name="key">Dashboard card key.</param>
+    /// <returns>Card value or zero.</returns>
+    private int CardValue(string key) =>
+        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
+
+    /// <summary>
+    /// Maps severity to a visual tone.
+    /// </summary>
+    /// <param name="severity">Severity label.</param>
+    /// <returns>CSS tone.</returns>
+    private static string Tone(string severity) =>
+        severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
+        severity.Equals("High", StringComparison.OrdinalIgnoreCase)
+            ? "danger"
+            : severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)
+                ? "suspicious"
+                : "caution";
 }

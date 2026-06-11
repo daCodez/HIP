@@ -1,77 +1,75 @@
 @page "/admin/api"
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@rendermode InteractiveServer
+@inject IAdminDashboardService DashboardService
 
 <PageTitle>HIP API & Developer</PageTitle>
 
 <section class="hip-page-heading compact">
     <div>
-        <h1>API & Developer <span class="hip-pill info">Coming Soon</span></h1>
+        <h1>API & Developer <span class="hip-pill info">MVP</span></h1>
         <p>Integrate HIP into your own tools and workflows.</p>
     </div>
-    <button class="hip-primary-action" type="button">+ New API Key</button>
+    <button class="hip-primary-action" type="button" disabled>+ New API Key</button>
 </section>
 
-<section class="hip-two-column">
-    <article class="hip-panel padded">
-        <h2>API Usage — Last 7 Days</h2>
-        <p>Total calls per day</p>
-        <div class="hip-bars">
-            <span style="height: 44px"></span>
-            <span style="height: 60px"></span>
-            <span style="height: 50px"></span>
-            <span style="height: 66px"></span>
-            <span style="height: 82px"></span>
-            <span style="height: 40px"></span>
-            <span style="height: 34px"></span>
-        </div>
-        <div class="hip-stat-pair">
-            <strong>52,900<small>Total this week</small></strong>
-            <strong>7,557<small>Daily average</small></strong>
-        </div>
-    </article>
-
-    <article class="hip-panel padded">
-        <h2>Rate Limits</h2>
-        @foreach (var item in Limits)
-        {
-            <div class="hip-progress-row">
-                <span>@item.Label</span>
-                <strong>@item.Value</strong>
-                <i style="--value:@item.Percent%"></i>
+@if (_summary is null)
+{
+    <section class="hip-panel padded narrow">
+        <h2>Loading API data</h2>
+        <p>HIP is reading live scan and submission summaries.</p>
+    </section>
+}
+else
+{
+    <section class="hip-two-column">
+        <article class="hip-panel padded">
+            <h2>API Activity</h2>
+            <p>HIP does not have API key usage telemetry connected yet.</p>
+            <div class="hip-stat-pair">
+                <strong>@CardValue("totalScans")<small>Stored scan submissions</small></strong>
+                <strong>@CardValue("scansToday")<small>Scans today</small></strong>
             </div>
-        }
-    </article>
-</section>
+        </article>
 
-<section class="hip-panel padded narrow">
-    <h2>API Keys</h2>
-    <p>Keep these private. They grant access to your HIP data.</p>
-    @foreach (var key in Keys)
-    {
+        <article class="hip-panel padded">
+            <h2>Rate Limits</h2>
+            <p>Production rate-limit counters are not connected yet.</p>
+            <div class="hip-progress-row">
+                <span>Plugin/API submissions</span>
+                <strong>Development placeholder</strong>
+                <i style="--value:0%"></i>
+            </div>
+        </article>
+    </section>
+
+    <section class="hip-panel padded narrow">
+        <h2>API Keys</h2>
+        <p>API key storage is not connected yet, so HIP is not showing fake tokens or fake usage.</p>
         <article class="hip-key-row">
             <div>
-                <h3>@key.Name <span>@key.Calls calls</span></h3>
-                <code>@key.Token</code>
-                <small>Created: @key.Created · Last used: @key.LastUsed</small>
+                <h3>No API keys yet <span>0 calls</span></h3>
+                <code>API key management not connected</code>
+                <small>Use this page after real API key persistence and auditing are added.</small>
             </div>
-            <button type="button">Regenerate</button>
         </article>
-    }
-</section>
+    </section>
+}
 
 @code {
-    private static readonly (string Label, string Value, int Percent)[] Limits =
-    [
-        ("Requests / min", "18 / 60", 30),
-        ("Requests / day", "3,241 / 10,000", 32),
-        ("Webhooks / hr", "44 / 500", 9)
-    ];
+    private AdminDashboardSummary? _summary;
 
-    private static readonly ApiKeyRow[] Keys =
-    [
-        new("Production Read", "48,291", "hip_ro_prod_4f8a2c1e9b7d••••••••••••••••", "Mar 10, 2026", "2 min ago"),
-        new("Dashboard Integration", "12,044", "hip_rw_dash_9c3b7e1f4a8d••••••••••••••••", "Apr 1, 2026", "1 hr ago"),
-        new("Webhook Receiver", "0", "hip_wh_recv_2e5f8a1c4b7d••••••••••••••••", "Apr 18, 2026", "never")
-    ];
+    /// <summary>
+    /// Loads live dashboard counters for API-adjacent activity.
+    /// </summary>
+    protected override async Task OnInitializedAsync() =>
+        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
 
-    private sealed record ApiKeyRow(string Name, string Calls, string Token, string Created, string LastUsed);
+    /// <summary>
+    /// Gets a live dashboard card value.
+    /// </summary>
+    /// <param name="key">Dashboard card key.</param>
+    /// <returns>Card value or zero.</returns>
+    private int CardValue(string key) =>
+        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
 }

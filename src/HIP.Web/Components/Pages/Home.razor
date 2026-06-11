@@ -1,113 +1,147 @@
 @page "/"
+@rendermode InteractiveServer
+@inject IAdminDashboardService DashboardService
 
 <PageTitle>HIP Security Overview</PageTitle>
 
 <section class="hip-page-heading">
     <div>
         <h1>Security Overview</h1>
-        <p>Real-time trust, origin, reputation, and risk signals across HIP clients.</p>
+        <p>Live trust, origin, reputation, and risk signals across connected HIP clients.</p>
     </div>
-    <span class="live-status"><i></i> Live monitoring</span>
+    <span class="live-status"><i></i> @(_summary is null ? "Loading" : "Live data")</span>
 </section>
 
-<section class="hip-metric-grid">
-    <article class="hip-metric-card danger">
-        <span>Threat Score</span>
-        <strong>23/100</strong>
-        <small>8% better vs last 24h</small>
-    </article>
-    <article class="hip-metric-card hot">
-        <span>Threats Blocked</span>
-        <strong>312</strong>
-        <small>23% increase vs last 24h</small>
-    </article>
-    <article class="hip-metric-card good">
-        <span>Reputation Score</span>
-        <strong>94%</strong>
-        <small>2% better vs last 24h</small>
-    </article>
-    <article class="hip-metric-card">
-        <span>Identities Verified</span>
-        <strong>4,201</strong>
-        <small>5% better vs last 24h</small>
-    </article>
-    <article class="hip-metric-card wide">
-        <span>Messages Scanned</span>
-        <strong>14,829</strong>
-    </article>
-    <article class="hip-metric-card wide">
-        <span>Links Scanned</span>
-        <strong>8,734</strong>
-    </article>
-    <article class="hip-metric-card wide good">
-        <span>Active Monitors</span>
-        <strong>7</strong>
-    </article>
-</section>
-
-<section class="hip-panel">
-    <div class="hip-panel-heading">
-        <div>
-            <h2>Recent Threats</h2>
-            <p>Last 24 hours of privacy-safe detected threats.</p>
+@if (_summary is null)
+{
+    <section class="hip-panel">
+        <div class="hip-panel-heading">
+            <div>
+                <h2>Loading HIP data</h2>
+                <p>HIP is reading stored scan and review summaries.</p>
+            </div>
         </div>
-        <a href="/admin/review">View all threats</a>
-    </div>
+    </section>
+}
+else
+{
+    <section class="hip-metric-grid">
+        <article class="hip-metric-card danger">
+            <span>Dangerous Results</span>
+            <strong>@CardValue("dangerousResults")</strong>
+            <small>@CardStatus("dangerousResults")</small>
+        </article>
+        <article class="hip-metric-card hot">
+            <span>High-Risk Results</span>
+            <strong>@CardValue("highRiskResults")</strong>
+            <small>@CardStatus("highRiskResults")</small>
+        </article>
+        <article class="hip-metric-card good">
+            <span>Trusted Results</span>
+            <strong>@CardValue("trustedResults")</strong>
+            <small>@CardStatus("trustedResults")</small>
+        </article>
+        <article class="hip-metric-card">
+            <span>Domains Scanned</span>
+            <strong>@CardValue("domainsScanned")</strong>
+            <small>@CardStatus("domainsScanned")</small>
+        </article>
+        <article class="hip-metric-card wide">
+            <span>Total Scans</span>
+            <strong>@CardValue("totalScans")</strong>
+        </article>
+        <article class="hip-metric-card wide">
+            <span>Links Scanned</span>
+            <strong>@CardValue("linksScanned")</strong>
+        </article>
+        <article class="hip-metric-card wide good">
+            <span>Active Rules</span>
+            <strong>@CardValue("activeRules")</strong>
+        </article>
+    </section>
 
-    <div class="hip-table-wrap">
-        <table class="hip-data-table">
-            <thead>
-                <tr>
-                    <th>Threat Type</th>
-                    <th>Source</th>
-                    <th>Target</th>
-                    <th>Severity</th>
-                    <th>Status</th>
-                    <th>Time</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Phishing</td>
-                    <td>Email</td>
-                    <td>alex@example.com</td>
-                    <td><span class="hip-pill danger">danger</span></td>
-                    <td><span class="hip-pill danger">Blocked</span></td>
-                    <td>2m ago</td>
-                </tr>
-                <tr>
-                    <td>Suspicious Link</td>
-                    <td>Chat</td>
-                    <td>bit.ly/3xAb...</td>
-                    <td><span class="hip-pill suspicious">suspicious</span></td>
-                    <td><span class="hip-pill suspicious">Flagged</span></td>
-                    <td>14m ago</td>
-                </tr>
-                <tr>
-                    <td>Identity Spoof</td>
-                    <td>Second Life</td>
-                    <td>AvatarX123</td>
-                    <td><span class="hip-pill caution">caution</span></td>
-                    <td><span class="hip-pill caution">Reviewing</span></td>
-                    <td>1h ago</td>
-                </tr>
-                <tr>
-                    <td>Malware URL</td>
-                    <td>Email</td>
-                    <td>free-gift.ru</td>
-                    <td><span class="hip-pill danger">danger</span></td>
-                    <td><span class="hip-pill danger">Blocked</span></td>
-                    <td>2h ago</td>
-                </tr>
-                <tr>
-                    <td>Social Engineering</td>
-                    <td>Discord</td>
-                    <td>User#4521</td>
-                    <td><span class="hip-pill suspicious">suspicious</span></td>
-                    <td><span class="hip-pill suspicious">Flagged</span></td>
-                    <td>3h ago</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</section>
+    <section class="hip-panel">
+        <div class="hip-panel-heading">
+            <div>
+                <h2>Recent Threats</h2>
+                <p>Live privacy-safe detected threats. Normal clean pages are not shown here.</p>
+            </div>
+            <a href="/admin/review">View review queue</a>
+        </div>
+
+        @if (_summary.RecentThreats.Count == 0)
+        {
+            <div class="hip-threat-empty">
+                <strong>No recent threats found.</strong>
+                <span>HIP has no high-risk evidence in the connected live data sources.</span>
+            </div>
+        }
+        else
+        {
+            <div class="hip-table-wrap">
+                <table class="hip-data-table">
+                    <thead>
+                        <tr>
+                            <th>Source</th>
+                            <th>Domain</th>
+                            <th>Severity</th>
+                            <th>Status</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var threat in _summary.RecentThreats)
+                        {
+                            <tr>
+                                <td>@threat.Source</td>
+                                <td>@threat.Domain</td>
+                                <td><span class="hip-pill @Tone(threat.Severity)">@threat.Severity</span></td>
+                                <td><span class="hip-pill @Tone(threat.Severity)">@threat.SiteSafetyStatus</span></td>
+                                <td>@threat.CreatedAtUtc.UtcDateTime.ToString("u")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    private AdminDashboardSummary? _summary;
+
+    /// <summary>
+    /// Loads the live dashboard summary for the root overview.
+    /// </summary>
+    protected override async Task OnInitializedAsync() =>
+        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Gets a dashboard card value.
+    /// </summary>
+    /// <param name="key">Card key.</param>
+    /// <returns>Live card value or zero.</returns>
+    private int CardValue(string key) =>
+        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
+
+    /// <summary>
+    /// Gets a dashboard card status.
+    /// </summary>
+    /// <param name="key">Card key.</param>
+    /// <returns>Live card status or no-data text.</returns>
+    private string CardStatus(string key) =>
+        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Status ?? "No Data";
+
+    /// <summary>
+    /// Maps severity to a HIP visual tone.
+    /// </summary>
+    /// <param name="severity">Severity label.</param>
+    /// <returns>CSS tone.</returns>
+    private static string Tone(string severity) =>
+        severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
+        severity.Equals("High", StringComparison.OrdinalIgnoreCase)
+            ? "danger"
+            : severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)
+                ? "suspicious"
+                : "caution";
+}

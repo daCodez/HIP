@@ -1,76 +1,132 @@
 @page "/admin/reports"
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@rendermode InteractiveServer
+@inject IAdminDashboardService DashboardService
 
 <PageTitle>HIP Reports</PageTitle>
 
 <section class="hip-page-heading compact">
     <div>
         <h1>Reports</h1>
-        <p>Weekly trust and threat activity summary.</p>
+        <p>Live privacy-safe trust and threat activity summary.</p>
     </div>
     <div class="hip-button-row end">
-        <button type="button">Export CSV</button>
-        <button type="button">Export PDF</button>
+        <button type="button" disabled>Export CSV</button>
+        <button type="button" disabled>Export PDF</button>
     </div>
 </section>
 
-<div class="hip-report-tags">
-    <span>Apr 24 – Apr 30, 2026</span>
-    <span>Trust Score: 87/100</span>
-</div>
+@if (_summary is null)
+{
+    <section class="hip-panel padded narrow">
+        <h2>Loading live report</h2>
+        <p>HIP is reading stored scans, feedback, review items, and provider signals.</p>
+    </section>
+}
+else
+{
+    <div class="hip-report-tags">
+        <span>Generated @_summary.GeneratedAtUtc.UtcDateTime.ToString("u")</span>
+        <span>Data source: @_summary.DataSource</span>
+    </div>
 
-<section class="hip-card-row four">
-    <article class="hip-mini-stat"><strong>4,328</strong><span>Messages Scanned</span></article>
-    <article class="hip-mini-stat hot"><strong>142</strong><span>Threats Blocked</span></article>
-    <article class="hip-mini-stat"><strong>891</strong><span>Links Checked</span></article>
-    <article class="hip-mini-stat good"><strong>3,904</strong><span>Safe Messages</span></article>
-</section>
+    <section class="hip-card-row four">
+        <article class="hip-mini-stat"><strong>@CardValue("totalScans")</strong><span>Total Scans</span></article>
+        <article class="hip-mini-stat"><strong>@CardValue("linksScanned")</strong><span>Links Checked</span></article>
+        <article class="hip-mini-stat hot"><strong>@CardValue("dangerousResults")</strong><span>Dangerous Results</span></article>
+        <article class="hip-mini-stat good"><strong>@CardValue("trustedResults")</strong><span>Trusted Results</span></article>
+    </section>
 
-<section class="hip-two-column">
-    <article class="hip-panel padded">
-        <h2>Message Risk Breakdown</h2>
-        <div class="hip-risk-bars">
-            <label>Safe <strong>3,904 (90%)</strong><span><i style="--value:90%"></i></span></label>
-            <label>Suspicious <strong>282 (7%)</strong><span><i style="--value:7%"></i></span></label>
-            <label>Dangerous <strong>142 (3%)</strong><span><i style="--value:3%"></i></span></label>
-        </div>
-    </article>
+    <section class="hip-two-column">
+        <article class="hip-panel padded">
+            <h2>Scan Status Breakdown</h2>
+            <div class="hip-risk-bars">
+                <label>Trusted <strong>@CardValue("trustedResults")</strong><span><i style="@BarStyle("trustedResults")"></i></span></label>
+                <label>Limited Trust <strong>@CardValue("limitedTrustResults")</strong><span><i style="@BarStyle("limitedTrustResults")"></i></span></label>
+                <label>Suspicious <strong>@CardValue("suspiciousResults")</strong><span><i style="@BarStyle("suspiciousResults")"></i></span></label>
+                <label>Dangerous <strong>@CardValue("dangerousResults")</strong><span><i style="@BarStyle("dangerousResults")"></i></span></label>
+            </div>
+        </article>
 
-    <article class="hip-panel padded">
-        <h2>Daily Scan Activity</h2>
-        <p>Scanned vs. blocked</p>
-        <div class="hip-bars small">
-            <span style="height: 62px"></span>
-            <span style="height: 68px"></span>
-            <span style="height: 52px"></span>
-            <span style="height: 34px"></span>
-            <span style="height: 82px"></span>
-            <span style="height: 96px"></span>
-            <span style="height: 88px"></span>
-        </div>
-    </article>
-</section>
+        <article class="hip-panel padded">
+            <h2>Live Signal Sources</h2>
+            <p>Missing integrations show as zero instead of fake activity.</p>
+            <div class="hip-risk-bars">
+                <label>Feedback <strong>@CardValue("feedbackReceived")</strong><span><i style="@BarStyle("feedbackReceived")"></i></span></label>
+                <label>Open Reviews <strong>@CardValue("openReviewItems")</strong><span><i style="@BarStyle("openReviewItems")"></i></span></label>
+                <label>Provider Errors <strong>@CardValue("externalProviderErrors")</strong><span><i style="@BarStyle("externalProviderErrors")"></i></span></label>
+            </div>
+        </article>
+    </section>
 
-<section class="hip-panel padded narrow">
-    <h2>Most Common Scam Patterns</h2>
-    @foreach (var pattern in Patterns)
-    {
-        <div class="hip-ranked-bar">
-            <span>@pattern.Rank</span>
-            <strong>@pattern.Name</strong>
-            <em>@pattern.Count</em>
-            <i style="--value:@pattern.Width%"></i>
-        </div>
-    }
-</section>
+    <section class="hip-panel padded narrow">
+        <h2>Recent Threats</h2>
+        @if (_summary.RecentThreats.Count == 0)
+        {
+            <p>No live threat rows yet. HIP is not generating sample threats.</p>
+        }
+        else
+        {
+            <div class="hip-table-wrap">
+                <table class="hip-data-table">
+                    <thead><tr><th>Time</th><th>Domain</th><th>Severity</th><th>Source</th><th>Reason</th></tr></thead>
+                    <tbody>
+                        @foreach (var threat in _summary.RecentThreats)
+                        {
+                            <tr>
+                                <td>@threat.CreatedAtUtc.UtcDateTime.ToString("u")</td>
+                                <td>@threat.Domain</td>
+                                <td><span class="hip-pill @Tone(threat.Severity)">@threat.Severity</span></td>
+                                <td>@threat.Source</td>
+                                <td>@threat.ReasonSummary</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
 
 @code {
-    private static readonly PatternRow[] Patterns =
-    [
-        new("#1", "Urgency language", 88, 88),
-        new("#2", "Reward scam wording", 41, 41),
-        new("#3", "Broken-up links", 23, 23),
-        new("#4", "Impersonation signals", 34, 34)
-    ];
+    private AdminDashboardSummary? _summary;
 
-    private sealed record PatternRow(string Rank, string Name, int Count, int Width);
+    /// <summary>
+    /// Loads the live dashboard summary for report rendering.
+    /// </summary>
+    protected override async Task OnInitializedAsync() =>
+        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Gets a dashboard card value by key.
+    /// </summary>
+    /// <param name="key">Dashboard card key.</param>
+    /// <returns>Card value or zero when missing.</returns>
+    private int CardValue(string key) =>
+        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
+
+    /// <summary>
+    /// Creates a bounded bar width from a live dashboard card value.
+    /// </summary>
+    /// <param name="key">Dashboard card key.</param>
+    /// <returns>Inline CSS custom property.</returns>
+    private string BarStyle(string key)
+    {
+        var total = Math.Max(1, CardValue("totalScans"));
+        var percent = Math.Clamp((int)Math.Round(CardValue(key) * 100m / total), 0, 100);
+        return $"--value:{percent}%";
+    }
+
+    /// <summary>
+    /// Maps live severity labels to HIP visual tones.
+    /// </summary>
+    /// <param name="severity">Severity label.</param>
+    /// <returns>CSS tone.</returns>
+    private static string Tone(string severity) =>
+        severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
+        severity.Equals("High", StringComparison.OrdinalIgnoreCase)
+            ? "danger"
+            : severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)
+                ? "suspicious"
+                : "caution";
 }
