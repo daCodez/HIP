@@ -5,6 +5,8 @@ export const HIP_CONFIG = Object.freeze({
 
 export const HIP_EXTENSION_CHANNEL = "dev";
 
+export const HIP_FETCH_TIMEOUT_MS = 8000;
+
 export const REPUTATION_FEEDBACK_ENUMS = Object.freeze({
   targetType: Object.freeze({
     Website: 5
@@ -55,7 +57,7 @@ export class HipApiClient {
     }
 
     const url = `${this.config.apiBaseUrl}/api/v1/public/lookup/domain/${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "GET",
       headers: {
         "Accept": "application/json"
@@ -71,7 +73,7 @@ export class HipApiClient {
 
   async scoreSite(request) {
     const url = `${this.config.apiBaseUrl}/api/v1/browser/score-site`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Accept": "application/json",
@@ -92,7 +94,7 @@ export class HipApiClient {
 
   async scanLinks(pageUrl, links) {
     const url = `${this.config.apiBaseUrl}/api/v1/browser/scan-links`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Accept": "application/json",
@@ -145,7 +147,7 @@ export class HipApiClient {
    * Sends a JSON POST without including private page text or form values.
    */
   async postJson(url, payload) {
-    return fetch(url, {
+    return fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Accept": "application/json",
@@ -192,7 +194,7 @@ export class HipApiClient {
 
   async reportRiskFinding(report) {
     const url = `${this.config.apiBaseUrl}/api/v1/public/risk-findings`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Accept": "application/json",
@@ -215,7 +217,7 @@ export class HipApiClient {
    */
   async submitSiteFeedback(feedback) {
     const url = `${this.config.apiBaseUrl}/api/v1/public/feedback`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Accept": "application/json",
@@ -250,7 +252,7 @@ export class HipApiClient {
     }
 
     const url = `${this.config.apiBaseUrl}/api/v1/browser/scan-results`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Accept": "application/json",
@@ -272,7 +274,7 @@ export class HipApiClient {
    */
   async getExternalProviderSettings() {
     const url = `${this.config.apiBaseUrl}/api/v1/site-safety/external-providers`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "GET",
       headers: {
         "Accept": "application/json",
@@ -293,7 +295,7 @@ export class HipApiClient {
    */
   async updateExternalProviderSettings(settings) {
     const url = `${this.config.apiBaseUrl}/api/v1/site-safety/external-providers`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Accept": "application/json",
@@ -324,6 +326,30 @@ export class HipApiClient {
     }
 
     return url.toString();
+  }
+}
+
+/**
+ * Calls fetch with a bounded timeout so extension pages do not sit in a loading state indefinitely.
+ * The timeout failure is intentionally generic because request details may include local dev ports.
+ */
+export async function fetchWithTimeout(url, options = {}, timeoutMs = HIP_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: options.signal || controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("HIP request timed out.");
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
