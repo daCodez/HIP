@@ -10,8 +10,8 @@
 
   const currentDomain = normalizeHost(window.location.hostname);
   let settings = null;
-  let lastSummary = emptySummary();
   let pluginVersion = "HIP Plugin vunknown-dev";
+  let lastSummary = emptySummary();
 
   if (!currentDomain) {
     return;
