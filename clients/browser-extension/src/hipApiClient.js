@@ -177,17 +177,17 @@ export class HipApiClient {
       url: pageUrl,
       pluginVersion: summary.pluginVersion || null,
       observedSignals: {
-        downloadLinks: Array.isArray(summary.downloadLinks) ? summary.downloadLinks : [],
+        downloadLinks: filterSafePublicEvidenceUrls(summary.downloadLinks, this.config),
         hasLoginForm: (summary.loginFormsDetected ?? 0) > 0,
         hasPasswordField: (summary.passwordFieldsDetected ?? summary.loginFormsDetected ?? 0) > 0,
         hasPaymentField: (summary.paymentFieldsDetected ?? 0) > 0,
         inlineScriptCount: summary.inlineScriptCount ?? 0,
-        externalScriptUrls: Array.isArray(summary.externalScriptUrls) ? summary.externalScriptUrls : [],
+        externalScriptUrls: filterSafePublicEvidenceUrls(summary.externalScriptUrls, this.config),
         suspiciousScriptPatternCount: summary.suspiciousScriptPatternCount ?? 0,
         trustDataAvailable: summary.scanResultDataSource === "BrowserPluginScan",
         shortenedLinkCount: summary.shortenedLinkCandidates ?? 0,
         obfuscatedLinkCount: summary.obfuscatedLinkCandidates ?? 0,
-        redirectChain: Array.isArray(summary.redirectSignals) ? summary.redirectSignals : []
+        redirectChain: filterSafePublicEvidenceUrls(summary.redirectSignals, this.config)
       }
     };
   }
@@ -713,6 +713,21 @@ export function isSiteSafetyScanEligibleUrl(pageUrl, settings = {}) {
   } catch {
     return false;
   }
+}
+
+/**
+ * Filters observed URL evidence before sending a Site Safety request.
+ * The server repeats this validation, but filtering client-side avoids noisy 400 responses while preserving
+ * HIP's privacy and SSRF protections for local/private/HIP-owned URLs.
+ */
+export function filterSafePublicEvidenceUrls(values, settings = {}) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values
+    .filter(value => typeof value === "string")
+    .filter(value => isSiteSafetyScanEligibleUrl(value, settings));
 }
 
 /**

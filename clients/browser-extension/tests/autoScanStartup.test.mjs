@@ -48,6 +48,11 @@ test("popup skips site safety scan for ineligible local HIP pages", () => {
   assert.equal(popupSource.includes("!activeTabUrl || !isSiteSafetyScanEligibleUrl(activeTabUrl, settings)"), true);
 });
 
+test("popup handles optional site safety failures without extension warning noise", () => {
+  assert.equal(popupSource.includes("handleSiteSafetyUnavailable"), true);
+  assert.equal(popupSource.includes("console.warn(\"HIP Site Safety Scan unavailable."), false);
+});
+
 test("HIP API client uses a shared fetch timeout wrapper", () => {
   assert.equal(HIP_FETCH_TIMEOUT_MS, 8000);
   assert.equal(apiClientSource.includes("export async function fetchWithTimeout"), true);

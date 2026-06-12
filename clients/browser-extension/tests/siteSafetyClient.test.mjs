@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { HipApiClient, isSiteSafetyScanEligibleUrl, normalizeHipSettings } from "../src/hipApiClient.js";
+import { filterSafePublicEvidenceUrls, HipApiClient, isSiteSafetyScanEligibleUrl, normalizeHipSettings } from "../src/hipApiClient.js";
 
 test("site safety request includes privacy-safe scan facts", () => {
   const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
@@ -63,6 +63,33 @@ test("site safety scan eligibility skips HIP owned and internal URLs", () => {
   assert.equal(isSiteSafetyScanEligibleUrl("http://192.168.1.10/page", settings), false);
   assert.equal(isSiteSafetyScanEligibleUrl("chrome://extensions", settings), false);
   assert.equal(isSiteSafetyScanEligibleUrl("https://example.com/page", settings), true);
+});
+
+test("site safety request filters private observed evidence URLs", () => {
+  const client = new HipApiClient({
+    apiBaseUrl: "http://localhost:5099",
+    webBaseUrl: "http://localhost:5123"
+  });
+  const request = client.buildSiteSafetyRequest("https://example.com", {
+    downloadLinks: ["https://example.com/setup.exe", "http://localhost:5123/private.exe", "javascript:alert(1)"],
+    externalScriptUrls: ["https://cdn.example.com/app.js", "http://192.168.1.10/app.js"],
+    redirectSignals: ["https://safe.example/out", "http://127.0.0.1/internal"]
+  });
+
+  assert.deepEqual(request.observedSignals.downloadLinks, ["https://example.com/setup.exe"]);
+  assert.deepEqual(request.observedSignals.externalScriptUrls, ["https://cdn.example.com/app.js"]);
+  assert.deepEqual(request.observedSignals.redirectChain, ["https://safe.example/out"]);
+});
+
+test("safe public evidence URL filter drops invalid and private values", () => {
+  const filtered = filterSafePublicEvidenceUrls([
+    "https://cdn.example.com/app.js",
+    "http://10.0.0.4/app.js",
+    "not a url",
+    null
+  ]);
+
+  assert.deepEqual(filtered, ["https://cdn.example.com/app.js"]);
 });
 
 test("site feedback calls public feedback route with instance header", async () => {
