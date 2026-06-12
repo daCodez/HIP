@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { HipApiClient, normalizeHipSettings } from "../src/hipApiClient.js";
+import { HipApiClient, isSiteSafetyScanEligibleUrl, normalizeHipSettings } from "../src/hipApiClient.js";
 
 test("site safety request includes privacy-safe scan facts", () => {
   const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
@@ -50,6 +50,19 @@ test("scan site safety calls versioned API route", async () => {
   assert.equal(calls[0].options.method, "POST");
   assert.equal(calls[0].options.headers["X-HIP-Instance-Id"], "test-instance");
   assert.equal(JSON.parse(calls[0].options.body).pluginVersion, "HIP Plugin v0.1.0-dev");
+});
+
+test("site safety scan eligibility skips HIP owned and internal URLs", () => {
+  const settings = {
+    apiBaseUrl: "http://localhost:5099",
+    webBaseUrl: "http://localhost:5123"
+  };
+
+  assert.equal(isSiteSafetyScanEligibleUrl("http://localhost:5123/admin", settings), false);
+  assert.equal(isSiteSafetyScanEligibleUrl("http://127.0.0.1:5123/admin", settings), false);
+  assert.equal(isSiteSafetyScanEligibleUrl("http://192.168.1.10/page", settings), false);
+  assert.equal(isSiteSafetyScanEligibleUrl("chrome://extensions", settings), false);
+  assert.equal(isSiteSafetyScanEligibleUrl("https://example.com/page", settings), true);
 });
 
 test("site feedback calls public feedback route with instance header", async () => {

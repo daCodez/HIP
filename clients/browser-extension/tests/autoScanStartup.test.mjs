@@ -43,6 +43,11 @@ test("popup starts scanner once when no cached page-load summary exists", () => 
   assert.equal(popupSource.includes('"src/content.js"'), true);
 });
 
+test("popup skips site safety scan for ineligible local HIP pages", () => {
+  assert.equal(popupSource.includes("isSiteSafetyScanEligibleUrl"), true);
+  assert.equal(popupSource.includes("!activeTabUrl || !isSiteSafetyScanEligibleUrl(activeTabUrl, settings)"), true);
+});
+
 test("HIP API client uses a shared fetch timeout wrapper", () => {
   assert.equal(HIP_FETCH_TIMEOUT_MS, 8000);
   assert.equal(apiClientSource.includes("export async function fetchWithTimeout"), true);

@@ -1,4 +1,4 @@
-import { buildSiteFeedbackRequest, HipApiClient, DEFAULT_HIP_SETTINGS, loadHipSettings, normalizeHost } from "./hipApiClient.js";
+import { buildSiteFeedbackRequest, HipApiClient, DEFAULT_HIP_SETTINGS, isSiteSafetyScanEligibleUrl, loadHipSettings, normalizeHost } from "./hipApiClient.js";
 import {
   buildPopupViewModel,
   buildSiteSafetyViewModel,
@@ -307,7 +307,7 @@ function isUsefulSummary(summary = {}) {
  * The scan never receives page text, script contents, form values, passwords, or private messages.
  */
 async function renderSiteSafety(summary = {}) {
-  if (!activeTabUrl) {
+  if (!activeTabUrl || !isSiteSafetyScanEligibleUrl(activeTabUrl, settings)) {
     return null;
   }
 
