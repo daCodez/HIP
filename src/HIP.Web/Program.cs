@@ -38,6 +38,7 @@ using HIP.Web.Security;
 using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 const string HipInstanceIdHeader = "X-HIP-Instance-Id";
@@ -51,6 +52,9 @@ builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment
 builder.Services.AddOptions<HipPerformanceOptions>()
     .Bind(builder.Configuration.GetSection(HipPerformanceOptions.SectionName))
     .Validate(ValidateHipPerformanceOptions, "HIP performance options must use positive cache durations and request limits.")
+    .ValidateOnStart();
+builder.Services.AddOptions<HipSecurityOptions>()
+    .Bind(builder.Configuration.GetSection(HipSecurityOptions.SectionName))
     .ValidateOnStart();
 if (ShouldUseRedisOutputCache(builder.Configuration))
 {
@@ -69,9 +73,14 @@ builder.Services.AddHipAdminAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("PublicHipReadOnly", policy =>
+    var security = BindHipSecurityOptions(builder.Configuration);
+    options.AddPolicy(HipCorsPolicies.PublicRead, policy =>
         policy.AllowAnyOrigin()
-            .WithMethods("GET", "POST")
+            .WithMethods("GET")
+            .AllowAnyHeader());
+    options.AddPolicy(HipCorsPolicies.ClientWrite, policy =>
+        policy.SetIsOriginAllowed(origin => IsAllowedClientWriteOrigin(origin, security))
+            .WithMethods("POST")
             .AllowAnyHeader());
 });
 builder.Services.AddRateLimiter(options =>
@@ -112,7 +121,7 @@ if (ShouldUseHttpsRedirection(app))
 {
     app.UseHttpsRedirection();
 }
-app.UseCors("PublicHipReadOnly");
+app.UseCors(HipCorsPolicies.PublicRead);
 app.UseResponseCompression();
 app.UseRateLimiter();
 app.UseOutputCache();
@@ -256,6 +265,51 @@ static HipPerformanceOptions BindHipPerformanceOptions(IConfiguration configurat
     var options = new HipPerformanceOptions();
     configuration.GetSection(HipPerformanceOptions.SectionName).Bind(options);
     return options;
+}
+
+/// <summary>
+/// Binds HIP security options with safe defaults for local browser-extension testing.
+/// </summary>
+/// <param name="configuration">Application configuration.</param>
+/// <returns>Bound security options.</returns>
+static HipSecurityOptions BindHipSecurityOptions(IConfiguration configuration)
+{
+    var options = new HipSecurityOptions();
+    configuration.GetSection(HipSecurityOptions.SectionName).Bind(options);
+    return options;
+}
+
+/// <summary>
+/// Determines whether a browser origin may send privacy-safe public write requests to HIP.Web.
+/// </summary>
+/// <param name="origin">Origin header supplied by the browser.</param>
+/// <param name="options">Host-level security options.</param>
+/// <returns>True when the origin is an explicitly configured HIP client or allowed local dev origin.</returns>
+static bool IsAllowedClientWriteOrigin(string? origin, HipSecurityOptions options)
+{
+    if (string.IsNullOrWhiteSpace(origin))
+    {
+        return false;
+    }
+
+    if (options.AllowedClientWriteOrigins.Any(allowed => string.Equals(allowed, origin, StringComparison.OrdinalIgnoreCase)))
+    {
+        return true;
+    }
+
+    if (options.AllowBrowserExtensionOrigins
+        && (origin.StartsWith("chrome-extension://", StringComparison.OrdinalIgnoreCase)
+            || origin.StartsWith("moz-extension://", StringComparison.OrdinalIgnoreCase)
+            || origin.StartsWith("ms-browser-extension://", StringComparison.OrdinalIgnoreCase)))
+    {
+        return true;
+    }
+
+    return options.AllowLocalhostClientWriteOrigins
+        && Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+        && (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.Equals("[::1]", StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>
@@ -642,7 +696,8 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireCors(HipCorsPolicies.ClientWrite);
 
     publicApi.MapGet("/badge/domain/{domain}", async (
         string domain,
@@ -673,6 +728,7 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 
     publicApi.MapPost("/feedback", async (
@@ -698,6 +754,7 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 
     publicApi.MapPost("/risk-findings", async (
@@ -714,6 +771,7 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
         var response = await ingestionService.IngestAsync(report, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
     })
+        .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 }
 
@@ -733,6 +791,7 @@ static void MapReportApis(RouteGroupBuilder reportApi)
         var result = await reportService.SubmitAsync(report, cancellationToken);
         return result.Accepted ? Results.Ok(result) : Results.BadRequest(result);
     })
+        .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 }
 
@@ -837,6 +896,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     browserApi.MapPost("/scan-links", async (
@@ -853,6 +913,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     browserApi.MapPost("/scan-results", async (
@@ -875,6 +936,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
             return Results.BadRequest(new BrowserScanResultErrorResponse(ex.Message));
         }
     })
+        .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     browserApi.MapGet("/scan-results/{domain}", async (
@@ -909,14 +971,17 @@ static void MapSafetyApis(RouteGroupBuilder safetyApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     safetyApi.MapPost("/report-safe", (SafetyReportRequest request) =>
         Results.Ok(SafetyReportResponse.CreateAccepted(SafetyUrlDisplay.StripQueryAndFragment(request.Url), request.Source, "Report as safe was accepted for MVP review.")))
+        .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 
     safetyApi.MapPost("/report-dangerous", (SafetyReportRequest request) =>
         Results.Ok(SafetyReportResponse.CreateAccepted(SafetyUrlDisplay.StripQueryAndFragment(request.Url), request.Source, "Report as dangerous was accepted for MVP review.")))
+        .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 }
 
@@ -956,6 +1021,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 }
 

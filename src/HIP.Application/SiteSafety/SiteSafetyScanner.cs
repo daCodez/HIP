@@ -365,6 +365,14 @@ public sealed class SiteSafetyScanner(
             providers = [new BrowserObservedSignalProvider()];
         }
 
+        var externalOptions = providers.OfType<IExternalSiteEvidenceProvider>()
+            .Select(provider => provider.CurrentOptions)
+            .FirstOrDefault(options => !options.RunExternalProvidersOnRequestPath);
+        if (externalOptions is not null)
+        {
+            providers = providers.Where(provider => provider is not IExternalSiteEvidenceProvider).ToArray();
+        }
+
         return providers;
     }
 

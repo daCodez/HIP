@@ -423,7 +423,7 @@ Runtime MVP controls:
 
 These runtime controls update the current running HIP process. Production deployments should persist the same values in configuration or a secure settings store and keep API keys in secret storage.
 
-The admin endpoints are protected and scope settings by the authenticated admin plus optional `X-HIP-Instance-Id`. The browser/API preference endpoints scope settings only by `X-HIP-Instance-Id`, which the browser extension generates and stores locally. That lets one extension install disable or enable provider checks for its own scans without mutating global defaults for every user.
+The admin endpoints are protected and scope settings by the authenticated admin plus optional `X-HIP-Instance-Id`. The browser/API `GET` endpoint can read effective provider preferences for diagnostics, but the browser/API `POST` endpoint is disabled by default through `HipSecurity:AllowClientProviderPreferenceWrites=false`. That prevents unauthenticated clients from toggling provider behavior and consuming outbound scan capacity. Local/client testing can temporarily enable the write endpoint, but production should keep provider control in protected admin settings.
 
 The browser/API preference endpoint accepts only provider switches and safe timeout/cache values. It ignores client-supplied endpoints, API keys, and full-URL permissions so a browser extension cannot turn HIP into a client-controlled outbound scanner or secret store.
 
@@ -431,8 +431,11 @@ To enable or disable a provider, use both the global switch and the provider-spe
 
 - `ExternalSiteEvidence:ExternalProvidersEnabled`
 - `ExternalSiteEvidence:<ProviderName>:Enabled`
+- `ExternalSiteEvidence:RunExternalProvidersOnRequestPath`
 
 The same switches are available in `/admin/settings` while the app is running. SSL Labs / Qualys TLS checks are on by default for MVP testing because both `ExternalProvidersEnabled` and `SslLabs.Enabled` default to `true`. Turning either switch off prevents outbound TLS scanner calls.
+
+`RunExternalProvidersOnRequestPath` is false by default. HIP can keep external providers configured and enabled while still skipping third-party calls during public page-visit scans. The production direction is to queue slow provider work, reuse cached provider evidence, and update scores asynchronously.
 
 External provider rules:
 

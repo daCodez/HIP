@@ -5,7 +5,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using HIP.Application.Browser;
 using HIP.Application.SiteSafety;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using NUnit.Framework;
 
 namespace HIP.Tests.Api;
@@ -81,27 +83,43 @@ public sealed class BrowserPluginApiServiceTests
     }
 
     /// <summary>
-    /// Verifies browser-instance provider settings can be saved on the API host without changing other instances.
+    /// Verifies browser-instance provider settings cannot be changed unless the host explicitly opts in.
     /// </summary>
     [Test]
-    public async Task Api_service_provider_preferences_are_scoped_per_browser_instance()
+    public async Task Api_service_provider_preferences_reject_public_writes_by_default()
     {
         await using var factory = new WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-HIP-Instance-Id", "api-first-instance");
+
+        var update = await client.PostAsJsonAsync("/api/v1/site-safety/external-providers", ProviderPreferencePayload(false));
+
+        Assert.That(update.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+    }
+
+    /// <summary>
+    /// Verifies browser-instance provider settings remain scoped when a local/dev host explicitly enables client writes.
+    /// </summary>
+    [Test]
+    public async Task Api_service_provider_preferences_are_scoped_per_browser_instance_when_enabled()
+    {
+        await using var factory = new WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.ConfigureAppConfiguration((_, configuration) =>
+                {
+                    configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["HipSecurity:AllowClientProviderPreferenceWrites"] = "true"
+                    });
+                });
+            });
         using var firstClient = factory.CreateClient();
         using var secondClient = factory.CreateClient();
         firstClient.DefaultRequestHeaders.Add("X-HIP-Instance-Id", "api-first-instance");
         secondClient.DefaultRequestHeaders.Add("X-HIP-Instance-Id", "api-second-instance");
 
-        var update = await firstClient.PostAsJsonAsync("/api/v1/site-safety/external-providers", new
-        {
-            ExternalProvidersEnabled = false,
-            AllowFullUrlChecks = true,
-            ProviderTimeout = "00:00:10",
-            DefaultCacheDuration = "06:00:00",
-            SslLabs = new { Enabled = false, Endpoint = "http://attacker.invalid", ApiKey = "secret", AllowFullUrl = true, CacheDuration = (string?)null },
-            GoogleWebRisk = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = true, CacheDuration = (string?)null },
-            VirusTotal = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = true, CacheDuration = (string?)null }
-        });
+        var update = await firstClient.PostAsJsonAsync("/api/v1/site-safety/external-providers", ProviderPreferencePayload(false));
 
         var firstRead = await firstClient.GetAsync("/api/v1/site-safety/external-providers");
         var secondRead = await secondClient.GetAsync("/api/v1/site-safety/external-providers");
@@ -126,4 +144,20 @@ public sealed class BrowserPluginApiServiceTests
             Assert.That(secondJson.RootElement.GetProperty("sslLabs").GetProperty("enabled").GetBoolean(), Is.True);
         });
     }
+
+    /// <summary>
+    /// Builds a provider-preference request that intentionally includes unsafe fields to prove the API strips them.
+    /// </summary>
+    /// <param name="enabled">Whether the scoped external providers should be enabled.</param>
+    /// <returns>Anonymous JSON payload for the provider preference endpoint.</returns>
+    private static object ProviderPreferencePayload(bool enabled) => new
+    {
+        ExternalProvidersEnabled = enabled,
+        AllowFullUrlChecks = true,
+        ProviderTimeout = "00:00:10",
+        DefaultCacheDuration = "06:00:00",
+        SslLabs = new { Enabled = enabled, Endpoint = "http://attacker.invalid", ApiKey = "secret", AllowFullUrl = true, CacheDuration = (string?)null },
+        GoogleWebRisk = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = true, CacheDuration = (string?)null },
+        VirusTotal = new { Enabled = false, Endpoint = "", ApiKey = "", AllowFullUrl = true, CacheDuration = (string?)null }
+    };
 }

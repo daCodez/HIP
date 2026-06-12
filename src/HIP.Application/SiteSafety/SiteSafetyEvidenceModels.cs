@@ -291,6 +291,10 @@ public interface ISiteSafetyEvidenceProvider
 /// </summary>
 public interface IExternalSiteEvidenceProvider : ISiteSafetyEvidenceProvider
 {
+    /// <summary>
+    /// Gets the effective provider options for the current request scope.
+    /// </summary>
+    ExternalSiteEvidenceOptions CurrentOptions { get; }
 }
 
 /// <summary>
@@ -321,6 +325,15 @@ public sealed class ExternalSiteEvidenceOptions
     /// Gets or sets the default evidence cache duration.
     /// </summary>
     public TimeSpan DefaultCacheDuration { get; set; } = TimeSpan.FromHours(6);
+
+    /// <summary>
+    /// Gets or sets whether external providers may run during the public request path.
+    /// </summary>
+    /// <remarks>
+    /// This is false by default for scalability. External providers can be enabled globally while still being
+    /// moved to a slow-path worker later, so browser page visits are not coupled to third-party latency.
+    /// </remarks>
+    public bool RunExternalProvidersOnRequestPath { get; set; }
 
     /// <summary>
     /// Gets or sets SSL Labs/Qualys-style TLS provider configuration.
@@ -366,6 +379,7 @@ public sealed class ExternalSiteEvidenceOptions
             AllowFullUrlChecks = AllowFullUrlChecks,
             ProviderTimeout = ProviderTimeout,
             DefaultCacheDuration = DefaultCacheDuration,
+            RunExternalProvidersOnRequestPath = RunExternalProvidersOnRequestPath,
             SslLabs = SslLabs.Clone(),
             GoogleWebRisk = GoogleWebRisk.Clone(),
             VirusTotal = VirusTotal.Clone()
@@ -676,6 +690,9 @@ public abstract class ExternalSiteEvidenceProviderBase(
     /// Gets external provider options shared by concrete providers.
     /// </summary>
     protected ExternalSiteEvidenceOptions Options => options.GetEffectiveOptions();
+
+    /// <inheritdoc />
+    public ExternalSiteEvidenceOptions CurrentOptions => Options;
 
     /// <inheritdoc />
     public abstract string ProviderName { get; }

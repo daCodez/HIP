@@ -16,6 +16,7 @@ using HIP.Infrastructure.Persistence;
 using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 const string PublicScanPolicy = "PublicScanPolicy";
@@ -32,6 +33,9 @@ builder.Services.AddOptions<HipPerformanceOptions>()
     .Bind(builder.Configuration.GetSection(HipPerformanceOptions.SectionName))
     .Validate(ValidateHipPerformanceOptions, "HIP performance options must use positive cache durations and request limits.")
     .ValidateOnStart();
+builder.Services.AddOptions<HipSecurityOptions>()
+    .Bind(builder.Configuration.GetSection(HipSecurityOptions.SectionName))
+    .ValidateOnStart();
 if (ShouldUseRedisOutputCache(builder.Configuration))
 {
     builder.AddRedisOutputCache("redis");
@@ -47,9 +51,14 @@ builder.Services.Configure<BrotliCompressionProviderOptions>(options => options.
 builder.Services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("PublicHipReadOnly", policy =>
+    var security = BindHipSecurityOptions(builder.Configuration);
+    options.AddPolicy(HipCorsPolicies.PublicRead, policy =>
         policy.AllowAnyOrigin()
-            .WithMethods("GET", "POST")
+            .WithMethods("GET")
+            .AllowAnyHeader());
+    options.AddPolicy(HipCorsPolicies.ClientWrite, policy =>
+        policy.SetIsOriginAllowed(origin => IsAllowedClientWriteOrigin(origin, security))
+            .WithMethods("POST")
             .AllowAnyHeader());
 });
 builder.Services.AddRateLimiter(options =>
@@ -76,7 +85,7 @@ if (ShouldUseHttpsRedirection(app))
 {
     app.UseHttpsRedirection();
 }
-app.UseCors("PublicHipReadOnly");
+app.UseCors(HipCorsPolicies.PublicRead);
 app.UseResponseCompression();
 app.UseRateLimiter();
 app.UseOutputCache();
@@ -146,6 +155,7 @@ publicApi.MapPost("/feedback", async (
     }
 })
 .WithName("PublicFeedback")
+.RequireCors(HipCorsPolicies.ClientWrite)
 .RequireRateLimiting(PublicFeedbackPolicy);
 
 MapBrowserApis(browserApi);
@@ -205,6 +215,51 @@ static HipPerformanceOptions BindHipPerformanceOptions(IConfiguration configurat
     var options = new HipPerformanceOptions();
     configuration.GetSection(HipPerformanceOptions.SectionName).Bind(options);
     return options;
+}
+
+/// <summary>
+/// Binds HIP security options with safe defaults for local browser-extension testing.
+/// </summary>
+/// <param name="configuration">Application configuration.</param>
+/// <returns>Bound security options.</returns>
+static HipSecurityOptions BindHipSecurityOptions(IConfiguration configuration)
+{
+    var options = new HipSecurityOptions();
+    configuration.GetSection(HipSecurityOptions.SectionName).Bind(options);
+    return options;
+}
+
+/// <summary>
+/// Determines whether a browser origin may send privacy-safe public write requests.
+/// </summary>
+/// <param name="origin">Origin header supplied by the browser.</param>
+/// <param name="options">Host-level security options.</param>
+/// <returns>True when the origin is an explicitly configured HIP client or allowed local dev origin.</returns>
+static bool IsAllowedClientWriteOrigin(string? origin, HipSecurityOptions options)
+{
+    if (string.IsNullOrWhiteSpace(origin))
+    {
+        return false;
+    }
+
+    if (options.AllowedClientWriteOrigins.Any(allowed => string.Equals(allowed, origin, StringComparison.OrdinalIgnoreCase)))
+    {
+        return true;
+    }
+
+    if (options.AllowBrowserExtensionOrigins
+        && (origin.StartsWith("chrome-extension://", StringComparison.OrdinalIgnoreCase)
+            || origin.StartsWith("moz-extension://", StringComparison.OrdinalIgnoreCase)
+            || origin.StartsWith("ms-browser-extension://", StringComparison.OrdinalIgnoreCase)))
+    {
+        return true;
+    }
+
+    return options.AllowLocalhostClientWriteOrigins
+        && Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+        && (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.Equals("[::1]", StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>
@@ -445,6 +500,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
         }
     })
     .WithName("BrowserScoreSite")
+    .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
     browserApi.MapPost("/scan-links", async (
@@ -462,6 +518,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
         }
     })
     .WithName("BrowserScanLinks")
+    .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
     browserApi.MapPost("/scan-results", async (
@@ -485,6 +542,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
         }
     })
     .WithName("BrowserSaveScanResult")
+    .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
     browserApi.MapGet("/scan-results/{domain}", async (
@@ -530,10 +588,16 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     siteSafetyApi.MapPost("/external-providers", async (
         ExternalProviderSettingsUpdateRequest request,
         HttpContext httpContext,
+        IOptions<HipSecurityOptions> securityOptions,
         ExternalSiteEvidenceOptions defaultOptions,
         IExternalSiteEvidenceSettingsStore settingsStore,
         CancellationToken cancellationToken) =>
     {
+        if (!securityOptions.Value.AllowClientProviderPreferenceWrites)
+        {
+            return Results.Json(new { error = "Client provider preference writes are disabled for this HIP host." }, statusCode: StatusCodes.Status403Forbidden);
+        }
+
         var scopeKey = ResolveProviderSettingsScope(httpContext);
         var options = defaultOptions.Clone();
         ApplyClientExternalProviderSettings(options, request);
@@ -541,6 +605,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
         return Results.Ok(ExternalProviderSettingsResponse.From(saved, scopeKey));
     })
     .WithName("ApiServiceUpdateExternalProviderPreferences")
+    .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
     siteSafetyApi.MapPost("/scan", async (
@@ -574,6 +639,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
         }
     })
     .WithName("ApiServiceSiteSafetyScan")
+    .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 }
 

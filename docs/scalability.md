@@ -8,6 +8,7 @@ HIP currently has a development-first runtime that is useful for MVP testing, bu
 - The EF implementation stores JSON records in a generic `hip_records` table.
 - Several local defaults are intentionally in-memory for development and tests.
 - External provider checks must not run on every page visit.
+- `RunExternalProvidersOnRequestPath` is false by default so configured providers do not block public scans.
 - The dashboard can read stored scan results today, but large deployments should use pre-aggregated counters.
 
 SQLite is acceptable for local development. PostgreSQL should be the production persistence target because HIP will need stronger concurrency, indexing, retention policies, backup strategy, and operational tooling.
@@ -33,6 +34,8 @@ The hot path must return quickly:
 5. HIP stores the privacy-safe summary and updates dashboard aggregates.
 
 The hot path stores only public-safe scan summaries such as domain, URL hash, score, status, confidence, reasons, warnings, provider names, matched rule IDs, plugin version, and scan time.
+
+The public scan request path should not call third-party providers by default. HIP can show browser-observed, history, feedback, and admin-review evidence immediately, then enqueue external provider checks for the slow path.
 
 ## Slow Path
 
