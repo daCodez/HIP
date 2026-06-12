@@ -13,6 +13,7 @@ let activeTabId = null;
 let activeTabUrl = null;
 let activeLookup = null;
 let activeSiteSafety = null;
+let popupStartedContentScan = false;
 
 const summaryPollAttempts = 6;
 const summaryPollDelayMs = 450;
@@ -222,6 +223,10 @@ async function waitForScanSummary() {
       return summary;
     }
 
+    if (attempt === 0) {
+      await startContentScanIfNeeded();
+    }
+
     renderLoadingSummary(attempt === 0 ? "Scanning page" : "Still scanning");
     await delay(summaryPollDelayMs);
   }
@@ -241,6 +246,47 @@ async function getScanSummary() {
 
   const response = await chrome.runtime.sendMessage({ type: "HIP_GET_SCAN_SUMMARY", tabId: activeTabId });
   return response?.result || {};
+}
+
+/**
+ * Starts the content-script scanner from the popup only when no page-load summary exists yet.
+ * This covers development reloads where Chrome has not injected content scripts into already-open tabs.
+ */
+async function startContentScanIfNeeded() {
+  if (!activeTabId || popupStartedContentScan) {
+    return;
+  }
+
+  popupStartedContentScan = true;
+
+  try {
+    await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
+    return;
+  } catch (firstError) {
+    console.warn("HIP content scanner not attached yet; attempting one-time injection.", firstError);
+  }
+
+  try {
+    await injectContentScanner(activeTabId);
+    await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
+  } catch (error) {
+    console.warn("HIP content scanner startup unavailable.", error);
+  }
+}
+
+/**
+ * Injects the same ordered scripts from manifest.json into an already-open tab.
+ * The content script has an idempotency guard, so this is safe when a dev reload races with page load.
+ */
+async function injectContentScanner(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: [
+      "src/riskBadgeRenderer.js",
+      "src/safetyPageRouter.js",
+      "src/content.js"
+    ]
+  });
 }
 
 /**
