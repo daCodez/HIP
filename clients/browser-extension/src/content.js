@@ -1,4 +1,10 @@
 (function runHipContentScript() {
+  if (window.__hipContentScriptLoaded) {
+    return;
+  }
+
+  window.__hipContentScriptLoaded = true;
+
   const riskyStatuses = new Set(["Suspicious", "HighRisk", "Dangerous", "Critical"]);
   const attentionStatuses = new Set(["Unknown", "LimitedTrustData", "Caution", "Suspicious", "HighRisk", "Dangerous", "Critical"]);
   const ignoredProtocols = new Set(["javascript:", "mailto:", "tel:", "data:", "blob:"]);

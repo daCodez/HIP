@@ -321,7 +321,7 @@ test("content script contains duplicate scan submission guards", async () => {
 });
 
 test("plugin version is formatted from manifest version", () => {
-  assert.equal(formatPluginVersion("0.1.0"), "HIP Plugin v0.1.0-dev");
+  assert.equal(formatPluginVersion("0.1.1"), "HIP Plugin v0.1.1-dev");
 });
 
 test("hip owned web pages are skipped by content scanning guard", () => {
