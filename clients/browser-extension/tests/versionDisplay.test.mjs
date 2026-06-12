@@ -56,6 +56,16 @@ test("version is not duplicated as hardcoded display text across UI files", () =
   assert.equal(hardcodedDisplayCount, 0);
 });
 
+test("content summary cannot read plugin version before initialization", () => {
+  const content = read("src/content.js");
+  const versionDeclaration = content.indexOf('let pluginVersion = "HIP Plugin vunknown-dev";');
+  const summaryDeclaration = content.indexOf("let lastSummary = emptySummary();");
+
+  assert.notEqual(versionDeclaration, -1);
+  assert.notEqual(summaryDeclaration, -1);
+  assert.ok(versionDeclaration < summaryDeclaration);
+});
+
 function read(relativePath) {
   return readFileSync(join(extensionRoot, relativePath), "utf8");
 }
