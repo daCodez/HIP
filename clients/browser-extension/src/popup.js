@@ -107,7 +107,7 @@ async function initialize() {
   activeLookup = lookup;
   renderLoadingSummary("Checking page scan");
   const summary = await waitForScanSummary();
-  await renderSiteSafety(summary).catch(error => console.warn("HIP Site Safety Scan unavailable.", error));
+  await renderSiteSafety(summary).catch(handleSiteSafetyUnavailable);
   renderLookup(lookup, summary);
 }
 
@@ -463,7 +463,7 @@ async function refreshScan() {
   try {
     await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
     const summary = await waitForScanSummary();
-    await renderSiteSafety(summary).catch(error => console.warn("HIP Site Safety Scan unavailable after refresh.", error));
+    await renderSiteSafety(summary).catch(handleSiteSafetyUnavailable);
     if (activeLookup) {
       renderLookup(activeLookup, summary);
     }
@@ -472,6 +472,15 @@ async function refreshScan() {
   } finally {
     elements.refreshScan.disabled = false;
   }
+}
+
+/**
+ * Keeps Site Safety failures out of Chrome's extension error list when the API rejects a request safely.
+ * Public lookup and the content-script summary still render, so users are not blocked by optional scan details.
+ */
+function handleSiteSafetyUnavailable(_error) {
+  activeSiteSafety = null;
+  elements.siteSafetyPanel.hidden = true;
 }
 
 /**
