@@ -21,7 +21,10 @@
     if (message?.type === "HIP_REFRESH_SCAN") {
       initialize()
         .then(() => sendResponse({ ok: true, result: lastSummary }))
-        .catch(error => sendResponse({ ok: false, error: error.message }));
+        .catch(error => {
+          handleInitializationError(error);
+          sendResponse({ ok: false, error: error.message });
+        });
       return true;
     }
 
@@ -33,7 +36,7 @@
     return false;
   });
 
-  initialize().catch(error => console.warn("HIP content script failed safely.", error));
+  initialize().catch(handleInitializationError);
 
   /**
    * Runs the privacy-safe page scan and publishes a summary for the popup.
@@ -42,10 +45,14 @@
     settings = await loadSettings();
     pluginVersion = await loadPluginVersion();
     lastSummary = emptySummary();
+    markScanStage("Starting");
+    publishSummary();
+
     if (isHipOwnedPage(window.location.href, settings)) {
       lastSummary.apiStatus = "Skipped";
       lastSummary.scanResultSubmission = "Skipped";
       lastSummary.scanResultDataSource = "HipOwnedPage";
+      markScanStage("SkippedHipPage");
       lastSummary.website = {
         domain: currentDomain,
         status: "NotScanned",
@@ -55,18 +62,46 @@
       return;
     }
 
+    markScanStage("CheckingSiteScore");
+    publishSummary();
     const currentLookup = await scoreSite(currentDomain, window.location.href);
     lastSummary.website = compactLookup(currentLookup);
     lastSummary.apiStatus = currentLookup ? "Available" : "Unavailable";
+    publishSummary();
 
     if (settings.enableLinkScanning) {
+      markScanStage("ScanningLinks");
+      publishSummary();
       await scanLinks();
+      publishSummary();
     }
 
+    markScanStage("CheckingForms");
+    publishSummary();
     await scanLoginForms();
+    markScanStage("CollectingPageSignals");
     collectScriptSignals();
+    publishSummary();
+    markScanStage("RenderingWarnings");
     await renderPageBannerIfNeeded(currentLookup);
+    markScanStage("SubmittingSummary");
+    publishSummary();
     await persistScanResult(currentLookup).catch(error => console.warn("HIP scan result persistence failed safely.", error));
+    markScanStage("Complete");
+    publishSummary();
+  }
+
+  /**
+   * Publishes a privacy-safe failure summary when startup fails so the popup does not wait forever.
+   * The error text is kept generic and never includes page body text, form values, cookies, or tokens.
+   */
+  function handleInitializationError(error) {
+    console.warn("HIP content script failed safely.", error);
+    lastSummary = lastSummary || emptySummary();
+    lastSummary.apiStatus = "Unavailable";
+    lastSummary.scanResultSubmission = "Failed";
+    lastSummary.scanResultError = error?.message || "HIP page scan failed.";
+    markScanStage("Failed");
     publishSummary();
   }
 
@@ -487,8 +522,22 @@
     return response?.ok ? response.result : "HIP Plugin vunknown-dev";
   }
 
+  /**
+   * Publishes the latest privacy-safe scan summary to the extension background worker.
+   * This keeps the popup updated even when it opens after the content script has already started scanning.
+   */
   function publishSummary() {
+    lastSummary.updatedAt = new Date().toISOString();
     chrome.runtime.sendMessage({ type: "HIP_SCAN_SUMMARY", summary: lastSummary }).catch(() => {});
+  }
+
+  /**
+   * Marks the current page scan stage without collecting private page content.
+   * Stages are UI/debug hints only; HIP scoring decisions come from structured scan evidence.
+   */
+  function markScanStage(stage) {
+    lastSummary.scanStage = stage;
+    lastSummary.lastScanUtc = new Date().toISOString();
   }
 
   function parseTarget(anchor) {
@@ -921,7 +970,10 @@
       suspiciousScriptPatternCount: 0,
       scanResultSubmission: "Pending",
       scanResultDataSource: "Pending",
+      scanStage: "Pending",
       lastSubmittedUtc: null,
+      lastScanUtc: null,
+      updatedAt: null,
       scanResultError: null,
       pageUrlHash: null,
       isHttps: window.location.protocol === "https:",
