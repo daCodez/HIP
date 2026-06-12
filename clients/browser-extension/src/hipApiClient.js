@@ -697,6 +697,55 @@ export function isHipOwnedPageUrl(pageUrl, settings = {}) {
   }
 }
 
+/**
+ * Determines whether a page URL is eligible for HIP Site Safety Scan.
+ * Localhost, private-network, and HIP-owned URLs are skipped client-side because the API rejects them
+ * as an SSRF defense and they do not produce useful public site trust evidence.
+ */
+export function isSiteSafetyScanEligibleUrl(pageUrl, settings = {}) {
+  try {
+    const url = new URL(pageUrl);
+    if (!["http:", "https:"].includes(url.protocol) || isHipOwnedPageUrl(pageUrl, settings)) {
+      return false;
+    }
+
+    return !isInternalHost(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Detects local and private hosts so the browser extension does not ask HIP to scan internal targets.
+ * The API repeats this check server-side; the client copy exists only to avoid noisy dev/MVP errors.
+ */
+function isInternalHost(hostname) {
+  const host = normalizeHost(hostname);
+  if (!host ||
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "::1" ||
+    host === "[::1]") {
+    return true;
+  }
+
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4) {
+    return false;
+  }
+
+  const octets = ipv4.slice(1).map(Number);
+  if (octets.some(octet => Number.isNaN(octet) || octet < 0 || octet > 255)) {
+    return true;
+  }
+
+  return octets[0] === 10 ||
+    octets[0] === 127 ||
+    (octets[0] === 169 && octets[1] === 254) ||
+    (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+    (octets[0] === 192 && octets[1] === 168);
+}
+
 export function statusNeedsAttention(status) {
   return ["Unknown", "LimitedTrustData", "Caution", "Suspicious", "HighRisk", "Dangerous", "Critical"].includes(status);
 }
