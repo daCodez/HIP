@@ -4,14 +4,14 @@ HIP currently has a development-first runtime that is useful for MVP testing, bu
 
 ## Current Limits
 
-- SQLite is the default development database through `ConnectionStrings:HipDatabase`.
+- PostgreSQL is the default development/runtime database when HIP is launched through Aspire or Docker Compose.
 - The EF implementation stores JSON records in a generic `hip_records` table.
 - Several local defaults are intentionally in-memory for development and tests.
 - External provider checks must not run on every page visit.
 - `RunExternalProvidersOnRequestPath` is false by default so configured providers do not block public scans.
 - The dashboard can read stored scan results today, but large deployments should use pre-aggregated counters.
 
-SQLite is acceptable for local development. PostgreSQL should be the production persistence target because HIP will need stronger concurrency, indexing, retention policies, backup strategy, and operational tooling.
+SQLite is now reserved for explicit isolated tests. PostgreSQL is the durable persistence target because HIP needs stronger concurrency, indexing, retention policies, backup strategy, and operational tooling.
 
 ## Production Direction
 

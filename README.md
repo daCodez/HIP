@@ -65,9 +65,11 @@ Aspire starts:
 
 The browser extension should use those same base URLs.
 
-You can still run the API and Web projects separately:
+You can still run the API and Web projects separately, but direct project runs must provide PostgreSQL configuration because HIP no longer falls back to a local SQLite file:
 
 ```powershell
+$env:ConnectionStrings__HipDatabase='Host=localhost;Port=5432;Database=hip;Username=hip;Password=<local-password>'
+$env:HipInfrastructure__DatabaseProvider='PostgreSQL'
 dotnet run --project src/HIP.ApiService/HIP.ApiService.csproj
 dotnet run --project src/HIP.Web/HIP.Web.csproj
 ```

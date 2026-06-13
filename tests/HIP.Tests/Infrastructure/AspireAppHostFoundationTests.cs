@@ -34,19 +34,23 @@ public sealed class AspireAppHostFoundationTests
         Assert.That(source, Does.Contain(".WithReference(hipDatabase)"));
         Assert.That(source, Does.Contain(".WithReference(redis)"));
         Assert.That(source, Does.Contain(".WithEnvironment(\"HipInfrastructure__DatabaseProvider\", \"PostgreSQL\")"));
+        Assert.That(source, Does.Contain("AddProject<Projects.HIP_Web>(\"hip-web\", launchProfileName: \"http\")"));
+        Assert.That(source, Does.Contain(".WaitFor(hipDatabase)"));
         Assert.That(project, Does.Contain("Aspire.Hosting.PostgreSQL"));
         Assert.That(project, Does.Contain("Aspire.Hosting.Redis"));
     }
 
     /// <summary>
-    /// Confirms HIP can use Aspire's PostgreSQL connection while retaining SQLite for direct local runs and tests.
+    /// Confirms HIP uses PostgreSQL by default while retaining explicit SQLite support for isolated tests.
     /// </summary>
     [Test]
-    public void Infrastructure_supports_postgresql_provider_switch_for_aspire()
+    public void Infrastructure_requires_postgresql_connection_and_keeps_explicit_sqlite_switch()
     {
         var source = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.Infrastructure", "DependencyInjection.cs"));
         var project = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.Infrastructure", "HIP.Infrastructure.csproj"));
 
+        Assert.That(source, Does.Contain("HIP requires ConnectionStrings:HipDatabase"));
+        Assert.That(source, Does.Not.Contain("?? \"Data Source=hip-dev.db\""));
         Assert.That(source, Does.Contain("UseNpgsql(connectionString)"));
         Assert.That(source, Does.Contain("UseSqlite(connectionString)"));
         Assert.That(source, Does.Contain("HipInfrastructure:DatabaseProvider"));

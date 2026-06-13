@@ -34,7 +34,7 @@ public interface IHipRecordEncryptor
 }
 
 /// <summary>
-/// AES-GCM record encryptor for HIP's development SQLite persistence foundation.
+/// AES-GCM record encryptor for HIP's generic EF Core record persistence foundation.
 /// </summary>
 /// <remarks>
 /// This encrypts the record JSON before storage and keeps a versioned envelope so future key rotation can be added.

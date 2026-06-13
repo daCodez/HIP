@@ -21,9 +21,12 @@ var apiService = builder.AddProject<Projects.HIP_ApiService>("hip-api", launchPr
 
 builder.AddProject<Projects.HIP_Web>("hip-web", launchProfileName: "http")
     .WithExternalHttpEndpoints()
+    .WithReference(hipDatabase)
+    .WaitFor(hipDatabase)
     .WithReference(apiService)
     .WaitFor(apiService)
     .WithReference(redis)
-    .WaitFor(redis);
+    .WaitFor(redis)
+    .WithEnvironment("HipInfrastructure__DatabaseProvider", "PostgreSQL");
 
 builder.Build().Run();

@@ -57,7 +57,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__HipDatabase: Data Source=/data/hip-api-dev.db
+      ConnectionStrings__HipDatabase: Host=hip-postgres;Port=5432;Database=${HIP_POSTGRES_DB:?Set HIP_POSTGRES_DB in .env};Username=${HIP_POSTGRES_USER:?Set HIP_POSTGRES_USER in .env};Password=${HIP_POSTGRES_PASSWORD:?Set HIP_POSTGRES_PASSWORD in .env}
+      HipInfrastructure__DatabaseProvider: PostgreSQL
       HipSecurity__RecordEncryptionKey: ${HIP_RECORD_ENCRYPTION_KEY:?Set HIP_RECORD_ENCRYPTION_KEY in .env}
       HipSecurity__PrivacyHashingKey: ${HIP_PRIVACY_HASHING_KEY:?Set HIP_PRIVACY_HASHING_KEY in .env}
       ExternalSiteEvidence__ExternalProvidersEnabled: "true"
@@ -66,8 +67,6 @@ services:
       ExternalSiteEvidence__VirusTotal__Enabled: "false"
     ports:
       - "${HIP_API_PORT:-5099}:8080"
-    volumes:
-      - hip-api-data:/data
     depends_on:
       hip-postgres:
         condition: service_healthy
@@ -84,7 +83,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__HipDatabase: Data Source=/data/hip-web-dev.db
+      ConnectionStrings__HipDatabase: Host=hip-postgres;Port=5432;Database=${HIP_POSTGRES_DB:?Set HIP_POSTGRES_DB in .env};Username=${HIP_POSTGRES_USER:?Set HIP_POSTGRES_USER in .env};Password=${HIP_POSTGRES_PASSWORD:?Set HIP_POSTGRES_PASSWORD in .env}
+      HipInfrastructure__DatabaseProvider: PostgreSQL
       HipSecurity__RecordEncryptionKey: ${HIP_RECORD_ENCRYPTION_KEY:?Set HIP_RECORD_ENCRYPTION_KEY in .env}
       HipSecurity__PrivacyHashingKey: ${HIP_PRIVACY_HASHING_KEY:?Set HIP_PRIVACY_HASHING_KEY in .env}
       services__hip-api__http__0: http://hip-api:8080
@@ -94,8 +94,6 @@ services:
       ExternalSiteEvidence__VirusTotal__Enabled: "false"
     ports:
       - "${HIP_WEB_PORT:-5123}:8080"
-    volumes:
-      - hip-web-data:/data
     depends_on:
       hip-api:
         condition: service_healthy
@@ -104,5 +102,3 @@ volumes:
   hip-postgres-data:
   hip-redis-data:
   hip-rabbitmq-data:
-  hip-api-data:
-  hip-web-data:

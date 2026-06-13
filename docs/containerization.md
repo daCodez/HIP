@@ -8,8 +8,8 @@ HIP now has a local container foundation for running the API, Web/Admin UI, and 
 - `HIP.ApiService` and `HIP.Web` already expose `/alive` health endpoints through `MapDefaultEndpoints`.
 - No Dockerfiles or Docker Compose file existed before this foundation pass.
 - No worker service project exists yet, so queue consumption is intentionally documented as a future worker step.
-- `HIP.AppHost` now declares Aspire-managed PostgreSQL and Redis resources for Visual Studio local development.
-- Direct API/Web project runs still use SQLite by default. Aspire injects PostgreSQL through the `HipDatabase` connection string and `HipInfrastructure:DatabaseProvider=PostgreSQL`.
+- `HIP.AppHost` declares Aspire-managed PostgreSQL and Redis resources for Visual Studio local development.
+- API/Web project runs now require a PostgreSQL `HipDatabase` connection string. Aspire injects it automatically; direct project runs must set `ConnectionStrings__HipDatabase`.
 
 ## Aspire Local Resources
 
@@ -21,7 +21,7 @@ When `HIP.AppHost` is the Visual Studio startup project, Aspire should show:
 - `HipDatabase`: HIP database resource created from the PostgreSQL container.
 - `redis`: Redis container resource managed by Aspire.
 
-PostgreSQL is the active EF Core provider for the API when launched through AppHost. This avoids the previous mismatch where a database container was expected but no container resource existed.
+PostgreSQL is the active EF Core provider for the API and Web/Admin app when launched through AppHost. This avoids the previous mismatch where a database container was expected but some hosts still used SQLite.
 
 ## Services
 
@@ -33,12 +33,7 @@ PostgreSQL is the active EF Core provider for the API when launched through AppH
 - `hip-api`: HIP API service built from `src/HIP.ApiService/Dockerfile`.
 - `hip-web`: HIP Web/Admin service built from `src/HIP.Web/Dockerfile`.
 
-The Docker Compose API and Web containers can still store local MVP data in mounted SQLite volumes unless their environment is configured to use PostgreSQL:
-
-- `hip-api-data`
-- `hip-web-data`
-
-This keeps direct container validation small while Aspire owns the normal Visual Studio development topology.
+The Docker Compose API and Web containers use `hip-postgres` through `ConnectionStrings__HipDatabase` and `HipInfrastructure__DatabaseProvider=PostgreSQL`. They no longer mount SQLite data volumes.
 
 ## Required Environment Variables
 
@@ -59,6 +54,17 @@ Then replace the placeholder values:
 - `HIP_PRIVACY_HASHING_KEY`
 
 Do not commit `.env`. It is ignored by Git.
+
+## Direct Project Runs
+
+Aspire is the preferred local entry point because it supplies the PostgreSQL connection string and starts dependencies. If you run `HIP.ApiService` or `HIP.Web` directly, set a PostgreSQL connection string first:
+
+```powershell
+$env:ConnectionStrings__HipDatabase='Host=localhost;Port=5432;Database=hip;Username=hip;Password=<local-password>'
+$env:HipInfrastructure__DatabaseProvider='PostgreSQL'
+```
+
+Use user secrets, environment variables, or your local shell profile for the password. Do not commit real database credentials.
 
 ## Start Services
 

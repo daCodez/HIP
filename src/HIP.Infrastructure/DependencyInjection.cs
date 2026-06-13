@@ -30,7 +30,8 @@ public static class DependencyInjection
     /// <returns>The same service collection for fluent registration.</returns>
     public static IServiceCollection AddHipInfrastructure(this IServiceCollection services, IConfiguration configuration, bool isLocalDevelopment = true)
     {
-        var connectionString = configuration.GetConnectionString("HipDatabase") ?? "Data Source=hip-dev.db";
+        var connectionString = configuration.GetConnectionString("HipDatabase")
+            ?? throw new InvalidOperationException("HIP requires ConnectionStrings:HipDatabase. Run HIP.AppHost to use Aspire-managed PostgreSQL, or set ConnectionStrings__HipDatabase explicitly for direct project runs.");
         var databaseProvider = configuration["HipInfrastructure:DatabaseProvider"];
 
         services.AddDbContext<HipDbContext>(options => ConfigureDatabaseProvider(options, connectionString, databaseProvider));
@@ -61,7 +62,8 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Selects the EF Core provider from configuration so Aspire can inject PostgreSQL while direct local runs keep SQLite.
+    /// Selects the EF Core provider from configuration. PostgreSQL is the runtime default; SQLite is only used
+    /// when explicitly requested by tests or isolated local tooling.
     /// </summary>
     /// <param name="options">EF Core options builder being configured for HIP persistence.</param>
     /// <param name="connectionString">Database connection string supplied by configuration or Aspire service discovery.</param>

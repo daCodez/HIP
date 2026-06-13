@@ -33,6 +33,20 @@ public sealed class ContainerizationFoundationTests
     }
 
     /// <summary>
+    /// Confirms runtime containers use PostgreSQL instead of falling back to local SQLite files.
+    /// </summary>
+    [Test]
+    public void Compose_runtime_services_use_postgresql_provider()
+    {
+        var compose = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "docker-compose.yml"));
+
+        Assert.That(compose, Does.Contain("ConnectionStrings__HipDatabase: Host=hip-postgres;Port=5432;"));
+        Assert.That(compose, Does.Contain("HipInfrastructure__DatabaseProvider: PostgreSQL"));
+        Assert.That(compose, Does.Not.Contain("Data Source=/data/hip-api-dev.db"));
+        Assert.That(compose, Does.Not.Contain("Data Source=/data/hip-web-dev.db"));
+    }
+
+    /// <summary>
     /// Confirms container startup relies on environment variables instead of committed secrets.
     /// </summary>
     [Test]
@@ -73,15 +87,15 @@ public sealed class ContainerizationFoundationTests
     }
 
     /// <summary>
-    /// Confirms the documentation explains the current Postgres limitation instead of pretending it is active.
+    /// Confirms the documentation describes PostgreSQL as the active local/container provider.
     /// </summary>
     [Test]
-    public void Container_docs_document_postgres_mvp_limit()
+    public void Container_docs_document_active_postgres_provider()
     {
         var docs = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "docs", "containerization.md"));
 
-        Assert.That(docs, Does.Contain("PostgreSQL is staged as a local dependency"));
-        Assert.That(docs, Does.Contain("not yet the active EF Core provider"));
+        Assert.That(docs, Does.Contain("PostgreSQL is the active EF Core provider for the API and Web/Admin app"));
+        Assert.That(docs, Does.Contain("They no longer mount SQLite data volumes."));
     }
 
     /// <summary>

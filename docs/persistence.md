@@ -1,16 +1,19 @@
 # HIP Persistence Foundation
 
-HIP uses a SQLite persistence foundation for local development. The Application layer continues to depend on repository interfaces; EF Core and database details live in `HIP.Infrastructure`.
+HIP uses a PostgreSQL persistence foundation for local development and runtime hosts. The Application layer continues to depend on repository interfaces; EF Core and database details live in `HIP.Infrastructure`.
 
 ## Development Database
 
-The development connection string is:
+The preferred development path is Aspire. `HIP.AppHost` starts PostgreSQL and injects the `HipDatabase` connection string into the API and Web/Admin app.
+
+For direct project runs, set:
 
 ```text
-Data Source=hip-dev.db
+ConnectionStrings__HipDatabase=Host=localhost;Port=5432;Database=hip;Username=hip;Password=<local-password>
+HipInfrastructure__DatabaseProvider=PostgreSQL
 ```
 
-`HIP.Web` reads this from `ConnectionStrings:HipDatabase` in `appsettings.Development.json`. If no value is configured, Infrastructure falls back to the same SQLite file name.
+Do not commit real database credentials. Use Aspire, user secrets, environment variables, or local shell profile settings. HIP no longer silently falls back to a SQLite file when `HipDatabase` is missing.
 
 ## Repository Pattern
 
@@ -32,7 +35,7 @@ Current persisted record categories include:
 - self-healing rule candidates
 - weighted browser/banner feedback
 
-The first storage implementation uses a JSON-backed `hip_records` table keyed by partition and ID. This keeps the foundation small while preserving clean boundaries for later normalized PostgreSQL storage.
+The first storage implementation uses a JSON-backed `hip_records` table keyed by partition and ID. This keeps the foundation small while preserving clean boundaries for later normalized PostgreSQL tables.
 
 ## Encrypted Record Storage
 
@@ -45,11 +48,11 @@ Existing plaintext development rows remain readable so local data created before
 ## Database Safety Rules
 
 - Do not use `EnsureDeleted`.
-- Do not wipe existing SQLite files.
+- Do not wipe existing PostgreSQL volumes, schemas, or local database data.
 - Destructive migrations require review before running.
 - Private chat logs, private message bodies, form contents, and raw private evidence must not be persisted by default.
 
-The dev app uses safe create behavior for the initial SQLite table. It creates missing storage but does not delete existing data.
+The dev app uses safe create behavior for the initial PostgreSQL table. It creates missing storage but does not delete existing data.
 
 Outside local Development, HIP no longer uses `EnsureCreated`. If EF migrations are present, startup applies them with `MigrateAsync`. If no migrations exist, startup fails closed with a clear error so production-like environments cannot silently create unmanaged schemas.
 
@@ -66,9 +69,9 @@ dotnet ef database update --project src/HIP.Infrastructure --startup-project src
 
 Review generated migrations before applying them. Stop before any migration that drops tables, columns, or data.
 
-## Future Production Database Plan
+## Production Database Plan
 
-SQLite is for development and local testing. Production storage should move to PostgreSQL or another managed database with:
+PostgreSQL is the current durable database target. Production storage still needs hardening work:
 
 - normalized tables for high-volume entities
 - explicit indexes for lookup and review queues
