@@ -136,6 +136,8 @@ Storage uses the same browser scan result repository that already feeds public l
 Browser Plugin -> HIP API -> Site Safety Scan -> Stored Scan Result -> Admin Dashboard
 ```
 
+Both application hosts must preserve this behavior. The browser extension normally talks to `HIP.ApiService`, so `HIP.ApiService` must save the completed Site Safety scan before returning the response. `HIP.Web` exposes the same route for local fallback and must use the same `ISiteSafetyScanResultStorageService` path. This keeps popup details, public lookup, scan details, and dashboard cards pointed at one durable privacy-safe summary stream instead of split transient data.
+
 Stored fields are limited to public-safe scan facts:
 
 - normalized domain

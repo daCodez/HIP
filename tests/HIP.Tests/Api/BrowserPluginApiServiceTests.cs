@@ -83,6 +83,62 @@ public sealed class BrowserPluginApiServiceTests
     }
 
     /// <summary>
+    /// Confirms the Aspire API service actively persists Site Safety scan output through the browser scan store.
+    /// </summary>
+    /// <remarks>
+    /// The browser extension calls HIP.ApiService during normal browsing, so this test proves the API host writes
+    /// privacy-safe scan summaries to the configured repository instead of only returning transient scan data.
+    /// </remarks>
+    [Test]
+    public async Task Api_service_site_safety_scan_persists_live_scan_summary()
+    {
+        await using var factory = new WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
+        using var client = factory.CreateClient();
+        var domain = $"api-live-scan-{Guid.NewGuid():N}.com";
+
+        var scan = await client.PostAsJsonAsync("/api/v1/site-safety/scan", new SiteSafetyScanRequest(
+            $"https://{domain}/login?token=secret-password",
+            new SiteSafetyObservedSignals(
+                DownloadLinks: [$"https://{domain}/setup.exe"],
+                HasLoginForm: true,
+                HasPasswordField: true,
+                KnownPhishingPattern: true,
+                ShortenedLinkCount: 1,
+                ObfuscatedLinkCount: 1,
+                MatchedRiskTerms: ["FakeLogin"]),
+            PluginVersion: "HIP Plugin v0.1.0-dev"));
+        var stored = await client.GetAsync($"/api/v1/browser/scan-results/{domain}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(scan.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(stored.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        });
+
+        var json = await JsonDocument.ParseAsync(await stored.Content.ReadAsStreamAsync());
+        var serialized = json.RootElement.ToString();
+        var metadata = json.RootElement.GetProperty("privacySafeMetadata");
+        Assert.Multiple(() =>
+        {
+            Assert.That(json.RootElement.GetProperty("domain").GetString(), Is.EqualTo(domain));
+            Assert.That(json.RootElement.GetProperty("score").GetInt32(), Is.InRange(0, 100));
+            Assert.That(json.RootElement.GetProperty("status").GetString(), Is.EqualTo("Dangerous").Or.EqualTo("HighRisk").Or.EqualTo("Suspicious"));
+            Assert.That(json.RootElement.GetProperty("recommendedAction").GetString(), Is.Not.Empty);
+            Assert.That(json.RootElement.GetProperty("reasons").GetArrayLength(), Is.GreaterThan(0));
+            Assert.That(metadata.GetProperty("source").GetString(), Is.EqualTo("SiteSafetyScan"));
+            Assert.That(metadata.GetProperty("pluginVersion").GetString(), Is.EqualTo("HIP Plugin v0.1.0-dev"));
+            Assert.That(metadata.GetProperty("domainTrustScore").GetString(), Is.Not.Empty);
+            Assert.That(metadata.GetProperty("pageTrustScore").GetString(), Is.Not.Empty);
+            Assert.That(metadata.GetProperty("contentRiskScore").GetString(), Is.Not.Empty);
+            Assert.That(metadata.GetProperty("providerNames").GetString(), Does.Contain("BrowserObservedSignalProvider"));
+            Assert.That(serialized, Does.Not.Contain("token=secret-password"));
+            Assert.That(serialized, Does.Not.Contain("pageText"));
+            Assert.That(serialized, Does.Not.Contain("formValues"));
+            Assert.That(serialized, Does.Not.Contain("password=secret"));
+        });
+    }
+
+    /// <summary>
     /// Verifies browser-instance provider settings cannot be changed unless the host explicitly opts in.
     /// </summary>
     [Test]
