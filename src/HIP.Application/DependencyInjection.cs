@@ -33,6 +33,8 @@ public static class DependencyInjection
 {
     /// <summary>
     /// Adds HIP application services without binding infrastructure-specific storage or secret configuration.
+    /// Runtime hosts must also call HIP.Infrastructure's AddHipInfrastructure so live data comes from configured durable storage.
+    /// In-memory repositories are intentionally kept out of this registration path and should be instantiated directly by tests.
     /// </summary>
     /// <param name="services">Service collection used by the host.</param>
     /// <returns>The same service collection for fluent registration.</returns>
@@ -52,9 +54,7 @@ public static class DependencyInjection
         services.AddSingleton<IRuleActionApplier, RuleActionApplier>();
         services.AddSingleton<IRuleEvaluationService, RuleEvaluationService>();
         services.AddSingleton<IRuleSimulationService, RuleSimulationService>();
-        services.AddSingleton<IRuleSimulationResultRepository, InMemoryRuleSimulationResultRepository>();
         services.AddScoped<IRuleJsonService, RuleJsonService>();
-        services.AddScoped<IRuleRepository, InMemoryRuleRepository>();
         services.AddScoped<IAdminRuleService, AdminRuleService>();
         services.AddScoped<IPublicDomainLookupService, PublicDomainLookupService>();
         services.AddScoped<ITrustBadgeService, TrustBadgeService>();
@@ -64,19 +64,14 @@ public static class DependencyInjection
         services.AddSingleton<IRuleCandidateGenerator, RuleCandidateGenerator>();
         services.AddSingleton<ISelfHealingAnalysisService, SelfHealingAnalysisService>();
         services.AddScoped<ISelfHealingPatternDetectionService, SelfHealingPatternDetectionService>();
-        services.AddScoped<IGeneratedRuleCandidateRepository, InMemoryGeneratedRuleCandidateRepository>();
         services.AddScoped<IConsumerPortalService, ConsumerPortalService>();
         services.AddScoped<IAdminDashboardService, AdminDashboardService>();
         services.AddSingleton<IAuditLogService, AuditLogService>();
         services.AddSingleton<IReviewQueueService, ReviewQueueService>();
         services.AddSingleton<IAppealService, AppealService>();
         services.AddSingleton<IReputationOverrideService, ReputationOverrideService>();
-        services.AddScoped<IReputationEventRepository, InMemoryReputationEventRepository>();
-        services.AddScoped<IReputationProfileRepository, InMemoryReputationProfileRepository>();
         services.AddScoped<IReputationService, ReputationService>();
-        services.AddScoped<IWeightedFeedbackRepository, InMemoryWeightedFeedbackRepository>();
         services.AddScoped<IWeightedFeedbackAggregationService, WeightedFeedbackAggregationService>();
-        services.AddScoped<IRiskFindingReportRepository, InMemoryRiskFindingReportRepository>();
         services.AddScoped<IRiskFindingIngestionService, RiskFindingIngestionService>();
         services.TryAddSingleton(new PrivacyHashingOptions());
         services.TryAddSingleton<IPrivacyStoragePolicy, DefaultPrivacyStoragePolicy>();
@@ -89,13 +84,10 @@ public static class DependencyInjection
         services.AddSingleton<IScanResultDedupeService, InMemoryScanResultDedupeService>();
         services.AddSingleton<IDashboardScanAggregateStore, InMemoryDashboardScanAggregateStore>();
         services.AddSingleton<ISubmissionRateLimiter, DevelopmentSubmissionRateLimiter>();
-        services.AddSingleton<IOutboxEventRepository, InMemoryOutboxEventRepository>();
-        services.AddSingleton<IInboxEventRepository, InMemoryInboxEventRepository>();
         services.AddScoped<IOutboxEventWriter, OutboxEventWriter>();
         services.AddSingleton<IReportRetentionPolicyService, ReportRetentionPolicyService>();
         services.AddSingleton<IPrivacySafeReportService, PrivacySafeReportService>();
         services.AddSingleton<IHipCryptoProvider, DevelopmentHipCryptoProvider>();
-        services.AddScoped<IHipIdentityRepository, InMemoryHipIdentityRepository>();
         services.AddScoped<IHipIdentityService, HipIdentityService>();
         services.AddScoped<IHipSignatureService, HipSignatureService>();
         services.AddScoped<IWebsiteIdentityService, WebsiteIdentityService>();
@@ -104,7 +96,6 @@ public static class DependencyInjection
         services.AddScoped<ISecondLifeHudService, SecondLifeHudService>();
         services.AddScoped<ISecondLifeHudSimulationService, SecondLifeHudSimulationService>();
         services.AddScoped<IBrowserPluginService, BrowserPluginService>();
-        services.AddScoped<IBrowserScanResultRepository, InMemoryBrowserScanResultRepository>();
         services.AddScoped<IBrowserScanResultService, BrowserScanResultService>();
         services.AddScoped<IBrowserScanResultWriteService>(provider => (BrowserScanResultService)provider.GetRequiredService<IBrowserScanResultService>());
         services.AddScoped<IBrowserScanResultQueryService>(provider => (BrowserScanResultService)provider.GetRequiredService<IBrowserScanResultService>());
@@ -113,9 +104,7 @@ public static class DependencyInjection
         services.AddScoped<ISiteSafetyScanResultStorageService, SiteSafetyScanResultStorageService>();
         services.AddScoped<IValidator<SiteSafetyScanRequest>, SiteSafetyScanValidator>();
         services.AddSingleton<IValidator<AdminSiteSafetyRule>, AdminSiteSafetyRuleValidator>();
-        services.AddScoped<IAdminSiteSafetyRuleRepository, InMemoryAdminSiteSafetyRuleRepository>();
         services.AddScoped<AdminSiteSafetyRuleService>();
-        services.AddScoped<IAdminReviewQueueRepository, InMemoryAdminReviewQueueRepository>();
         services.AddScoped<IAdminReviewQueueService, AdminReviewQueueService>();
         services.AddSingleton<IValidator<AdminReviewQueueItem>, AdminReviewQueueItemValidator>();
         services.AddSingleton(new SiteSafetyRuleOptions());

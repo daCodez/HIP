@@ -1,6 +1,6 @@
 # HIP
 
-HIP stands for Human Interactive Protocol.
+HIP stands for Human Identity Protocol.
 
 HIP is a trust and origin verification layer for the internet. It sits above TCP and TLS:
 
@@ -78,4 +78,11 @@ The Aspire AppHost is the primary local orchestration entry point.
 
 ## Status
 
-This repository currently contains the foundation only: solution structure, starter architecture docs, core domain model scaffolding, and first scoring model tests.
+HIP now has a local development runtime centered on Aspire:
+
+- the browser extension scans eligible public pages automatically and submits privacy-safe summaries;
+- API/Web persist scan, feedback, review, rule, identity, and audit records through `HIP.Infrastructure`;
+- PostgreSQL is the normal runtime database, while SQLite and in-memory stores are reserved for explicit tests;
+- admin/dashboard pages should show live data or clear no-data/not-connected states instead of fake activity.
+
+This is still an MVP foundation, not production-ready. Production auth, durable worker queues, Redis-backed app caches/dedupe/rate-limit adapters, normalized hot tables, and external-provider slow-path workers remain future hardening work.
