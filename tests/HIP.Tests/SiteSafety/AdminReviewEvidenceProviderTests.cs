@@ -159,7 +159,7 @@ public sealed class AdminReviewEvidenceProviderTests
         new(
             repository,
             new AdminReviewQueueItemValidator(),
-            new AuditLogService());
+            new AuditLogService(new InMemoryAuditLogRepository()));
 
     /// <summary>
     /// Creates a scanner with the browser-observed and admin-review providers active.

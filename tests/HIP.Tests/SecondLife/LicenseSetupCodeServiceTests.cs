@@ -225,7 +225,7 @@ public sealed class LicenseSetupCodeServiceTests
         var ingestion = new RiskFindingIngestionService(
             new RiskFindingReportValidator(),
             new InMemoryRiskFindingReportRepository(),
-            new ReviewQueueService(new ReviewItemValidator(), new AuditLogService()),
+            new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), new AuditLogService(new InMemoryAuditLogRepository())),
             new PatternDetectionService(),
             new Sha256PrivacyHashingService());
 

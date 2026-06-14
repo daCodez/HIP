@@ -40,6 +40,38 @@ public sealed class RuntimeDataSourceTests
     }
 
     /// <summary>
+    /// Ensures runtime review workflows are not backed by process-local dictionaries or singleton service lifetimes.
+    /// </summary>
+    [Test]
+    public void Review_workflow_runtime_services_are_repository_backed()
+    {
+        var root = RepositoryRoot();
+        var dependencyInjection = File.ReadAllText(Path.Combine(root, "src", "HIP.Application", "DependencyInjection.cs"));
+        var reviewServiceSources = new[]
+        {
+            Path.Combine(root, "src", "HIP.Application", "Review", "AuditLogService.cs"),
+            Path.Combine(root, "src", "HIP.Application", "Review", "ReviewQueueService.cs"),
+            Path.Combine(root, "src", "HIP.Application", "Review", "AppealService.cs"),
+            Path.Combine(root, "src", "HIP.Application", "Review", "ReputationOverrideService.cs")
+        };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(dependencyInjection, Does.Not.Contain("AddSingleton<IAuditLogService, AuditLogService>"));
+            Assert.That(dependencyInjection, Does.Not.Contain("AddSingleton<IReviewQueueService, ReviewQueueService>"));
+            Assert.That(dependencyInjection, Does.Not.Contain("AddSingleton<IAppealService, AppealService>"));
+            Assert.That(dependencyInjection, Does.Not.Contain("AddSingleton<IReputationOverrideService, ReputationOverrideService>"));
+
+            foreach (var sourcePath in reviewServiceSources)
+            {
+                var source = File.ReadAllText(sourcePath);
+                Assert.That(source, Does.Not.Contain("private readonly Dictionary<string,"), $"{Path.GetFileName(sourcePath)} must not own process-local workflow state.");
+                Assert.That(source, Does.Not.Contain("private readonly ConcurrentDictionary<string,"), $"{Path.GetFileName(sourcePath)} must not own process-local workflow state.");
+            }
+        });
+    }
+
+    /// <summary>
     /// Ensures the README no longer tells developers HIP is foundation-only or misnames the product.
     /// </summary>
     [Test]

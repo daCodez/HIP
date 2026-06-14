@@ -54,7 +54,7 @@ public sealed class SecondLifeHudServiceTests
     [Test]
     public async Task Suspicious_finding_can_create_review_item()
     {
-        var review = new ReviewQueueService(new ReviewItemValidator(), new AuditLogService());
+        var review = new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), new AuditLogService(new InMemoryAuditLogRepository()));
         var service = Service(review);
 
         var response = await service.ReportFindingAsync(Report(RiskStatus.HighRisk), CancellationToken.None);
@@ -194,7 +194,7 @@ public sealed class SecondLifeHudServiceTests
         var ingestion = new RiskFindingIngestionService(
             new RiskFindingReportValidator(),
             new InMemoryRiskFindingReportRepository(),
-            reviewQueueService ?? new ReviewQueueService(new ReviewItemValidator(), new AuditLogService()),
+            reviewQueueService ?? new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), new AuditLogService(new InMemoryAuditLogRepository())),
             new PatternDetectionService(),
             new Sha256PrivacyHashingService());
 

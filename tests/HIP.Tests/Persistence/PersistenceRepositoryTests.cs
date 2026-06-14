@@ -298,6 +298,73 @@ public sealed class PersistenceRepositoryTests
         });
     }
 
+    /// <summary>
+    /// Verifies review workflow services persist through repositories instead of process-local service state.
+    /// </summary>
+    [Test]
+    public async Task ReviewWorkflowServicesPersistAcrossServiceInstances()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var store = new HipRecordStore(database.Context);
+        var auditRepository = new EfAuditLogRepository(store);
+        var reviewRepository = new EfReviewQueueRepository(store);
+        var appealRepository = new EfAppealRepository(store);
+        var overrideRepository = new EfReputationOverrideRequestRepository(store);
+        var auditService = new AuditLogService(auditRepository);
+        var reviewWriter = new ReviewQueueService(new ReviewItemValidator(), reviewRepository, auditService);
+        var reviewReader = new ReviewQueueService(new ReviewItemValidator(), reviewRepository, auditService);
+        var appealWriter = new AppealService(new AppealRequestValidator(), appealRepository, auditService);
+        var appealReader = new AppealService(new AppealRequestValidator(), appealRepository, auditService);
+        var overrideWriter = new ReputationOverrideService(new ReputationOverrideRequestValidator(), overrideRepository, auditService);
+        var overrideReader = new ReputationOverrideService(new ReputationOverrideRequestValidator(), overrideRepository, auditService);
+
+        var createdReview = reviewWriter.Create(CreateReviewItem(string.Empty));
+        var assignedReview = reviewReader.Assign(createdReview.ReviewItemId, "admin-1", "admin-actor");
+        var submittedAppeal = appealWriter.Submit(new AppealRequest(
+            string.Empty,
+            TargetType.Domain,
+            "appeal.example",
+            "submitter-hash",
+            "The warning appears to be a false positive.",
+            AppealStatus.Submitted,
+            default,
+            default,
+            ReviewerId: null,
+            Decision: null,
+            DecisionReason: null,
+            new Dictionary<string, string> { ["urlHash"] = "hash-only" }));
+        var approvedAppeal = appealReader.Approve(submittedAppeal.AppealId, "admin-2", "Evidence is clean.");
+        var overrideRequest = overrideWriter.Request(new ReputationOverrideRequest(
+            string.Empty,
+            TargetType.Domain,
+            "override.example",
+            CurrentScore: 45,
+            RequestedScore: 70,
+            "Manual review confirmed clean behavior.",
+            "admin-3",
+            OverrideRequestStatus.Pending,
+            RequiredApprovalCount: 0,
+            [],
+            default,
+            default));
+        var approvedOverride = overrideReader.Approve(overrideRequest.OverrideRequestId, "admin-4", "Second review agrees.");
+
+        var auditEntries = await auditRepository.ListAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(assignedReview.AssignedTo, Is.EqualTo("admin-1"));
+            Assert.That(reviewReader.Get(createdReview.ReviewItemId)?.Status, Is.EqualTo(ReviewStatus.InReview));
+            Assert.That(appealReader.Get(submittedAppeal.AppealId)?.Status, Is.EqualTo(AppealStatus.Approved));
+            Assert.That(approvedAppeal.Decision, Is.EqualTo("Approved"));
+            Assert.That(overrideReader.List().Single().Status, Is.EqualTo(OverrideRequestStatus.Approved));
+            Assert.That(approvedOverride.Approvals, Has.Count.EqualTo(1));
+            Assert.That(auditEntries.Select(entry => entry.Action), Does.Contain("Review item assigned"));
+            Assert.That(auditEntries.Select(entry => entry.Action), Does.Contain("Appeal approved"));
+            Assert.That(auditEntries.Select(entry => entry.Action), Does.Contain("Reputation override approved"));
+        });
+    }
+
     private static TrustRule CreateRule(string ruleId) =>
         new(
             ruleId,

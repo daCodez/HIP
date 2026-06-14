@@ -66,10 +66,10 @@ public static class DependencyInjection
         services.AddScoped<ISelfHealingPatternDetectionService, SelfHealingPatternDetectionService>();
         services.AddScoped<IConsumerPortalService, ConsumerPortalService>();
         services.AddScoped<IAdminDashboardService, AdminDashboardService>();
-        services.AddSingleton<IAuditLogService, AuditLogService>();
-        services.AddSingleton<IReviewQueueService, ReviewQueueService>();
-        services.AddSingleton<IAppealService, AppealService>();
-        services.AddSingleton<IReputationOverrideService, ReputationOverrideService>();
+        services.AddScoped<IAuditLogService, AuditLogService>();
+        services.AddScoped<IReviewQueueService, ReviewQueueService>();
+        services.AddScoped<IAppealService, AppealService>();
+        services.AddScoped<IReputationOverrideService, ReputationOverrideService>();
         services.AddScoped<IReputationService, ReputationService>();
         services.AddScoped<IWeightedFeedbackAggregationService, WeightedFeedbackAggregationService>();
         services.AddScoped<IRiskFindingIngestionService, RiskFindingIngestionService>();

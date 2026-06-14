@@ -199,11 +199,11 @@ public sealed class ReviewFlowTests
 
     private static ServiceSet Services()
     {
-        var audit = new AuditLogService();
+        var audit = new AuditLogService(new InMemoryAuditLogRepository());
         return new ServiceSet(
-            new ReviewQueueService(new ReviewItemValidator(), audit),
-            new AppealService(new AppealRequestValidator(), audit),
-            new ReputationOverrideService(new ReputationOverrideRequestValidator(), audit),
+            new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), audit),
+            new AppealService(new AppealRequestValidator(), new InMemoryAppealRepository(), audit),
+            new ReputationOverrideService(new ReputationOverrideRequestValidator(), new InMemoryReputationOverrideRequestRepository(), audit),
             audit);
     }
 

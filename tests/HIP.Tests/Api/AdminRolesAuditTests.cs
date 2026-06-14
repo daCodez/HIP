@@ -60,7 +60,7 @@ public sealed class AdminRolesAuditTests
     [Test]
     public async Task Audit_log_entry_is_created_for_rule_change()
     {
-        var audit = new AuditLogService();
+        var audit = new AuditLogService(new InMemoryAuditLogRepository());
         var matching = new RuleMatchingEngine();
         var service = new AdminRuleService(
             new TrustRuleValidator(),
@@ -76,7 +76,7 @@ public sealed class AdminRolesAuditTests
     [Test]
     public void Audit_log_does_not_store_private_chat_content()
     {
-        var audit = new AuditLogService();
+        var audit = new AuditLogService(new InMemoryAuditLogRepository());
 
         audit.Write(
             "admin",

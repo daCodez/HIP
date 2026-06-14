@@ -65,8 +65,8 @@ public sealed class RiskFindingIngestionTests
     [Test]
     public async Task High_risk_report_creates_review_item()
     {
-        var audit = new AuditLogService();
-        var review = new ReviewQueueService(new ReviewItemValidator(), audit);
+        var audit = new AuditLogService(new InMemoryAuditLogRepository());
+        var review = new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), audit);
         var service = Service(review);
 
         var response = await service.IngestAsync(Report(RiskStatus.HighRisk), CancellationToken.None);
@@ -78,8 +78,8 @@ public sealed class RiskFindingIngestionTests
     [Test]
     public async Task Low_risk_report_does_not_always_create_review_item()
     {
-        var audit = new AuditLogService();
-        var review = new ReviewQueueService(new ReviewItemValidator(), audit);
+        var audit = new AuditLogService(new InMemoryAuditLogRepository());
+        var review = new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), audit);
         var service = Service(review);
 
         var response = await service.IngestAsync(Report(RiskStatus.Caution), CancellationToken.None);
@@ -129,7 +129,7 @@ public sealed class RiskFindingIngestionTests
         new(
             new RiskFindingReportValidator(),
             new InMemoryRiskFindingReportRepository(),
-            reviewQueueService ?? new ReviewQueueService(new ReviewItemValidator(), new AuditLogService()),
+            reviewQueueService ?? new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), new AuditLogService(new InMemoryAuditLogRepository())),
             new PatternDetectionService(),
             new Sha256PrivacyHashingService());
 

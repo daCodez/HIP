@@ -450,7 +450,7 @@ public sealed class AdminSiteSafetyRuleTests
     public async Task Rollback_does_not_erase_audit_history()
     {
         var repository = new InMemoryAdminSiteSafetyRuleRepository();
-        var audit = new AuditLogService();
+        var audit = new AuditLogService(new InMemoryAuditLogRepository());
         var service = CreateService(repository, audit);
         var original = await service.CreateAsync(ValidRule("Audited rollback"), CancellationToken.None);
         await service.UpdateAsync(original with { Description = "Changed description.", UpdatedBy = "admin-a" }, CancellationToken.None);
@@ -610,7 +610,7 @@ public sealed class AdminSiteSafetyRuleTests
     /// Creates the admin rule service with an optional repository.
     /// </summary>
     private static AdminSiteSafetyRuleService CreateService(IAdminSiteSafetyRuleRepository? repository = null, AuditLogService? auditLogService = null) =>
-        new(repository ?? new InMemoryAdminSiteSafetyRuleRepository(), new AdminSiteSafetyRuleValidator(), auditLogService ?? new AuditLogService());
+        new(repository ?? new InMemoryAdminSiteSafetyRuleRepository(), new AdminSiteSafetyRuleValidator(), auditLogService ?? new AuditLogService(new InMemoryAuditLogRepository()));
 
     /// <summary>
     /// Creates a scanner with a test admin repository and no external providers.

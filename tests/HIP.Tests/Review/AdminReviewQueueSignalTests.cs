@@ -333,7 +333,7 @@ public sealed class AdminReviewQueueSignalTests
     [Test]
     public async Task Admin_decision_creates_safe_audit_log()
     {
-        var audit = new AuditLogService();
+        var audit = new AuditLogService(new InMemoryAuditLogRepository());
         var service = CreateService(audit);
         var item = await service.CreateSignalAsync(Signal(), CancellationToken.None);
 
@@ -371,7 +371,7 @@ public sealed class AdminReviewQueueSignalTests
         new(
             new InMemoryAdminReviewQueueRepository(),
             new AdminReviewQueueItemValidator(),
-            auditLogService ?? new AuditLogService());
+            auditLogService ?? new AuditLogService(new InMemoryAuditLogRepository()));
 
     /// <summary>
     /// Builds a minimal privacy-safe scan result for review signal tests.

@@ -264,7 +264,7 @@ public sealed class EndToEndSiteSafetyScanFlowTests
     /// </summary>
     /// <returns>An admin review queue service backed by in-memory storage.</returns>
     private static AdminReviewQueueService ReviewQueue() =>
-        new(new InMemoryAdminReviewQueueRepository(), new AdminReviewQueueItemValidator(), new AuditLogService());
+        new(new InMemoryAdminReviewQueueRepository(), new AdminReviewQueueItemValidator(), new AuditLogService(new InMemoryAuditLogRepository()));
 
     /// <summary>
     /// Builds a privacy-safe Site Safety result for review queue integration tests.

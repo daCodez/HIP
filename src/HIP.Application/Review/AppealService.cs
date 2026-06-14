@@ -6,11 +6,9 @@ namespace HIP.Application.Review;
 
 public sealed class AppealService(
     IValidator<AppealRequest> validator,
+    IAppealRepository repository,
     IAuditLogService auditLogService) : IAppealService
 {
-    private readonly Dictionary<string, AppealRequest> _appeals = new(StringComparer.OrdinalIgnoreCase);
-    private readonly object _lock = new();
-
     public AppealRequest Submit(AppealRequest appeal)
     {
         var now = DateTimeOffset.UtcNow;
@@ -24,30 +22,19 @@ public sealed class AppealService(
 
         validator.ValidateAndThrow(normalized);
 
-        lock (_lock)
-        {
-            _appeals[normalized.AppealId] = normalized;
-        }
+        Run(repository.SaveAsync(normalized, CancellationToken.None));
 
         auditLogService.Write("public-appeal", "Appeal submitted", normalized.TargetType, normalized.TargetId, normalized.Reason, AuditSeverity.Medium);
         return normalized;
     }
 
-    public IReadOnlyCollection<AppealRequest> List()
-    {
-        lock (_lock)
-        {
-            return _appeals.Values.OrderByDescending(appeal => appeal.CreatedAtUtc).ToArray();
-        }
-    }
+    public IReadOnlyCollection<AppealRequest> List() =>
+        Run(repository.ListAsync(CancellationToken.None))
+            .OrderByDescending(appeal => appeal.CreatedAtUtc)
+            .ToArray();
 
-    public AppealRequest? Get(string appealId)
-    {
-        lock (_lock)
-        {
-            return _appeals.GetValueOrDefault(appealId);
-        }
-    }
+    public AppealRequest? Get(string appealId) =>
+        Run(repository.GetAsync(appealId, CancellationToken.None));
 
     public AppealRequest Approve(string appealId, string reviewerId, string reason)
     {
@@ -72,25 +59,29 @@ public sealed class AppealService(
 
     private AppealRequest Decide(string appealId, AppealStatus status, string reviewerId, string decision, string reason)
     {
-        lock (_lock)
+        var appeal = Run(repository.GetAsync(appealId, CancellationToken.None));
+        if (appeal is null)
         {
-            if (!_appeals.TryGetValue(appealId, out var appeal))
-            {
-                throw new ArgumentException("Appeal was not found.", nameof(appealId));
-            }
-
-            var updated = appeal with
-            {
-                Status = status,
-                ReviewerId = reviewerId,
-                Decision = decision,
-                DecisionReason = reason,
-                UpdatedAtUtc = DateTimeOffset.UtcNow
-            };
-
-            validator.ValidateAndThrow(updated);
-            _appeals[appealId] = updated;
-            return updated;
+            throw new ArgumentException("Appeal was not found.", nameof(appealId));
         }
+
+        var updated = appeal with
+        {
+            Status = status,
+            ReviewerId = reviewerId,
+            Decision = decision,
+            DecisionReason = reason,
+            UpdatedAtUtc = DateTimeOffset.UtcNow
+        };
+
+        validator.ValidateAndThrow(updated);
+        Run(repository.SaveAsync(updated, CancellationToken.None));
+        return updated;
     }
+
+    private static void Run(Task task) =>
+        task.GetAwaiter().GetResult();
+
+    private static T Run<T>(Task<T> task) =>
+        task.GetAwaiter().GetResult();
 }

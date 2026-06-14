@@ -971,13 +971,13 @@ public sealed class AdminDashboardTests
         IAdminSiteSafetyRuleRepository? adminSiteSafetyRuleRepository = null,
         IRuleRepository? ruleRepository = null)
     {
-        var auditLogService = new AuditLogService();
+        var auditLogService = new AuditLogService(new InMemoryAuditLogRepository());
         return new AdminDashboardService(
             browserScanRepository,
             riskFindingRepository ?? new InMemoryRiskFindingReportRepository(),
-            reviewQueueService ?? new ReviewQueueService(new ReviewItemValidator(), auditLogService),
-            new AppealService(new AppealRequestValidator(), auditLogService),
-            new ReputationOverrideService(new ReputationOverrideRequestValidator(), auditLogService),
+            reviewQueueService ?? new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), auditLogService),
+            new AppealService(new AppealRequestValidator(), new InMemoryAppealRepository(), auditLogService),
+            new ReputationOverrideService(new ReputationOverrideRequestValidator(), new InMemoryReputationOverrideRequestRepository(), auditLogService),
             auditLogService,
             ruleRepository ?? new InMemoryRuleRepository(),
             new InMemoryGeneratedRuleCandidateRepository(),

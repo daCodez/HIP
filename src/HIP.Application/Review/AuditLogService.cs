@@ -1,13 +1,10 @@
-using System.Collections.Concurrent;
 using HIP.Domain.Audit;
 using HIP.Domain.Review;
 
 namespace HIP.Application.Review;
 
-public sealed class AuditLogService : IAuditLogService
+public sealed class AuditLogService(IAuditLogRepository repository) : IAuditLogService
 {
-    private readonly ConcurrentDictionary<string, AuditLogEntry> _entries = new();
-
     public AuditLogEntry Write(
         string actorId,
         string action,
@@ -38,12 +35,14 @@ public sealed class AuditLogService : IAuditLogService
             CorrelationId = correlationId
         };
 
-        _entries[entry.AuditLogId] = entry;
+        Run(repository.SaveAsync(entry, CancellationToken.None));
         return entry;
     }
 
     public IReadOnlyCollection<AuditLogEntry> List() =>
-        _entries.Values.OrderByDescending(entry => entry.CreatedAtUtc).ToArray();
+        Run(repository.ListAsync(CancellationToken.None))
+            .OrderByDescending(entry => entry.CreatedAtUtc)
+            .ToArray();
 
     private static IReadOnlyDictionary<string, string> Sanitize(IReadOnlyDictionary<string, string>? metadata)
     {
@@ -70,4 +69,10 @@ public sealed class AuditLogService : IAuditLogService
         value.Contains("private chat content", StringComparison.OrdinalIgnoreCase) ||
         value.Contains("raw private message", StringComparison.OrdinalIgnoreCase) ||
         value.Contains("privateChatLog", StringComparison.OrdinalIgnoreCase);
+
+    private static void Run(Task task) =>
+        task.GetAwaiter().GetResult();
+
+    private static T Run<T>(Task<T> task) =>
+        task.GetAwaiter().GetResult();
 }

@@ -6,11 +6,9 @@ namespace HIP.Application.Review;
 
 public sealed class ReviewQueueService(
     IValidator<ReviewItem> validator,
+    IReviewQueueRepository repository,
     IAuditLogService auditLogService) : IReviewQueueService
 {
-    private readonly Dictionary<string, ReviewItem> _items = new(StringComparer.OrdinalIgnoreCase);
-    private readonly object _lock = new();
-
     public ReviewItem Create(ReviewItem item)
     {
         var now = DateTimeOffset.UtcNow;
@@ -24,30 +22,19 @@ public sealed class ReviewQueueService(
 
         validator.ValidateAndThrow(normalized);
 
-        lock (_lock)
-        {
-            _items[normalized.ReviewItemId] = normalized;
-        }
+        Run(repository.SaveAsync(normalized, CancellationToken.None));
 
         auditLogService.Write(normalized.CreatedBy, "Review item created", normalized.TargetType, normalized.TargetId, normalized.Title, AuditSeverity.Medium);
         return normalized;
     }
 
-    public IReadOnlyCollection<ReviewItem> List()
-    {
-        lock (_lock)
-        {
-            return _items.Values.OrderByDescending(item => item.CreatedAtUtc).ToArray();
-        }
-    }
+    public IReadOnlyCollection<ReviewItem> List() =>
+        Run(repository.ListAsync(CancellationToken.None))
+            .OrderByDescending(item => item.CreatedAtUtc)
+            .ToArray();
 
-    public ReviewItem? Get(string reviewItemId)
-    {
-        lock (_lock)
-        {
-            return _items.GetValueOrDefault(reviewItemId);
-        }
-    }
+    public ReviewItem? Get(string reviewItemId) =>
+        Run(repository.GetAsync(reviewItemId, CancellationToken.None));
 
     public ReviewItem Assign(string reviewItemId, string assignedTo, string actorId)
     {
@@ -112,17 +99,21 @@ public sealed class ReviewQueueService(
 
     private ReviewItem Update(string reviewItemId, Func<ReviewItem, ReviewItem> update)
     {
-        lock (_lock)
+        var item = Run(repository.GetAsync(reviewItemId, CancellationToken.None));
+        if (item is null)
         {
-            if (!_items.TryGetValue(reviewItemId, out var item))
-            {
-                throw new ArgumentException("Review item was not found.", nameof(reviewItemId));
-            }
-
-            var updated = update(item);
-            validator.ValidateAndThrow(updated);
-            _items[reviewItemId] = updated;
-            return updated;
+            throw new ArgumentException("Review item was not found.", nameof(reviewItemId));
         }
+
+        var updated = update(item);
+        validator.ValidateAndThrow(updated);
+        Run(repository.SaveAsync(updated, CancellationToken.None));
+        return updated;
     }
+
+    private static void Run(Task task) =>
+        task.GetAwaiter().GetResult();
+
+    private static T Run<T>(Task<T> task) =>
+        task.GetAwaiter().GetResult();
 }
