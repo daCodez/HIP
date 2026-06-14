@@ -68,6 +68,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "HIP_SCAN_SITE_SAFETY") {
+    scanSiteSafety(message.request)
+      .then(result => sendResponse({ ok: true, result }))
+      .catch(error => {
+        sendResponse({ ok: false, error: safeSiteSafetyError(error) });
+      });
+
+    return true;
+  }
+
   if (message?.type === "HIP_SAFETY_URL") {
     safetyPageUrl(message.originalUrl, message.sourceDomain, message.riskStatus)
       .then(result => sendResponse({ ok: true, result }))
@@ -165,6 +175,26 @@ async function scanLinks(pageUrl, links) {
   const settings = await loadHipSettings();
   const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
   return client.scanLinks(pageUrl, links);
+}
+
+/**
+ * Runs the server-side Site Safety scan from the background worker.
+ * Keeping network access here lets page content scripts collect structural signals without owning API details.
+ */
+async function scanSiteSafety(request) {
+  const settings = await loadHipSettings();
+  const client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
+  return client.scanSiteSafety(request);
+}
+
+/**
+ * Returns a deliberately generic Site Safety error for extension UI surfaces.
+ * Expected 400/404 responses should not leak URLs, local ports, or validation details into page-visible state.
+ */
+function safeSiteSafetyError(error) {
+  return error?.message?.includes("status 400") || error?.message?.includes("status 404")
+    ? "HIP Site Safety unavailable for this page."
+    : "HIP Site Safety unavailable.";
 }
 
 async function safetyPageUrl(originalUrl, sourceDomain, riskStatus) {

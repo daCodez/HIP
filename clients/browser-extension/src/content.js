@@ -88,6 +88,12 @@
     markScanStage("CollectingPageSignals");
     collectScriptSignals();
     publishSummary();
+    markScanStage("CheckingSiteSafety");
+    publishSummary();
+    await scanSiteSafety().catch(error => {
+      lastSummary.siteSafetyStatus = "Unavailable";
+      lastSummary.siteSafetyError = error?.message || "HIP Site Safety unavailable.";
+    });
     markScanStage("RenderingWarnings");
     await renderPageBannerIfNeeded(currentLookup);
     markScanStage("SubmittingSummary");
@@ -413,6 +419,14 @@
         redirectCandidates: String(lastSummary.redirectCandidates),
         socialLinkCandidates: String(lastSummary.socialLinkCandidates),
         webmailLinkCandidates: String(lastSummary.webmailLinkCandidates),
+        siteSafetyDataSource: lastSummary.siteSafetyDataSource,
+        siteSafetyStatus: lastSummary.siteSafetyStatus,
+        confidence: lastSummary.confidenceLevel,
+        domainTrustScore: String(lastSummary.domainTrustScore ?? ""),
+        pageTrustScore: String(lastSummary.pageTrustScore ?? ""),
+        contentRiskScore: String(lastSummary.contentRiskScore ?? ""),
+        finalHipScore: String(lastSummary.finalHipScore ?? ""),
+        providerEvidenceCount: String(lastSummary.providerEvidenceCount ?? 0),
         pluginVersion
       }
     };
@@ -470,6 +484,64 @@
   }
 
   /**
+   * Runs Site Safety automatically from the content script after structural page signals are collected.
+   * The request sends counts, public evidence URLs, and the current URL only; it never sends page body text,
+   * form values, cookies, tokens, passwords, or private message content.
+   */
+  async function scanSiteSafety() {
+    if (!isSiteSafetyEligibleUrl(window.location.href)) {
+      lastSummary.siteSafetyStatus = "Skipped";
+      lastSummary.siteSafetyDataSource = "IneligibleUrl";
+      return null;
+    }
+
+    const request = buildSiteSafetyRequest();
+    const response = await chrome.runtime.sendMessage({ type: "HIP_SCAN_SITE_SAFETY", request });
+    if (!response?.ok) {
+      lastSummary.siteSafetyStatus = "Unavailable";
+      lastSummary.siteSafetyError = response?.error || "HIP Site Safety unavailable.";
+      return null;
+    }
+
+    lastSummary.siteSafetyStatus = response.result?.status || "Unknown";
+    lastSummary.siteSafetyDataSource = "SiteSafetyScan";
+    lastSummary.siteSafetyScannedAtUtc = response.result?.scannedAtUtc || new Date().toISOString();
+    lastSummary.domainTrustScore = response.result?.domainTrustScore ?? null;
+    lastSummary.pageTrustScore = response.result?.pageTrustScore ?? null;
+    lastSummary.contentRiskScore = response.result?.contentRiskScore ?? null;
+    lastSummary.finalHipScore = response.result?.finalHipScore ?? null;
+    lastSummary.confidenceLevel = response.result?.confidenceLevel || "Unknown";
+    lastSummary.providerEvidenceCount = Array.isArray(response.result?.providerEvidence)
+      ? response.result.providerEvidence.length
+      : 0;
+    return response.result;
+  }
+
+  /**
+   * Builds the privacy-safe Site Safety request from structural page observations.
+   * Evidence URL lists are filtered to public HTTP(S) URLs so the API does not receive localhost/private targets.
+   */
+  function buildSiteSafetyRequest() {
+    return {
+      url: window.location.href,
+      pluginVersion,
+      observedSignals: {
+        downloadLinks: filterSafePublicUrls(lastSummary.downloadLinks),
+        hasLoginForm: lastSummary.loginFormsDetected > 0,
+        hasPasswordField: lastSummary.passwordFieldsDetected > 0,
+        hasPaymentField: lastSummary.paymentFieldsDetected > 0,
+        inlineScriptCount: lastSummary.inlineScriptCount,
+        externalScriptUrls: filterSafePublicUrls(lastSummary.externalScriptUrls),
+        suspiciousScriptPatternCount: lastSummary.suspiciousScriptPatternCount,
+        trustDataAvailable: lastSummary.scanResultDataSource === "BrowserPluginScan",
+        shortenedLinkCount: lastSummary.shortenedLinkCandidates,
+        obfuscatedLinkCount: lastSummary.obfuscatedLinkCandidates,
+        redirectChain: filterSafePublicUrls(lastSummary.redirectSignals)
+      }
+    };
+  }
+
+  /**
    * Removes query strings and fragments before any explicitly enabled raw URL diagnostic submission.
    * Normal background scan submissions send only pageUrlHash, because query strings often contain private tokens.
    */
@@ -517,6 +589,65 @@
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Checks whether the current tab URL is safe to submit to the Site Safety API.
+   * Localhost and private-network URLs are skipped client-side because the server rejects them as SSRF protection.
+   */
+  function isSiteSafetyEligibleUrl(pageUrl) {
+    try {
+      const url = new URL(pageUrl);
+      return ["http:", "https:"].includes(url.protocol) &&
+        !isHipOwnedPage(pageUrl, settings) &&
+        !isInternalHost(url.hostname);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Filters optional evidence URLs before sending Site Safety requests.
+   * This protects local networks and keeps expected API validation failures out of extension diagnostics.
+   */
+  function filterSafePublicUrls(values) {
+    if (!Array.isArray(values)) {
+      return [];
+    }
+
+    return values
+      .filter(value => typeof value === "string")
+      .filter(isSiteSafetyEligibleUrl);
+  }
+
+  /**
+   * Detects local and private hosts using the same conservative checks as the shared API client helper.
+   */
+  function isInternalHost(hostname) {
+    const host = normalizeHost(hostname);
+    if (!host ||
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host === "::1" ||
+      host === "[::1]") {
+      return true;
+    }
+
+    const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (!ipv4) {
+      return false;
+    }
+
+    const octets = ipv4.slice(1).map(Number);
+    if (octets.some(octet => Number.isNaN(octet) || octet < 0 || octet > 255)) {
+      return true;
+    }
+
+    return octets[0] === 10 ||
+      octets[0] === 127 ||
+      (octets[0] === 169 && octets[1] === 254) ||
+      (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+      (octets[0] === 192 && octets[1] === 168);
   }
 
   /**
@@ -711,6 +842,15 @@
    * This prevents the first successful content scan from persisting "not scanned yet" as a real result.
    */
   function browserScanAssessment(lookup, summary = {}) {
+    if (summary.siteSafetyDataSource === "SiteSafetyScan" && Number.isInteger(summary.finalHipScore)) {
+      const status = mapSiteSafetyStatus(summary.siteSafetyStatus);
+      return {
+        score: summary.finalHipScore,
+        status,
+        reasons: siteSafetyScanReasons(summary)
+      };
+    }
+
     if (!isLookupNoDataState(lookup)) {
       const status = lookup?.status || "Unknown";
       return {
@@ -733,6 +873,39 @@
       status: browserScanStatus(score, dangerousLinks, suspiciousLinks, riskyLinks, unknownLinks),
       reasons: browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates })
     };
+  }
+
+  /**
+   * Converts Site Safety labels to the public/dashboard status labels used by stored browser scan summaries.
+   */
+  function mapSiteSafetyStatus(status) {
+    if (status === "Clean") {
+      return "MostlyTrusted";
+    }
+
+    if (status === "LimitedData") {
+      return "LimitedTrustData";
+    }
+
+    return ["Unknown", "Suspicious", "HighRisk", "Dangerous"].includes(status)
+      ? status
+      : "Unknown";
+  }
+
+  /**
+   * Explains an automatic Site Safety-backed browser scan without exposing raw page contents.
+   */
+  function siteSafetyScanReasons(summary = {}) {
+    const reasons = ["HIP ran a privacy-safe Site Safety scan using structural browser observations."];
+    if (summary.confidenceLevel) {
+      reasons.push(`Site Safety confidence: ${summary.confidenceLevel}.`);
+    }
+
+    if ((summary.providerEvidenceCount ?? 0) > 0) {
+      reasons.push(`${summary.providerEvidenceCount} evidence provider result${summary.providerEvidenceCount === 1 ? " was" : "s were"} included.`);
+    }
+
+    return reasons;
   }
 
   /**
@@ -974,6 +1147,16 @@
       inlineScriptCount: 0,
       externalScriptUrls: [],
       suspiciousScriptPatternCount: 0,
+      siteSafetyStatus: "Pending",
+      siteSafetyDataSource: "Pending",
+      siteSafetyScannedAtUtc: null,
+      siteSafetyError: null,
+      domainTrustScore: null,
+      pageTrustScore: null,
+      contentRiskScore: null,
+      finalHipScore: null,
+      confidenceLevel: "Unknown",
+      providerEvidenceCount: 0,
       scanResultSubmission: "Pending",
       scanResultDataSource: "Pending",
       scanStage: "Pending",

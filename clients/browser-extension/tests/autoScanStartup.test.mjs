@@ -6,6 +6,7 @@ import { fetchWithTimeout, HIP_FETCH_TIMEOUT_MS } from "../src/hipApiClient.js";
 const contentSource = await readFile(new URL("../src/content.js", import.meta.url), "utf8");
 const popupSource = await readFile(new URL("../src/popup.js", import.meta.url), "utf8");
 const apiClientSource = await readFile(new URL("../src/hipApiClient.js", import.meta.url), "utf8");
+const backgroundSource = await readFile(new URL("../src/background.js", import.meta.url), "utf8");
 
 test("content script publishes scan progress before site scoring", () => {
   const startupIndex = contentSource.indexOf('markScanStage("Starting")');
@@ -31,9 +32,42 @@ test("content script summary includes scan stage and update timestamps", () => {
   assert.equal(contentSource.includes("lastSummary.updatedAt = new Date().toISOString();"), true);
 });
 
+test("content script runs Site Safety during automatic page scan", () => {
+  const collectIndex = contentSource.indexOf('markScanStage("CollectingPageSignals")');
+  const siteSafetyIndex = contentSource.indexOf('markScanStage("CheckingSiteSafety")');
+  const persistIndex = contentSource.indexOf("await persistScanResult(currentLookup)");
+
+  assert.equal(siteSafetyIndex > collectIndex, true);
+  assert.equal(persistIndex > siteSafetyIndex, true);
+  assert.equal(contentSource.includes('type: "HIP_SCAN_SITE_SAFETY"'), true);
+  assert.equal(contentSource.includes("buildSiteSafetyRequest()"), true);
+});
+
+test("content script skips private and HIP owned URLs before Site Safety", () => {
+  assert.equal(contentSource.includes("function isSiteSafetyEligibleUrl"), true);
+  assert.equal(contentSource.includes("!isHipOwnedPage(pageUrl, settings)"), true);
+  assert.equal(contentSource.includes("!isInternalHost(url.hostname)"), true);
+  assert.equal(contentSource.includes("function filterSafePublicUrls"), true);
+});
+
+test("content script preserves layered Site Safety scores in stored scan metadata", () => {
+  assert.equal(contentSource.includes("siteSafetyDataSource: lastSummary.siteSafetyDataSource"), true);
+  assert.equal(contentSource.includes("domainTrustScore: String(lastSummary.domainTrustScore"), true);
+  assert.equal(contentSource.includes("pageTrustScore: String(lastSummary.pageTrustScore"), true);
+  assert.equal(contentSource.includes("contentRiskScore: String(lastSummary.contentRiskScore"), true);
+  assert.equal(contentSource.includes("finalHipScore: String(lastSummary.finalHipScore"), true);
+  assert.equal(contentSource.includes("function mapSiteSafetyStatus"), true);
+});
+
 test("content script is guarded against duplicate dev-time injection", () => {
   assert.equal(contentSource.includes("window.__hipContentScriptLoaded"), true);
   assert.equal(contentSource.includes("return;"), true);
+});
+
+test("background worker handles automatic Site Safety requests without noisy warnings", () => {
+  assert.equal(backgroundSource.includes('message?.type === "HIP_SCAN_SITE_SAFETY"'), true);
+  assert.equal(backgroundSource.includes("function safeSiteSafetyError"), true);
+  assert.equal(backgroundSource.includes('console.warn("HIP Site Safety'), false);
 });
 
 test("popup starts scanner once when no cached page-load summary exists", () => {
