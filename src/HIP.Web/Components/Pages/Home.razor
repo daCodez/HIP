@@ -1,147 +1,57 @@
 @page "/"
 @rendermode InteractiveServer
-@inject IAdminDashboardService DashboardService
 
-<PageTitle>HIP Security Overview</PageTitle>
+<PageTitle>HIP Local Overview</PageTitle>
 
 <section class="hip-page-heading">
     <div>
-        <h1>Security Overview</h1>
-        <p>Live trust, origin, reputation, and risk signals across connected HIP clients.</p>
+        <h1>HIP Local Overview</h1>
+        <p>Human Identity Protocol verifies trust above TCP and TLS. TCP connects. TLS encrypts. HIP verifies origin, reputation, and risk.</p>
     </div>
-    <span class="live-status"><i></i> @(_summary is null ? "Loading" : "Live data")</span>
+    <span class="live-status"><i></i> Local dev</span>
 </section>
 
-@if (_summary is null)
-{
-    <section class="hip-panel">
-        <div class="hip-panel-heading">
-            <div>
-                <h2>Loading HIP data</h2>
-                <p>HIP is reading stored scan and review summaries.</p>
-            </div>
+<section class="hip-metric-grid">
+    <article class="hip-metric-card good">
+        <span>Admin Dashboard</span>
+        <strong>Live</strong>
+        <small>Requires dev login</small>
+    </article>
+    <article class="hip-metric-card">
+        <span>Public Lookup</span>
+        <strong>Ready</strong>
+        <small>Domain trust summaries</small>
+    </article>
+    <article class="hip-metric-card hot">
+        <span>Browser Plugin</span>
+        <strong>Client</strong>
+        <small>Privacy-safe scans</small>
+    </article>
+</section>
+
+<section class="hip-panel">
+    <div class="hip-panel-heading">
+        <div>
+            <h2>Local Development Entry Points</h2>
+            <p>This page intentionally avoids live dashboard queries so the site shell loads even when admin data sources are empty or still starting.</p>
         </div>
-    </section>
-}
-else
-{
-    <section class="hip-metric-grid">
-        <article class="hip-metric-card danger">
-            <span>Dangerous Results</span>
-            <strong>@CardValue("dangerousResults")</strong>
-            <small>@CardStatus("dangerousResults")</small>
-        </article>
-        <article class="hip-metric-card hot">
-            <span>High-Risk Results</span>
-            <strong>@CardValue("highRiskResults")</strong>
-            <small>@CardStatus("highRiskResults")</small>
-        </article>
-        <article class="hip-metric-card good">
-            <span>Trusted Results</span>
-            <strong>@CardValue("trustedResults")</strong>
-            <small>@CardStatus("trustedResults")</small>
-        </article>
-        <article class="hip-metric-card">
-            <span>Domains Scanned</span>
-            <strong>@CardValue("domainsScanned")</strong>
-            <small>@CardStatus("domainsScanned")</small>
-        </article>
-        <article class="hip-metric-card wide">
-            <span>Total Scans</span>
-            <strong>@CardValue("totalScans")</strong>
-        </article>
-        <article class="hip-metric-card wide">
-            <span>Links Scanned</span>
-            <strong>@CardValue("linksScanned")</strong>
-        </article>
-        <article class="hip-metric-card wide good">
-            <span>Active Rules</span>
-            <strong>@CardValue("activeRules")</strong>
-        </article>
-    </section>
+    </div>
 
-    <section class="hip-panel">
-        <div class="hip-panel-heading">
-            <div>
-                <h2>Recent Threats</h2>
-                <p>Live privacy-safe detected threats. Normal clean pages are not shown here.</p>
-            </div>
-            <a href="/admin/review">View review queue</a>
+    <div class="quick-link-grid">
+        <a href="/login">Admin Login</a>
+        <a href="/dev/admin-login/Admin">Dev Admin Sign In</a>
+        <a href="/admin">Admin Dashboard</a>
+        <a href="/lookup">Public Lookup</a>
+        <a href="/safety">Safety Page</a>
+        <a href="/admin/settings">Provider Settings</a>
+    </div>
+</section>
+
+<section class="hip-panel">
+    <div class="hip-panel-heading">
+        <div>
+            <h2>Current Build</h2>
+            <p>@HipWebBuildInfo.DashboardDisplayVersion</p>
         </div>
-
-        @if (_summary.RecentThreats.Count == 0)
-        {
-            <div class="hip-threat-empty">
-                <strong>No recent threats found.</strong>
-                <span>HIP has no high-risk evidence in the connected live data sources.</span>
-            </div>
-        }
-        else
-        {
-            <div class="hip-table-wrap">
-                <table class="hip-data-table">
-                    <thead>
-                        <tr>
-                            <th>Source</th>
-                            <th>Domain</th>
-                            <th>Severity</th>
-                            <th>Status</th>
-                            <th>Time</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var threat in _summary.RecentThreats)
-                        {
-                            <tr>
-                                <td>@threat.Source</td>
-                                <td>@threat.Domain</td>
-                                <td><span class="hip-pill @Tone(threat.Severity)">@threat.Severity</span></td>
-                                <td><span class="hip-pill @Tone(threat.Severity)">@threat.SiteSafetyStatus</span></td>
-                                <td>@threat.CreatedAtUtc.UtcDateTime.ToString("u")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-    </section>
-}
-
-@code {
-    private AdminDashboardSummary? _summary;
-
-    /// <summary>
-    /// Loads the live dashboard summary for the root overview.
-    /// </summary>
-    protected override async Task OnInitializedAsync() =>
-        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
-
-    /// <summary>
-    /// Gets a dashboard card value.
-    /// </summary>
-    /// <param name="key">Card key.</param>
-    /// <returns>Live card value or zero.</returns>
-    private int CardValue(string key) =>
-        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
-
-    /// <summary>
-    /// Gets a dashboard card status.
-    /// </summary>
-    /// <param name="key">Card key.</param>
-    /// <returns>Live card status or no-data text.</returns>
-    private string CardStatus(string key) =>
-        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Status ?? "No Data";
-
-    /// <summary>
-    /// Maps severity to a HIP visual tone.
-    /// </summary>
-    /// <param name="severity">Severity label.</param>
-    /// <returns>CSS tone.</returns>
-    private static string Tone(string severity) =>
-        severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
-        severity.Equals("High", StringComparison.OrdinalIgnoreCase)
-            ? "danger"
-            : severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)
-                ? "suspicious"
-                : "caution";
-}
+    </div>
+</section>
