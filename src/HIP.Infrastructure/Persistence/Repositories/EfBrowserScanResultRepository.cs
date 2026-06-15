@@ -45,4 +45,24 @@ public sealed class EfBrowserScanResultRepository(HipRecordStore store) : IBrows
             .OrderByDescending(result => result.LastCheckedUtc)
             .ToArray();
     }
+
+    /// <summary>
+    /// Lists recent browser scan results for dashboard read models without requiring dashboard code to process every scan.
+    /// </summary>
+    /// <param name="maxCount">Maximum number of recent scans to return.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>Recent privacy-safe scan results, newest first.</returns>
+    public async Task<IReadOnlyCollection<BrowserScanResultRecord>> ListRecentAsync(int maxCount, CancellationToken cancellationToken)
+    {
+        var boundedMax = Math.Max(0, maxCount);
+        if (boundedMax == 0)
+        {
+            return Array.Empty<BrowserScanResultRecord>();
+        }
+
+        var results = await store.ListRecentAsync<BrowserScanResultRecord>(Partition, boundedMax, cancellationToken);
+        return results
+            .OrderByDescending(result => result.LastCheckedUtc)
+            .ToArray();
+    }
 }

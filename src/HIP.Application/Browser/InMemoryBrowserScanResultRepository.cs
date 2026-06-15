@@ -50,4 +50,21 @@ public sealed class InMemoryBrowserScanResultRepository : IBrowserScanResultRepo
 
         return Task.FromResult<IReadOnlyCollection<BrowserScanResultRecord>>(results);
     }
+
+    /// <summary>
+    /// Lists the most recent in-memory scan results for dashboard tables without exposing private page content.
+    /// </summary>
+    /// <param name="maxCount">Maximum number of scan results to return.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>Recent scan results, newest first.</returns>
+    public Task<IReadOnlyCollection<BrowserScanResultRecord>> ListRecentAsync(int maxCount, CancellationToken cancellationToken)
+    {
+        var boundedMax = Math.Max(0, maxCount);
+        var results = resultsById.Values
+            .OrderByDescending(item => item.LastCheckedUtc)
+            .Take(boundedMax)
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyCollection<BrowserScanResultRecord>>(results);
+    }
 }

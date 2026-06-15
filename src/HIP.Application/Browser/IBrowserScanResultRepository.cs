@@ -27,4 +27,12 @@ public interface IBrowserScanResultRepository
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
     /// <returns>Stored scan results sorted by repository implementation preference.</returns>
     Task<IReadOnlyCollection<BrowserScanResultRecord>> ListAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists a bounded number of recent browser scan results for dashboard tables without forcing full history reads.
+    /// </summary>
+    /// <param name="maxCount">Maximum number of recent scan records to return.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>Recent scan results, newest first.</returns>
+    Task<IReadOnlyCollection<BrowserScanResultRecord>> ListRecentAsync(int maxCount, CancellationToken cancellationToken);
 }

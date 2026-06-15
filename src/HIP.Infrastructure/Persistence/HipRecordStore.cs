@@ -87,6 +87,41 @@ public sealed class HipRecordStore(HipDbContext dbContext, IHipRecordEncryptor? 
     }
 
     /// <summary>
+    /// Lists a bounded set of recent typed records for dashboard hot paths.
+    /// This limits encrypted payload decryption to the requested window and avoids scanning full history on page load.
+    /// </summary>
+    /// <typeparam name="T">Record type.</typeparam>
+    /// <param name="partition">Logical partition name.</param>
+    /// <param name="maxCount">Maximum number of recent records to decrypt.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>Records ordered by update time descending.</returns>
+    public async Task<IReadOnlyCollection<T>> ListRecentAsync<T>(string partition, int maxCount, CancellationToken cancellationToken)
+    {
+        var boundedMax = Math.Max(0, maxCount);
+        if (boundedMax == 0)
+        {
+            return Array.Empty<T>();
+        }
+
+        var query = dbContext.Records.AsNoTracking()
+            .Where(item => item.Partition == partition);
+
+        var records = dbContext.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true
+            ? (await query.ToArrayAsync(cancellationToken))
+                .OrderByDescending(record => record.UpdatedAtUtc)
+                .Take(boundedMax)
+                .ToArray()
+            : await query
+                .OrderByDescending(record => record.UpdatedAtUtc)
+                .Take(boundedMax)
+                .ToArrayAsync(cancellationToken);
+
+        return records
+            .Select(record => HipJsonSerializer.Deserialize<T>(recordEncryptor.Unprotect(record.Json)))
+            .ToArray();
+    }
+
+    /// <summary>
     /// Removes a typed record by partition and identifier.
     /// </summary>
     /// <param name="partition">Logical partition name.</param>

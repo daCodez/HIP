@@ -11,6 +11,7 @@ using HIP.Domain.Rules;
 using HIP.Application.Reporting;
 using HIP.Application.Review;
 using HIP.Application.Rules;
+using HIP.Application.Scalability;
 using HIP.Application.SelfHealing;
 using HIP.Application.SiteSafety;
 using Microsoft.AspNetCore.Hosting;
@@ -950,11 +951,22 @@ public sealed class AdminDashboardTests
     private static async Task<AdminDashboardService> DashboardWithScansAsync()
     {
         var repository = new InMemoryBrowserScanResultRepository();
+        var aggregate = new InMemoryDashboardScanAggregateStore();
         var now = DateTimeOffset.UtcNow;
-        await repository.SaveAsync(Scan("safe.example", 84, "Trusted", 10, 0, 0, now.AddHours(-1), "No risky links found."), CancellationToken.None);
-        await repository.SaveAsync(Scan("danger.example", 38, "HighRisk", 20, 5, 3, now.AddDays(-2), "Dangerous links found."), CancellationToken.None);
-        await repository.SaveAsync(Scan("caution.example", 75, "ProbablySafe", 15, 2, 0, now.AddMinutes(-10), "Some caution links found."), CancellationToken.None);
-        return Dashboard(repository);
+        var scans = new[]
+        {
+            Scan("safe.example", 84, "Trusted", 10, 0, 0, now.AddHours(-1), "No risky links found."),
+            Scan("danger.example", 38, "HighRisk", 20, 5, 3, now.AddDays(-2), "Dangerous links found."),
+            Scan("caution.example", 75, "ProbablySafe", 15, 2, 0, now.AddMinutes(-10), "Some caution links found.")
+        };
+
+        foreach (var scan in scans)
+        {
+            await repository.SaveAsync(scan, CancellationToken.None);
+            await aggregate.UpdateAsync(scan, CancellationToken.None);
+        }
+
+        return Dashboard(repository, dashboardScanAggregateStore: aggregate);
     }
 
     /// <summary>
@@ -964,6 +976,7 @@ public sealed class AdminDashboardTests
     /// <returns>Dashboard service.</returns>
     private static AdminDashboardService Dashboard(
         IBrowserScanResultRepository browserScanRepository,
+        IDashboardScanAggregateStore? dashboardScanAggregateStore = null,
         IRiskFindingReportRepository? riskFindingRepository = null,
         IReviewQueueService? reviewQueueService = null,
         IAdminReviewQueueRepository? generatedReviewRepository = null,
@@ -974,6 +987,7 @@ public sealed class AdminDashboardTests
         var auditLogService = new AuditLogService(new InMemoryAuditLogRepository());
         return new AdminDashboardService(
             browserScanRepository,
+            dashboardScanAggregateStore ?? new InMemoryDashboardScanAggregateStore(),
             riskFindingRepository ?? new InMemoryRiskFindingReportRepository(),
             reviewQueueService ?? new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), auditLogService),
             new AppealService(new AppealRequestValidator(), new InMemoryAppealRepository(), auditLogService),

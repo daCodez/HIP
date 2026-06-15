@@ -4,6 +4,7 @@ using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.SelfHealing;
+using HIP.Application.Scalability;
 using HIP.Application.SiteSafety;
 using HIP.Domain.Reporting;
 using HIP.Domain.Review;
@@ -16,6 +17,7 @@ namespace HIP.Application.Dashboard;
 /// Aggregates privacy-safe HIP dashboard metrics from stored browser scans and administrative workflow services.
 /// </summary>
 /// <param name="browserScanResultRepository">Repository containing stored browser plugin scan summaries.</param>
+/// <param name="dashboardScanAggregateStore">Pre-aggregated scan counter store for dashboard hot-path reads.</param>
 /// <param name="riskFindingRepository">Repository containing privacy-safe risk finding reports.</param>
 /// <param name="reviewQueueService">Review queue service.</param>
 /// <param name="appealService">Appeal service.</param>
@@ -28,6 +30,7 @@ namespace HIP.Application.Dashboard;
 /// <param name="adminSiteSafetyRuleRepository">Admin-managed Site Safety rule repository.</param>
 public sealed class AdminDashboardService(
     IBrowserScanResultRepository browserScanResultRepository,
+    IDashboardScanAggregateStore dashboardScanAggregateStore,
     IRiskFindingReportRepository riskFindingRepository,
     IReviewQueueService reviewQueueService,
     IAppealService appealService,
@@ -46,7 +49,8 @@ public sealed class AdminDashboardService(
     /// <returns>Admin dashboard summary.</returns>
     public async Task<AdminDashboardSummary> GetSummaryAsync(CancellationToken cancellationToken)
     {
-        var browserScans = await browserScanResultRepository.ListAsync(cancellationToken);
+        var aggregate = await dashboardScanAggregateStore.GetAsync(cancellationToken);
+        var browserScans = await browserScanResultRepository.ListRecentAsync(100, cancellationToken);
         var findings = await riskFindingRepository.ListAsync(cancellationToken);
         var reviews = reviewQueueService.List();
         var appeals = appealService.List();
@@ -59,21 +63,24 @@ public sealed class AdminDashboardService(
         var adminSiteSafetyRules = await adminSiteSafetyRuleRepository.ListAsync(cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
-        var hasScanData = browserScans.Count > 0;
-        var totalScans = browserScans.Count;
-        var scansToday = browserScans.Count(scan => scan.LastCheckedUtc.UtcDateTime.Date == now.UtcDateTime.Date);
+        var hasScanData = aggregate.TotalScans > 0 || browserScans.Count > 0;
+        var useAggregateCounts = aggregate.TotalScans > 0;
+        var totalScans = useAggregateCounts ? aggregate.TotalScans : browserScans.Count;
+        var scansToday = useAggregateCounts
+            ? aggregate.ScansToday
+            : browserScans.Count(scan => scan.LastCheckedUtc.UtcDateTime.Date == now.UtcDateTime.Date);
         var domainsScanned = browserScans.Select(scan => scan.Domain).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         var linksScanned = browserScans.Sum(scan => scan.LinksScanned);
         var riskyLinksFound = browserScans.Sum(scan => scan.RiskyLinksFound);
         var suspiciousLinksFound = browserScans.Sum(scan => scan.SuspiciousLinksFound);
         var dangerousLinksFound = browserScans.Sum(scan => scan.DangerousLinksFound);
-        var trustedResults = browserScans.Count(IsTrustedScan);
-        var mostlyTrustedResults = browserScans.Count(IsMostlyTrustedScan);
-        var limitedTrustResults = browserScans.Count(IsLimitedTrustScan);
-        var unknownResults = browserScans.Count(IsUnknownScan);
-        var suspiciousResults = browserScans.Count(IsSuspiciousScan);
-        var highRiskResults = browserScans.Count(IsHighRiskScan);
-        var dangerousResults = browserScans.Count(IsDangerousScan);
+        var trustedResults = useAggregateCounts ? aggregate.Trusted : browserScans.Count(IsTrustedScan);
+        var mostlyTrustedResults = useAggregateCounts ? aggregate.MostlyTrusted : browserScans.Count(IsMostlyTrustedScan);
+        var limitedTrustResults = useAggregateCounts ? aggregate.LimitedTrustData : browserScans.Count(IsLimitedTrustScan);
+        var unknownResults = useAggregateCounts ? aggregate.Unknown : browserScans.Count(IsUnknownScan);
+        var suspiciousResults = useAggregateCounts ? aggregate.Suspicious : browserScans.Count(IsSuspiciousScan);
+        var highRiskResults = useAggregateCounts ? aggregate.HighRisk : browserScans.Count(IsHighRiskScan);
+        var dangerousResults = useAggregateCounts ? aggregate.Dangerous : browserScans.Count(IsDangerousScan);
         var scansLast24Hours = browserScans.Count(scan => scan.LastCheckedUtc >= now.AddHours(-24));
         var scansLast7Days = browserScans.Count(scan => scan.LastCheckedUtc >= now.AddDays(-7));
         var averageHipScore = hasScanData ? (int)Math.Round(browserScans.Average(scan => scan.Score)) : 0;
