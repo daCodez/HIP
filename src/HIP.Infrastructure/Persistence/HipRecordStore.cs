@@ -41,7 +41,14 @@ public sealed class HipRecordStore(HipDbContext dbContext, IHipRecordEncryptor? 
             record.UpdatedAtUtc = now;
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (IsDuplicateKeyViolation(exception))
+        {
+            await UpdateAfterDuplicateInsertAsync(partition, id, protectedPayload, now, cancellationToken);
+        }
     }
 
     /// <summary>
@@ -96,4 +103,46 @@ public sealed class HipRecordStore(HipDbContext dbContext, IHipRecordEncryptor? 
         dbContext.Records.Remove(record);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// Replaces the just-created insert with an update when another request inserted the same logical record first.
+    /// This keeps generic encrypted records safe under concurrent browser scan submissions without logging payload data.
+    /// </summary>
+    /// <param name="partition">Logical partition name.</param>
+    /// <param name="id">Record identifier.</param>
+    /// <param name="protectedPayload">Encrypted JSON payload that must be written after the duplicate insert race.</param>
+    /// <param name="updatedAtUtc">Timestamp to apply to the winning update.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    private async Task UpdateAfterDuplicateInsertAsync(
+        string partition,
+        string id,
+        string protectedPayload,
+        DateTimeOffset updatedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        dbContext.ChangeTracker.Clear();
+        var existing = await dbContext.Records.FindAsync([partition, id], cancellationToken);
+        if (existing is null)
+        {
+            throw new DbUpdateConcurrencyException("HIP record insert collided, but the existing record could not be reloaded.");
+        }
+
+        existing.Json = protectedPayload;
+        existing.UpdatedAtUtc = updatedAtUtc;
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Detects duplicate-key errors from relational providers without depending on one database for all HIP deployments.
+    /// PostgreSQL reports SQL state 23505 and SQLite reports error code 19 for unique constraint failures.
+    /// </summary>
+    /// <param name="exception">EF Core update exception raised while saving a generic HIP record.</param>
+    /// <returns>True when the exception represents a duplicate primary key insert race.</returns>
+    private static bool IsDuplicateKeyViolation(DbUpdateException exception) =>
+        exception.InnerException switch
+        {
+            Npgsql.PostgresException postgresException => postgresException.SqlState == "23505",
+            Microsoft.Data.Sqlite.SqliteException sqliteException => sqliteException.SqliteErrorCode == 19,
+            _ => false
+        };
 }

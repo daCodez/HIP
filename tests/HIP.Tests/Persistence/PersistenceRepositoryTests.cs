@@ -414,6 +414,62 @@ public sealed class PersistenceRepositoryTests
         });
     }
 
+    /// <summary>
+    /// Verifies concurrent scan requests can update the single dashboard aggregate without duplicate-key failures.
+    /// </summary>
+    [Test]
+    public async Task DashboardScanAggregateHandlesConcurrentUpdates()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"hip-concurrent-{Guid.NewGuid():N}.db");
+        var options = new DbContextOptionsBuilder<HipDbContext>()
+            .UseSqlite($"Data Source={databasePath};Pooling=False")
+            .Options;
+
+        try
+        {
+            await using (var setupContext = new HipDbContext(options))
+            {
+                await setupContext.Database.EnsureCreatedAsync();
+            }
+
+            var scans = Enumerable.Range(0, 12)
+                .Select(index => CreateStoredScan($"concurrent-{index}.example", index % 2 == 0 ? "Dangerous" : "Trusted"))
+                .ToArray();
+
+            await Task.WhenAll(scans.Select(async scan =>
+            {
+                await using var context = new HipDbContext(options);
+                var aggregateStore = new EfDashboardScanAggregateStore(new HipRecordStore(context));
+                await aggregateStore.UpdateAsync(scan, CancellationToken.None);
+            }));
+
+            await using var verifyContext = new HipDbContext(options);
+            var aggregate = await new EfDashboardScanAggregateStore(new HipRecordStore(verifyContext)).GetAsync(CancellationToken.None);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(aggregate.TotalScans, Is.EqualTo(12));
+                Assert.That(aggregate.Trusted, Is.EqualTo(6));
+                Assert.That(aggregate.Dangerous, Is.EqualTo(6));
+            });
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (File.Exists(databasePath))
+            {
+                try
+                {
+                    File.Delete(databasePath);
+                }
+                catch (IOException)
+                {
+                    // Windows can briefly hold SQLite file handles after concurrent contexts dispose; cleanup must not hide test behavior.
+                }
+            }
+        }
+    }
+
     private static TrustRule CreateRule(string ruleId) =>
         new(
             ruleId,
