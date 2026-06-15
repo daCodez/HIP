@@ -1012,21 +1012,20 @@ public sealed class AdminDashboardTests
         IBrowserScanResultRepository browserScanRepository,
         IDashboardScanAggregateStore? dashboardScanAggregateStore = null,
         IRiskFindingReportRepository? riskFindingRepository = null,
-        IReviewQueueService? reviewQueueService = null,
         IAdminReviewQueueRepository? generatedReviewRepository = null,
         IWeightedFeedbackRepository? weightedFeedbackRepository = null,
         IAdminSiteSafetyRuleRepository? adminSiteSafetyRuleRepository = null,
         IRuleRepository? ruleRepository = null)
     {
-        var auditLogService = new AuditLogService(new InMemoryAuditLogRepository());
+        var auditLogRepository = new InMemoryAuditLogRepository();
         return new AdminDashboardService(
             browserScanRepository,
             dashboardScanAggregateStore ?? new InMemoryDashboardScanAggregateStore(),
             riskFindingRepository ?? new InMemoryRiskFindingReportRepository(),
-            reviewQueueService ?? new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), auditLogService),
-            new AppealService(new AppealRequestValidator(), new InMemoryAppealRepository(), auditLogService),
-            new ReputationOverrideService(new ReputationOverrideRequestValidator(), new InMemoryReputationOverrideRequestRepository(), auditLogService),
-            auditLogService,
+            new InMemoryReviewQueueRepository(),
+            new InMemoryAppealRepository(),
+            new InMemoryReputationOverrideRequestRepository(),
+            auditLogRepository,
             ruleRepository ?? new InMemoryRuleRepository(),
             new InMemoryGeneratedRuleCandidateRepository(),
             generatedReviewRepository ?? new InMemoryAdminReviewQueueRepository(),

@@ -1,0 +1,136 @@
+@page "/admin/reputation/signals"
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@rendermode InteractiveServer
+@inject IAdminDashboardService DashboardService
+
+<PageTitle>HIP Trust Signals</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">HIP Reputation</p>
+            <h1>Trust Signals</h1>
+            <p>Privacy-safe signals contributing to domain, page, content, and final HIP scoring.</p>
+        </div>
+    </section>
+
+    @if (_summary is null)
+    {
+        <section class="dashboard-loading-state" aria-busy="true">
+            <strong>Loading trust signals...</strong>
+            <span>HIP is reading scan, feedback, review, rule, and provider summaries.</span>
+        </section>
+    }
+    else
+    {
+        <section class="hip-panel hip-threat-panel">
+            <div class="hip-panel-heading">
+                <div>
+                    <h2>Signal Sources</h2>
+                    <p>These are live connected sources or explicit empty states. HIP does not show raw page text, form values, private messages, cookies, passwords, or tokens.</p>
+                </div>
+                <span class="hip-pill good">@_summary.ApiHealth</span>
+            </div>
+
+            <div class="hip-table-wrap">
+                <table class="hip-data-table">
+                    <thead>
+                        <tr>
+                            <th>Signal</th>
+                            <th>State</th>
+                            <th>Evidence</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Browser scans</td>
+                            <td>@(_summary.HasScanData ? "Connected" : "No data yet")</td>
+                            <td>@CardValue("totalScans") scans</td>
+                            <td>Current source for live domain/page/content score summaries.</td>
+                        </tr>
+                        <tr>
+                            <td>Review queue</td>
+                            <td>@CardValue("pendingReviewItems") pending</td>
+                            <td>@_summary.RecentThreats.Count recent threat signals</td>
+                            <td>Used for uncertain or high-risk cases that need human review.</td>
+                        </tr>
+                        <tr>
+                            <td>Feedback</td>
+                            <td>@CardValue("feedbackReceived") records</td>
+                            <td>Weighted feedback only</td>
+                            <td>Feedback is not raw voting and should not mark a site safe by itself.</td>
+                        </tr>
+                        <tr>
+                            <td>Admin rules</td>
+                            <td>@CardValue("activeRules") active</td>
+                            <td>@CardValue("externalProviderErrors") provider errors</td>
+                            <td>Rule/provider failures lower confidence; they do not create trust by themselves.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="hip-panel hip-threat-panel">
+            <div class="hip-panel-heading">
+                <div>
+                    <h2>Recent Signal Activity</h2>
+                    <p>Newest privacy-safe activity summaries from the dashboard read model.</p>
+                </div>
+            </div>
+
+            @if (_summary.RecentActivity.Count == 0)
+            {
+                <div class="hip-threat-empty">
+                    <strong>No signal activity yet.</strong>
+                    <span>Run scans, submit feedback, or trigger review items to populate this list.</span>
+                </div>
+            }
+            else
+            {
+                <div class="hip-table-wrap">
+                    <table class="hip-data-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Type</th>
+                                <th>Target</th>
+                                <th>Summary</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _summary.RecentActivity.Take(12))
+                            {
+                                <tr>
+                                    <td>@item.CreatedAtUtc.UtcDateTime.ToString("u")</td>
+                                    <td>@item.ActivityType</td>
+                                    <td>@item.TargetType: @item.TargetId</td>
+                                    <td>@item.Summary</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</main>
+
+@code {
+    private AdminDashboardSummary? _summary;
+
+    /// <summary>
+    /// Loads the dashboard read model used by the MVP trust signal page.
+    /// </summary>
+    protected override async Task OnInitializedAsync() =>
+        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Finds a dashboard card value without exposing unavailable data as fake data.
+    /// </summary>
+    /// <param name="cardId">The dashboard card identifier.</param>
+    /// <returns>The card value when present; otherwise zero.</returns>
+    private string CardValue(string cardId) =>
+        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(cardId, StringComparison.OrdinalIgnoreCase))?.Value.ToString() ?? "0";
+}

@@ -6,6 +6,7 @@ using HIP.Application.Rules;
 using HIP.Application.SelfHealing;
 using HIP.Application.Scalability;
 using HIP.Application.SiteSafety;
+using HIP.Domain.Audit;
 using HIP.Domain.Reporting;
 using HIP.Domain.Review;
 using HIP.Domain.Risk;
@@ -19,10 +20,10 @@ namespace HIP.Application.Dashboard;
 /// <param name="browserScanResultRepository">Repository containing stored browser plugin scan summaries.</param>
 /// <param name="dashboardScanAggregateStore">Pre-aggregated scan counter store for dashboard hot-path reads.</param>
 /// <param name="riskFindingRepository">Repository containing privacy-safe risk finding reports.</param>
-/// <param name="reviewQueueService">Review queue service.</param>
-/// <param name="appealService">Appeal service.</param>
-/// <param name="reputationOverrideService">Reputation override service.</param>
-/// <param name="auditLogService">Audit log service.</param>
+/// <param name="reviewQueueRepository">Review queue repository used for bounded dashboard read projections.</param>
+/// <param name="appealRepository">Appeal repository used for bounded dashboard read projections.</param>
+/// <param name="reputationOverrideRepository">Reputation override repository used for bounded dashboard read projections.</param>
+/// <param name="auditLogRepository">Audit log repository used for bounded dashboard read projections.</param>
 /// <param name="ruleRepository">Rule repository.</param>
 /// <param name="generatedRuleCandidateRepository">Generated rule candidate repository.</param>
 /// <param name="adminReviewQueueRepository">Generated admin review signal repository.</param>
@@ -32,16 +33,18 @@ public sealed class AdminDashboardService(
     IBrowserScanResultRepository browserScanResultRepository,
     IDashboardScanAggregateStore dashboardScanAggregateStore,
     IRiskFindingReportRepository riskFindingRepository,
-    IReviewQueueService reviewQueueService,
-    IAppealService appealService,
-    IReputationOverrideService reputationOverrideService,
-    IAuditLogService auditLogService,
+    IReviewQueueRepository reviewQueueRepository,
+    IAppealRepository appealRepository,
+    IReputationOverrideRequestRepository reputationOverrideRepository,
+    IAuditLogRepository auditLogRepository,
     IRuleRepository ruleRepository,
     IGeneratedRuleCandidateRepository generatedRuleCandidateRepository,
     IAdminReviewQueueRepository adminReviewQueueRepository,
     IWeightedFeedbackRepository weightedFeedbackRepository,
     IAdminSiteSafetyRuleRepository adminSiteSafetyRuleRepository) : IAdminDashboardService
 {
+    private static readonly TimeSpan LegacyReadBudget = TimeSpan.FromMilliseconds(750);
+
     /// <summary>
     /// Builds a privacy-safe dashboard summary using stored browser scan results as the primary real scan source.
     /// </summary>
@@ -51,16 +54,20 @@ public sealed class AdminDashboardService(
     {
         var aggregate = await dashboardScanAggregateStore.GetAsync(cancellationToken);
         var browserScans = await browserScanResultRepository.ListRecentAsync(100, cancellationToken);
-        var findings = await riskFindingRepository.ListAsync(cancellationToken);
-        var reviews = reviewQueueService.List();
-        var appeals = appealService.List();
-        var overrides = reputationOverrideService.List();
-        var auditLogs = auditLogService.List();
-        var rules = await ruleRepository.ListAsync(cancellationToken);
-        var candidates = await generatedRuleCandidateRepository.ListAsync(cancellationToken);
-        var generatedReviews = await adminReviewQueueRepository.ListAsync(cancellationToken);
-        var feedback = await weightedFeedbackRepository.ListAsync(cancellationToken);
-        var adminSiteSafetyRules = await adminSiteSafetyRuleRepository.ListAsync(cancellationToken);
+        // Keep the dashboard render on the hot path. Some MVP sources still use broad
+        // encrypted-record scans, so each optional source gets a small read budget. These
+        // reads intentionally stay sequential because the current EF-backed stores share a
+        // scoped DbContext, and EF Core contexts cannot safely run concurrent operations.
+        var findings = await ReadOptionalAsync(riskFindingRepository.ListAsync, cancellationToken);
+        var rules = await ReadOptionalAsync(ruleRepository.ListAsync, cancellationToken);
+        var candidates = await ReadOptionalAsync(generatedRuleCandidateRepository.ListAsync, cancellationToken);
+        var generatedReviews = await ReadOptionalAsync(adminReviewQueueRepository.ListAsync, cancellationToken);
+        var feedback = await ReadOptionalAsync(weightedFeedbackRepository.ListAsync, cancellationToken);
+        var adminSiteSafetyRules = await ReadOptionalAsync(adminSiteSafetyRuleRepository.ListAsync, cancellationToken);
+        var reviews = await ReadOptionalAsync(reviewQueueRepository.ListAsync, cancellationToken);
+        var appeals = await ReadOptionalAsync(appealRepository.ListAsync, cancellationToken);
+        var overrides = await ReadOptionalAsync(reputationOverrideRepository.ListAsync, cancellationToken);
+        var auditLogs = await ReadOptionalAsync(auditLogRepository.ListAsync, cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
         var hasScanData = aggregate.TotalScans > 0 || browserScans.Count > 0;
@@ -296,6 +303,34 @@ public sealed class AdminDashboardService(
             .ToArray();
 
         return new AdminDashboardSummary(cards, recentActivity, "Healthy", DateTimeOffset.UtcNow, hasScanData ? "BrowserPluginScanResults" : "NoStoredScanData", hasScanData, topRiskyDomains, recentScans, recentThreats);
+    }
+
+    /// <summary>
+    /// Reads an optional dashboard source with a small local budget so slow legacy stores cannot block the live scan dashboard.
+    /// </summary>
+    /// <typeparam name="T">Type of privacy-safe dashboard item being loaded.</typeparam>
+    /// <param name="read">Repository read operation.</param>
+    /// <param name="cancellationToken">Request cancellation token.</param>
+    /// <returns>Loaded items, or an empty collection when the optional source is unavailable.</returns>
+    private static async Task<IReadOnlyCollection<T>> ReadOptionalAsync<T>(
+        Func<CancellationToken, Task<IReadOnlyCollection<T>>> read,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(LegacyReadBudget);
+
+        try
+        {
+            return await read(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return [];
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     /// <summary>
