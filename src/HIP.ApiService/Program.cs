@@ -80,10 +80,22 @@ builder.Services.AddSwaggerGen(options =>
         Title = "HIP API",
         Version = "v1",
         Description = """
-        Human Identity Protocol API for privacy-safe website trust checks, browser plugin scans, public lookup, provider preferences, and feedback.
+        Human Identity Protocol API for website trust scoring, browser plugin scan ingestion, public lookup, live badges, site safety checks, provider preferences, and feedback.
 
-        Privacy baseline: HIP API endpoints must not receive page text, form values, passwords, tokens, cookies, private messages, or unrelated browsing history.
-        Browser endpoints accept only the current domain, current URL when allowed, URL hashes, observed page signals, link counts, risk summaries, and provider evidence.
+        HIP sits above TCP and TLS: TCP connects, TLS encrypts, and HIP evaluates origin, reputation, page behavior, and content risk.
+
+        Security model:
+        - A valid signature or verified domain proves origin and integrity; it does not automatically mean safe.
+        - Domain trust, page trust, content risk, and final HIP score are separate concepts.
+        - External scanners provide evidence only. HIP scoring makes the final decision.
+
+        Privacy baseline:
+        - HIP endpoints must not receive page text, form values, passwords, tokens, cookies, private messages, or unrelated browsing history.
+        - Browser endpoints accept only the current domain, current URL when allowed by policy, URL hashes, observed page signals, link counts, risk summaries, provider names, and rule IDs.
+        - Public endpoints return domain-level summaries only.
+
+        MVP note:
+        This API is still a local/dev foundation. Scores and provider evidence are useful for development and testing, but they are not production threat intelligence until connected to hardened identity, reputation, provider, queue, and persistence infrastructure.
         """
     });
 });
@@ -147,7 +159,7 @@ publicApi.MapGet("/lookup/domain/{domain}", async (
 })
 .WithName("PublicDomainLookup")
 .WithSummary("Looks up the public HIP trust summary for a domain.")
-.WithDescription("Returns a public-safe domain trust summary. The response may use stored browser scan data when available, and must not expose page text, user identity, browsing history, or private report payloads.")
+.WithDescription(GetPublicDomainLookupDescription())
 .Produces<PublicDomainLookupResponse>()
 .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
 .CacheOutput(HipOutputCachePolicies.PublicLookup);
@@ -168,7 +180,7 @@ publicApi.MapGet("/badge/domain/{domain}", async (
 })
 .WithName("PublicDomainBadge")
 .WithSummary("Returns live HIP badge data for a domain.")
-.WithDescription("Returns public-safe badge fields including domain, score, status, verification state, last checked time, and lookup link. Badges must remain live and must not hide low trust scores.")
+.WithDescription(GetPublicDomainBadgeDescription())
 .Produces<PublicBadgeResponse>()
 .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
 .CacheOutput(HipOutputCachePolicies.Badge);
@@ -200,7 +212,7 @@ publicApi.MapPost("/feedback", async (
 })
 .WithName("PublicFeedback")
 .WithSummary("Submits weighted trust feedback for a domain.")
-.WithDescription("Accepts privacy-safe feedback from HIP clients, such as Looks Safe or Looks Suspicious. Feedback is weighted evidence, not raw voting, and must not include page text, private messages, form values, passwords, cookies, or tokens.")
+.WithDescription(GetPublicFeedbackDescription())
 .Produces<ReputationProfile>()
 .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
 .RequireCors(HipCorsPolicies.ClientWrite)
@@ -549,7 +561,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
     })
     .WithName("BrowserScoreSite")
     .WithSummary("Scores the current browser tab domain.")
-    .WithDescription("Used by the browser plugin popup and content script to score the current site. The request should include only the current URL/domain and must not include page text, form contents, credentials, cookies, tokens, or private messages.")
+    .WithDescription(GetBrowserScoreSiteDescription())
     .Produces<BrowserScoreSiteResponse>()
     .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
     .RequireCors(HipCorsPolicies.ClientWrite)
@@ -571,7 +583,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
     })
     .WithName("BrowserScanLinks")
     .WithSummary("Scans links discovered on the current page.")
-    .WithDescription("Returns risk labels for discovered links so the browser plugin can label only risky links and route suspicious or dangerous clicks through the HIP safety page. The request must not include page text, form values, passwords, tokens, or private message content.")
+    .WithDescription(GetBrowserScanLinksDescription())
     .Produces<BrowserScanLinksResponse>()
     .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
     .RequireCors(HipCorsPolicies.ClientWrite)
@@ -599,7 +611,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
     })
     .WithName("BrowserSaveScanResult")
     .WithSummary("Stores a privacy-safe browser scan summary.")
-    .WithDescription("Persists the browser plugin's scan summary for public lookup and dashboard projections. HIP stores domain-level scan data, URL hashes, scores, counts, provider names, rule IDs, plugin version, reasons, and warnings; it must not store page text, form values, passwords, cookies, tokens, private messages, or browsing history.")
+    .WithDescription(GetBrowserSaveScanResultDescription())
     .Produces<BrowserScanResultSaveResponse>()
     .Produces<BrowserScanResultErrorResponse>(StatusCodes.Status400BadRequest)
     .Produces<BrowserScanResultErrorResponse>(StatusCodes.Status409Conflict)
@@ -623,7 +635,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
     })
     .WithName("BrowserGetScanResult")
     .WithSummary("Gets the latest stored browser scan summary for a domain.")
-    .WithDescription("Returns the latest privacy-safe scan summary for a domain, when available. This endpoint returns domain-level summaries and URL hashes only; it must not expose raw page contents or private user data.")
+    .WithDescription(GetBrowserGetScanResultDescription())
     .Produces<BrowserScanResultResponse>()
     .Produces(StatusCodes.Status404NotFound)
     .Produces<BrowserScanResultErrorResponse>(StatusCodes.Status400BadRequest);
@@ -651,7 +663,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     })
     .WithName("ApiServiceGetExternalProviderPreferences")
     .WithSummary("Gets external provider preferences for the current HIP client scope.")
-    .WithDescription("Returns client-safe provider switches for SSL Labs/Qualys-style TLS checks, Google Web Risk/Safe Browsing-style checks, and VirusTotal-style checks. API keys, endpoints, and full-URL permission are never returned to browser clients.")
+    .WithDescription(GetExternalProviderPreferencesDescription())
     .Produces<ExternalProviderSettingsResponse>();
 
     siteSafetyApi.MapPost("/external-providers", async (
@@ -675,7 +687,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     })
     .WithName("ApiServiceUpdateExternalProviderPreferences")
     .WithSummary("Updates external provider switches for the current HIP client scope.")
-    .WithDescription("Allows a local browser client to enable or disable provider categories for its own scope. The server rejects client-controlled endpoints, API keys, and full URL scanning permission to preserve privacy and prevent scanner abuse.")
+    .WithDescription(GetUpdateExternalProviderPreferencesDescription())
     .Produces<ExternalProviderSettingsResponse>()
     .Produces<ApiErrorResponse>(StatusCodes.Status403Forbidden)
     .RequireCors(HipCorsPolicies.ClientWrite)
@@ -713,8 +725,8 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     })
     .WithName("ApiServiceSiteSafetyScan")
     .WithSummary("Runs a privacy-safe site safety scan from browser-observed signals.")
-    .WithDescription("Evaluates the current page using privacy-safe browser observations, HIP history, feedback, admin review evidence, built-in rules, admin rules, and enabled external providers. The request must not include page text, form values, passwords, tokens, cookies, private messages, or unrelated browsing history.")
-    .Produces<object>()
+    .WithDescription(GetSiteSafetyScanDescription())
+    .Produces<SiteSafetyScanApiResponse>()
     .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
     .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
     .RequireCors(HipCorsPolicies.ClientWrite)
@@ -742,56 +754,439 @@ static void ApplyClientExternalProviderSettings(ExternalSiteEvidenceOptions opti
 /// </summary>
 /// <param name="result">The application-layer scan result.</param>
 /// <returns>A privacy-safe response for browser clients and public tools.</returns>
-static object ToSiteSafetyScanResponse(SiteSafetyScanResult result) => new
-{
-    result.ScanId,
-    result.Url,
-    result.Domain,
-    result.ScannedAtUtc,
-    result.MalwareRiskScore,
-    result.PhishingRiskScore,
-    result.RedirectRiskScore,
-    result.ScriptRiskScore,
-    result.DownloadRiskScore,
-    result.FormRiskScore,
-    result.ReputationRiskScore,
-    result.OverallSafetyRiskScore,
-    Status = result.Status.ToString(),
-    result.Summary,
-    result.Reasons,
-    result.Warnings,
-    result.PositiveSignals,
-    result.NegativeSignals,
-    result.ConfidenceLevel,
-    result.DomainTrustScore,
-    result.PageTrustScore,
-    result.ContentRiskScore,
-    result.FinalHipScore,
-    ProviderEvidence = result.ProviderEvidence.Select(evidence => new
-    {
-        evidence.ProviderName,
-        ProviderType = evidence.ProviderType.ToString(),
-        TargetType = evidence.TargetType.ToString(),
-        evidence.Domain,
-        evidence.UrlHash,
-        evidence.Confidence,
-        evidence.CheckedAtUtc,
-        evidence.ExpiresAtUtc,
-        evidence.Errors,
-        evidence.IsAuthoritativeForRisk,
-        evidence.IsAuthoritativeForTrust,
-        EvidenceItems = evidence.EvidenceItems.Select(item => new
-        {
-            item.Category,
-            item.Value,
-            Status = item.Status.ToString(),
-            item.RiskImpact,
-            item.TrustImpact,
-            item.Summary
-        }).ToArray()
-    }).ToArray(),
-    result.ScoreImpact
-};
+static SiteSafetyScanApiResponse ToSiteSafetyScanResponse(SiteSafetyScanResult result) =>
+    new(
+        result.ScanId,
+        result.Url,
+        result.Domain,
+        result.ScannedAtUtc,
+        result.MalwareRiskScore,
+        result.PhishingRiskScore,
+        result.RedirectRiskScore,
+        result.ScriptRiskScore,
+        result.DownloadRiskScore,
+        result.FormRiskScore,
+        result.ReputationRiskScore,
+        result.OverallSafetyRiskScore,
+        result.Status.ToString(),
+        result.Summary,
+        result.Reasons,
+        result.Warnings,
+        result.PositiveSignals,
+        result.NegativeSignals,
+        result.ConfidenceLevel,
+        result.DomainTrustScore,
+        result.PageTrustScore,
+        result.ContentRiskScore,
+        result.FinalHipScore,
+        result.ProviderEvidence.Select(evidence => new SiteSafetyProviderEvidenceApiResponse(
+            evidence.ProviderName,
+            evidence.ProviderType.ToString(),
+            evidence.TargetType.ToString(),
+            evidence.Domain,
+            evidence.UrlHash,
+            evidence.Confidence,
+            evidence.CheckedAtUtc,
+            evidence.ExpiresAtUtc,
+            evidence.Errors,
+            evidence.IsAuthoritativeForRisk,
+            evidence.IsAuthoritativeForTrust,
+            evidence.EvidenceItems.Select(item => new SiteSafetyProviderEvidenceItemApiResponse(
+                item.Category,
+                item.Value,
+                item.Status.ToString(),
+                item.RiskImpact,
+                item.TrustImpact,
+                item.Summary)).ToArray())).ToArray(),
+        result.ScoreImpact);
+
+/// <summary>
+/// Provides detailed Swagger text for the public lookup endpoint.
+/// </summary>
+/// <returns>Markdown description shown in Swagger UI.</returns>
+static string GetPublicDomainLookupDescription() => """
+    Public lookup returns the latest public-safe HIP trust summary for a domain.
+
+    Use this endpoint when:
+    - A user types a domain into the public HIP lookup page.
+    - A badge or client needs a domain-level public summary.
+    - You need to confirm whether HIP has stored browser scan evidence for a domain.
+
+    Input:
+    - `domain` must be a domain name such as `example.com`.
+    - Do not include a path, query string, fragment, username, password, or full page URL.
+
+    Response meaning:
+    - `score` and `status` describe the current public-facing HIP trust result.
+    - `dataSource` identifies whether the result came from stored browser scan data or a no-data fallback.
+    - `reasons` are written for humans and should explain whether the domain has real scan history or limited data.
+
+    Privacy:
+    - This endpoint must not expose full page URLs, page text, user identity, browsing history, form values, raw reports, or private scan payloads.
+    - Public lookup is domain-level only.
+
+    Example:
+    `GET /api/v1/public/lookup/domain/example.com`
+    """;
+
+/// <summary>
+/// Provides detailed Swagger text for the public live badge endpoint.
+/// </summary>
+/// <returns>Markdown description shown in Swagger UI.</returns>
+static string GetPublicDomainBadgeDescription() => """
+    Returns the live HIP badge state for a domain.
+
+    Use this endpoint when:
+    - Rendering a HIP badge on a website.
+    - Verifying that a badge shows both identity/verification state and current trust state.
+    - Linking visitors back to the public HIP lookup page.
+
+    Badge rules:
+    - The badge must always show a score or status.
+    - `verified` means HIP has domain or identity verification evidence; it does not mean the website is safe.
+    - Low scores must still be visible. A site must not be able to display only "Verified by HIP".
+
+    Response meaning:
+    - `lookupUrl` points to the public lookup route for independent verification.
+    - `lastCheckedUtc` tells users how fresh the badge data is.
+
+    Privacy:
+    - Badge data is public-safe and domain-level.
+    - No page text, private reports, user identity, or browsing history is returned.
+    """;
+
+/// <summary>
+/// Provides detailed Swagger text for public feedback submission.
+/// </summary>
+/// <returns>Markdown description shown in Swagger UI.</returns>
+static string GetPublicFeedbackDescription() => """
+    Submits a privacy-safe trust feedback signal.
+
+    HIP treats feedback as weighted evidence, not popularity voting.
+
+    Expected use:
+    - Browser plugin banner buttons such as "Looks Safe" and "Looks Suspicious".
+    - Safety page reports such as "Report Safe" or "Report Dangerous".
+    - Public lookup feedback when a user believes a result is wrong.
+
+    Security and abuse behavior:
+    - Duplicate submissions are suppressed so double-clicks and retries do not spam reputation data.
+    - Anonymous or untrusted feedback should carry low weight.
+    - Future production clients should use stronger identity, signer, or instance authentication.
+
+    Privacy:
+    - Allowed fields are domain, feedback type, source, reason summary, timestamp, and safe reporter trust metadata when available.
+    - Do not send page text, chat logs, private messages, form values, passwords, cookies, tokens, or unrelated browsing history.
+
+    Example feedback:
+    - LooksSafe from BrowserPluginBanner.
+    - LooksSuspicious from BrowserPluginBanner.
+    - ReportAsDangerous from SafetyPage.
+    """;
+
+/// <summary>
+/// Provides detailed Swagger text for browser site scoring.
+/// </summary>
+/// <returns>Markdown description shown in Swagger UI.</returns>
+static string GetBrowserScoreSiteDescription() => """
+    Scores the current browser tab domain for the browser plugin.
+
+    Expected caller:
+    - HIP browser extension popup.
+    - HIP browser content script when it needs a fast current-site summary.
+
+    Request:
+    - `url` is the current tab URL when policy allows it.
+    - `domain` is the normalized current domain.
+    - The request must be generated from the active tab only.
+
+    Response:
+    - Includes HIP score, status, verification status, signed identity placeholder/status, reasons, and recommended action.
+    - This is a fast user-facing score. Deeper provider checks should be cached or handled by the site-safety scan path.
+
+    Privacy:
+    - Do not send DOM text, page body text, selected text, form values, password fields, cookies, tokens, email contents, chat contents, or browsing history.
+
+    Failure behavior:
+    - Invalid domains or malformed URLs return `400`.
+    - The plugin should show a safe unavailable state instead of crashing.
+    """;
+
+/// <summary>
+/// Provides detailed Swagger text for browser link scanning.
+/// </summary>
+/// <returns>Markdown description shown in Swagger UI.</returns>
+static string GetBrowserScanLinksDescription() => """
+    Scans links discovered on the current page and returns per-link routing decisions.
+
+    Expected caller:
+    - HIP browser content script.
+
+    Request:
+    - Include only discovered link URLs.
+    - Do not include link surrounding text, visible page text, form data, or private content.
+
+    Response:
+    - Safe links should not require icons and should not be modified.
+    - Suspicious and dangerous links may include safety-page routing.
+    - Critical links should route through the safety page and avoid continue-by-default behavior where supported.
+
+    Recommended client behavior:
+    - Add icons/labels only to risky links.
+    - Intercept clicks only for risky links.
+    - Encode target URLs when routing through `/safety?url={encodedUrl}&source=browser`.
+
+    Privacy:
+    - HIP receives link URLs for risk checking, not page text or form values.
+    """;
+
+/// <summary>
+/// Provides detailed Swagger text for browser scan result storage.
+/// </summary>
+/// <returns>Markdown description shown in Swagger UI.</returns>
+static string GetBrowserSaveScanResultDescription() => """
+    Stores a privacy-safe browser scan summary for later lookup and dashboard views.
+
+    Expected caller:
+    - HIP browser extension after it finishes scanning a page.
+
+    Stored fields:
+    - Domain.
+    - URL hash and raw URL only when policy allows it.
+    - Layered scores such as domain trust, page trust, content risk, and final HIP score when available.
+    - Status, confidence, reasons, warnings, link counts, risky counts, provider names, matched rule IDs, plugin version, and scan timestamp.
+
+    Not stored:
+    - Page body text.
+    - Form values.
+    - Passwords, tokens, cookies, or secrets.
+    - Private messages, chat logs, email bodies, or unrelated browsing history.
+
+    Duplicate behavior:
+    - Repeated submissions with the same domain, URL hash, and signal fingerprint may return `409` to prevent dashboard spam and storage waste.
+
+    Downstream use:
+    - Public lookup can show domain-level scan summaries.
+    - Admin dashboard can show recent scan rows and aggregates.
+    - Review queue can receive important risky or uncertain cases.
+    """;
+
+/// <summary>
+/// Provides detailed Swagger text for browser scan result retrieval.
+/// </summary>
+/// <returns>Markdown description shown in Swagger UI.</returns>
+static string GetBrowserGetScanResultDescription() => """
+    Returns the latest stored browser scan summary for a domain.
+
+    Use this endpoint when:
+    - Debugging whether browser plugin scans are being persisted.
+    - Confirming what public lookup or dashboard projections can read.
+    - Showing the latest known scan state for a domain in local development.
+
+    Response:
+    - `200` returns the latest privacy-safe scan summary.
+    - `404` means HIP has no stored browser scan result for the domain yet.
+    - `400` means the domain was invalid.
+
+    Privacy:
+    - Response data must remain domain-level or hashed.
+    - Do not expose raw page text, form contents, user identity, private reports, or browsing history.
+    """;
+
+/// <summary>
+/// Provides detailed Swagger text for provider preference reads.
+/// </summary>
+/// <returns>Markdown description shown in Swagger UI.</returns>
+static string GetExternalProviderPreferencesDescription() => """
+    Returns external evidence provider switches for the current browser/HIP instance scope.
+
+    Providers represented:
+    - SSL Labs / Qualys-style TLS evidence.
+    - Google Web Risk / Safe Browsing-style threat evidence.
+    - VirusTotal-style URL/domain reputation evidence.
+
+    Important:
+    - Providers return evidence only; HIP scoring decides final trust and risk.
+    - A clean provider result does not make an unknown site Trusted.
+    - Provider errors should lower confidence or add warnings, not automatically create trust or danger.
+
+    Privacy:
+    - API keys and provider endpoints are never returned to browser clients.
+    - Browser-scoped settings cannot enable full raw URL submission.
+    """;
+
+/// <summary>
+/// Provides detailed Swagger text for provider preference updates.
+/// </summary>
+/// <returns>Markdown description shown in Swagger UI.</returns>
+static string GetUpdateExternalProviderPreferencesDescription() => """
+    Updates provider enablement switches for the current browser/HIP instance scope.
+
+    Local development behavior:
+    - Allows a tester to enable or disable provider categories from the extension/settings UI when the host permits client preference writes.
+    - Server-side configuration still controls endpoints, API keys, privacy policy, and provider behavior.
+
+    Rejected client control:
+    - Provider API keys.
+    - Provider base URLs.
+    - Full raw URL submission permission.
+
+    Security:
+    - This endpoint is rate limited and CORS-restricted to configured client origins.
+    - Production should move provider control behind authenticated admin or signed-instance policy.
+
+    Privacy:
+    - Domain-only or hashed checks remain preferred.
+    - Browser clients cannot force HIP to send page text, form values, passwords, cookies, tokens, private messages, or unrelated browsing history to providers.
+    """;
+
+/// <summary>
+/// Provides detailed Swagger text for site safety scans.
+/// </summary>
+/// <returns>Markdown description shown in Swagger UI.</returns>
+static string GetSiteSafetyScanDescription() => """
+    Runs a privacy-safe site safety scan from browser-observed signals.
+
+    This is the detailed scan path used by the browser plugin and future HIP clients.
+
+    Expected flow:
+    1. Browser plugin observes the current page locally.
+    2. Plugin sends only privacy-safe signals to HIP.
+    3. HIP checks cached/history data and evidence providers.
+    4. Built-in and admin-managed rules evaluate the signals.
+    5. HIP calculates malware, phishing, redirect, script, download, form, reputation, domain trust, page trust, content risk, and final HIP score.
+    6. HIP stores a safe scan result and creates admin review signals when needed.
+
+    Request may include:
+    - Current URL and normalized domain.
+    - HTTPS status.
+    - Login/password/payment flags.
+    - Download counts and file-type indicators.
+    - Redirect count, shortener count, obfuscation count, external script count, and matched risk-term categories.
+    - Provider preference scope from headers.
+
+    Request must not include:
+    - Page body text.
+    - Form values.
+    - Passwords, tokens, cookies, or private keys.
+    - Email bodies, chat logs, private messages, or unrelated browsing history.
+
+    Response:
+    - Returns separate risk scores and trust scores. Final HIP score must not hide domain, page, and content scoring.
+    - Includes provider evidence so testers can see whether SSL Labs/Qualys-style TLS checks or other providers contributed evidence.
+    - Includes reasons, warnings, positive signals, negative signals, confidence, and score impact.
+
+    Status guidance:
+    - Unknown clean sites should remain Unknown or LimitedTrustData.
+    - Trusted domains can still have risky pages or content.
+    - Downloads must not inherit full trust from the parent domain.
+
+    Failure behavior:
+    - Duplicate scans can return `409`.
+    - Invalid URLs or private-field validation failures return `400`.
+    - Provider failures should not crash scoring.
+    """;
+
+/// <summary>
+/// Detailed Swagger response for site safety scans.
+/// </summary>
+/// <param name="ScanId">Unique scan identifier.</param>
+/// <param name="Url">Current scanned URL when storage policy allows returning it to the local caller.</param>
+/// <param name="Domain">Normalized domain that was scored.</param>
+/// <param name="ScannedAtUtc">UTC time when HIP evaluated the scan.</param>
+/// <param name="MalwareRiskScore">Malware risk component score.</param>
+/// <param name="PhishingRiskScore">Phishing risk component score.</param>
+/// <param name="RedirectRiskScore">Redirect risk component score.</param>
+/// <param name="ScriptRiskScore">Script risk component score.</param>
+/// <param name="DownloadRiskScore">Download risk component score.</param>
+/// <param name="FormRiskScore">Form and credential collection risk component score.</param>
+/// <param name="ReputationRiskScore">Reputation risk component score.</param>
+/// <param name="OverallSafetyRiskScore">Combined safety risk score before trust-layer conversion.</param>
+/// <param name="Status">Final readable HIP status label.</param>
+/// <param name="Summary">Plain-English scan summary.</param>
+/// <param name="Reasons">Plain-English reasons supporting the score.</param>
+/// <param name="Warnings">User-visible warnings generated by rules or evidence providers.</param>
+/// <param name="PositiveSignals">Positive trust or safety signals observed during the scan.</param>
+/// <param name="NegativeSignals">Negative risk signals observed during the scan.</param>
+/// <param name="ConfidenceLevel">Confidence level assigned to the result.</param>
+/// <param name="DomainTrustScore">Trust score for the root domain overall.</param>
+/// <param name="PageTrustScore">Trust score for this exact page or URL.</param>
+/// <param name="ContentRiskScore">Risk score for observed page content and behavior.</param>
+/// <param name="FinalHipScore">Final user-facing HIP score.</param>
+/// <param name="ProviderEvidence">Normalized provider evidence used by the scan.</param>
+/// <param name="ScoreImpact">Rule and evidence score impact details.</param>
+sealed record SiteSafetyScanApiResponse(
+    string ScanId,
+    string Url,
+    string Domain,
+    DateTimeOffset ScannedAtUtc,
+    int MalwareRiskScore,
+    int PhishingRiskScore,
+    int RedirectRiskScore,
+    int ScriptRiskScore,
+    int DownloadRiskScore,
+    int FormRiskScore,
+    int ReputationRiskScore,
+    int OverallSafetyRiskScore,
+    string Status,
+    string Summary,
+    IReadOnlyCollection<string> Reasons,
+    IReadOnlyCollection<string> Warnings,
+    IReadOnlyCollection<string> PositiveSignals,
+    IReadOnlyCollection<string> NegativeSignals,
+    string ConfidenceLevel,
+    int DomainTrustScore,
+    int PageTrustScore,
+    int ContentRiskScore,
+    int FinalHipScore,
+    IReadOnlyList<SiteSafetyProviderEvidenceApiResponse> ProviderEvidence,
+    object? ScoreImpact);
+
+/// <summary>
+/// Detailed Swagger response for one normalized evidence provider result.
+/// </summary>
+/// <param name="ProviderName">Provider display name, such as BrowserObservedSignalProvider or SSL Labs / Qualys TLS.</param>
+/// <param name="ProviderType">Normalized provider category.</param>
+/// <param name="TargetType">Whether the evidence applies to the domain, URL, content, or another target type.</param>
+/// <param name="Domain">Domain evaluated by the provider.</param>
+/// <param name="UrlHash">Hashed URL when URL-level evidence is used.</param>
+/// <param name="Confidence">Provider confidence score.</param>
+/// <param name="CheckedAtUtc">UTC time the provider evidence was checked.</param>
+/// <param name="ExpiresAtUtc">UTC time when cached provider evidence expires.</param>
+/// <param name="Errors">Safe provider errors or timeout notes.</param>
+/// <param name="IsAuthoritativeForRisk">Whether this provider can force high-risk outcomes for known-bad evidence.</param>
+/// <param name="IsAuthoritativeForTrust">Whether this provider can contribute positive trust evidence.</param>
+/// <param name="EvidenceItems">Normalized evidence items returned by the provider.</param>
+sealed record SiteSafetyProviderEvidenceApiResponse(
+    string ProviderName,
+    string ProviderType,
+    string TargetType,
+    string Domain,
+    string? UrlHash,
+    int Confidence,
+    DateTimeOffset CheckedAtUtc,
+    DateTimeOffset ExpiresAtUtc,
+    IReadOnlyCollection<string> Errors,
+    bool IsAuthoritativeForRisk,
+    bool IsAuthoritativeForTrust,
+    IReadOnlyList<SiteSafetyProviderEvidenceItemApiResponse> EvidenceItems);
+
+/// <summary>
+/// Detailed Swagger response for one normalized evidence item.
+/// </summary>
+/// <param name="Category">Evidence category, such as TLS grade, phishing hit, script signal, or observed browser signal.</param>
+/// <param name="Value">Safe evidence value or label.</param>
+/// <param name="Status">Normalized evidence status.</param>
+/// <param name="RiskImpact">Risk impact contributed by this evidence item.</param>
+/// <param name="TrustImpact">Trust impact contributed by this evidence item.</param>
+/// <param name="Summary">Plain-English provider explanation.</param>
+sealed record SiteSafetyProviderEvidenceItemApiResponse(
+    string Category,
+    string Value,
+    string Status,
+    int RiskImpact,
+    int TrustImpact,
+    string Summary);
 
 /// <summary>
 /// Client-safe provider settings response scoped to one browser instance.
