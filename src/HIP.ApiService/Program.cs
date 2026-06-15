@@ -70,6 +70,9 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy(PublicFeedbackPolicy, httpContext =>
         CreateFixedWindowPartition(httpContext, "feedback", performance.PublicFeedbackRequestsPerMinute));
 });
+// Swagger is registered for local API discoverability; the interactive UI is only exposed in Development below.
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -79,6 +82,13 @@ await HipDatabaseInitializer.EnsureCreatedAsync(app.Services, app.Environment.Is
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        // Keep Swagger on a predictable local URL so the API port can be inspected directly during development.
+        options.RoutePrefix = "swagger";
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "HIP API v1");
+    });
 }
 
 if (ShouldUseHttpsRedirection(app))
@@ -90,6 +100,19 @@ app.UseResponseCompression();
 app.UseRateLimiter();
 app.UseOutputCache();
 app.MapDefaultEndpoints();
+
+app.MapGet("/", () => Results.Ok(new
+{
+    service = "HIP API",
+    status = "Running",
+    version = "0.1.0-dev",
+    health = "/alive",
+    openApi = app.Environment.IsDevelopment() ? "/openapi/v1.json" : null,
+    swagger = app.Environment.IsDevelopment() ? "/swagger" : null
+}))
+.WithName("ApiServiceInfo")
+.WithSummary("Returns local HIP API service information.")
+.WithDescription("Provides a safe, non-sensitive API root response for local development and service discovery.");
 
 var publicApi = app.MapGroup("/api/v1/public");
 var browserApi = app.MapGroup("/api/v1/browser");
