@@ -19,6 +19,7 @@ artifacts/
 
 # Logs
 *.log
+.hip-local/
 
 # OS files
 Thumbs.db
