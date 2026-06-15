@@ -10,7 +10,7 @@
         <h1>Platform Connections</h1>
         <p>Manage platforms that HIP monitors for threats.</p>
     </div>
-    <button class="hip-primary-action" type="button" disabled>+ Add Platform</button>
+    <button class="hip-primary-action" type="button" disabled>+ Connect Platform</button>
 </section>
 
 @if (_summary is null)
@@ -25,7 +25,7 @@ else
     <section class="hip-card-row three">
         <article class="hip-mini-stat good"><strong>1</strong><span>Connected Client Type</span></article>
         <article class="hip-mini-stat"><strong>@CardValue("totalScans")</strong><span>Browser Scans</span></article>
-        <article class="hip-mini-stat"><strong>0</strong><span>Message Platforms</span></article>
+        <article class="hip-mini-stat"><strong>1</strong><span>Configured Message Platform</span></article>
     </section>
 
     <section class="hip-stack">
@@ -45,12 +45,27 @@ else
         </article>
 
         <article class="hip-platform-row">
+            <span class="platform-avatar">DC</span>
+            <div>
+                <h3>Discord <span class="hip-pill caution">Not connected yet</span> <span class="hip-pill info">configured</span></h3>
+                <p>Discord is available as a message platform foundation, but no live Discord connector has submitted HIP data yet.</p>
+                <div>
+                    <small>Sender hash only</small>
+                    <small>URL and domain reports</small>
+                    <small>No message body storage</small>
+                    <small>Safety page routing ready</small>
+                    <small>No fake Discord traffic shown</small>
+                </div>
+            </div>
+        </article>
+
+        <article class="hip-platform-row">
             <span class="platform-avatar">--</span>
             <div>
-                <h3>Messaging Platforms <span class="hip-pill caution">Not connected yet</span></h3>
-                <p>Second Life, Discord, Telegram, and email connectors do not have live connector records yet.</p>
+                <h3>Other Messaging Platforms <span class="hip-pill caution">Not connected yet</span></h3>
+                <p>Second Life, Telegram, and email connectors do not have live connector records yet.</p>
                 <div>
-                    <small>No fake connected platform rows are shown.</small>
+                    <small>Connectors will appear here after privacy-safe ingestion exists.</small>
                 </div>
             </div>
         </article>
