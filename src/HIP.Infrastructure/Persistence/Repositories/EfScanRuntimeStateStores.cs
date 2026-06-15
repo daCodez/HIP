@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using HIP.Application.Browser;
 using HIP.Application.Scalability;
+using HIP.Infrastructure.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace HIP.Infrastructure.Persistence.Repositories;
 
@@ -104,8 +106,9 @@ public sealed class EfScanResultDedupeService(HipRecordStore store) : IScanResul
 /// <summary>
 /// Persists the current dashboard scan aggregate so the admin dashboard can read live scan counters.
 /// </summary>
-/// <param name="store">Encrypted generic record store used for the MVP aggregate projection.</param>
-public sealed class EfDashboardScanAggregateStore(HipRecordStore store) : IDashboardScanAggregateStore
+/// <param name="dbContext">HIP EF Core database context.</param>
+/// <param name="legacyStore">Generic encrypted record store used only as a migration fallback.</param>
+public sealed class EfDashboardScanAggregateStore(HipDbContext dbContext, HipRecordStore legacyStore) : IDashboardScanAggregateStore
 {
     private const string Partition = "dashboard-scan-aggregate";
     private const string CurrentId = "current";
@@ -123,23 +126,33 @@ public sealed class EfDashboardScanAggregateStore(HipRecordStore store) : IDashb
         await AggregateUpdateLock.WaitAsync(cancellationToken);
         try
         {
-            var aggregate = await GetAsync(cancellationToken);
-            var today = result.LastCheckedUtc.UtcDateTime.Date == DateTimeOffset.UtcNow.UtcDateTime.Date ? 1 : 0;
-            var updated = aggregate with
+            var entity = await dbContext.DashboardScanAggregates.FindAsync([CurrentId], cancellationToken);
+            if (entity is null)
             {
-                TotalScans = aggregate.TotalScans + 1,
-                ScansToday = aggregate.ScansToday + today,
-                Trusted = aggregate.Trusted + IsStatus(result, "Trusted"),
-                MostlyTrusted = aggregate.MostlyTrusted + IsStatus(result, "MostlyTrusted", "ProbablySafe"),
-                LimitedTrustData = aggregate.LimitedTrustData + IsStatus(result, "LimitedTrustData", "LimitedData"),
-                Unknown = aggregate.Unknown + IsStatus(result, "Unknown"),
-                Suspicious = aggregate.Suspicious + IsStatus(result, "Suspicious", "Caution"),
-                HighRisk = aggregate.HighRisk + IsStatus(result, "HighRisk"),
-                Dangerous = aggregate.Dangerous + IsStatus(result, "Dangerous", "Critical"),
-                UpdatedAtUtc = DateTimeOffset.UtcNow
-            };
+                entity = ToEntity(await ReadLegacyOrEmptyAsync(cancellationToken));
+                dbContext.DashboardScanAggregates.Add(entity);
+            }
 
-            await store.SaveAsync(Partition, CurrentId, updated, cancellationToken);
+            var today = result.LastCheckedUtc.UtcDateTime.Date == DateTimeOffset.UtcNow.UtcDateTime.Date ? 1 : 0;
+            entity.TotalScans++;
+            entity.ScansToday += today;
+            entity.Trusted += IsStatus(result, "Trusted");
+            entity.MostlyTrusted += IsStatus(result, "MostlyTrusted", "ProbablySafe");
+            entity.LimitedTrustData += IsStatus(result, "LimitedTrustData", "LimitedData");
+            entity.Unknown += IsStatus(result, "Unknown");
+            entity.Suspicious += IsStatus(result, "Suspicious", "Caution");
+            entity.HighRisk += IsStatus(result, "HighRisk");
+            entity.Dangerous += IsStatus(result, "Dangerous", "Critical");
+            entity.UpdatedAtUtc = DateTimeOffset.UtcNow;
+
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException exception) when (IsDuplicateAggregateInsert(exception))
+            {
+                await RetryAggregateUpdateAfterInsertRaceAsync(result, today, cancellationToken);
+            }
         }
         finally
         {
@@ -152,9 +165,12 @@ public sealed class EfDashboardScanAggregateStore(HipRecordStore store) : IDashb
     /// </summary>
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
     /// <returns>Current aggregate counters for admin dashboard live data.</returns>
-    public async Task<DashboardScanAggregate> GetAsync(CancellationToken cancellationToken) =>
-        await store.GetAsync<DashboardScanAggregate>(Partition, CurrentId, cancellationToken)
-        ?? Empty();
+    public async Task<DashboardScanAggregate> GetAsync(CancellationToken cancellationToken)
+    {
+        var entity = await dbContext.DashboardScanAggregates.AsNoTracking()
+            .SingleOrDefaultAsync(aggregate => aggregate.Id == CurrentId, cancellationToken);
+        return entity is null ? await ReadLegacyOrEmptyAsync(cancellationToken) : FromEntity(entity);
+    }
 
     /// <summary>
     /// Creates an explicit no-data aggregate for fresh development databases.
@@ -162,6 +178,79 @@ public sealed class EfDashboardScanAggregateStore(HipRecordStore store) : IDashb
     /// <returns>Empty dashboard aggregate.</returns>
     private static DashboardScanAggregate Empty() =>
         new(0, 0, 0, 0, 0, 0, 0, 0, 0, DateTimeOffset.MinValue);
+
+    /// <summary>
+    /// Reads the old generic aggregate row when a development database has not yet projected typed counters.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel fallback reads.</param>
+    /// <returns>Legacy aggregate or an explicit empty state.</returns>
+    private async Task<DashboardScanAggregate> ReadLegacyOrEmptyAsync(CancellationToken cancellationToken) =>
+        await legacyStore.GetAsync<DashboardScanAggregate>(Partition, CurrentId, cancellationToken)
+        ?? Empty();
+
+    /// <summary>
+    /// Converts an application aggregate into a typed EF entity.
+    /// </summary>
+    /// <param name="aggregate">Aggregate values.</param>
+    /// <returns>Typed EF entity.</returns>
+    private static HipDashboardScanAggregateEntity ToEntity(DashboardScanAggregate aggregate) =>
+        new()
+        {
+            Id = CurrentId,
+            TotalScans = aggregate.TotalScans,
+            ScansToday = aggregate.ScansToday,
+            Trusted = aggregate.Trusted,
+            MostlyTrusted = aggregate.MostlyTrusted,
+            LimitedTrustData = aggregate.LimitedTrustData,
+            Unknown = aggregate.Unknown,
+            Suspicious = aggregate.Suspicious,
+            HighRisk = aggregate.HighRisk,
+            Dangerous = aggregate.Dangerous,
+            UpdatedAtUtc = aggregate.UpdatedAtUtc
+        };
+
+    /// <summary>
+    /// Converts a typed EF aggregate row into the application read model.
+    /// </summary>
+    /// <param name="entity">Typed EF entity.</param>
+    /// <returns>Application aggregate.</returns>
+    private static DashboardScanAggregate FromEntity(HipDashboardScanAggregateEntity entity) =>
+        new(
+            entity.TotalScans,
+            entity.ScansToday,
+            entity.Trusted,
+            entity.MostlyTrusted,
+            entity.LimitedTrustData,
+            entity.Unknown,
+            entity.Suspicious,
+            entity.HighRisk,
+            entity.Dangerous,
+            entity.UpdatedAtUtc);
+
+    /// <summary>
+    /// Replays one aggregate update after another request inserted the current row first.
+    /// </summary>
+    /// <param name="result">Scan result being projected.</param>
+    /// <param name="today">Precomputed today increment.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    private async Task RetryAggregateUpdateAfterInsertRaceAsync(BrowserScanResultRecord result, int today, CancellationToken cancellationToken)
+    {
+        dbContext.ChangeTracker.Clear();
+        var entity = await dbContext.DashboardScanAggregates.FindAsync([CurrentId], cancellationToken)
+            ?? throw new DbUpdateConcurrencyException("Dashboard aggregate insert collided, but the current row could not be reloaded.");
+
+        entity.TotalScans++;
+        entity.ScansToday += today;
+        entity.Trusted += IsStatus(result, "Trusted");
+        entity.MostlyTrusted += IsStatus(result, "MostlyTrusted", "ProbablySafe");
+        entity.LimitedTrustData += IsStatus(result, "LimitedTrustData", "LimitedData");
+        entity.Unknown += IsStatus(result, "Unknown");
+        entity.Suspicious += IsStatus(result, "Suspicious", "Caution");
+        entity.HighRisk += IsStatus(result, "HighRisk");
+        entity.Dangerous += IsStatus(result, "Dangerous", "Critical");
+        entity.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 
     /// <summary>
     /// Maps legacy and current status labels into the dashboard counter buckets.
@@ -175,4 +264,17 @@ public sealed class EfDashboardScanAggregateStore(HipRecordStore store) : IDashb
             result.RiskLevel.Equals(status, StringComparison.OrdinalIgnoreCase))
             ? 1
             : 0;
+
+    /// <summary>
+    /// Detects duplicate aggregate insert races across relational providers.
+    /// </summary>
+    /// <param name="exception">EF update exception raised while saving the aggregate.</param>
+    /// <returns>True when the exception is a duplicate primary key violation.</returns>
+    private static bool IsDuplicateAggregateInsert(DbUpdateException exception) =>
+        exception.InnerException switch
+        {
+            Npgsql.PostgresException postgresException => postgresException.SqlState == "23505",
+            Microsoft.Data.Sqlite.SqliteException sqliteException => sqliteException.SqliteErrorCode == 19,
+            _ => false
+        };
 }

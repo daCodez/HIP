@@ -141,6 +141,43 @@ public sealed class PersistenceRepositoryTests
     }
 
     /// <summary>
+    /// Verifies local development startup evolves an existing non-empty database with the typed hot-path tables.
+    /// </summary>
+    [Test]
+    public async Task DatabaseInitializerAddsHotPathTablesToExistingDevelopmentDatabase()
+    {
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText =
+                """
+                CREATE TABLE hip_records (
+                    Partition TEXT NOT NULL,
+                    Id TEXT NOT NULL,
+                    Json TEXT NOT NULL,
+                    CreatedAtUtc TEXT NOT NULL,
+                    UpdatedAtUtc TEXT NOT NULL,
+                    CONSTRAINT PK_hip_records PRIMARY KEY (Partition, Id)
+                );
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var services = new ServiceCollection();
+        services.AddDbContext<HipDbContext>(options => options.UseSqlite(connection));
+        using var provider = services.BuildServiceProvider();
+
+        await HipDatabaseInitializer.EnsureCreatedAsync(provider, isLocalDevelopment: true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(SqliteTableExists(connection, "hip_browser_scan_results"), Is.True);
+            Assert.That(SqliteTableExists(connection, "hip_dashboard_scan_aggregates"), Is.True);
+        });
+    }
+
+    /// <summary>
     /// Verifies the development encryption key cannot be used when production safety is requested.
     /// </summary>
     [Test]
@@ -378,7 +415,7 @@ public sealed class PersistenceRepositoryTests
         var cache = new EfScanResultCache(store);
         var queue = new EfScanIngestionQueue(store);
         var dedupe = new EfScanResultDedupeService(store);
-        var aggregateStore = new EfDashboardScanAggregateStore(store);
+        var aggregateStore = new EfDashboardScanAggregateStore(database.Context, store);
         var scan = CreateStoredScan("runtime.example", "Dangerous");
         var request = new ScanIngestionRequest(
             "scan-request-1",
@@ -400,7 +437,7 @@ public sealed class PersistenceRepositoryTests
         var freshCache = await new EfScanResultCache(store).GetFreshAsync("runtime.example", CancellationToken.None);
         var batch = await new EfScanIngestionQueue(store).DequeueBatchAsync(10, CancellationToken.None);
         var emptyBatch = await queue.DequeueBatchAsync(10, CancellationToken.None);
-        var aggregate = await new EfDashboardScanAggregateStore(store).GetAsync(CancellationToken.None);
+        var aggregate = await new EfDashboardScanAggregateStore(database.Context, store).GetAsync(CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -411,6 +448,123 @@ public sealed class PersistenceRepositoryTests
             Assert.That(secondDedupe, Is.False);
             Assert.That(aggregate.TotalScans, Is.EqualTo(1));
             Assert.That(aggregate.Dangerous, Is.EqualTo(1));
+        });
+    }
+
+    /// <summary>
+    /// Verifies new browser scan saves use the typed hot-path scan table instead of forcing dashboards through
+    /// encrypted generic record scans.
+    /// </summary>
+    [Test]
+    public async Task BrowserScanResultPersistsToTypedHotPathTable()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfBrowserScanResultRepository(database.Context, new HipRecordStore(database.Context));
+        var scan = CreateStoredScan("typed.example", "MostlyTrusted") with
+        {
+            PrivacySafeMetadata = new Dictionary<string, string>
+            {
+                ["signalHash"] = "sha256:" + new string('2', 64),
+                ["pluginVersion"] = "0.1.9-dev"
+            }
+        };
+
+        await repository.SaveAsync(scan, CancellationToken.None);
+
+        var entity = await database.Context.BrowserScanResults.SingleAsync();
+        var latest = await repository.GetLatestByDomainAsync("typed.example", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(entity.Domain, Is.EqualTo("typed.example"));
+            Assert.That(entity.PluginVersion, Is.EqualTo("0.1.9-dev"));
+            Assert.That(entity.ReasonsJson, Does.Contain("Privacy-safe stored scan summary."));
+            Assert.That(database.Context.Records.Count(), Is.EqualTo(0));
+            Assert.That(latest?.Domain, Is.EqualTo("typed.example"));
+            Assert.That(latest?.Status, Is.EqualTo("MostlyTrusted"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies typed scan storage keeps raw private page details out of the hot table.
+    /// </summary>
+    [Test]
+    public async Task BrowserScanResultTypedTableStoresOnlyPrivacySafeFields()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfBrowserScanResultRepository(database.Context, new HipRecordStore(database.Context));
+        var scan = CreateStoredScan("privacy-hot-path.example", "Unknown") with
+        {
+            PageUrlHash = "sha256:" + new string('3', 64),
+            StoredPageUrl = null,
+            PrivacySafeMetadata = new Dictionary<string, string>
+            {
+                ["signalHash"] = "sha256:" + new string('4', 64),
+                ["hasLoginForm"] = "true"
+            }
+        };
+
+        await repository.SaveAsync(scan, CancellationToken.None);
+
+        var entity = await database.Context.BrowserScanResults.SingleAsync();
+        var storedMaterial = string.Join(
+            "|",
+            entity.Domain,
+            entity.PageUrlHash,
+            entity.StoredPageUrl,
+            entity.PrivacySafeMetadataJson,
+            entity.ReasonsJson);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(entity.StoredPageUrl, Is.Null);
+            Assert.That(storedMaterial, Does.Not.Contain("password"));
+            Assert.That(storedMaterial, Does.Not.Contain("formValue"));
+            Assert.That(storedMaterial, Does.Not.Contain("page body"));
+            Assert.That(storedMaterial, Does.Not.Contain("https://privacy-hot-path.example/private"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies recent scan reads are served from typed rows in newest-first order.
+    /// </summary>
+    [Test]
+    public async Task BrowserScanResultRecentReadsUseTypedRowsNewestFirst()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfBrowserScanResultRepository(database.Context, new HipRecordStore(database.Context));
+        var older = CreateStoredScan("older.example", "Trusted") with { LastCheckedUtc = DateTimeOffset.UtcNow.AddMinutes(-10) };
+        var newer = CreateStoredScan("newer.example", "Dangerous") with { LastCheckedUtc = DateTimeOffset.UtcNow };
+
+        await repository.SaveAsync(older, CancellationToken.None);
+        await repository.SaveAsync(newer, CancellationToken.None);
+
+        var recent = await repository.ListRecentAsync(1, CancellationToken.None);
+
+        Assert.That(recent.Single().Domain, Is.EqualTo("newer.example"));
+    }
+
+    /// <summary>
+    /// Verifies dashboard scan counters persist into the typed aggregate projection table.
+    /// </summary>
+    [Test]
+    public async Task DashboardScanAggregatePersistsToTypedProjectionTable()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var aggregateStore = new EfDashboardScanAggregateStore(database.Context, new HipRecordStore(database.Context));
+
+        await aggregateStore.UpdateAsync(CreateStoredScan("aggregate-hot-path.example", "Dangerous"), CancellationToken.None);
+
+        var typedAggregate = await database.Context.DashboardScanAggregates.SingleAsync();
+        var aggregate = await aggregateStore.GetAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(typedAggregate.Id, Is.EqualTo("current"));
+            Assert.That(typedAggregate.TotalScans, Is.EqualTo(1));
+            Assert.That(typedAggregate.Dangerous, Is.EqualTo(1));
+            Assert.That(database.Context.Records.Count(record => record.Partition == "dashboard-scan-aggregate"), Is.EqualTo(0));
+            Assert.That(aggregate.TotalScans, Is.EqualTo(1));
         });
     }
 
@@ -439,12 +593,12 @@ public sealed class PersistenceRepositoryTests
             await Task.WhenAll(scans.Select(async scan =>
             {
                 await using var context = new HipDbContext(options);
-                var aggregateStore = new EfDashboardScanAggregateStore(new HipRecordStore(context));
+                var aggregateStore = new EfDashboardScanAggregateStore(context, new HipRecordStore(context));
                 await aggregateStore.UpdateAsync(scan, CancellationToken.None);
             }));
 
             await using var verifyContext = new HipDbContext(options);
-            var aggregate = await new EfDashboardScanAggregateStore(new HipRecordStore(verifyContext)).GetAsync(CancellationToken.None);
+            var aggregate = await new EfDashboardScanAggregateStore(verifyContext, new HipRecordStore(verifyContext)).GetAsync(CancellationToken.None);
 
             Assert.Multiple(() =>
             {
@@ -566,6 +720,20 @@ public sealed class PersistenceRepositoryTests
         await context.Database.EnsureCreatedAsync();
 
         return new TestDatabase(connection, context);
+    }
+
+    /// <summary>
+    /// Checks whether a table exists in a SQLite test database without touching application data.
+    /// </summary>
+    /// <param name="connection">Open SQLite connection.</param>
+    /// <param name="tableName">Table name to look up.</param>
+    /// <returns>True when SQLite reports the table exists.</returns>
+    private static bool SqliteTableExists(SqliteConnection connection, string tableName)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $tableName;";
+        command.Parameters.AddWithValue("$tableName", tableName);
+        return Convert.ToInt32(command.ExecuteScalar()) == 1;
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
