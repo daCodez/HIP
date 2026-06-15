@@ -1,9 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HIP.Application.Browser;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Rules;
+using HIP.Application.Scalability;
 using HIP.Domain.Audit;
 using HIP.Domain.Reporting;
 using HIP.Domain.Reputation;
@@ -365,6 +367,53 @@ public sealed class PersistenceRepositoryTests
         });
     }
 
+    /// <summary>
+    /// Verifies scan runtime state uses durable adapters for cache, queue, dedupe, and dashboard aggregates.
+    /// </summary>
+    [Test]
+    public async Task ScanRuntimeStateStoresPersistThroughEfAdapters()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var store = new HipRecordStore(database.Context);
+        var cache = new EfScanResultCache(store);
+        var queue = new EfScanIngestionQueue(store);
+        var dedupe = new EfScanResultDedupeService(store);
+        var aggregateStore = new EfDashboardScanAggregateStore(store);
+        var scan = CreateStoredScan("runtime.example", "Dangerous");
+        var request = new ScanIngestionRequest(
+            "scan-request-1",
+            "runtime.example",
+            scan.PageUrlHash,
+            scan.PrivacySafeMetadata["signalHash"],
+            "BrowserPlugin",
+            "0.1.0-dev",
+            DateTimeOffset.UtcNow,
+            ScanProcessingPath.SlowPath);
+        var dedupeKey = new ScanDedupeKey(request.Domain, request.UrlHash, request.SignalHash);
+
+        await cache.StoreAsync(scan, TimeSpan.FromMinutes(15), CancellationToken.None);
+        await queue.EnqueueAsync(request, CancellationToken.None);
+        var firstDedupe = await dedupe.TryAcceptAsync(dedupeKey, TimeSpan.FromMinutes(5), CancellationToken.None);
+        var secondDedupe = await dedupe.TryAcceptAsync(dedupeKey, TimeSpan.FromMinutes(5), CancellationToken.None);
+        await aggregateStore.UpdateAsync(scan, CancellationToken.None);
+
+        var freshCache = await new EfScanResultCache(store).GetFreshAsync("runtime.example", CancellationToken.None);
+        var batch = await new EfScanIngestionQueue(store).DequeueBatchAsync(10, CancellationToken.None);
+        var emptyBatch = await queue.DequeueBatchAsync(10, CancellationToken.None);
+        var aggregate = await new EfDashboardScanAggregateStore(store).GetAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(freshCache?.Result.Domain, Is.EqualTo("runtime.example"));
+            Assert.That(batch.Single(), Is.EqualTo(request));
+            Assert.That(emptyBatch, Is.Empty);
+            Assert.That(firstDedupe, Is.True);
+            Assert.That(secondDedupe, Is.False);
+            Assert.That(aggregate.TotalScans, Is.EqualTo(1));
+            Assert.That(aggregate.Dangerous, Is.EqualTo(1));
+        });
+    }
+
     private static TrustRule CreateRule(string ruleId) =>
         new(
             ruleId,
@@ -427,6 +476,28 @@ public sealed class PersistenceRepositoryTests
                 "Shortener and young domain signals only.",
                 new Dictionary<string, string> { ["usesShortener"] = "true" }),
             "hip-signature-placeholder");
+
+    private static BrowserScanResultRecord CreateStoredScan(string domain, string status) =>
+        new(
+            $"browser-scan:{domain}:test",
+            domain,
+            "sha256:" + new string('f', 64),
+            null,
+            "BrowserPlugin",
+            status == "Dangerous" ? 8 : 88,
+            status,
+            status,
+            ["Privacy-safe stored scan summary."],
+            5,
+            status == "Dangerous" ? 1 : 0,
+            status == "Dangerous" ? 1 : 0,
+            status == "Dangerous" ? 1 : 0,
+            DateTimeOffset.UtcNow,
+            status == "Dangerous" ? "Block" : "Allow",
+            new Dictionary<string, string>
+            {
+                ["signalHash"] = "sha256:" + new string('1', 64)
+            });
 
     private static async Task<TestDatabase> CreateDatabaseAsync()
     {

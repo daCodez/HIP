@@ -4,6 +4,7 @@ using HIP.Application.Browser;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reputation;
 using HIP.Application.Reporting;
+using HIP.Application.Scalability;
 using HIP.Application.SiteSafety;
 using HIP.Domain.Reputation;
 using HIP.Domain.Risk;
@@ -445,7 +446,7 @@ public sealed class HipScoringAccuracyTests
         IReadOnlyCollection<string>? reasons = null)
     {
         var repository = new InMemoryBrowserScanResultRepository();
-        var service = new BrowserScanResultService(repository, new Sha256PrivacyHashingService());
+        var service = new BrowserScanResultService(repository, new Sha256PrivacyHashingService(), new InMemoryScanResultCache(), new InMemoryDashboardScanAggregateStore());
         await service.SaveAsync(new BrowserScanResultSaveRequest(
             domain,
             $"https://{domain}/some-user/some-repo?token=secret",
@@ -566,3 +567,4 @@ public sealed class HipScoringAccuracyTests
             throw new TimeoutException("Simulated timeout.");
     }
 }
+

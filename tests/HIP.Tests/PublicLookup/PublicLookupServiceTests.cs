@@ -1,6 +1,7 @@
 using HIP.Application.Browser;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
+using HIP.Application.Scalability;
 using HIP.Domain.Risk;
 
 namespace HIP.Tests.PublicLookup;
@@ -178,7 +179,7 @@ public sealed class PublicLookupServiceTests
     private static async Task<PublicDomainLookupService> CreateServiceWithStoredScanAsync(string domain, int score = 84, string status = "Trusted")
     {
         var repository = new InMemoryBrowserScanResultRepository();
-        var scanResultService = new BrowserScanResultService(repository, new Sha256PrivacyHashingService());
+        var scanResultService = new BrowserScanResultService(repository, new Sha256PrivacyHashingService(), new InMemoryScanResultCache(), new InMemoryDashboardScanAggregateStore());
         await scanResultService.SaveAsync(new BrowserScanResultSaveRequest(
             domain,
             $"https://{domain.ToLowerInvariant()}/page?token=secret",
@@ -199,3 +200,4 @@ public sealed class PublicLookupServiceTests
         return new PublicDomainLookupService(repository);
     }
 }
+

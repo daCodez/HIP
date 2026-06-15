@@ -1,5 +1,6 @@
 using HIP.Application.Browser;
 using HIP.Application.Reporting;
+using HIP.Application.Scalability;
 using NUnit.Framework;
 
 namespace HIP.Tests.Browser;
@@ -77,7 +78,7 @@ public sealed class BrowserScanResultServiceTests
     public async Task Page_url_is_hashed_and_raw_url_is_not_stored()
     {
         var repository = new InMemoryBrowserScanResultRepository();
-        var service = new BrowserScanResultService(repository, new Sha256PrivacyHashingService());
+        var service = new BrowserScanResultService(repository, new Sha256PrivacyHashingService(), new InMemoryScanResultCache(), new InMemoryDashboardScanAggregateStore());
 
         await service.SaveAsync(ValidRequest(), CancellationToken.None);
         var stored = await repository.GetLatestByDomainAsync("example.com", CancellationToken.None);
@@ -157,7 +158,11 @@ public sealed class BrowserScanResultServiceTests
     /// </summary>
     /// <returns>A browser scan result service.</returns>
     private static BrowserScanResultService CreateService() =>
-        new(new InMemoryBrowserScanResultRepository(), new Sha256PrivacyHashingService());
+        new(
+            new InMemoryBrowserScanResultRepository(),
+            new Sha256PrivacyHashingService(),
+            new InMemoryScanResultCache(),
+            new InMemoryDashboardScanAggregateStore());
 
     /// <summary>
     /// Creates a valid privacy-safe request used as a baseline by tests.
@@ -182,3 +187,4 @@ public sealed class BrowserScanResultServiceTests
                 ["downloadCandidates"] = "0"
             });
 }
+

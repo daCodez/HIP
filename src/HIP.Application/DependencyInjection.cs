@@ -79,10 +79,6 @@ public static class DependencyInjection
         services.TryAddSingleton<IFeedbackWeightingPolicy, DefaultFeedbackWeightingPolicy>();
         services.AddSingleton<IPrivacyHashingService, Sha256PrivacyHashingService>();
         services.AddSingleton<IDuplicateSubmissionGuard, InMemoryDuplicateSubmissionGuard>();
-        services.AddSingleton<IScanResultCache, InMemoryScanResultCache>();
-        services.AddSingleton<IScanIngestionQueue, InMemoryScanIngestionQueue>();
-        services.AddSingleton<IScanResultDedupeService, InMemoryScanResultDedupeService>();
-        services.AddSingleton<IDashboardScanAggregateStore, InMemoryDashboardScanAggregateStore>();
         services.AddSingleton<ISubmissionRateLimiter, DevelopmentSubmissionRateLimiter>();
         services.AddScoped<IOutboxEventWriter, OutboxEventWriter>();
         services.AddSingleton<IReportRetentionPolicyService, ReportRetentionPolicyService>();

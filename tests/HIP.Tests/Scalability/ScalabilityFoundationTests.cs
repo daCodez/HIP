@@ -168,7 +168,7 @@ public sealed class ScalabilityFoundationTests
     public async Task Stored_scan_contains_signal_hash_without_private_page_data()
     {
         var repository = new InMemoryBrowserScanResultRepository();
-        var service = new BrowserScanResultService(repository, new Sha256PrivacyHashingService());
+        var service = new BrowserScanResultService(repository, new Sha256PrivacyHashingService(), new InMemoryScanResultCache(), new InMemoryDashboardScanAggregateStore());
 
         await service.SaveAsync(ValidRequest(), CancellationToken.None);
         var stored = await repository.GetLatestByDomainAsync("example.com", CancellationToken.None);
@@ -188,7 +188,7 @@ public sealed class ScalabilityFoundationTests
     [Test]
     public void Privacy_unsafe_scan_metadata_is_rejected()
     {
-        var service = new BrowserScanResultService(new InMemoryBrowserScanResultRepository(), new Sha256PrivacyHashingService());
+        var service = new BrowserScanResultService(new InMemoryBrowserScanResultRepository(), new Sha256PrivacyHashingService(), new InMemoryScanResultCache(), new InMemoryDashboardScanAggregateStore());
 
         Assert.ThrowsAsync<ArgumentException>(() =>
             service.SaveAsync(ValidRequest() with
@@ -206,7 +206,7 @@ public sealed class ScalabilityFoundationTests
     [Test]
     public async Task Browser_scan_write_and_query_boundaries_are_separate()
     {
-        var service = new BrowserScanResultService(new InMemoryBrowserScanResultRepository(), new Sha256PrivacyHashingService());
+        var service = new BrowserScanResultService(new InMemoryBrowserScanResultRepository(), new Sha256PrivacyHashingService(), new InMemoryScanResultCache(), new InMemoryDashboardScanAggregateStore());
         IBrowserScanResultWriteService writer = service;
         IBrowserScanResultQueryService query = service;
 
@@ -389,3 +389,4 @@ public sealed class ScalabilityFoundationTests
                 ["signalHash"] = "sha256:" + new string('1', 64)
             });
 }
+

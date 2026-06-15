@@ -78,4 +78,22 @@ public sealed class HipRecordStore(HipDbContext dbContext, IHipRecordEncryptor? 
             .Select(record => HipJsonSerializer.Deserialize<T>(recordEncryptor.Unprotect(record.Json)))
             .ToArray();
     }
+
+    /// <summary>
+    /// Removes a typed record by partition and identifier.
+    /// </summary>
+    /// <param name="partition">Logical partition name.</param>
+    /// <param name="id">Record identifier.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    public async Task RemoveAsync(string partition, string id, CancellationToken cancellationToken)
+    {
+        var record = await dbContext.Records.FindAsync([partition, id], cancellationToken);
+        if (record is null)
+        {
+            return;
+        }
+
+        dbContext.Records.Remove(record);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

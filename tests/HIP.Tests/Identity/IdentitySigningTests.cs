@@ -2,6 +2,7 @@ using HIP.Application.Browser;
 using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
+using HIP.Application.Scalability;
 using HIP.Domain.Identity;
 
 namespace HIP.Tests.Identity;
@@ -224,7 +225,7 @@ public sealed class IdentitySigningTests
     private static async Task<InMemoryBrowserScanResultRepository> SeedStoredBrowserScanAsync(string domain)
     {
         var repository = new InMemoryBrowserScanResultRepository();
-        var service = new BrowserScanResultService(repository, new Sha256PrivacyHashingService());
+        var service = new BrowserScanResultService(repository, new Sha256PrivacyHashingService(), new InMemoryScanResultCache(), new InMemoryDashboardScanAggregateStore());
         await service.SaveAsync(new BrowserScanResultSaveRequest(
             domain,
             $"https://{domain}/",
@@ -245,3 +246,4 @@ public sealed class IdentitySigningTests
         return repository;
     }
 }
+

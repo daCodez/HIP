@@ -23,24 +23,6 @@ public sealed class BrowserScanResultService : IBrowserScanResultService, IBrows
     private readonly IOutboxEventWriter? outboxEventWriter;
 
     /// <summary>
-    /// Creates the service with no-op scalability adapters for isolated tests or simple single-node hosts.
-    /// </summary>
-    /// <param name="repository">Repository used for durable scan result storage.</param>
-    /// <param name="hashingService">Privacy hashing service used when clients send raw page URLs.</param>
-    public BrowserScanResultService(
-        IBrowserScanResultRepository repository,
-        IPrivacyHashingService hashingService)
-        : this(
-            repository,
-            hashingService,
-            new InMemoryScanResultCache(),
-            new InMemoryDashboardScanAggregateStore(),
-            new DefaultPrivacyStoragePolicy(),
-            null)
-    {
-    }
-
-    /// <summary>
     /// Creates the service with explicit scalability adapters.
     /// </summary>
     /// <param name="repository">Repository used for durable scan result storage.</param>

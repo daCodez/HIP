@@ -57,6 +57,10 @@ public static class DependencyInjection
         services.AddScoped<IAdminReviewQueueRepository, EfAdminReviewQueueRepository>();
         services.AddScoped<IOutboxEventRepository, EfOutboxEventRepository>();
         services.AddScoped<IInboxEventRepository, EfInboxEventRepository>();
+        services.AddScoped<IScanResultCache, EfScanResultCache>();
+        services.AddScoped<IScanIngestionQueue, EfScanIngestionQueue>();
+        services.AddScoped<IScanResultDedupeService, EfScanResultDedupeService>();
+        services.AddScoped<IDashboardScanAggregateStore, EfDashboardScanAggregateStore>();
 
         return services;
     }

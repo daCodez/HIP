@@ -27,7 +27,11 @@ public sealed class RuntimeDataSourceTests
             "IRuleSimulationResultRepository, InMemoryRuleSimulationResultRepository",
             "IGeneratedRuleCandidateRepository, InMemoryGeneratedRuleCandidateRepository",
             "IOutboxEventRepository, InMemoryOutboxEventRepository",
-            "IInboxEventRepository, InMemoryInboxEventRepository"
+            "IInboxEventRepository, InMemoryInboxEventRepository",
+            "IScanResultCache, InMemoryScanResultCache",
+            "IScanIngestionQueue, InMemoryScanIngestionQueue",
+            "IScanResultDedupeService, InMemoryScanResultDedupeService",
+            "IDashboardScanAggregateStore, InMemoryDashboardScanAggregateStore"
         };
 
         Assert.Multiple(() =>
@@ -68,6 +72,21 @@ public sealed class RuntimeDataSourceTests
                 Assert.That(source, Does.Not.Contain("private readonly Dictionary<string,"), $"{Path.GetFileName(sourcePath)} must not own process-local workflow state.");
                 Assert.That(source, Does.Not.Contain("private readonly ConcurrentDictionary<string,"), $"{Path.GetFileName(sourcePath)} must not own process-local workflow state.");
             }
+        });
+    }
+
+    /// <summary>
+    /// Ensures browser scan services do not hide in-memory cache/aggregate defaults in normal application code.
+    /// </summary>
+    [Test]
+    public void Browser_scan_service_requires_explicit_scalability_adapters()
+    {
+        var source = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.Application", "Browser", "BrowserScanResultService.cs"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Not.Contain("new InMemoryScanResultCache()"));
+            Assert.That(source, Does.Not.Contain("new InMemoryDashboardScanAggregateStore()"));
         });
     }
 
