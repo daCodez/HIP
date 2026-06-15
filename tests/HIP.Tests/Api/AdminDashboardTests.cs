@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using HIP.Application.Browser;
 using HIP.Application.Dashboard;
@@ -14,6 +15,7 @@ using HIP.Application.Rules;
 using HIP.Application.Scalability;
 using HIP.Application.SelfHealing;
 using HIP.Application.SiteSafety;
+using HIP.Web;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -867,6 +869,38 @@ public sealed class AdminDashboardTests
         Assert.That(serialized, Does.Contain("Known dangerous domain signal."));
         Assert.That(serialized, Does.Not.Contain("secret-path"));
         Assert.That(serialized, Does.Not.Contain("sender-secret"));
+    }
+
+    /// <summary>
+    /// Verifies the dashboard version marker comes from HIP.Web assembly metadata instead of duplicated UI text.
+    /// </summary>
+    [Test]
+    public void Dashboard_version_uses_web_assembly_informational_version()
+    {
+        var informationalVersion = typeof(HipWebBuildInfo).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(HipWebBuildInfo.Version, Is.EqualTo(informationalVersion));
+            Assert.That(HipWebBuildInfo.DashboardDisplayVersion, Is.EqualTo($"HIP Dashboard v{informationalVersion}"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies the admin dashboard references the shared build marker so stale hardcoded version labels are avoided.
+    /// </summary>
+    [Test]
+    public void Dashboard_page_references_shared_build_marker()
+    {
+        var source = ReadDashboardSource();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("HipWebBuildInfo.DashboardDisplayVersion"));
+            Assert.That(source, Does.Not.Contain("HIP Dashboard v0.2.1-dev"));
+        });
     }
 
     private static void AddRole(HttpClient client, string role)

@@ -531,6 +531,20 @@ h1:focus {
     margin: 0;
 }
 
+.hip-build-version {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    margin-top: 12px;
+    border: 1px solid rgba(8, 215, 236, 0.28);
+    border-radius: 999px;
+    padding: 4px 10px;
+    background: rgba(8, 215, 236, 0.1);
+    color: #08d8ec;
+    font-size: 0.8rem;
+    font-weight: 800;
+}
+
 .lookup-result {
     max-width: 1180px;
     margin: 0 auto 18px;
