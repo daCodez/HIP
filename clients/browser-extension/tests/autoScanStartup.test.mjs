@@ -7,6 +7,8 @@ const contentSource = await readFile(new URL("../src/content.js", import.meta.ur
 const popupSource = await readFile(new URL("../src/popup.js", import.meta.url), "utf8");
 const apiClientSource = await readFile(new URL("../src/hipApiClient.js", import.meta.url), "utf8");
 const backgroundSource = await readFile(new URL("../src/background.js", import.meta.url), "utf8");
+const manifestSource = await readFile(new URL("../manifest.json", import.meta.url), "utf8");
+const workerWrapperSource = await readFile(new URL("../background.js", import.meta.url), "utf8");
 
 test("content script publishes scan progress before site scoring", () => {
   const startupIndex = contentSource.indexOf('markScanStage("Starting")');
@@ -68,6 +70,14 @@ test("background worker handles automatic Site Safety requests without noisy war
   assert.equal(backgroundSource.includes('message?.type === "HIP_SCAN_SITE_SAFETY"'), true);
   assert.equal(backgroundSource.includes("function safeSiteSafetyError"), true);
   assert.equal(backgroundSource.includes('console.warn("HIP Site Safety'), false);
+});
+
+test("manifest uses root service worker wrapper for reliable unpacked reloads", () => {
+  const manifest = JSON.parse(manifestSource);
+
+  assert.equal(manifest.background.service_worker, "background.js");
+  assert.equal(manifest.background.type, "module");
+  assert.equal(workerWrapperSource.includes('import "./src/background.js";'), true);
 });
 
 test("popup starts scanner once when no cached page-load summary exists", () => {
