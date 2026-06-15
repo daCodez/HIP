@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Options;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 const string PublicScanPolicy = "PublicScanPolicy";
@@ -72,7 +73,20 @@ builder.Services.AddRateLimiter(options =>
 });
 // Swagger is registered for local API discoverability; the interactive UI is only exposed in Development below.
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "HIP API",
+        Version = "v1",
+        Description = """
+        Human Identity Protocol API for privacy-safe website trust checks, browser plugin scans, public lookup, provider preferences, and feedback.
+
+        Privacy baseline: HIP API endpoints must not receive page text, form values, passwords, tokens, cookies, private messages, or unrelated browsing history.
+        Browser endpoints accept only the current domain, current URL when allowed, URL hashes, observed page signals, link counts, risk summaries, and provider evidence.
+        """
+    });
+});
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -101,22 +115,21 @@ app.UseRateLimiter();
 app.UseOutputCache();
 app.MapDefaultEndpoints();
 
-app.MapGet("/", () => Results.Ok(new
-{
-    service = "HIP API",
-    status = "Running",
-    version = "0.1.0-dev",
-    health = "/alive",
-    openApi = app.Environment.IsDevelopment() ? "/openapi/v1.json" : null,
-    swagger = app.Environment.IsDevelopment() ? "/swagger" : null
-}))
+app.MapGet("/", () => Results.Ok(new ApiServiceInfoResponse(
+    "HIP API",
+    "Running",
+    "0.1.0-dev",
+    "/alive",
+    app.Environment.IsDevelopment() ? "/openapi/v1.json" : null,
+    app.Environment.IsDevelopment() ? "/swagger" : null)))
 .WithName("ApiServiceInfo")
 .WithSummary("Returns local HIP API service information.")
-.WithDescription("Provides a safe, non-sensitive API root response for local development and service discovery.");
+.WithDescription("Provides a safe, non-sensitive API root response for local development and service discovery.")
+.Produces<ApiServiceInfoResponse>();
 
-var publicApi = app.MapGroup("/api/v1/public");
-var browserApi = app.MapGroup("/api/v1/browser");
-var siteSafetyApi = app.MapGroup("/api/v1/site-safety");
+var publicApi = app.MapGroup("/api/v1/public").WithTags("Public Lookup and Feedback");
+var browserApi = app.MapGroup("/api/v1/browser").WithTags("Browser Plugin");
+var siteSafetyApi = app.MapGroup("/api/v1/site-safety").WithTags("Site Safety");
 
 publicApi.MapGet("/lookup/domain/{domain}", async (
     string domain,
@@ -129,10 +142,14 @@ publicApi.MapGet("/lookup/domain/{domain}", async (
     }
     catch (ArgumentException ex)
     {
-        return Results.BadRequest(new { error = ex.Message });
+        return Results.BadRequest(new ApiErrorResponse(ex.Message));
     }
 })
 .WithName("PublicDomainLookup")
+.WithSummary("Looks up the public HIP trust summary for a domain.")
+.WithDescription("Returns a public-safe domain trust summary. The response may use stored browser scan data when available, and must not expose page text, user identity, browsing history, or private report payloads.")
+.Produces<PublicDomainLookupResponse>()
+.Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
 .CacheOutput(HipOutputCachePolicies.PublicLookup);
 
 publicApi.MapGet("/badge/domain/{domain}", async (
@@ -146,10 +163,14 @@ publicApi.MapGet("/badge/domain/{domain}", async (
     }
     catch (ArgumentException ex)
     {
-        return Results.BadRequest(new { error = ex.Message });
+        return Results.BadRequest(new ApiErrorResponse(ex.Message));
     }
 })
 .WithName("PublicDomainBadge")
+.WithSummary("Returns live HIP badge data for a domain.")
+.WithDescription("Returns public-safe badge fields including domain, score, status, verification state, last checked time, and lookup link. Badges must remain live and must not hide low trust scores.")
+.Produces<PublicBadgeResponse>()
+.Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
 .CacheOutput(HipOutputCachePolicies.Badge);
 
 publicApi.MapPost("/feedback", async (
@@ -174,10 +195,14 @@ publicApi.MapPost("/feedback", async (
     }
     catch (ArgumentException ex)
     {
-        return Results.BadRequest(new { error = ex.Message });
+        return Results.BadRequest(new ApiErrorResponse(ex.Message));
     }
 })
 .WithName("PublicFeedback")
+.WithSummary("Submits weighted trust feedback for a domain.")
+.WithDescription("Accepts privacy-safe feedback from HIP clients, such as Looks Safe or Looks Suspicious. Feedback is weighted evidence, not raw voting, and must not include page text, private messages, form values, passwords, cookies, or tokens.")
+.Produces<ReputationProfile>()
+.Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
 .RequireCors(HipCorsPolicies.ClientWrite)
 .RequireRateLimiting(PublicFeedbackPolicy);
 
@@ -519,10 +544,14 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Results.BadRequest(new ApiErrorResponse(ex.Message));
         }
     })
     .WithName("BrowserScoreSite")
+    .WithSummary("Scores the current browser tab domain.")
+    .WithDescription("Used by the browser plugin popup and content script to score the current site. The request should include only the current URL/domain and must not include page text, form contents, credentials, cookies, tokens, or private messages.")
+    .Produces<BrowserScoreSiteResponse>()
+    .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
@@ -537,10 +566,14 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Results.BadRequest(new ApiErrorResponse(ex.Message));
         }
     })
     .WithName("BrowserScanLinks")
+    .WithSummary("Scans links discovered on the current page.")
+    .WithDescription("Returns risk labels for discovered links so the browser plugin can label only risky links and route suspicious or dangerous clicks through the HIP safety page. The request must not include page text, form values, passwords, tokens, or private message content.")
+    .Produces<BrowserScanLinksResponse>()
+    .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
@@ -565,6 +598,11 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
         }
     })
     .WithName("BrowserSaveScanResult")
+    .WithSummary("Stores a privacy-safe browser scan summary.")
+    .WithDescription("Persists the browser plugin's scan summary for public lookup and dashboard projections. HIP stores domain-level scan data, URL hashes, scores, counts, provider names, rule IDs, plugin version, reasons, and warnings; it must not store page text, form values, passwords, cookies, tokens, private messages, or browsing history.")
+    .Produces<BrowserScanResultSaveResponse>()
+    .Produces<BrowserScanResultErrorResponse>(StatusCodes.Status400BadRequest)
+    .Produces<BrowserScanResultErrorResponse>(StatusCodes.Status409Conflict)
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
@@ -583,7 +621,12 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
             return Results.BadRequest(new BrowserScanResultErrorResponse(ex.Message));
         }
     })
-    .WithName("BrowserGetScanResult");
+    .WithName("BrowserGetScanResult")
+    .WithSummary("Gets the latest stored browser scan summary for a domain.")
+    .WithDescription("Returns the latest privacy-safe scan summary for a domain, when available. This endpoint returns domain-level summaries and URL hashes only; it must not expose raw page contents or private user data.")
+    .Produces<BrowserScanResultResponse>()
+    .Produces(StatusCodes.Status404NotFound)
+    .Produces<BrowserScanResultErrorResponse>(StatusCodes.Status400BadRequest);
 }
 
 /// <summary>
@@ -606,7 +649,10 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
         var options = await settingsStore.GetAsync(scopeKey, cancellationToken) ?? defaultOptions.Clone();
         return Results.Ok(ExternalProviderSettingsResponse.From(options, scopeKey));
     })
-    .WithName("ApiServiceGetExternalProviderPreferences");
+    .WithName("ApiServiceGetExternalProviderPreferences")
+    .WithSummary("Gets external provider preferences for the current HIP client scope.")
+    .WithDescription("Returns client-safe provider switches for SSL Labs/Qualys-style TLS checks, Google Web Risk/Safe Browsing-style checks, and VirusTotal-style checks. API keys, endpoints, and full-URL permission are never returned to browser clients.")
+    .Produces<ExternalProviderSettingsResponse>();
 
     siteSafetyApi.MapPost("/external-providers", async (
         ExternalProviderSettingsUpdateRequest request,
@@ -618,7 +664,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     {
         if (!securityOptions.Value.AllowClientProviderPreferenceWrites)
         {
-            return Results.Json(new { error = "Client provider preference writes are disabled for this HIP host." }, statusCode: StatusCodes.Status403Forbidden);
+            return Results.Json(new ApiErrorResponse("Client provider preference writes are disabled for this HIP host."), statusCode: StatusCodes.Status403Forbidden);
         }
 
         var scopeKey = ResolveProviderSettingsScope(httpContext);
@@ -628,6 +674,10 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
         return Results.Ok(ExternalProviderSettingsResponse.From(saved, scopeKey));
     })
     .WithName("ApiServiceUpdateExternalProviderPreferences")
+    .WithSummary("Updates external provider switches for the current HIP client scope.")
+    .WithDescription("Allows a local browser client to enable or disable provider categories for its own scope. The server rejects client-controlled endpoints, API keys, and full URL scanning permission to preserve privacy and prevent scanner abuse.")
+    .Produces<ExternalProviderSettingsResponse>()
+    .Produces<ApiErrorResponse>(StatusCodes.Status403Forbidden)
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
@@ -646,7 +696,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
         {
             if (IsDuplicateSiteSafetyScan(request, duplicateGuard))
             {
-                return Results.Conflict(new { error = "Duplicate site safety scan ignored." });
+                return Results.Conflict(new ApiErrorResponse("Duplicate site safety scan ignored."));
             }
 
             var scopedOptions = await LoadScopedExternalProviderOptionsAsync(httpContext, settingsStore, cancellationToken);
@@ -658,10 +708,15 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
         }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Results.BadRequest(new ApiErrorResponse(ex.Message));
         }
     })
     .WithName("ApiServiceSiteSafetyScan")
+    .WithSummary("Runs a privacy-safe site safety scan from browser-observed signals.")
+    .WithDescription("Evaluates the current page using privacy-safe browser observations, HIP history, feedback, admin review evidence, built-in rules, admin rules, and enabled external providers. The request must not include page text, form values, passwords, tokens, cookies, private messages, or unrelated browsing history.")
+    .Produces<object>()
+    .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+    .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 }
@@ -819,6 +874,29 @@ sealed record ExternalProviderSettings(
     public static ExternalProviderSettings From(ExternalProviderOptions options) =>
         new(options.Enabled, null, null, false, options.CacheDuration);
 }
+
+/// <summary>
+/// Safe API root response shown in Swagger and returned from the local service root.
+/// </summary>
+/// <param name="Service">Service name.</param>
+/// <param name="Status">Current service status.</param>
+/// <param name="Version">Local API version string.</param>
+/// <param name="Health">Health endpoint path.</param>
+/// <param name="OpenApi">OpenAPI document path when exposed in Development.</param>
+/// <param name="Swagger">Swagger UI path when exposed in Development.</param>
+sealed record ApiServiceInfoResponse(
+    string Service,
+    string Status,
+    string Version,
+    string Health,
+    string? OpenApi,
+    string? Swagger);
+
+/// <summary>
+/// Consistent error response used by documented HIP API endpoints.
+/// </summary>
+/// <param name="Error">Public-safe error message suitable for local development and client diagnostics.</param>
+sealed record ApiErrorResponse(string Error);
 
 /// <summary>
 /// Marker type used by integration tests to boot the standalone HIP API service.
