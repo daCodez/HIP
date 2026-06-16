@@ -585,7 +585,7 @@ static void MapDevelopmentAuthEndpoints(WebApplication app)
         return;
     }
 
-    app.MapGet("/dev/admin-login/{role}", (string role, HttpContext httpContext) =>
+    app.MapGet("/dev/admin-login/{role}", (string role, string? returnUrl, HttpContext httpContext) =>
     {
         if (!LocalDevelopmentRequestGuard.IsLocalDevelopmentRequest(httpContext.Request, app.Environment))
         {
@@ -609,7 +609,7 @@ static void MapDevelopmentAuthEndpoints(WebApplication app)
         httpContext.Response.Cookies.Append(HipDevHeaderAuthenticationHandler.DevAdminRoleCookieName, role, options);
         httpContext.Response.Cookies.Append(HipDevHeaderAuthenticationHandler.DevAdminUserCookieName, "hip-dev-browser-admin", options);
 
-        return Results.Redirect("/admin/settings");
+        return Results.Redirect(GetSafeLocalReturnUrl(returnUrl, "/admin"));
     }).AllowAnonymous()
         .RequireRateLimiting(RateLimitPolicies.IdentityDevPolicy);
 
@@ -619,6 +619,31 @@ static void MapDevelopmentAuthEndpoints(WebApplication app)
         httpContext.Response.Cookies.Delete(HipDevHeaderAuthenticationHandler.DevAdminUserCookieName);
         return Results.Redirect("/login");
     }).AllowAnonymous();
+}
+
+/// <summary>
+/// Sanitizes a development login return URL so the local helper cannot become an open redirect.
+/// </summary>
+/// <param name="returnUrl">Requested return path from the login link or authentication challenge.</param>
+/// <param name="fallback">Local fallback path used when the request is missing or unsafe.</param>
+/// <returns>A local-only relative path that is safe to pass to <see cref="Results.Redirect(string)"/>.</returns>
+static string GetSafeLocalReturnUrl(string? returnUrl, string fallback)
+{
+    if (string.IsNullOrWhiteSpace(returnUrl))
+    {
+        return fallback;
+    }
+
+    var trimmed = returnUrl.Trim();
+    if (!trimmed.StartsWith("/", StringComparison.Ordinal) ||
+        trimmed.StartsWith("//", StringComparison.Ordinal) ||
+        trimmed.StartsWith("/\\", StringComparison.Ordinal) ||
+        Uri.TryCreate(trimmed, UriKind.Absolute, out _))
+    {
+        return fallback;
+    }
+
+    return trimmed;
 }
 
 /// <summary>

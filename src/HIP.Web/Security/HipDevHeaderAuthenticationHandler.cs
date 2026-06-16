@@ -58,6 +58,30 @@ public sealed class HipDevHeaderAuthenticationHandler(
     }
 
     /// <summary>
+    /// Redirects local development browser requests for protected admin pages through the dev login helper.
+    /// </summary>
+    /// <param name="properties">Authentication challenge properties supplied by ASP.NET Core authorization.</param>
+    /// <returns>A completed task after the response challenge is written.</returns>
+    /// <remarks>
+    /// This deliberately applies only to local Development admin page navigation. API requests still receive
+    /// a 401 so automated clients do not silently follow a browser login redirect, and non-local Development
+    /// hosts never receive the dev login path.
+    /// </remarks>
+    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
+    {
+        if (LocalDevelopmentRequestGuard.IsLocalDevelopmentRequest(Request, environment) &&
+            Request.Path.StartsWithSegments("/admin"))
+        {
+            var returnUrl = Uri.EscapeDataString($"{Request.PathBase}{Request.Path}{Request.QueryString}");
+            Response.Redirect($"/dev/admin-login/{AdminRoles.Owner}?returnUrl={returnUrl}");
+            return Task.CompletedTask;
+        }
+
+        Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// Creates an admin principal after validating the requested development role.
     /// </summary>
     /// <param name="roleValue">Role from a dev header or dev cookie.</param>

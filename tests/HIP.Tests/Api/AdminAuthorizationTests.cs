@@ -131,7 +131,7 @@ public sealed class AdminAuthorizationTests
     }
 
     /// <summary>
-    /// Confirms local development browser login issues a dev-only admin cookie and redirects to settings.
+    /// Confirms local development browser login issues a dev-only admin cookie and redirects to the dashboard.
     /// </summary>
     [Test]
     public async Task Development_admin_login_sets_browser_cookie()
@@ -147,9 +147,51 @@ public sealed class AdminAuthorizationTests
         Assert.Multiple(() =>
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
-            Assert.That(response.Headers.Location?.ToString(), Is.EqualTo("/admin/settings"));
+            Assert.That(response.Headers.Location?.ToString(), Is.EqualTo("/admin"));
             Assert.That(response.Headers.TryGetValues("Set-Cookie", out var cookies), Is.True);
             Assert.That(cookies!, Has.Some.Contains("HIP_DEV_ADMIN_ROLE"));
+        });
+    }
+
+    /// <summary>
+    /// Confirms direct local browser navigation to the protected dashboard starts the dev login flow.
+    /// </summary>
+    [Test]
+    public async Task Admin_dashboard_navigation_redirects_to_development_login()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var response = await client.GetAsync("/admin");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
+            Assert.That(response.Headers.Location?.ToString(), Is.EqualTo("/dev/admin-login/Owner?returnUrl=%2Fadmin"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies the dev login helper rejects absolute return URLs to avoid open redirect behavior.
+    /// </summary>
+    [Test]
+    public async Task Development_admin_login_rejects_external_return_url()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var response = await client.GetAsync("/dev/admin-login/Admin?returnUrl=https%3A%2F%2Fevil.example");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
+            Assert.That(response.Headers.Location?.ToString(), Is.EqualTo("/admin"));
         });
     }
 
