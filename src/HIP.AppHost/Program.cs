@@ -13,6 +13,8 @@ var redis = builder.AddRedis("redis")
 
 var apiService = builder.AddProject<Projects.HIP_ApiService>("hip-api", launchProfileName: "http")
     .WithExternalHttpEndpoints()
+    // Add the Swagger UI as an Aspire dashboard action so local API discovery is one click.
+    .WithUrlForEndpoint("http", _ => new() { Url = "/swagger", DisplayText = "Swagger" })
     .WithReference(hipDatabase)
     .WaitFor(hipDatabase)
     .WithReference(redis)
@@ -21,6 +23,8 @@ var apiService = builder.AddProject<Projects.HIP_ApiService>("hip-api", launchPr
 
 builder.AddProject<Projects.HIP_Web>("hip-web", launchProfileName: "http")
     .WithExternalHttpEndpoints()
+    // Add the admin shell as an Aspire dashboard action; the base URL remains available separately.
+    .WithUrlForEndpoint("http", _ => new() { Url = "/admin", DisplayText = "Admin" })
     .WithReference(hipDatabase)
     .WaitFor(hipDatabase)
     .WithReference(apiService)
