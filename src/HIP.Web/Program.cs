@@ -899,7 +899,7 @@ static void MapPlatformConnectionApis(RouteGroupBuilder platformApi)
     })
     .WithName("GetDiscordPlatformConnection")
     .WithSummary("Get the Discord platform connection")
-    .WithDescription("Returns the saved Discord connection state without exposing raw bot tokens or webhook URLs.")
+    .WithDescription("Returns the saved Discord bot/OAuth connection state without exposing raw bot tokens or optional outbound alert webhook URLs.")
     .Produces<PlatformConnectionResponse>();
 
     platformApi.MapPost("/discord/connect", async (
@@ -920,8 +920,8 @@ static void MapPlatformConnectionApis(RouteGroupBuilder platformApi)
     })
     .RequireAuthorization(AdminPolicies.CanManagePlatforms)
     .WithName("ConnectDiscordPlatform")
-    .WithSummary("Connect Discord as a HIP platform")
-    .WithDescription("Saves Discord connection metadata for privacy-safe message-platform ingestion. HIP hashes webhook URLs and records only whether bot credentials are configured.")
+    .WithSummary("Connect Discord as a HIP bot platform")
+    .WithDescription("Saves Discord bot/OAuth metadata for privacy-safe server-channel ingestion. Optional webhook URLs are treated only as outbound alert destinations; HIP hashes them and records only whether bot credentials are configured.")
     .Produces<PlatformConnectionResponse>();
 
     platformApi.MapPost("/discord/disable", async (

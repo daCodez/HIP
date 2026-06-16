@@ -38,12 +38,12 @@ public enum HipPlatformConnectionStatus
 /// <summary>
 /// Request used by administrators to configure a Discord platform connection.
 /// </summary>
-/// <param name="GuildId">Discord guild/server id. Stored because it is required to route platform-level submissions.</param>
+/// <param name="GuildId">Discord guild/server id selected during bot install. Stored because it is required to route platform-level submissions.</param>
 /// <param name="GuildName">Optional display name shown only in admin surfaces.</param>
-/// <param name="ClientId">Optional Discord application client id used to build an install URL.</param>
+/// <param name="ClientId">Optional Discord application client id used to build the bot OAuth install URL.</param>
 /// <param name="BotUserId">Optional Discord bot user id for admin troubleshooting.</param>
-/// <param name="WebhookUrl">Optional Discord webhook URL. HIP stores only a keyed hash, never the raw URL.</param>
-/// <param name="BotToken">Optional bot token marker. HIP records only whether a token was provided and never stores the raw secret.</param>
+/// <param name="WebhookUrl">Optional Discord webhook URL for outbound HIP alerts only. HIP stores only a keyed hash, never the raw URL.</param>
+/// <param name="BotToken">Optional local setup marker for bot credentials. HIP records only whether a token was provided and never stores the raw secret.</param>
 public sealed record ConnectDiscordPlatformRequest(
     string GuildId,
     string? GuildName,
@@ -98,7 +98,7 @@ public sealed record PlatformConnectionRecord(
 /// <param name="BotUserId">Optional Discord bot user id.</param>
 /// <param name="BotTokenConfigured">Whether bot credentials were marked as configured without exposing the token.</param>
 /// <param name="WebhookUrlConfigured">Whether a webhook URL hash exists without exposing the raw webhook URL.</param>
-/// <param name="InstallUrl">Discord install URL when a client id is available.</param>
+/// <param name="InstallUrl">Discord bot OAuth install URL when a client id is available.</param>
 /// <param name="UpdatedAtUtc">When the connection was last changed.</param>
 /// <param name="ConnectedAtUtc">When the connection became active.</param>
 public sealed record PlatformConnectionResponse(
@@ -164,7 +164,7 @@ public interface IPlatformConnectionService
     Task<PlatformConnectionResponse?> GetDiscordAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Connects Discord by saving privacy-safe admin metadata.
+    /// Connects Discord by saving privacy-safe bot/OAuth metadata.
     /// </summary>
     /// <param name="request">Discord connection request from an admin-only surface.</param>
     /// <param name="updatedBy">Admin actor placeholder used for audit-friendly display.</param>
@@ -287,7 +287,7 @@ public sealed partial class PlatformConnectionService(
             record.ConnectedAtUtc);
 
     /// <summary>
-    /// Builds a Discord OAuth install URL from a client id without granting broad permissions by default.
+    /// Builds a Discord bot OAuth install URL from a client id without granting broad permissions by default.
     /// </summary>
     /// <param name="clientId">Discord application client id.</param>
     /// <returns>Discord install URL or null when no client id is available.</returns>

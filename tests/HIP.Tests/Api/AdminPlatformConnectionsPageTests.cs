@@ -28,7 +28,7 @@ public sealed class AdminPlatformConnectionsPageTests
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(html, Does.Contain("Platform Connections"));
-            Assert.That(html, Does.Contain("Connect Platform"));
+            Assert.That(html, Does.Contain("Connect Discord Bot"));
         });
     }
 
@@ -49,7 +49,7 @@ public sealed class AdminPlatformConnectionsPageTests
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(html, Does.Contain("Discord"));
-            Assert.That(html, Does.Contain("message platform"));
+            Assert.That(html, Does.Contain("bot platform"));
             Assert.That(
                 html.Contains("No fake Discord traffic shown", StringComparison.Ordinal)
                 || html.Contains("Ready for live Discord connector submissions", StringComparison.Ordinal),
@@ -73,10 +73,57 @@ public sealed class AdminPlatformConnectionsPageTests
         Assert.Multiple(() =>
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(html, Does.Contain("Bot OAuth install"));
+            Assert.That(html, Does.Contain("Server channel monitoring"));
             Assert.That(html, Does.Contain("Sender hash only"));
             Assert.That(html, Does.Contain("URL and domain reports"));
             Assert.That(html, Does.Contain("No message body storage"));
+            Assert.That(html, Does.Contain("Webhooks are optional alert outputs"));
             Assert.That(html, Does.Contain("Safety page routing ready"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies the admin page presents Discord bot OAuth as the primary path instead of implying a webhook can monitor chats.
+    /// </summary>
+    [Test]
+    public async Task Platform_connections_page_presents_discord_bot_oauth_as_primary_flow()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddAdmin(client);
+
+        var response = await client.GetAsync("/admin/platforms");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(html, Does.Contain("Install the HIP bot with Discord OAuth"));
+            Assert.That(html, Does.Contain("Webhook URLs are optional outbound alert destinations"));
+            Assert.That(html, Does.Contain("Optional alert webhook URL"));
+            Assert.That(html, Does.Contain("This builds the bot OAuth install link"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies the page is explicit about Discord bot limits so users do not expect arbitrary DM monitoring.
+    /// </summary>
+    [Test]
+    public async Task Platform_connections_page_explains_discord_private_chat_limit()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddAdmin(client);
+
+        var response = await client.GetAsync("/admin/platforms");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(html, Does.Contain("Discord bots cannot monitor arbitrary private DMs or group DMs"));
+            Assert.That(html, Does.Contain("Private chat protection needs a separate user-side client flow later"));
         });
     }
 

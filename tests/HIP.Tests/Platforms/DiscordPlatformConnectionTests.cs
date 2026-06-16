@@ -58,6 +58,36 @@ public sealed class DiscordPlatformConnectionTests
     }
 
     /// <summary>
+    /// Verifies the generated install URL uses Discord bot OAuth scopes without granting broad permissions by default.
+    /// </summary>
+    [Test]
+    public async Task Connect_discord_generates_bot_oauth_install_url_without_broad_permissions()
+    {
+        var service = new PlatformConnectionService(
+            new InMemoryPlatformConnectionRepository(),
+            new Sha256PrivacyHashingService(),
+            TimeProvider.System);
+        var request = new ConnectDiscordPlatformRequest(
+            "123456789012345678",
+            "HIP Test Server",
+            "223456789012345678",
+            null,
+            null,
+            null);
+
+        var response = await service.ConnectDiscordAsync(request, "admin-test", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.InstallUrl, Does.StartWith("https://discord.com/oauth2/authorize"));
+            Assert.That(response.InstallUrl, Does.Contain("client_id=223456789012345678"));
+            Assert.That(response.InstallUrl, Does.Contain("scope=bot%20applications.commands"));
+            Assert.That(response.InstallUrl, Does.Contain("permissions=0"));
+            Assert.That(response.InstallUrl, Does.Not.Contain("raw-bot-token"));
+        });
+    }
+
+    /// <summary>
     /// Verifies disabling Discord preserves the record and changes only its state.
     /// </summary>
     [Test]

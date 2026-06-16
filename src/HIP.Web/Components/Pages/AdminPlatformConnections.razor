@@ -11,7 +11,7 @@
         <h1>Platform Connections</h1>
         <p>Manage platforms that HIP monitors for threats.</p>
     </div>
-    <button class="hip-primary-action" type="button" @onclick="FocusDiscordForm">+ Connect Platform</button>
+    <button class="hip-primary-action" type="button" @onclick="FocusDiscordForm">+ Connect Discord Bot</button>
 </section>
 
 @if (_summary is null || _connections is null)
@@ -51,18 +51,21 @@ else
         <article class="hip-platform-row">
             <span class="platform-avatar">DC</span>
             <div>
-                <h3>Discord <span class="@DiscordStatusClass">@DiscordStatusLabel</span> <span class="hip-pill info">message platform</span></h3>
+                <h3>Discord <span class="@DiscordStatusClass">@DiscordStatusLabel</span> <span class="hip-pill info">bot platform</span></h3>
                 <p>@DiscordDescription</p>
                 <div>
+                    <small>Bot OAuth install</small>
+                    <small>Server channel monitoring</small>
                     <small>Sender hash only</small>
                     <small>URL and domain reports</small>
-                    <small>No message body storage</small>
+                    <small>No message body storage by default</small>
+                    <small>Webhooks are optional alert outputs</small>
                     <small>Safety page routing ready</small>
                     <small>@(discordConnected ? "Ready for live Discord connector submissions" : "No fake Discord traffic shown")</small>
                 </div>
                 @if (discord?.InstallUrl is not null)
                 {
-                    <p class="hip-muted-line"><a href="@discord.InstallUrl" target="_blank" rel="noopener noreferrer">Open Discord install URL</a></p>
+                    <p class="hip-muted-line"><a href="@discord.InstallUrl" target="_blank" rel="noopener noreferrer">Install HIP Discord Bot</a></p>
                 }
             </div>
         </article>
@@ -81,9 +84,15 @@ else
 
     <section class="hip-stack" id="discord-connection-form" @ref="_discordForm">
         <div class="hip-section-heading">
-            <h2>Connect Discord</h2>
-            <p>Save privacy-safe Discord connection metadata. HIP does not store message bodies, raw bot tokens, or raw webhook URLs.</p>
+            <h2>Connect Discord Bot</h2>
+            <p>Install the HIP bot with Discord OAuth for server channel monitoring. Webhook URLs are optional outbound alert destinations; they do not let HIP read chats.</p>
         </div>
+
+        <section class="hip-panel padded narrow">
+            <h3>What this connection can monitor</h3>
+            <p>HIP can monitor Discord server channels where the HIP bot is installed and has permission to see messages. HIP stores privacy-safe URL, domain, score, and sender-hash signals, not raw message bodies.</p>
+            <p>Discord bots cannot monitor arbitrary private DMs or group DMs. Private chat protection needs a separate user-side client flow later.</p>
+        </section>
 
         @if (!string.IsNullOrWhiteSpace(_saveMessage))
         {
@@ -97,36 +106,38 @@ else
 
         <div class="hip-form-grid two">
             <label>
-                Discord guild ID
+                Discord guild/server ID
                 <input @bind="_discordGuildId" placeholder="123456789012345678" />
+                <small>This identifies the server selected during bot install.</small>
             </label>
             <label>
-                Guild display name
+                Server display name
                 <input @bind="_discordGuildName" placeholder="Community server" />
             </label>
             <label>
-                Discord application client ID
+                Discord application/client ID
                 <input @bind="_discordClientId" placeholder="123456789012345678" />
+                <small>This builds the bot OAuth install link shown above after saving.</small>
             </label>
             <label>
                 Bot user ID
                 <input @bind="_discordBotUserId" placeholder="123456789012345678" />
             </label>
             <label>
-                Discord webhook URL
+                Optional alert webhook URL
                 <input @bind="_discordWebhookUrl" type="password" placeholder="https://discord.com/api/webhooks/..." />
-                <small>HIP stores only a keyed hash of this URL.</small>
+                <small>Only for outbound HIP alerts. It cannot monitor chats; HIP stores only a keyed hash.</small>
             </label>
             <label>
-                Bot token
+                Bot token marker
                 <input @bind="_discordBotToken" type="password" placeholder="Optional local setup marker" />
-                <small>HIP records only that a token was supplied; the raw token is never stored.</small>
+                <small>Use secret storage for real bot credentials. HIP records only that one was supplied; the raw token is never stored.</small>
             </label>
         </div>
 
         <div class="hip-action-row">
             <button class="hip-primary-action" type="button" disabled="@_savingDiscord" @onclick="SaveDiscordAsync">
-                @(_savingDiscord ? "Saving..." : "Save Discord Connection")
+                @(_savingDiscord ? "Saving..." : "Save Discord Bot Connection")
             </button>
             <button class="hip-secondary-action" type="button" disabled="@(!discordConnected || _savingDiscord)" @onclick="DisableDiscordAsync">Disable Discord</button>
         </div>
@@ -205,8 +216,8 @@ else
     /// </summary>
     private string DiscordDescription =>
         DiscordConnection is null
-            ? "Discord is available as a message platform foundation, but no live Discord connector has submitted HIP data yet."
-            : $"Discord is configured for {DiscordConnection.ExternalWorkspaceName ?? DiscordConnection.ExternalWorkspaceId}. Live data appears after a connector submits privacy-safe URL and sender-hash signals.";
+            ? "Discord needs a bot OAuth install before HIP can monitor server channels. Webhooks are only optional alert outputs, not chat monitoring."
+            : $"Discord is configured for {DiscordConnection.ExternalWorkspaceName ?? DiscordConnection.ExternalWorkspaceId}. HIP should receive privacy-safe URL and sender-hash signals only from channels where the bot has access.";
 
     /// <summary>
     /// Reloads saved platform connection metadata and repopulates the Discord form from public-safe fields.
@@ -253,7 +264,7 @@ else
             await PlatformConnectionService.ConnectDiscordAsync(request, "local-admin", CancellationToken.None);
             _discordWebhookUrl = null;
             _discordBotToken = null;
-            _saveMessage = "Discord connection saved. HIP is ready to accept privacy-safe Discord connector submissions.";
+            _saveMessage = "Discord bot connection saved. HIP can accept privacy-safe Discord bot submissions from server channels the bot is allowed to read.";
             await LoadConnectionsAsync();
         }
         catch (ArgumentException exception)
