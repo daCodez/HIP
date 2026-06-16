@@ -2,6 +2,7 @@
 @attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
 @rendermode InteractiveServer
 @inject IAdminDashboardService DashboardService
+@inject IPlatformConnectionService PlatformConnectionService
 
 <PageTitle>HIP Platform Connections</PageTitle>
 
@@ -10,10 +11,10 @@
         <h1>Platform Connections</h1>
         <p>Manage platforms that HIP monitors for threats.</p>
     </div>
-    <button class="hip-primary-action" type="button" disabled>+ Connect Platform</button>
+    <button class="hip-primary-action" type="button" @onclick="FocusDiscordForm">+ Connect Platform</button>
 </section>
 
-@if (_summary is null)
+@if (_summary is null || _connections is null)
 {
     <section class="hip-panel padded narrow">
         <h2>Loading platform status</h2>
@@ -22,10 +23,13 @@
 }
 else
 {
+    var discord = DiscordConnection;
+    var discordConnected = discord?.Status.Equals(nameof(HipPlatformConnectionStatus.Connected), StringComparison.OrdinalIgnoreCase) == true;
+
     <section class="hip-card-row three">
         <article class="hip-mini-stat good"><strong>1</strong><span>Connected Client Type</span></article>
         <article class="hip-mini-stat"><strong>@CardValue("totalScans")</strong><span>Browser Scans</span></article>
-        <article class="hip-mini-stat"><strong>1</strong><span>Configured Message Platform</span></article>
+        <article class="hip-mini-stat"><strong>@ConfiguredPlatformCount</strong><span>Configured Message Platform(s)</span></article>
     </section>
 
     <section class="hip-stack">
@@ -47,15 +51,19 @@ else
         <article class="hip-platform-row">
             <span class="platform-avatar">DC</span>
             <div>
-                <h3>Discord <span class="hip-pill caution">Not connected yet</span> <span class="hip-pill info">configured</span></h3>
-                <p>Discord is available as a message platform foundation, but no live Discord connector has submitted HIP data yet.</p>
+                <h3>Discord <span class="@DiscordStatusClass">@DiscordStatusLabel</span> <span class="hip-pill info">message platform</span></h3>
+                <p>@DiscordDescription</p>
                 <div>
                     <small>Sender hash only</small>
                     <small>URL and domain reports</small>
                     <small>No message body storage</small>
                     <small>Safety page routing ready</small>
-                    <small>No fake Discord traffic shown</small>
+                    <small>@(discordConnected ? "Ready for live Discord connector submissions" : "No fake Discord traffic shown")</small>
                 </div>
+                @if (discord?.InstallUrl is not null)
+                {
+                    <p class="hip-muted-line"><a href="@discord.InstallUrl" target="_blank" rel="noopener noreferrer">Open Discord install URL</a></p>
+                }
             </div>
         </article>
 
@@ -70,16 +78,83 @@ else
             </div>
         </article>
     </section>
+
+    <section class="hip-stack" id="discord-connection-form" @ref="_discordForm">
+        <div class="hip-section-heading">
+            <h2>Connect Discord</h2>
+            <p>Save privacy-safe Discord connection metadata. HIP does not store message bodies, raw bot tokens, or raw webhook URLs.</p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_saveMessage))
+        {
+            <p class="hip-success-text">@_saveMessage</p>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_saveError))
+        {
+            <p class="hip-error-text">@_saveError</p>
+        }
+
+        <div class="hip-form-grid two">
+            <label>
+                Discord guild ID
+                <input @bind="_discordGuildId" placeholder="123456789012345678" />
+            </label>
+            <label>
+                Guild display name
+                <input @bind="_discordGuildName" placeholder="Community server" />
+            </label>
+            <label>
+                Discord application client ID
+                <input @bind="_discordClientId" placeholder="123456789012345678" />
+            </label>
+            <label>
+                Bot user ID
+                <input @bind="_discordBotUserId" placeholder="123456789012345678" />
+            </label>
+            <label>
+                Discord webhook URL
+                <input @bind="_discordWebhookUrl" type="password" placeholder="https://discord.com/api/webhooks/..." />
+                <small>HIP stores only a keyed hash of this URL.</small>
+            </label>
+            <label>
+                Bot token
+                <input @bind="_discordBotToken" type="password" placeholder="Optional local setup marker" />
+                <small>HIP records only that a token was supplied; the raw token is never stored.</small>
+            </label>
+        </div>
+
+        <div class="hip-action-row">
+            <button class="hip-primary-action" type="button" disabled="@_savingDiscord" @onclick="SaveDiscordAsync">
+                @(_savingDiscord ? "Saving..." : "Save Discord Connection")
+            </button>
+            <button class="hip-secondary-action" type="button" disabled="@(!discordConnected || _savingDiscord)" @onclick="DisableDiscordAsync">Disable Discord</button>
+        </div>
+    </section>
 }
 
 @code {
     private AdminDashboardSummary? _summary;
+    private IReadOnlyCollection<PlatformConnectionResponse>? _connections;
+    private ElementReference _discordForm;
+    private string _discordGuildId = string.Empty;
+    private string? _discordGuildName;
+    private string? _discordClientId;
+    private string? _discordBotUserId;
+    private string? _discordWebhookUrl;
+    private string? _discordBotToken;
+    private string? _saveMessage;
+    private string? _saveError;
+    private bool _savingDiscord;
 
     /// <summary>
-    /// Loads live platform-adjacent scan data.
+    /// Loads live platform-adjacent scan data and saved platform connection metadata.
     /// </summary>
-    protected override async Task OnInitializedAsync() =>
+    protected override async Task OnInitializedAsync()
+    {
         _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+        await LoadConnectionsAsync();
+    }
 
     /// <summary>
     /// Gets a live dashboard card value.
@@ -97,5 +172,117 @@ else
     {
         var latestScan = _summary?.Cards.FirstOrDefault(card => card.Key.Equals("latestScan", StringComparison.OrdinalIgnoreCase));
         return latestScan is null || latestScan.IsPlaceholder ? "No scan data yet" : $"{latestScan.Value} minutes ago";
+    }
+
+    /// <summary>
+    /// Gets the saved Discord connection response when present.
+    /// </summary>
+    private PlatformConnectionResponse? DiscordConnection =>
+        _connections?.FirstOrDefault(item => item.PlatformType.Equals(nameof(HipPlatformType.Discord), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Counts configured message platforms from saved connection data.
+    /// </summary>
+    private int ConfiguredPlatformCount =>
+        _connections?.Count(item => !item.Status.Equals(nameof(HipPlatformConnectionStatus.Disabled), StringComparison.OrdinalIgnoreCase)) ?? 0;
+
+    /// <summary>
+    /// Returns the Discord status label used by the admin page.
+    /// </summary>
+    private string DiscordStatusLabel =>
+        DiscordConnection?.Status ?? "Not connected yet";
+
+    /// <summary>
+    /// Returns the CSS class for the Discord status pill.
+    /// </summary>
+    private string DiscordStatusClass =>
+        DiscordConnection?.Status.Equals(nameof(HipPlatformConnectionStatus.Connected), StringComparison.OrdinalIgnoreCase) == true
+            ? "hip-pill good"
+            : "hip-pill caution";
+
+    /// <summary>
+    /// Explains the current Discord connection state without inventing scan data.
+    /// </summary>
+    private string DiscordDescription =>
+        DiscordConnection is null
+            ? "Discord is available as a message platform foundation, but no live Discord connector has submitted HIP data yet."
+            : $"Discord is configured for {DiscordConnection.ExternalWorkspaceName ?? DiscordConnection.ExternalWorkspaceId}. Live data appears after a connector submits privacy-safe URL and sender-hash signals.";
+
+    /// <summary>
+    /// Reloads saved platform connection metadata and repopulates the Discord form from public-safe fields.
+    /// </summary>
+    private async Task LoadConnectionsAsync()
+    {
+        _connections = await PlatformConnectionService.ListAsync(CancellationToken.None);
+        var discord = DiscordConnection;
+        if (discord is null)
+        {
+            return;
+        }
+
+        _discordGuildId = discord.ExternalWorkspaceId;
+        _discordGuildName = discord.ExternalWorkspaceName;
+        _discordClientId = discord.ClientId;
+        _discordBotUserId = discord.BotUserId;
+    }
+
+    /// <summary>
+    /// Moves focus toward the Discord connection form for keyboard users.
+    /// </summary>
+    private async Task FocusDiscordForm() =>
+        await _discordForm.FocusAsync();
+
+    /// <summary>
+    /// Saves the Discord platform connection using privacy-safe service validation.
+    /// </summary>
+    private async Task SaveDiscordAsync()
+    {
+        _savingDiscord = true;
+        _saveError = null;
+        _saveMessage = null;
+        try
+        {
+            var request = new ConnectDiscordPlatformRequest(
+                _discordGuildId,
+                _discordGuildName,
+                _discordClientId,
+                _discordBotUserId,
+                _discordWebhookUrl,
+                _discordBotToken);
+
+            await PlatformConnectionService.ConnectDiscordAsync(request, "local-admin", CancellationToken.None);
+            _discordWebhookUrl = null;
+            _discordBotToken = null;
+            _saveMessage = "Discord connection saved. HIP is ready to accept privacy-safe Discord connector submissions.";
+            await LoadConnectionsAsync();
+        }
+        catch (ArgumentException exception)
+        {
+            _saveError = exception.Message;
+        }
+        finally
+        {
+            _savingDiscord = false;
+        }
+    }
+
+    /// <summary>
+    /// Disables the Discord platform connection without deleting saved metadata.
+    /// </summary>
+    private async Task DisableDiscordAsync()
+    {
+        _savingDiscord = true;
+        _saveError = null;
+        _saveMessage = null;
+        try
+        {
+            await PlatformConnectionService.DisableDiscordAsync("local-admin", CancellationToken.None);
+            _saveMessage = "Discord connection disabled.";
+            await LoadConnectionsAsync();
+        }
+        finally
+        {
+            _savingDiscord = false;
+        }
     }
 }

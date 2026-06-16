@@ -1,4 +1,6 @@
 using System.Net;
+using System.Net.Http.Json;
+using HIP.Application.Platforms;
 using HIP.Domain.Reporting;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -34,7 +36,7 @@ public sealed class AdminPlatformConnectionsPageTests
     /// Verifies Discord is visible as a configured platform foundation without claiming live traffic.
     /// </summary>
     [Test]
-    public async Task Platform_connections_page_shows_discord_as_configured_not_connected()
+    public async Task Platform_connections_page_shows_truthful_discord_state()
     {
         await using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
@@ -47,10 +49,11 @@ public sealed class AdminPlatformConnectionsPageTests
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(html, Does.Contain("Discord"));
-            Assert.That(html, Does.Contain("Not connected yet"));
-            Assert.That(html, Does.Contain("configured"));
-            Assert.That(html, Does.Contain("no live Discord connector has submitted HIP data yet"));
-            Assert.That(html, Does.Contain("No fake Discord traffic shown"));
+            Assert.That(html, Does.Contain("message platform"));
+            Assert.That(
+                html.Contains("No fake Discord traffic shown", StringComparison.Ordinal)
+                || html.Contains("Ready for live Discord connector submissions", StringComparison.Ordinal),
+                Is.EqualTo(true));
         });
     }
 
@@ -88,6 +91,54 @@ public sealed class AdminPlatformConnectionsPageTests
             Assert.That((int)ReportPlatform.FileDownload, Is.EqualTo(7));
             Assert.That((int)ReportPlatform.Discord, Is.EqualTo(8));
         });
+    }
+
+    /// <summary>
+    /// Verifies admins can configure Discord through the protected platform API without exposing raw secrets.
+    /// </summary>
+    [Test]
+    public async Task Discord_platform_api_connects_without_returning_raw_secrets()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddAdmin(client);
+        var request = new ConnectDiscordPlatformRequest(
+            "123456789012345678",
+            "HIP Test Server",
+            "223456789012345678",
+            "323456789012345678",
+            "https://discord.com/api/webhooks/123/secret",
+            "raw-bot-token");
+
+        var response = await client.PostAsJsonAsync("/api/v1/admin/platforms/discord/connect", request);
+        var json = await response.Content.ReadAsStringAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(json, Does.Contain("\"status\":\"Connected\""));
+            Assert.That(json, Does.Contain("\"webhookUrlConfigured\":true"));
+            Assert.That(json, Does.Contain("\"botTokenConfigured\":true"));
+            Assert.That(json, Does.Not.Contain("raw-bot-token"));
+            Assert.That(json, Does.Not.Contain("discord.com/api/webhooks"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies read-only admins can view platform state but cannot connect Discord.
+    /// </summary>
+    [Test]
+    public async Task Discord_platform_api_rejects_readonly_connect()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "ReadOnly");
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-User", "readonly-platform-test");
+        var request = new ConnectDiscordPlatformRequest("123456789012345678", null, null, null, null, null);
+
+        var response = await client.PostAsJsonAsync("/api/v1/admin/platforms/discord/connect", request);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
     }
 
     /// <summary>

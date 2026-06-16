@@ -1523,6 +1523,73 @@ h1:focus {
     background: rgba(255, 81, 104, 0.1);
 }
 
+.hip-section-heading p,
+.hip-muted-line {
+    color: #8fa1ba;
+}
+
+.hip-form-grid {
+    display: grid;
+    gap: 18px;
+    margin-top: 18px;
+}
+
+.hip-form-grid.two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hip-form-grid label {
+    display: grid;
+    gap: 8px;
+    color: #d8e4f7;
+    font-weight: 800;
+}
+
+.hip-form-grid input {
+    min-height: 44px;
+    border: 1px solid #24486f;
+    border-radius: 8px;
+    padding: 0 12px;
+    color: #e9f2ff;
+    background: #07111f;
+}
+
+.hip-form-grid small {
+    color: #8fa1ba;
+    font-weight: 600;
+}
+
+.hip-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.hip-secondary-action {
+    min-height: 44px;
+    border: 1px solid #24486f;
+    border-radius: 8px;
+    padding: 0 16px;
+    color: #cfe0f8;
+    background: #0b1728;
+    font-weight: 900;
+}
+
+.hip-success-text,
+.hip-error-text {
+    margin-top: 14px;
+    font-weight: 800;
+}
+
+.hip-success-text {
+    color: #12e59a;
+}
+
+.hip-error-text {
+    color: #ff6276;
+}
+
 .hip-report-tags {
     display: flex;
     flex-wrap: wrap;

@@ -7,5 +7,6 @@ public static class AdminPolicies
     public const string CanApproveOverrides = nameof(CanApproveOverrides);
     public const string CanViewAuditLogs = nameof(CanViewAuditLogs);
     public const string CanManageLicenses = nameof(CanManageLicenses);
+    public const string CanManagePlatforms = nameof(CanManagePlatforms);
     public const string CanViewAdminDashboard = nameof(CanViewAdminDashboard);
 }

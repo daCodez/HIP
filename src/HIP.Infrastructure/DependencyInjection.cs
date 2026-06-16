@@ -1,5 +1,6 @@
 using HIP.Application.Browser;
 using HIP.Application.Identity;
+using HIP.Application.Platforms;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
@@ -61,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<IScanIngestionQueue, EfScanIngestionQueue>();
         services.AddScoped<IScanResultDedupeService, EfScanResultDedupeService>();
         services.AddScoped<IDashboardScanAggregateStore, EfDashboardScanAggregateStore>();
+        services.AddScoped<IPlatformConnectionRepository, EfPlatformConnectionRepository>();
 
         return services;
     }

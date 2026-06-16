@@ -11,6 +11,7 @@ using HIP.Application.Dashboard;
 using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Performance;
+using HIP.Application.Platforms;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
@@ -153,6 +154,7 @@ MapReputationOverrideApis(app.MapGroup($"{ApiRoutes.Admin}/reputation-overrides"
 MapReputationApis(app.MapGroup($"{ApiRoutes.Admin}/reputation").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapDashboardApis(app.MapGroup($"{ApiRoutes.Admin}/dashboard").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapAdminScanApis(app.MapGroup($"{ApiRoutes.Admin}/scans").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
+MapPlatformConnectionApis(app.MapGroup($"{ApiRoutes.Admin}/platforms").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapConsumerApis(app.MapGroup(ApiRoutes.Consumer).RequireAuthorization(ConsumerPolicies.CanUseConsumerPortal));
 MapIdentityApis(app.MapGroup(ApiRoutes.Identity));
 app.MapGet($"{ApiRoutes.Admin}/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()))
@@ -842,6 +844,78 @@ static void MapAdminScanApis(RouteGroupBuilder scanApi)
     });
 }
 
+/// <summary>
+/// Maps admin platform connection endpoints. Mutations are restricted to Owner/Admin roles because platform connectors
+/// control future ingestion paths and must not be writable by read-only dashboard users.
+/// </summary>
+/// <param name="platformApi">Versioned admin platform route group.</param>
+static void MapPlatformConnectionApis(RouteGroupBuilder platformApi)
+{
+    platformApi.MapGet("/", async (
+        IPlatformConnectionService platformService,
+        CancellationToken cancellationToken) =>
+    {
+        var connections = await platformService.ListAsync(cancellationToken);
+        return Results.Ok(connections);
+    })
+    .WithName("ListPlatformConnections")
+    .WithSummary("List configured platform connections")
+    .WithDescription("Returns privacy-safe admin metadata for configured platform connections. Raw platform tokens and webhook URLs are never returned.")
+    .Produces<IReadOnlyCollection<PlatformConnectionResponse>>();
+
+    platformApi.MapGet("/discord", async (
+        IPlatformConnectionService platformService,
+        CancellationToken cancellationToken) =>
+    {
+        var connection = await platformService.GetDiscordAsync(cancellationToken);
+        return connection is null
+            ? Results.NotFound(new { error = "Discord is not connected yet." })
+            : Results.Ok(connection);
+    })
+    .WithName("GetDiscordPlatformConnection")
+    .WithSummary("Get the Discord platform connection")
+    .WithDescription("Returns the saved Discord connection state without exposing raw bot tokens or webhook URLs.")
+    .Produces<PlatformConnectionResponse>();
+
+    platformApi.MapPost("/discord/connect", async (
+        ConnectDiscordPlatformRequest request,
+        IPlatformConnectionService platformService,
+        HttpContext httpContext,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var connection = await platformService.ConnectDiscordAsync(request, ResolveAdminActor(httpContext), cancellationToken);
+            return Results.Ok(connection);
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    })
+    .RequireAuthorization(AdminPolicies.CanManagePlatforms)
+    .WithName("ConnectDiscordPlatform")
+    .WithSummary("Connect Discord as a HIP platform")
+    .WithDescription("Saves Discord connection metadata for privacy-safe message-platform ingestion. HIP hashes webhook URLs and records only whether bot credentials are configured.")
+    .Produces<PlatformConnectionResponse>();
+
+    platformApi.MapPost("/discord/disable", async (
+        IPlatformConnectionService platformService,
+        HttpContext httpContext,
+        CancellationToken cancellationToken) =>
+    {
+        var connection = await platformService.DisableDiscordAsync(ResolveAdminActor(httpContext), cancellationToken);
+        return connection is null
+            ? Results.NotFound(new { error = "Discord is not connected yet." })
+            : Results.Ok(connection);
+    })
+    .RequireAuthorization(AdminPolicies.CanManagePlatforms)
+    .WithName("DisableDiscordPlatform")
+    .WithSummary("Disable the Discord platform connection")
+    .WithDescription("Disables Discord ingestion without deleting saved admin metadata, preserving history and avoiding accidental data loss.")
+    .Produces<PlatformConnectionResponse>();
+}
+
 static void MapBadgeApis(RouteGroupBuilder badgeApi)
 {
     badgeApi.MapGet("/{domain}", async (
@@ -1288,6 +1362,16 @@ static string ConsumerId(HttpContext httpContext) =>
     httpContext.User.FindFirst("hip_consumer_id")?.Value
     ?? httpContext.User.Identity?.Name
     ?? "development-consumer";
+
+/// <summary>
+/// Resolves the current admin actor label for audit-friendly metadata without exposing authentication internals.
+/// </summary>
+/// <param name="httpContext">Current HTTP request context.</param>
+/// <returns>Admin actor label suitable for persistence in privacy-safe admin records.</returns>
+static string ResolveAdminActor(HttpContext httpContext) =>
+    httpContext.User.Identity?.Name
+    ?? httpContext.User.FindFirst("name")?.Value
+    ?? "local-admin";
 
 static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
 {

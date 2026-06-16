@@ -4,6 +4,7 @@ using HIP.Application.Browser;
 using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
 using HIP.Application.Identity;
+using HIP.Application.Platforms;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
@@ -66,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<ISelfHealingPatternDetectionService, SelfHealingPatternDetectionService>();
         services.AddScoped<IConsumerPortalService, ConsumerPortalService>();
         services.AddScoped<IAdminDashboardService, AdminDashboardService>();
+        services.AddScoped<IPlatformConnectionService, PlatformConnectionService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddScoped<IReviewQueueService, ReviewQueueService>();
         services.AddScoped<IAppealService, AppealService>();
