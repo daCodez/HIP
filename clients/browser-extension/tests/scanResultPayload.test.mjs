@@ -207,6 +207,65 @@ test("plugin calls scan-results endpoint", async () => {
   assert.equal(calls[0].options.method, "POST");
 });
 
+test("duplicate scan result submission is treated as accepted suppression", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 409,
+    json: async () => ({ error: "Duplicate browser scan result ignored." })
+  });
+
+  try {
+    const client = new HipApiClient({
+      apiBaseUrl: "http://localhost:5099",
+      webBaseUrl: "http://localhost:5123",
+      instanceId: "hip-ext-test"
+    });
+    const result = await client.saveScanResult(buildScanResultPayload({
+      domain: "example.com",
+      pageUrl: "https://example.com/page",
+      lookup: { status: "Trusted", score: 84 },
+      summary: {}
+    }));
+
+    assert.equal(result.saved, false);
+    assert.equal(result.duplicateSuppressed, true);
+    assert.equal(result.domain, "example.com");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("scan result submission includes extension instance header when configured", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      json: async () => ({ saved: true })
+    };
+  };
+
+  try {
+    const client = new HipApiClient({
+      apiBaseUrl: "http://localhost:5099",
+      webBaseUrl: "http://localhost:5123",
+      instanceId: "hip-ext-test"
+    });
+    await client.saveScanResult(buildScanResultPayload({
+      domain: "example.com",
+      pageUrl: "https://example.com/page",
+      lookup: { status: "Trusted", score: 84 },
+      summary: {}
+    }));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(calls[0].options.headers["X-HIP-Instance-Id"], "hip-ext-test");
+});
+
 test("plugin scan result request sends URL hash and plugin version to API", async () => {
   const calls = [];
   const originalFetch = globalThis.fetch;

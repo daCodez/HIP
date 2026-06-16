@@ -227,6 +227,7 @@ export class HipApiClient {
       body: JSON.stringify(feedback)
     });
 
+    // HIP deduplicates rapid repeat submissions server-side; a 409 means an equivalent scan was already accepted recently.
     if (response.status === 409) {
       return {
         accepted: true,
@@ -256,10 +257,21 @@ export class HipApiClient {
       method: "POST",
       headers: {
         "Accept": "application/json",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...this.instanceHeaders()
       },
       body: JSON.stringify(result)
     });
+
+    if (response.status === 409) {
+      return {
+        saved: false,
+        duplicateSuppressed: true,
+        domain: result?.domain || null,
+        lastCheckedUtc: new Date().toISOString(),
+        message: "Duplicate browser scan result already accepted recently."
+      };
+    }
 
     if (!response.ok) {
       throw new Error(`HIP scan result persistence failed with status ${response.status}.`);
