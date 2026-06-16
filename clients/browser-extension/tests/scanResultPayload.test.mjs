@@ -6,6 +6,7 @@ import {
   buildBannerFeedbackReport,
   buildSiteFeedbackRequest,
   buildScanResultPayload,
+  classifyClientChatContext,
   formatPluginVersion,
   hasRiskyLimitedTrustSignals,
   HipApiClient,
@@ -29,6 +30,7 @@ test("plugin creates privacy-safe scan result payload", () => {
       riskyLinks: 2,
       suspiciousLinks: 2,
       dangerousLinks: 0,
+      clientChatLinkCandidates: 2,
       apiStatus: "Available"
     },
     settings: {
@@ -52,6 +54,17 @@ test("plugin creates privacy-safe scan result payload", () => {
   assert.equal(payload.dangerousLinksFound, 0);
   assert.equal(payload.privacySafeMetadata.scanTimestampUtc, "2026-06-01T00:00:00Z");
   assert.equal(payload.privacySafeMetadata.pluginVersion, "HIP Plugin v0.1.0-dev");
+  assert.equal(payload.privacySafeMetadata.clientChatLinkCandidates, "2");
+});
+
+test("client chat context is detected from structure without private message text", () => {
+  assert.equal(classifyClientChatContext({ role: "log" }), "client-chat");
+  assert.equal(classifyClientChatContext({ ariaLabel: "Direct messages" }), "client-chat");
+  assert.equal(classifyClientChatContext({ className: "conversation-thread" }), "client-chat");
+  assert.equal(classifyClientChatContext({
+    pageText: "private message with a password",
+    formValues: "password=secret"
+  }), "page-link");
 });
 
 test("scan result payload sends stripped raw page URL only when explicitly enabled", () => {
@@ -92,7 +105,8 @@ test("scan result payload includes privacy-safe observed page signals", () => {
       paymentFieldsDetected: 1,
       shortenedLinkCandidates: 2,
       obfuscatedLinkCandidates: 1,
-      redirectCandidates: 2
+      redirectCandidates: 2,
+      clientChatLinkCandidates: 4
     }
   });
 
@@ -106,6 +120,7 @@ test("scan result payload includes privacy-safe observed page signals", () => {
   assert.equal(payload.privacySafeMetadata.shortenedLinkCandidates, "2");
   assert.equal(payload.privacySafeMetadata.obfuscatedLinkCandidates, "1");
   assert.equal(payload.privacySafeMetadata.redirectCandidates, "2");
+  assert.equal(payload.privacySafeMetadata.clientChatLinkCandidates, "4");
 });
 
 test("no-data lookup state persists actual browser scan result", () => {
@@ -125,6 +140,7 @@ test("no-data lookup state persists actual browser scan result", () => {
       dangerousLinks: 0,
       unknownLinks: 0,
       downloadCandidates: 0,
+      clientChatLinkCandidates: 1,
       apiStatus: "Available"
     },
     settings: {
@@ -138,6 +154,7 @@ test("no-data lookup state persists actual browser scan result", () => {
   assert.equal(payload.recommendedAction, "Allow");
   assert.equal(payload.reasons.some(reason => reason.includes("HIP has not scanned this domain yet")), false);
   assert.equal(payload.reasons.some(reason => reason.includes("No risky external links")), true);
+  assert.equal(payload.reasons.includes("HIP observed 1 link inside chat-like areas without sending message text."), true);
 });
 
 test("browser scan assessment penalizes suspicious and dangerous scan counts", () => {

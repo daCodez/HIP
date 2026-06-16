@@ -187,6 +187,8 @@ export class HipApiClient {
         trustDataAvailable: summary.scanResultDataSource === "BrowserPluginScan",
         shortenedLinkCount: summary.shortenedLinkCandidates ?? 0,
         obfuscatedLinkCount: summary.obfuscatedLinkCandidates ?? 0,
+        clientChatLinkCount: summary.clientChatLinkCandidates ?? 0,
+        clientChatContextObserved: (summary.clientChatLinkCandidates ?? 0) > 0,
         redirectChain: filterSafePublicEvidenceUrls(summary.redirectSignals, this.config)
       }
     };
@@ -559,6 +561,7 @@ export function buildScanResultPayload({ domain, pageUrl, pageUrlHash = null, lo
       redirectCandidates: String(summary.redirectCandidates ?? 0),
       socialLinkCandidates: String(summary.socialLinkCandidates ?? 0),
       webmailLinkCandidates: String(summary.webmailLinkCandidates ?? 0),
+      clientChatLinkCandidates: String(summary.clientChatLinkCandidates ?? 0),
       pluginVersion: pluginVersion || summary.pluginVersion || "Unknown"
     }
   };
@@ -673,14 +676,38 @@ export function browserScanAssessment(lookup, summary = {}) {
   const unknownLinks = summary.unknownLinks ?? 0;
   const downloadCandidates = summary.downloadCandidates ?? 0;
   const linksScanned = summary.linksScanned ?? 0;
+  const clientChatLinkCandidates = summary.clientChatLinkCandidates ?? 0;
   const score = Math.max(0, Math.min(100, 80 - dangerousLinks * 30 - suspiciousLinks * 18 - Math.max(0, riskyLinks - suspiciousLinks - dangerousLinks) * 12 - unknownLinks * 6 - downloadCandidates * 4));
   const status = browserScanStatus(score, dangerousLinks, suspiciousLinks, riskyLinks, unknownLinks);
 
   return {
     score,
     status,
-    reasons: browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates })
+    reasons: browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates, clientChatLinkCandidates })
   };
+}
+
+/**
+ * Classifies a link container as client chat using structural metadata only.
+ * The helper deliberately ignores page text, form values, cookies, tokens, and private message bodies.
+ */
+export function classifyClientChatContext(context = {}) {
+  const role = lower(context.role);
+  if (role === "log") {
+    return "client-chat";
+  }
+
+  const structuralText = [
+    context.ariaLabel,
+    context.className,
+    context.id,
+    context.dataTestId,
+    context.dataListId
+  ].map(lower).join(" ");
+
+  return /\b(chat|conversation|direct message|dm|thread|message-list|messages)\b/.test(structuralText)
+    ? "client-chat"
+    : "page-link";
 }
 
 export function normalizeHost(hostname) {
@@ -842,11 +869,15 @@ function browserScanStatus(score, dangerousLinks, suspiciousLinks, riskyLinks, u
 /**
  * Builds plain-English scan reasons from counts and excludes page body text, form values, and private content.
  */
-function browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates }) {
+function browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates, clientChatLinkCandidates = 0 }) {
   const reasons = [`Browser plugin scanned ${linksScanned} external links on this page without sending page text or form values.`];
 
   if (riskyLinks === 0 && suspiciousLinks === 0 && dangerousLinks === 0) {
     reasons.push("No risky external links were found in this browser plugin scan.");
+  }
+
+  if (clientChatLinkCandidates > 0) {
+    reasons.push(`HIP observed ${clientChatLinkCandidates} link${clientChatLinkCandidates === 1 ? "" : "s"} inside chat-like areas without sending message text.`);
   }
 
   if (suspiciousLinks > 0) {
@@ -866,6 +897,13 @@ function browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangero
   }
 
   return reasons;
+}
+
+/**
+ * Converts optional structural values to lowercase strings for privacy-safe context matching.
+ */
+function lower(value) {
+  return String(value || "").toLowerCase();
 }
 
 /**

@@ -11,6 +11,20 @@
   const downloadExtensions = new Set([".exe", ".zip", ".msi", ".dmg", ".pdf", ".docx", ".scr"]);
   const executableDownloadExtensions = new Set([".exe", ".msi", ".dmg", ".scr"]);
   const shortenerDomains = new Set(["bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd", "buff.ly", "cutt.ly", "shorturl.at", "rebrand.ly"]);
+  const clientChatContainerSelector = [
+    '[role="log"]',
+    '[aria-label*="chat" i]',
+    '[aria-label*="conversation" i]',
+    '[aria-label*="direct message" i]',
+    '[data-testid*="chat" i]',
+    '[data-testid*="message" i]',
+    '[data-testid*="conversation" i]',
+    '[data-testid*="thread" i]',
+    '[class*="chat" i]',
+    '[class*="message" i]',
+    '[class*="conversation" i]',
+    '[class*="thread" i]'
+  ].join(", ");
   const reportedDomains = new Set();
   const pendingScanSubmissions = new Set();
 
@@ -154,6 +168,9 @@
       }
       if (target.linkContext === "webmail") {
         lastSummary.webmailLinkCandidates++;
+      }
+      if (target.linkContext === "client-chat") {
+        lastSummary.clientChatLinkCandidates++;
       }
 
       if (!anchorsByDomain.has(target.domain)) {
@@ -419,6 +436,7 @@
         redirectCandidates: String(lastSummary.redirectCandidates),
         socialLinkCandidates: String(lastSummary.socialLinkCandidates),
         webmailLinkCandidates: String(lastSummary.webmailLinkCandidates),
+        clientChatLinkCandidates: String(lastSummary.clientChatLinkCandidates),
         siteSafetyDataSource: lastSummary.siteSafetyDataSource,
         siteSafetyStatus: lastSummary.siteSafetyStatus,
         confidence: lastSummary.confidenceLevel,
@@ -536,6 +554,8 @@
         trustDataAvailable: lastSummary.scanResultDataSource === "BrowserPluginScan",
         shortenedLinkCount: lastSummary.shortenedLinkCandidates,
         obfuscatedLinkCount: lastSummary.obfuscatedLinkCandidates,
+        clientChatLinkCount: lastSummary.clientChatLinkCandidates,
+        clientChatContextObserved: lastSummary.clientChatLinkCandidates > 0,
         redirectChain: filterSafePublicUrls(lastSummary.redirectSignals)
       }
     };
@@ -742,7 +762,15 @@
       /\/(redirect|out|away|go|link)\b/i.test(url.pathname);
   }
 
+  /**
+   * Classifies the link's surrounding UI by structure only.
+   * This deliberately avoids reading message text, page body text, form values, or private chat content.
+   */
   function detectLinkContext(anchor) {
+    if (isClientChatLink(anchor)) {
+      return "client-chat";
+    }
+
     if (anchor.closest('[role="feed"], [data-testid*="tweet"], article, .feed, .post, .timeline')) {
       return "social-feed";
     }
@@ -752,6 +780,14 @@
     }
 
     return "page-link";
+  }
+
+  /**
+   * Detects chat-like link placement from accessible roles, labels, classes, and test IDs.
+   * HIP uses the result only as a count/source signal so private conversation text is never collected.
+   */
+  function isClientChatLink(anchor) {
+    return Boolean(anchor.closest(clientChatContainerSelector));
   }
 
   function formActionDomain(form) {
@@ -866,12 +902,13 @@
     const unknownLinks = summary.unknownLinks ?? 0;
     const downloadCandidates = summary.downloadCandidates ?? 0;
     const linksScanned = summary.linksScanned ?? 0;
+    const clientChatLinkCandidates = summary.clientChatLinkCandidates ?? 0;
     const score = Math.max(0, Math.min(100, 80 - dangerousLinks * 30 - suspiciousLinks * 18 - Math.max(0, riskyLinks - suspiciousLinks - dangerousLinks) * 12 - unknownLinks * 6 - downloadCandidates * 4));
 
     return {
       score,
       status: browserScanStatus(score, dangerousLinks, suspiciousLinks, riskyLinks, unknownLinks),
-      reasons: browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates })
+      reasons: browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates, clientChatLinkCandidates })
     };
   }
 
@@ -940,11 +977,15 @@
   /**
    * Builds plain-English reasons from scan counts without including page body text or form values.
    */
-  function browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates }) {
+  function browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates, clientChatLinkCandidates = 0 }) {
     const reasons = [`Browser plugin scanned ${linksScanned} external links on this page without sending page text or form values.`];
 
     if (riskyLinks === 0 && suspiciousLinks === 0 && dangerousLinks === 0) {
       reasons.push("No risky external links were found in this browser plugin scan.");
+    }
+
+    if (clientChatLinkCandidates > 0) {
+      reasons.push(`HIP observed ${clientChatLinkCandidates} link${clientChatLinkCandidates === 1 ? "" : "s"} inside chat-like areas without sending message text.`);
     }
 
     if (suspiciousLinks > 0) {
@@ -1144,6 +1185,7 @@
       crossDomainLoginForms: 0,
       socialLinkCandidates: 0,
       webmailLinkCandidates: 0,
+      clientChatLinkCandidates: 0,
       inlineScriptCount: 0,
       externalScriptUrls: [],
       suspiciousScriptPatternCount: 0,
