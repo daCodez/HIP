@@ -142,6 +142,34 @@ app.MapGet("/", () => Results.Ok(new ApiServiceInfoResponse(
 var publicApi = app.MapGroup("/api/v1/public").WithTags("Public Lookup and Feedback");
 var browserApi = app.MapGroup("/api/v1/browser").WithTags("Browser Plugin");
 var siteSafetyApi = app.MapGroup("/api/v1/site-safety").WithTags("Site Safety");
+var domainVerificationApi = app.MapGroup("/api/v1/domain-verification").WithTags("Domain Verification");
+
+domainVerificationApi.MapPost("/check", async (
+    DomainVerificationCheckApiRequest request,
+    IDomainVerificationService domainVerificationService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await domainVerificationService.CheckDnsTxtAsync(request.Domain, request.ExpectedToken, cancellationToken);
+        return Results.Ok(DomainVerificationCheckApiResponse.FromResult(result));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new ApiErrorResponse(ex.Message));
+    }
+})
+.WithName("CheckDomainDnsVerification")
+.WithSummary("Checks a HIP DNS TXT verification record for a domain.")
+.WithDescription("""
+Checks _hip.{domain} for a TXT record in the format hip-site-verification={token}.
+This endpoint proves domain-control evidence only; it does not mark a website safe or trusted.
+The expected token is accepted only for this verification check and is never returned in the response.
+""")
+.Produces<DomainVerificationCheckApiResponse>()
+.Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+.RequireCors(HipCorsPolicies.ClientWrite)
+.RequireRateLimiting(PublicScanPolicy);
 
 publicApi.MapGet("/lookup/domain/{domain}", async (
     string domain,
@@ -1268,6 +1296,37 @@ sealed record ExternalProviderSettings(
     /// <returns>Client-safe provider settings.</returns>
     public static ExternalProviderSettings From(ExternalProviderOptions options) =>
         new(options.Enabled, null, null, false, options.CacheDuration);
+}
+
+/// <summary>
+/// Request used to check whether a domain has published the expected HIP DNS TXT verification record.
+/// </summary>
+/// <param name="Domain">Domain to verify, such as example.com.</param>
+/// <param name="ExpectedToken">Raw HIP verification token expected at _hip.{domain}; this value is never returned.</param>
+sealed record DomainVerificationCheckApiRequest(string Domain, string ExpectedToken);
+
+/// <summary>
+/// Public-safe response for a HIP DNS TXT verification check.
+/// </summary>
+/// <param name="Domain">Normalized domain that was checked.</param>
+/// <param name="RecordName">DNS record name queried by HIP.</param>
+/// <param name="Status">Verification status: NotConfigured, PendingVerification, Verified, or Invalid.</param>
+/// <param name="CheckedAtUtc">UTC time when HIP performed the check.</param>
+/// <param name="Message">Plain-English explanation that does not expose the expected token.</param>
+sealed record DomainVerificationCheckApiResponse(
+    string Domain,
+    string RecordName,
+    string Status,
+    DateTimeOffset CheckedAtUtc,
+    string Message)
+{
+    /// <summary>
+    /// Converts the application-layer verification result into an API response that omits secrets.
+    /// </summary>
+    /// <param name="result">Domain verification result returned by the application service.</param>
+    /// <returns>Public-safe API response.</returns>
+    public static DomainVerificationCheckApiResponse FromResult(DomainVerificationCheckResult result) =>
+        new(result.Domain, result.RecordName, result.Status.ToString(), result.CheckedAtUtc, result.Message);
 }
 
 /// <summary>

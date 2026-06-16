@@ -89,7 +89,8 @@ public static class DependencyInjection
         services.AddScoped<IHipIdentityService, HipIdentityService>();
         services.AddScoped<IHipSignatureService, HipSignatureService>();
         services.AddScoped<IWebsiteIdentityService, WebsiteIdentityService>();
-        services.AddSingleton<IDomainVerificationService, InMemoryDomainVerificationService>();
+        services.TryAddSingleton<IDnsTxtRecordResolver, NoOpDnsTxtRecordResolver>();
+        services.AddSingleton<IDomainVerificationService, DnsDomainVerificationService>();
         services.AddSingleton<ISetupCodeLicenseService, InMemorySetupCodeLicenseService>();
         services.AddScoped<ISecondLifeHudService, SecondLifeHudService>();
         services.AddScoped<ISecondLifeHudSimulationService, SecondLifeHudSimulationService>();

@@ -80,7 +80,8 @@ public sealed class IdentitySigningTests
 
         Assert.That(request.Domain, Is.EqualTo("example.com"));
         Assert.That(request.Status, Is.EqualTo(VerificationStatus.Pending));
-        Assert.That(request.Token, Does.StartWith("hip-domain-verification="));
+        Assert.That(request.Token, Is.Not.Empty);
+        Assert.That(request.Token, Does.Not.Contain("hip-domain-verification="));
     }
 
     [Test]
@@ -119,7 +120,8 @@ public sealed class IdentitySigningTests
         var verified = await service.VerifyAsync(new WebsiteVerificationRequest("dns.example", VerificationMethod.DnsTxt, registered.VerificationRequest.Token), CancellationToken.None);
 
         Assert.That(verified.VerificationStatus, Is.EqualTo(VerificationStatus.Verified));
-        Assert.That(registered.VerificationRequest.Token, Does.StartWith("hip-domain-verification="));
+        Assert.That(registered.VerificationRequest.Token, Is.Not.Empty);
+        Assert.That(registered.VerificationRequest.Token, Does.Not.Contain("hip-domain-verification="));
     }
 
     [Test]

@@ -9,6 +9,7 @@ using HIP.Application.Scalability;
 using HIP.Application.SelfHealing;
 using HIP.Application.SiteSafety;
 using HIP.Application.Simulation;
+using HIP.Infrastructure.Identity;
 using HIP.Infrastructure.Persistence;
 using HIP.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -40,6 +41,11 @@ public static class DependencyInjection
         services.AddSingleton(BindPrivacyHashingOptions(configuration, isLocalDevelopment));
         services.AddSingleton<IHipRecordEncryptor, DevelopmentHipRecordEncryptor>();
         services.AddScoped<HipRecordStore>();
+        services.AddOptions<DnsVerificationOptions>()
+            .Bind(configuration.GetSection(DnsVerificationOptions.SectionName))
+            .Validate(ValidateDnsVerificationOptions, "DNS verification options must use a valid port and timeout.")
+            .ValidateOnStart();
+        services.AddSingleton<IDnsTxtRecordResolver, DnsClientTxtRecordResolver>();
 
         services.AddScoped<IHipIdentityRepository, EfHipIdentityRepository>();
         services.AddScoped<IReputationProfileRepository, EfReputationProfileRepository>();
@@ -119,4 +125,14 @@ public static class DependencyInjection
         new(
             configuration["HipSecurity:PrivacyHashingKey"] ?? Sha256PrivacyHashingService.DevelopmentOnlyKey,
             AllowDevelopmentKey: isLocalDevelopment);
+
+    /// <summary>
+    /// Validates DNS lookup settings before HIP starts so bad resolver configuration fails clearly.
+    /// </summary>
+    /// <param name="options">DNS verification options.</param>
+    /// <returns>True when options are safe to use.</returns>
+    private static bool ValidateDnsVerificationOptions(DnsVerificationOptions options) =>
+        options.TimeoutMilliseconds is >= 500 and <= 15000
+        && (options.NameServerPort is null or (> 0 and <= 65535))
+        && (string.IsNullOrWhiteSpace(options.NameServerHost) || System.Net.IPAddress.TryParse(options.NameServerHost, out _));
 }

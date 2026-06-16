@@ -1,0 +1,6 @@
+.:53 {
+    errors
+    log
+    file /zones/hip.test.zone test
+    cache 30
+}
