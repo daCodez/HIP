@@ -34,7 +34,7 @@ test("version comes from manifest through background and shared formatter", () =
   const background = read("src/background.js");
   const client = read("src/hipApiClient.js");
 
-  assert.equal(manifest.version, "0.1.2");
+  assert.equal(manifest.version, "0.1.6");
   assert.match(background, /chrome\.runtime\.getManifest\(\)\.version/);
   assert.match(background, /formatPluginVersion/);
   assert.match(client, /formatPluginVersion/);

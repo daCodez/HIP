@@ -11,6 +11,7 @@ test("site safety request includes privacy-safe scan facts", () => {
     inlineScriptCount: 4,
     externalScriptUrls: ["https://cdn.example.com/app.js"],
     suspiciousScriptPatternCount: 0,
+    clientChatLinkCandidates: 3,
     pluginVersion: "HIP Plugin v0.1.0-dev",
     pageText: "private page body",
     formValues: "password=secret"
@@ -23,6 +24,8 @@ test("site safety request includes privacy-safe scan facts", () => {
   assert.equal(request.observedSignals.hasPasswordField, true);
   assert.equal(request.observedSignals.inlineScriptCount, 4);
   assert.deepEqual(request.observedSignals.externalScriptUrls, ["https://cdn.example.com/app.js"]);
+  assert.equal(request.observedSignals.clientChatLinkCount, 3);
+  assert.equal(request.observedSignals.clientChatContextObserved, true);
   assert.equal("pageText" in request.observedSignals, false);
   assert.equal("formValues" in request.observedSignals, false);
 });
