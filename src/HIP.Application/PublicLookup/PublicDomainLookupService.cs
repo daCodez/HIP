@@ -1,6 +1,7 @@
 using HIP.Application.Browser;
 using HIP.Domain.Risk;
 using HIP.Domain.Scoring;
+using Microsoft.Extensions.Logging;
 
 namespace HIP.Application.PublicLookup;
 
@@ -8,7 +9,10 @@ namespace HIP.Application.PublicLookup;
 /// Builds public-safe HIP domain lookup results from stored scan data, falling back to a clear no-data state.
 /// </summary>
 /// <param name="browserScanResultRepository">Repository containing privacy-safe browser plugin scan summaries.</param>
-public sealed class PublicDomainLookupService(IBrowserScanResultRepository browserScanResultRepository) : IPublicDomainLookupService
+/// <param name="logger">Optional logger used to record storage availability problems without exposing private scan data.</param>
+public sealed class PublicDomainLookupService(
+    IBrowserScanResultRepository browserScanResultRepository,
+    ILogger<PublicDomainLookupService>? logger = null) : IPublicDomainLookupService
 {
     private static readonly HashSet<string> StrongDomainTrust = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -46,7 +50,7 @@ public sealed class PublicDomainLookupService(IBrowserScanResultRepository brows
     public async Task<PublicDomainLookupResponse> LookupDomainAsync(string domain, CancellationToken cancellationToken)
     {
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
-        var storedScan = await browserScanResultRepository.GetLatestByDomainAsync(normalized, cancellationToken);
+        var storedScan = await GetLatestStoredScanSafelyAsync(normalized, cancellationToken);
         if (storedScan is null)
         {
             return BuildNoStoredDataResponse(normalized);
@@ -54,6 +58,47 @@ public sealed class PublicDomainLookupService(IBrowserScanResultRepository brows
 
         return BuildStoredScanResponse(normalized, storedScan);
     }
+
+    /// <summary>
+    /// Reads the latest stored scan result while treating database connectivity failures as a no-data state.
+    /// </summary>
+    /// <param name="normalizedDomain">Already validated and normalized domain name.</param>
+    /// <param name="cancellationToken">Token used to cancel the lookup when the caller disconnects.</param>
+    /// <returns>The latest stored scan result, or null when storage is unavailable or no scan exists.</returns>
+    /// <remarks>
+    /// This method intentionally does not log URLs, URL hashes, page text, form values, tokens, or user identity.
+    /// A PostgreSQL timeout should not make public lookup or the browser popup fail open or crash; HIP degrades to
+    /// limited trust data until persistence recovers.
+    /// </remarks>
+    private async Task<BrowserScanResultRecord?> GetLatestStoredScanSafelyAsync(string normalizedDomain, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await browserScanResultRepository.GetLatestByDomainAsync(normalizedDomain, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (IsStorageAvailabilityFailure(exception))
+        {
+            logger?.LogWarning(
+                exception,
+                "HIP public lookup storage read failed for domain {Domain}. Returning a limited-trust no-data response.",
+                normalizedDomain);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Determines whether an exception represents storage unavailability rather than invalid input or a coding error.
+    /// </summary>
+    /// <param name="exception">Exception raised while reading scan storage.</param>
+    /// <returns>True when HIP should degrade to a no-data lookup response.</returns>
+    private static bool IsStorageAvailabilityFailure(Exception exception) =>
+        exception is TimeoutException
+            or TaskCanceledException
+            or System.Data.Common.DbException;
 
     /// <summary>
     /// Converts a stored browser plugin scan result into the public lookup shape without exposing page URL hashes or user identity.

@@ -107,6 +107,23 @@ public sealed class PublicLookupServiceTests
     }
 
     [Test]
+    public async Task Lookup_returns_limited_trust_data_when_scan_storage_times_out()
+    {
+        var service = new PublicDomainLookupService(new TimeoutBrowserScanResultRepository());
+
+        var result = await service.LookupDomainAsync("example.com", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Domain, Is.EqualTo("example.com"));
+            Assert.That(result.Status, Is.EqualTo(RiskStatus.LimitedTrustData));
+            Assert.That(result.DataSource, Is.EqualTo("NoStoredData"));
+            Assert.That(result.Reasons, Has.Some.Contains("HIP has not scanned this domain yet"));
+            Assert.That(result.RecommendedAction, Is.EqualTo("ShowCaution"));
+        });
+    }
+
+    [Test]
     public async Task Lookup_shows_last_checked_date_and_scan_counts_from_stored_scan()
     {
         var service = await CreateServiceWithStoredScanAsync("example.com");
@@ -198,6 +215,46 @@ public sealed class PublicLookupServiceTests
             }), CancellationToken.None);
 
         return new PublicDomainLookupService(repository);
+    }
+
+    /// <summary>
+    /// Test repository that simulates a PostgreSQL connection timeout without requiring a live database.
+    /// </summary>
+    private sealed class TimeoutBrowserScanResultRepository : IBrowserScanResultRepository
+    {
+        /// <summary>
+        /// Save is not used by the lookup timeout regression test.
+        /// </summary>
+        /// <param name="result">Privacy-safe scan result.</param>
+        /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+        /// <returns>A task that completes when the method is invoked.</returns>
+        public Task SaveAsync(BrowserScanResultRecord result, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        /// <summary>
+        /// Simulates the Npgsql task cancellation observed when PostgreSQL is unreachable or too slow to accept a connection.
+        /// </summary>
+        /// <param name="domain">Normalized domain being read.</param>
+        /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+        /// <returns>This method never returns because it throws the simulated timeout.</returns>
+        public Task<BrowserScanResultRecord?> GetLatestByDomainAsync(string domain, CancellationToken cancellationToken) =>
+            throw new TaskCanceledException("Simulated scan result storage timeout.");
+
+        /// <summary>
+        /// List is not used by the lookup timeout regression test.
+        /// </summary>
+        /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+        /// <returns>An empty scan result collection.</returns>
+        public Task<IReadOnlyCollection<BrowserScanResultRecord>> ListAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyCollection<BrowserScanResultRecord>>(Array.Empty<BrowserScanResultRecord>());
+
+        /// <summary>
+        /// Recent list is not used by the lookup timeout regression test.
+        /// </summary>
+        /// <param name="maxCount">Maximum number of recent scan records to return.</param>
+        /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+        /// <returns>An empty recent scan result collection.</returns>
+        public Task<IReadOnlyCollection<BrowserScanResultRecord>> ListRecentAsync(int maxCount, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyCollection<BrowserScanResultRecord>>(Array.Empty<BrowserScanResultRecord>());
     }
 }
 
