@@ -7,6 +7,73 @@ namespace HIP.Tests.Rules;
 
 public sealed class AdminRuleBuilderTests
 {
+    /// <summary>
+    /// Confirms the rule builder exposes only the MVP modes, severities, and safe structured actions.
+    /// </summary>
+    [Test]
+    public void Rule_builder_supported_choices_match_mvp_surface()
+    {
+        Assert.That(RuleBuilderFormModel.SupportedModes, Is.EqualTo(new[] { RuleMode.Watch, RuleMode.Active, RuleMode.Disabled }));
+        Assert.That(RuleBuilderFormModel.MvpSeverities, Does.Contain(RuleSeverity.Critical));
+        Assert.That(RuleBuilderFormModel.MvpActions, Does.Contain(RuleActionType.RouteToSafetyPage));
+        Assert.That(RuleBuilderFormModel.MvpActions, Does.Not.Contain(RuleActionType.MarkForSimulation));
+    }
+
+    /// <summary>
+    /// Confirms loading an existing rule preserves editable values and turns JSON values back into form text.
+    /// </summary>
+    [Test]
+    public void Rule_builder_load_round_trips_existing_rule_into_form_fields()
+    {
+        var original = RuleEngineTests.NewDomainShortenerRule(RuleMode.Active) with
+        {
+            RuleId = "round-trip-rule",
+            Name = "Round Trip Rule",
+            Description = "Preserves editable rule fields.",
+            Enabled = false,
+            RequiresApproval = false,
+            SimulationRequired = false,
+            CreatedBy = "admin@example.test",
+            CreatedReason = "Regression coverage",
+            ConfidenceScore = 87.5m,
+            Version = 7
+        };
+        var form = new RuleBuilderFormModel();
+
+        form.Load(original);
+
+        Assert.That(form.RuleId, Is.EqualTo("round-trip-rule"));
+        Assert.That(form.Name, Is.EqualTo("Round Trip Rule"));
+        Assert.That(form.Enabled, Is.False);
+        Assert.That(form.Mode, Is.EqualTo(RuleMode.Active));
+        Assert.That(form.RequiresApproval, Is.False);
+        Assert.That(form.SimulationRequired, Is.False);
+        Assert.That(form.CreatedBy, Is.EqualTo("admin@example.test"));
+        Assert.That(form.CreatedReason, Is.EqualTo("Regression coverage"));
+        Assert.That(form.ConfidenceScore, Is.EqualTo(87.5m));
+        Assert.That(form.Version, Is.EqualTo(7));
+        Assert.That(form.Conditions.Select(condition => condition.Value), Does.Contain("30"));
+        Assert.That(form.Conditions.Select(condition => condition.Value), Does.Contain("true"));
+        Assert.That(form.Actions.Select(action => action.Value), Does.Contain("HighRisk"));
+    }
+
+    /// <summary>
+    /// Confirms form values become typed JSON so rules compare numbers and booleans correctly.
+    /// </summary>
+    [Test]
+    public void Rule_builder_converts_form_values_to_typed_json()
+    {
+        var boolean = RuleBuilderFormModel.ToJsonElement("true");
+        var number = RuleBuilderFormModel.ToJsonElement("42.5");
+        var text = RuleBuilderFormModel.ToJsonElement("High");
+
+        Assert.That(boolean.ValueKind, Is.EqualTo(JsonValueKind.True));
+        Assert.That(number.ValueKind, Is.EqualTo(JsonValueKind.Number));
+        Assert.That(number.GetDecimal(), Is.EqualTo(42.5m));
+        Assert.That(text.ValueKind, Is.EqualTo(JsonValueKind.String));
+        Assert.That(text.GetString(), Is.EqualTo("High"));
+    }
+
     [Test]
     public void Rule_validation_passes_for_valid_rule()
     {

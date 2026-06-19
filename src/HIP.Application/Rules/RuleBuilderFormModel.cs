@@ -3,10 +3,24 @@ using HIP.Domain.Rules;
 
 namespace HIP.Application.Rules;
 
+/// <summary>
+/// Holds the simple admin rule-builder form state and converts it to a structured HIP rule.
+/// </summary>
 public sealed class RuleBuilderFormModel
 {
+    /// <summary>
+    /// Rule modes that the MVP form allows admins to choose from.
+    /// </summary>
     public static readonly RuleMode[] SupportedModes = [RuleMode.Watch, RuleMode.Active, RuleMode.Disabled];
+
+    /// <summary>
+    /// Severity values exposed in the MVP rule builder.
+    /// </summary>
     public static readonly RuleSeverity[] MvpSeverities = [RuleSeverity.Low, RuleSeverity.Medium, RuleSeverity.High, RuleSeverity.Critical];
+
+    /// <summary>
+    /// Actions that admins can add through the MVP rule builder without writing code.
+    /// </summary>
     public static readonly RuleActionType[] MvpActions =
     [
         RuleActionType.SetRiskLevel,
@@ -17,21 +31,80 @@ public sealed class RuleBuilderFormModel
         RuleActionType.RequireReview
     ];
 
+    /// <summary>
+    /// Stable identifier used to save and update the rule.
+    /// </summary>
     public string RuleId { get; set; } = "new-domain-shortener-high-risk";
+
+    /// <summary>
+    /// Admin-facing rule name.
+    /// </summary>
     public string Name { get; set; } = "New Domain With Shortened URL";
+
+    /// <summary>
+    /// Short explanation of what the rule is intended to detect.
+    /// </summary>
     public string Description { get; set; } = "Flags shortened links that resolve to new domains.";
+
+    /// <summary>
+    /// Whether the rule is enabled in its selected mode.
+    /// </summary>
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Controls whether the rule watches, actively enforces, or is ignored.
+    /// </summary>
     public RuleMode Mode { get; set; } = RuleMode.Watch;
+
+    /// <summary>
+    /// Severity used for review, simulation, and risk messaging.
+    /// </summary>
     public RuleSeverity Severity { get; set; } = RuleSeverity.High;
+
+    /// <summary>
+    /// Conditions that must match before the rule actions can run.
+    /// </summary>
     public List<RuleConditionInput> Conditions { get; } = [];
+
+    /// <summary>
+    /// Actions applied when every condition matches.
+    /// </summary>
     public List<RuleActionInput> Actions { get; } = [];
+
+    /// <summary>
+    /// Whether the rule needs administrator approval before enforcement.
+    /// </summary>
     public bool RequiresApproval { get; set; } = true;
+
+    /// <summary>
+    /// Whether simulation is required before the rule can be enabled.
+    /// </summary>
     public bool SimulationRequired { get; set; } = true;
+
+    /// <summary>
+    /// Identifier for the admin or system that created the rule.
+    /// </summary>
     public string CreatedBy { get; set; } = "admin";
+
+    /// <summary>
+    /// Plain-English reason for creating the rule.
+    /// </summary>
     public string CreatedReason { get; set; } = "Suspicious shortened URL pattern";
+
+    /// <summary>
+    /// Confidence score from simulation or review, where higher means stronger supporting evidence.
+    /// </summary>
     public decimal ConfidenceScore { get; set; }
+
+    /// <summary>
+    /// Version number used by rule history and rollback workflows.
+    /// </summary>
     public int Version { get; set; } = 1;
 
+    /// <summary>
+    /// Creates the example shortener rule used by the MVP admin form.
+    /// </summary>
+    /// <returns>A form model prefilled with a high-risk shortened-URL rule.</returns>
     public static RuleBuilderFormModel Default()
     {
         var form = new RuleBuilderFormModel();
@@ -43,6 +116,10 @@ public sealed class RuleBuilderFormModel
         return form;
     }
 
+    /// <summary>
+    /// Converts the form state into a validated structured rule model.
+    /// </summary>
+    /// <returns>A trust rule with typed conditions, actions, and approval metadata.</returns>
     public TrustRule ToRule() => new(
         RuleId,
         Name,
@@ -60,6 +137,10 @@ public sealed class RuleBuilderFormModel
         ConfidenceScore,
         Version);
 
+    /// <summary>
+    /// Loads an existing rule into the form so admins can edit it without losing structured JSON values.
+    /// </summary>
+    /// <param name="rule">The rule to display in the form.</param>
     public void Load(TrustRule rule)
     {
         RuleId = rule.RuleId;
@@ -89,6 +170,11 @@ public sealed class RuleBuilderFormModel
         Version = rule.Version;
     }
 
+    /// <summary>
+    /// Converts a text form value into the closest JSON value type used by the rule engine.
+    /// </summary>
+    /// <param name="value">The raw form value entered by an admin.</param>
+    /// <returns>A JSON element containing a boolean, number, or string.</returns>
     public static JsonElement ToJsonElement(string value)
     {
         if (bool.TryParse(value, out var boolean))
@@ -104,6 +190,11 @@ public sealed class RuleBuilderFormModel
         return JsonSerializer.SerializeToElement(value);
     }
 
+    /// <summary>
+    /// Converts a rule JSON value back to display text for the form.
+    /// </summary>
+    /// <param name="value">The JSON value stored in a rule condition or action.</param>
+    /// <returns>Readable form text for the JSON value.</returns>
     private static string JsonValueText(JsonElement value) => value.ValueKind switch
     {
         JsonValueKind.String => value.GetString() ?? string.Empty,
@@ -114,15 +205,39 @@ public sealed class RuleBuilderFormModel
     };
 }
 
+/// <summary>
+/// Captures one condition row from the admin rule-builder form.
+/// </summary>
 public sealed class RuleConditionInput
 {
+    /// <summary>
+    /// Allow-listed fact field that the rule evaluates.
+    /// </summary>
     public string Field { get; set; } = "domain.ageDays";
+
+    /// <summary>
+    /// Comparison operator used for this condition.
+    /// </summary>
     public RuleOperator Operator { get; set; } = RuleOperator.LessThan;
+
+    /// <summary>
+    /// Raw form value converted to JSON when the rule is saved.
+    /// </summary>
     public string Value { get; set; } = "30";
 }
 
+/// <summary>
+/// Captures one action row from the admin rule-builder form.
+/// </summary>
 public sealed class RuleActionInput
 {
+    /// <summary>
+    /// Structured action type supported by the rule engine.
+    /// </summary>
     public RuleActionType Type { get; set; } = RuleActionType.SetRiskLevel;
+
+    /// <summary>
+    /// Raw form value converted to JSON when the action is saved.
+    /// </summary>
     public string Value { get; set; } = "High";
 }
