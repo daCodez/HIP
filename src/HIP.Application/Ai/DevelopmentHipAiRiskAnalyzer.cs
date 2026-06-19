@@ -4,8 +4,18 @@ using HIP.Domain.Rules;
 
 namespace HIP.Application.Ai;
 
+/// <summary>
+/// Provides deterministic development-only AI-style risk analysis for local HIP workflows.
+/// </summary>
+/// <remarks>
+/// This analyzer is intentionally simple and explainable. It does not call an external AI service,
+/// and it should not be treated as production-grade model output.
+/// </remarks>
 public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
 {
+    /// <summary>
+    /// Identifies this analyzer in API responses and audit records as a non-production placeholder.
+    /// </summary>
     public const string ProviderName = "Development deterministic HIP AI placeholder - not production AI";
 
     private static readonly string[] ShortenerDomains =
@@ -52,6 +62,12 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
         "confirm identity"
     ];
 
+    /// <summary>
+    /// Analyzes URL and domain signals using deterministic pattern checks.
+    /// </summary>
+    /// <param name="request">The URL risk request. Only privacy-safe summaries and structured signals should be included.</param>
+    /// <param name="cancellationToken">Unused for this in-memory analyzer, but accepted to match production analyzer contracts.</param>
+    /// <returns>A deterministic risk analysis result for local development and tests.</returns>
     public Task<HipAiRiskAnalysisResult> AnalyzeUrlRiskAsync(
         HipAiUrlRiskAnalysisRequest request,
         CancellationToken cancellationToken)
@@ -65,6 +81,12 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
         return Task.FromResult(result);
     }
 
+    /// <summary>
+    /// Analyzes content-level risk from short privacy-safe summaries and optional snippets.
+    /// </summary>
+    /// <param name="request">The content risk request, which must not contain private messages, secrets, or form values.</param>
+    /// <param name="cancellationToken">Unused for this in-memory analyzer, but accepted to match production analyzer contracts.</param>
+    /// <returns>A deterministic content risk analysis result.</returns>
     public Task<HipAiRiskAnalysisResult> AnalyzeContentRiskAsync(
         HipAiContentRiskAnalysisRequest request,
         CancellationToken cancellationToken)
@@ -79,6 +101,12 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
         return Task.FromResult(result);
     }
 
+    /// <summary>
+    /// Builds a structured rule suggestion from an analysis result without using executable code.
+    /// </summary>
+    /// <param name="request">The rule suggestion request built from a prior risk analysis.</param>
+    /// <param name="cancellationToken">Unused for this in-memory analyzer, but accepted to match production analyzer contracts.</param>
+    /// <returns>A rule suggestion that requires simulation and may require approval before enforcement.</returns>
     public Task<HipAiRuleSuggestionResult> SuggestRuleAsync(
         HipAiRuleSuggestionRequest request,
         CancellationToken cancellationToken)
@@ -125,6 +153,12 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
             ProviderName));
     }
 
+    /// <summary>
+    /// Detects simple risk patterns from privacy-safe text and structured rule signals.
+    /// </summary>
+    /// <param name="input">Combined input text from safe request fields.</param>
+    /// <param name="ruleSignals">Optional structured signals from HIP detectors and rules.</param>
+    /// <returns>The detected risk pattern identifiers.</returns>
     private static IReadOnlyCollection<string> DetectPatterns(
         string input,
         IReadOnlyDictionary<string, string>? ruleSignals)
@@ -172,8 +206,15 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
         return patterns.ToArray();
     }
 
+    /// <summary>
+    /// Converts detected patterns into a deterministic risk level, confidence, reasons, and recommended action.
+    /// </summary>
+    /// <param name="patterns">Risk patterns detected by the placeholder analyzer.</param>
+    /// <param name="analysisType">Plain-English label used in reasons when no pattern is detected.</param>
+    /// <returns>The complete AI-style risk analysis result.</returns>
     private static HipAiRiskAnalysisResult BuildAnalysis(IReadOnlyCollection<string> patterns, string analysisType)
     {
+        // The score weights are deliberately simple so local development output stays explainable.
         var score = patterns.Sum(pattern => pattern switch
         {
             "KnownRiskSignal" => 35,
@@ -218,6 +259,11 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
             ProviderName);
     }
 
+    /// <summary>
+    /// Builds safe structured rule conditions from detected patterns and optional domain context.
+    /// </summary>
+    /// <param name="request">The rule suggestion request that contains the analysis result.</param>
+    /// <returns>Allow-listed rule conditions that do not execute code or access private fields.</returns>
     private static IReadOnlyCollection<RuleCondition> BuildConditions(HipAiRuleSuggestionRequest request)
     {
         var conditions = new List<RuleCondition>();
@@ -257,6 +303,12 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
         return conditions;
     }
 
+    /// <summary>
+    /// Builds rule actions from the analysis result while keeping high-impact actions behind review controls.
+    /// </summary>
+    /// <param name="analysis">The analysis result that drives the proposed actions.</param>
+    /// <param name="highImpact">Whether the rule can materially affect user navigation or enforcement.</param>
+    /// <returns>Structured rule actions that can be simulated before enforcement.</returns>
     private static IReadOnlyCollection<RuleAction> BuildActions(HipAiRiskAnalysisResult analysis, bool highImpact)
     {
         var actions = new List<RuleAction>
@@ -275,12 +327,22 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
         return actions;
     }
 
+    /// <summary>
+    /// Creates a readable rule name from the strongest detected pattern.
+    /// </summary>
+    /// <param name="analysis">The analysis result used to name the rule.</param>
+    /// <returns>A short name suitable for the admin rule list.</returns>
     private static string BuildRuleName(HipAiRiskAnalysisResult analysis)
     {
         var primaryPattern = analysis.DetectedPatterns.FirstOrDefault() ?? "Risk Signal";
         return $"AI Suggested {primaryPattern} Rule";
     }
 
+    /// <summary>
+    /// Converts an internal pattern identifier into a plain-English explanation.
+    /// </summary>
+    /// <param name="pattern">The detected pattern identifier.</param>
+    /// <returns>A user- and reviewer-readable reason.</returns>
     private static string ToReason(string pattern) => pattern switch
     {
         "ShortenedUrl" => "The input contains a shortened URL pattern that can hide the final destination.",
@@ -292,6 +354,12 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
         _ => "The input contains an AI-assisted risk pattern."
     };
 
+    /// <summary>
+    /// Checks whether a structured rule signal exists and is set to true.
+    /// </summary>
+    /// <param name="signals">Optional structured signals from HIP detectors.</param>
+    /// <param name="key">The allow-listed signal key to inspect.</param>
+    /// <returns>True when the signal exists and parses as true.</returns>
     private static bool IsSignalTrue(IReadOnlyDictionary<string, string>? signals, string key)
     {
         return signals is not null &&
@@ -300,6 +368,12 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
             parsed;
     }
 
+    /// <summary>
+    /// Rejects values that are too large or appear to contain private or secret content.
+    /// </summary>
+    /// <param name="value">The value to validate.</param>
+    /// <param name="fieldName">The field name used in validation errors.</param>
+    /// <exception cref="ArgumentException">Thrown when the value is too long or appears to contain private content.</exception>
     private static void ValidatePrivacySafeInput(string? value, string fieldName)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -322,6 +396,11 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
         }
     }
 
+    /// <summary>
+    /// Normalizes a domain for stable rule generation.
+    /// </summary>
+    /// <param name="domain">The domain supplied by the request.</param>
+    /// <returns>A trimmed, lowercase domain value.</returns>
     private static string NormalizeDomain(string domain)
     {
         return domain.Trim().TrimEnd('/').ToLowerInvariant();
