@@ -65,7 +65,7 @@ test("browser scan assessment recommends safety routing for risky statuses", () 
 
 /**
  * Status: New
- * Changed: 2026-06-20 16:32
+ * Changed: 2026-06-20 20:32 UTC
  * Developer: Codex
  * Description: Loads the classic content-script helper in a tiny fake browser so tests can read its public helper box.
  */
