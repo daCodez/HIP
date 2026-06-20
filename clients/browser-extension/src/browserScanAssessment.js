@@ -6,7 +6,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 20:32 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Gives the content script one small helper box for turning safe scan counts into a site result.
    */
   function browserScanAssessment(lookup, summary = {}) {
@@ -47,7 +48,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 20:32 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Picks safe explanation text from HIP data without looking at private page words.
    */
   function safeReasons(lookup) {
@@ -58,7 +60,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 20:32 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Changes Site Safety labels into the labels the plugin saves for dashboards and lookup pages.
    */
   function mapSiteSafetyStatus(status) {
@@ -78,7 +81,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 20:32 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Explains that HIP used safe browser observations instead of private page content.
    */
   function siteSafetyScanReasons(summary = {}) {
@@ -97,7 +101,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 20:32 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Spots the temporary "we have not scanned this yet" response so a real browser scan can replace it.
    */
   function isLookupNoDataState(lookup) {
@@ -110,7 +115,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 20:32 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Turns safe link counts into a cautious status without pretending unknown sites are fully trusted.
    */
   function browserScanStatus(score, dangerousLinks, suspiciousLinks, riskyLinks, unknownLinks) {
@@ -132,7 +138,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 20:32 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Builds plain reasons from counts, not from private messages or page text.
    */
   function browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates, clientChatLinkCandidates = 0 }) {
@@ -168,7 +175,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 20:32 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Chooses the safe next action from the final status the user sees.
    */
   function recommendedSiteAction(status) {
