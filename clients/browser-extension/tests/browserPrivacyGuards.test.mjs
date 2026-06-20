@@ -53,7 +53,8 @@ test("browser privacy guards filter evidence URL lists to public URLs only", () 
 /**
  * Status: New
  * Changed: 2026-06-20 21:05 UTC
- * Developer: Codex
+ * Developer: HIP Development Team
+ * Assisted by: Codex
  * Description: Loads the classic privacy helper in a tiny fake browser so tests can check its safe URL rules.
  */
 function loadGuards() {
@@ -66,7 +67,8 @@ function loadGuards() {
 /**
  * Status: New
  * Changed: 2026-06-20 21:05 UTC
- * Developer: Codex
+ * Developer: HIP Development Team
+ * Assisted by: Codex
  * Description: Reads browser extension files so these tests check the real unpacked-extension assets.
  */
 function read(relativePath) {

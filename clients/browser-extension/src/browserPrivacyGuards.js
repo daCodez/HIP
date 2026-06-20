@@ -1,7 +1,8 @@
 /**
  * Status: New
  * Changed: 2026-06-20 21:05 UTC
- * Developer: Codex
+ * Developer: HIP Development Team
+ * Assisted by: Codex
  * Description: Adds one shared browser privacy helper so scan code can reuse the same safe URL rules.
  */
 (function registerHipBrowserPrivacyGuards(globalScope) {
@@ -10,7 +11,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 21:05 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Cleans a host name so different parts of the extension compare domains the same way.
    */
   function normalizeHost(hostname) {
@@ -20,7 +22,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 21:05 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Removes private URL pieces before optional raw URL diagnostics can be sent.
    */
   function stripQueryAndFragment(pageUrl) {
@@ -41,7 +44,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 21:05 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Spots HIP's own pages so the plugin does not scan itself and create noisy local errors.
    */
   function isHipOwnedPage(pageUrl, currentSettings = {}) {
@@ -59,7 +63,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 21:05 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Blocks localhost and private-network targets so HIP does not send local addresses to Site Safety.
    */
   function isInternalHost(hostname) {
@@ -92,7 +97,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 21:05 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Checks whether a page URL is safe for the Site Safety API before any scan request is made.
    */
   function isSiteSafetyEligibleUrl(pageUrl, currentSettings = {}) {
@@ -109,7 +115,8 @@
   /**
    * Status: New
    * Changed: 2026-06-20 21:05 UTC
-   * Developer: Codex
+   * Developer: HIP Development Team
+   * Assisted by: Codex
    * Description: Keeps optional evidence URL lists public-only before they leave the browser.
    */
   function filterSafePublicUrls(values, currentSettings = {}) {
