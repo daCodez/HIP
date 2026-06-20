@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
+using HIP.Application.Security;
 using HIP.Application.SiteSafety;
 using HIP.Domain.Reputation;
 
@@ -256,23 +257,19 @@ public interface IWeightedFeedbackAggregationService
 /// Conservative feedback aggregator that treats feedback as weak evidence, not proof.
 /// </summary>
 public sealed partial class WeightedFeedbackAggregationService(
-    IWeightedFeedbackRepository repository) : IWeightedFeedbackAggregationService
+    IWeightedFeedbackRepository repository,
+    IFeedbackWeightingPolicy feedbackWeightingPolicy) : IWeightedFeedbackAggregationService
 {
     private static readonly TimeSpan AggregationWindow = TimeSpan.FromDays(14);
 
     /// <summary>
-    /// Gets integer weights used for feedback aggregation. These weights intentionally stay conservative.
+    /// Creates an aggregator with the default feedback weighting policy for tests and older callers.
     /// </summary>
-    public static readonly IReadOnlyDictionary<ReporterTrustLevel, int> FeedbackWeights =
-        new Dictionary<ReporterTrustLevel, int>
-        {
-            [ReporterTrustLevel.Anonymous] = 1,
-            [ReporterTrustLevel.Verified] = 3,
-            [ReporterTrustLevel.Trusted] = 6,
-            [ReporterTrustLevel.Moderator] = 8,
-            [ReporterTrustLevel.Admin] = 10,
-            [ReporterTrustLevel.KnownFalseReporter] = 1
-        };
+    /// <param name="repository">Repository that stores privacy-safe feedback submissions.</param>
+    public WeightedFeedbackAggregationService(IWeightedFeedbackRepository repository)
+        : this(repository, new DefaultFeedbackWeightingPolicy())
+    {
+    }
 
     /// <inheritdoc />
     public async Task<WeightedFeedbackSummary> SubmitAsync(WeightedFeedbackSubmission submission, CancellationToken cancellationToken)
@@ -327,7 +324,7 @@ public sealed partial class WeightedFeedbackAggregationService(
     /// <summary>
     /// Builds a summary from recent submissions.
     /// </summary>
-    private static WeightedFeedbackSummary BuildSummary(string domain, IReadOnlyCollection<WeightedFeedbackSubmission> recent)
+    private WeightedFeedbackSummary BuildSummary(string domain, IReadOnlyCollection<WeightedFeedbackSubmission> recent)
     {
         var looksSafeWeight = TotalWeight(recent, HipFeedbackType.LooksSafe);
         var suspiciousWeight = TotalWeight(recent, HipFeedbackType.LooksSuspicious);
@@ -403,9 +400,9 @@ public sealed partial class WeightedFeedbackAggregationService(
     /// <summary>
     /// Totals feedback weight by type.
     /// </summary>
-    private static int TotalWeight(IEnumerable<WeightedFeedbackSubmission> submissions, HipFeedbackType feedbackType) =>
+    private int TotalWeight(IEnumerable<WeightedFeedbackSubmission> submissions, HipFeedbackType feedbackType) =>
         submissions.Where(item => item.FeedbackType == feedbackType)
-            .Sum(item => FeedbackWeights[item.ReporterTrustLevel]);
+            .Sum(item => feedbackWeightingPolicy.CalculateWeight(item.FeedbackType, item.ReporterTrustLevel, item.Source));
 
     /// <summary>
     /// Validates and normalizes a submission without accepting raw private content.

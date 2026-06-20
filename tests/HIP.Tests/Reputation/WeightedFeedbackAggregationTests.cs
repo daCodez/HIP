@@ -155,7 +155,7 @@ public sealed class WeightedFeedbackAggregationTests
         Assert.Multiple(() =>
         {
             Assert.That(summary.LooksSafeWeight, Is.EqualTo(3));
-            Assert.That(summary.ReportIssueWeight, Is.EqualTo(10));
+            Assert.That(summary.ReportIssueWeight, Is.EqualTo(11));
             Assert.That(summary.RecommendedReview, Is.True);
             Assert.That(propertyNames, Does.Not.Contain("PageText"));
             Assert.That(propertyNames, Does.Not.Contain("FormValues"));

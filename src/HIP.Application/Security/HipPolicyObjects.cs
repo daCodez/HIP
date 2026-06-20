@@ -180,8 +180,8 @@ public sealed class DefaultFeedbackWeightingPolicy : IFeedbackWeightingPolicy
         var trustWeight = reporterTrustLevel switch
         {
             ReporterTrustLevel.Admin => 10,
-            ReporterTrustLevel.Moderator => 7,
-            ReporterTrustLevel.Trusted => 5,
+            ReporterTrustLevel.Moderator => 8,
+            ReporterTrustLevel.Trusted => 6,
             ReporterTrustLevel.Verified => 3,
             ReporterTrustLevel.KnownFalseReporter => 0,
             ReporterTrustLevel.Anonymous => 1,
