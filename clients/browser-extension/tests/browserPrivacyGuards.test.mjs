@@ -52,7 +52,7 @@ test("browser privacy guards filter evidence URL lists to public URLs only", () 
 
 /**
  * Status: New
- * Changed: 2026-06-20 17:05 America/Toronto
+ * Changed: 2026-06-20 17:05
  * Developer: Codex
  * Description: Loads the classic privacy helper in a tiny fake browser so tests can check its safe URL rules.
  */
@@ -65,7 +65,7 @@ function loadGuards() {
 
 /**
  * Status: New
- * Changed: 2026-06-20 17:05 America/Toronto
+ * Changed: 2026-06-20 17:05
  * Developer: Codex
  * Description: Reads browser extension files so these tests check the real unpacked-extension assets.
  */
