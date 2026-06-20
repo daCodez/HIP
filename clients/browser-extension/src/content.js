@@ -27,7 +27,20 @@
   ].join(", ");
   const reportedDomains = new Set();
   const pendingScanSubmissions = new Set();
+  const privacyGuards = window.HipBrowserPrivacyGuards;
   const scanAssessment = window.HipBrowserScanAssessment;
+
+  if (!privacyGuards) {
+    throw new Error("HIP browser privacy guard module did not load.");
+  }
+
+  const {
+    filterSafePublicUrls,
+    isHipOwnedPage,
+    isSiteSafetyEligibleUrl,
+    normalizeHost,
+    stripQueryAndFragment
+  } = privacyGuards;
 
   const currentDomain = normalizeHost(window.location.hostname);
   let settings = null;
@@ -517,7 +530,7 @@
    * form values, cookies, tokens, passwords, or private message content.
    */
   async function scanSiteSafety() {
-    if (!isSiteSafetyEligibleUrl(window.location.href)) {
+    if (!isSiteSafetyEligibleUrl(window.location.href, settings)) {
       lastSummary.siteSafetyStatus = "Skipped";
       lastSummary.siteSafetyDataSource = "IneligibleUrl";
       return null;
@@ -554,40 +567,21 @@
       url: window.location.href,
       pluginVersion,
       observedSignals: {
-        downloadLinks: filterSafePublicUrls(lastSummary.downloadLinks),
+        downloadLinks: filterSafePublicUrls(lastSummary.downloadLinks, settings),
         hasLoginForm: lastSummary.loginFormsDetected > 0,
         hasPasswordField: lastSummary.passwordFieldsDetected > 0,
         hasPaymentField: lastSummary.paymentFieldsDetected > 0,
         inlineScriptCount: lastSummary.inlineScriptCount,
-        externalScriptUrls: filterSafePublicUrls(lastSummary.externalScriptUrls),
+        externalScriptUrls: filterSafePublicUrls(lastSummary.externalScriptUrls, settings),
         suspiciousScriptPatternCount: lastSummary.suspiciousScriptPatternCount,
         trustDataAvailable: lastSummary.scanResultDataSource === "BrowserPluginScan",
         shortenedLinkCount: lastSummary.shortenedLinkCandidates,
         obfuscatedLinkCount: lastSummary.obfuscatedLinkCandidates,
         clientChatLinkCount: lastSummary.clientChatLinkCandidates,
         clientChatContextObserved: lastSummary.clientChatLinkCandidates > 0,
-        redirectChain: filterSafePublicUrls(lastSummary.redirectSignals)
+        redirectChain: filterSafePublicUrls(lastSummary.redirectSignals, settings)
       }
     };
-  }
-
-  /**
-   * Removes query strings and fragments before any explicitly enabled raw URL diagnostic submission.
-   * Normal background scan submissions send only pageUrlHash, because query strings often contain private tokens.
-   */
-  function stripQueryAndFragment(pageUrl) {
-    try {
-      const url = new URL(pageUrl);
-      if (!["http:", "https:"].includes(url.protocol)) {
-        return null;
-      }
-
-      url.search = "";
-      url.hash = "";
-      return url.toString();
-    } catch {
-      return null;
-    }
   }
 
   async function loadSettings() {
@@ -603,81 +597,6 @@
       bannerDisplayMode: "WarningsOnly",
       scanMode: "Normal"
     };
-  }
-
-  /**
-   * Detects the configured HIP API/Web hosts so the extension does not recursively scan HIP's own UI.
-   * This prevents localhost lookup pages from generating noisy API-unavailable errors during development.
-   */
-  function isHipOwnedPage(pageUrl, currentSettings = {}) {
-    try {
-      const pageOrigin = new URL(pageUrl).origin;
-      const hipOrigins = [currentSettings.apiBaseUrl, currentSettings.hipApiBaseUrl, currentSettings.webBaseUrl]
-        .filter(Boolean)
-        .map(value => new URL(value).origin);
-      return hipOrigins.includes(pageOrigin);
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Checks whether the current tab URL is safe to submit to the Site Safety API.
-   * Localhost and private-network URLs are skipped client-side because the server rejects them as SSRF protection.
-   */
-  function isSiteSafetyEligibleUrl(pageUrl) {
-    try {
-      const url = new URL(pageUrl);
-      return ["http:", "https:"].includes(url.protocol) &&
-        !isHipOwnedPage(pageUrl, settings) &&
-        !isInternalHost(url.hostname);
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Filters optional evidence URLs before sending Site Safety requests.
-   * This protects local networks and keeps expected API validation failures out of extension diagnostics.
-   */
-  function filterSafePublicUrls(values) {
-    if (!Array.isArray(values)) {
-      return [];
-    }
-
-    return values
-      .filter(value => typeof value === "string")
-      .filter(isSiteSafetyEligibleUrl);
-  }
-
-  /**
-   * Detects local and private hosts using the same conservative checks as the shared API client helper.
-   */
-  function isInternalHost(hostname) {
-    const host = normalizeHost(hostname);
-    if (!host ||
-      host === "localhost" ||
-      host.endsWith(".localhost") ||
-      host === "::1" ||
-      host === "[::1]") {
-      return true;
-    }
-
-    const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-    if (!ipv4) {
-      return false;
-    }
-
-    const octets = ipv4.slice(1).map(Number);
-    if (octets.some(octet => Number.isNaN(octet) || octet < 0 || octet > 255)) {
-      return true;
-    }
-
-    return octets[0] === 10 ||
-      octets[0] === 127 ||
-      (octets[0] === 169 && octets[1] === 254) ||
-      (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
-      (octets[0] === 192 && octets[1] === 168);
   }
 
   /**
@@ -832,10 +751,6 @@
       .slice(0, 25)
       .map(script => script.src);
     lastSummary.suspiciousScriptPatternCount = 0;
-  }
-
-  function normalizeHost(hostname) {
-    return (hostname || "").replace(/^www\./i, "").toLowerCase();
   }
 
   function withLookupUrl(lookup) {
