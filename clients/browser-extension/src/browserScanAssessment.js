@@ -5,7 +5,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 16:32 America/Toronto
+   * Changed: 2026-06-20 16:32
    * Developer: Codex
    * Description: Gives the content script one small helper box for turning safe scan counts into a site result.
    */
@@ -46,7 +46,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 16:32 America/Toronto
+   * Changed: 2026-06-20 16:32
    * Developer: Codex
    * Description: Picks safe explanation text from HIP data without looking at private page words.
    */
@@ -57,7 +57,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 16:32 America/Toronto
+   * Changed: 2026-06-20 16:32
    * Developer: Codex
    * Description: Changes Site Safety labels into the labels the plugin saves for dashboards and lookup pages.
    */
@@ -77,7 +77,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 16:32 America/Toronto
+   * Changed: 2026-06-20 16:32
    * Developer: Codex
    * Description: Explains that HIP used safe browser observations instead of private page content.
    */
@@ -96,7 +96,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 16:32 America/Toronto
+   * Changed: 2026-06-20 16:32
    * Developer: Codex
    * Description: Spots the temporary "we have not scanned this yet" response so a real browser scan can replace it.
    */
@@ -109,7 +109,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 16:32 America/Toronto
+   * Changed: 2026-06-20 16:32
    * Developer: Codex
    * Description: Turns safe link counts into a cautious status without pretending unknown sites are fully trusted.
    */
@@ -131,7 +131,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 16:32 America/Toronto
+   * Changed: 2026-06-20 16:32
    * Developer: Codex
    * Description: Builds plain reasons from counts, not from private messages or page text.
    */
@@ -167,7 +167,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 16:32 America/Toronto
+   * Changed: 2026-06-20 16:32
    * Developer: Codex
    * Description: Chooses the safe next action from the final status the user sees.
    */
