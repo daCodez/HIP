@@ -1,6 +1,6 @@
 /**
  * Status: New
- * Changed: 2026-06-20 17:05
+ * Changed: 2026-06-20 21:05 UTC
  * Developer: Codex
  * Description: Adds one shared browser privacy helper so scan code can reuse the same safe URL rules.
  */
@@ -9,7 +9,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 17:05
+   * Changed: 2026-06-20 21:05 UTC
    * Developer: Codex
    * Description: Cleans a host name so different parts of the extension compare domains the same way.
    */
@@ -19,7 +19,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 17:05
+   * Changed: 2026-06-20 21:05 UTC
    * Developer: Codex
    * Description: Removes private URL pieces before optional raw URL diagnostics can be sent.
    */
@@ -40,7 +40,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 17:05
+   * Changed: 2026-06-20 21:05 UTC
    * Developer: Codex
    * Description: Spots HIP's own pages so the plugin does not scan itself and create noisy local errors.
    */
@@ -58,7 +58,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 17:05
+   * Changed: 2026-06-20 21:05 UTC
    * Developer: Codex
    * Description: Blocks localhost and private-network targets so HIP does not send local addresses to Site Safety.
    */
@@ -91,7 +91,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 17:05
+   * Changed: 2026-06-20 21:05 UTC
    * Developer: Codex
    * Description: Checks whether a page URL is safe for the Site Safety API before any scan request is made.
    */
@@ -108,7 +108,7 @@
 
   /**
    * Status: New
-   * Changed: 2026-06-20 17:05
+   * Changed: 2026-06-20 21:05 UTC
    * Developer: Codex
    * Description: Keeps optional evidence URL lists public-only before they leave the browser.
    */
