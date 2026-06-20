@@ -4,6 +4,7 @@ import test from "node:test";
 import { fetchWithTimeout, HIP_FETCH_TIMEOUT_MS } from "../src/hipApiClient.js";
 
 const contentSource = await readFile(new URL("../src/content.js", import.meta.url), "utf8");
+const browserPrivacyGuardsSource = await readFile(new URL("../src/browserPrivacyGuards.js", import.meta.url), "utf8");
 const browserScanAssessmentSource = await readFile(new URL("../src/browserScanAssessment.js", import.meta.url), "utf8");
 const popupSource = await readFile(new URL("../src/popup.js", import.meta.url), "utf8");
 const apiClientSource = await readFile(new URL("../src/hipApiClient.js", import.meta.url), "utf8");
@@ -47,10 +48,12 @@ test("content script runs Site Safety during automatic page scan", () => {
 });
 
 test("content script skips private and HIP owned URLs before Site Safety", () => {
-  assert.equal(contentSource.includes("function isSiteSafetyEligibleUrl"), true);
-  assert.equal(contentSource.includes("!isHipOwnedPage(pageUrl, settings)"), true);
-  assert.equal(contentSource.includes("!isInternalHost(url.hostname)"), true);
-  assert.equal(contentSource.includes("function filterSafePublicUrls"), true);
+  assert.equal(contentSource.includes("isSiteSafetyEligibleUrl(window.location.href, settings)"), true);
+  assert.equal(contentSource.includes("filterSafePublicUrls(lastSummary.downloadLinks, settings)"), true);
+  assert.equal(browserPrivacyGuardsSource.includes("function isSiteSafetyEligibleUrl"), true);
+  assert.equal(browserPrivacyGuardsSource.includes("!isHipOwnedPage(pageUrl, currentSettings)"), true);
+  assert.equal(browserPrivacyGuardsSource.includes("!isInternalHost(url.hostname)"), true);
+  assert.equal(browserPrivacyGuardsSource.includes("function filterSafePublicUrls"), true);
 });
 
 test("content script preserves layered Site Safety scores in stored scan metadata", () => {
