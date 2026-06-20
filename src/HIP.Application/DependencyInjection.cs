@@ -72,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<IReviewQueueService, ReviewQueueService>();
         services.AddScoped<IAppealService, AppealService>();
         services.AddScoped<IReputationOverrideService, ReputationOverrideService>();
+        services.AddSingleton<IReputationScoringPolicy, DefaultReputationScoringPolicy>();
         services.AddScoped<IReputationService, ReputationService>();
         services.AddScoped<IWeightedFeedbackAggregationService, WeightedFeedbackAggregationService>();
         services.AddScoped<IRiskFindingIngestionService, RiskFindingIngestionService>();

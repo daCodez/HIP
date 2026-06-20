@@ -3,23 +3,38 @@ using HIP.Domain.Risk;
 
 namespace HIP.Application.Reputation;
 
+/// <summary>
+/// Coordinates reputation reads and writes while delegating scoring details to a policy object.
+/// </summary>
 public sealed class ReputationService(
     IReputationEventRepository eventRepository,
-    IReputationProfileRepository profileRepository) : IReputationService
+    IReputationProfileRepository profileRepository,
+    IReputationScoringPolicy scoringPolicy) : IReputationService
 {
-    public const int DefaultScore = 75;
+    /// <summary>
+    /// Neutral starting score used before HIP has enough privacy-safe reputation evidence.
+    /// </summary>
+    public const int DefaultScore = DefaultReputationScoringPolicy.NeutralScore;
 
-    public static readonly IReadOnlyDictionary<ReporterTrustLevel, decimal> ReporterWeights =
-        new Dictionary<ReporterTrustLevel, decimal>
-        {
-            [ReporterTrustLevel.Anonymous] = 0.25m,
-            [ReporterTrustLevel.Verified] = 0.50m,
-            [ReporterTrustLevel.Trusted] = 0.80m,
-            [ReporterTrustLevel.Moderator] = 1.00m,
-            [ReporterTrustLevel.Admin] = 1.00m,
-            [ReporterTrustLevel.KnownFalseReporter] = 0.05m
-        };
+    /// <summary>
+    /// Creates the service with the default scoring policy for tests or callers that have not moved to dependency injection yet.
+    /// </summary>
+    /// <param name="eventRepository">Repository used to append privacy-safe reputation events.</param>
+    /// <param name="profileRepository">Repository used to store calculated reputation profiles.</param>
+    public ReputationService(
+        IReputationEventRepository eventRepository,
+        IReputationProfileRepository profileRepository)
+        : this(eventRepository, profileRepository, new DefaultReputationScoringPolicy())
+    {
+    }
 
+    /// <summary>
+    /// Loads the current reputation profile or returns a neutral in-memory profile when no events exist yet.
+    /// </summary>
+    /// <param name="targetType">Type of target being scored.</param>
+    /// <param name="targetId">Privacy-safe target identifier.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <returns>The stored or calculated reputation profile.</returns>
     public async Task<ReputationProfile> GetProfileAsync(ReputationSubjectType targetType, string targetId, CancellationToken cancellationToken)
     {
         ValidateTarget(targetId);
@@ -27,6 +42,12 @@ public sealed class ReputationService(
             BuildProfile(targetType, targetId, [], DateTimeOffset.UtcNow);
     }
 
+    /// <summary>
+    /// Stores a reputation event and recalculates the target profile from event history.
+    /// </summary>
+    /// <param name="reputationEvent">Privacy-safe reputation event to append.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <returns>The recalculated reputation profile.</returns>
     public async Task<ReputationProfile> ApplyEventAsync(ReputationEvent reputationEvent, CancellationToken cancellationToken)
     {
         ValidateTarget(reputationEvent.TargetId);
@@ -34,6 +55,12 @@ public sealed class ReputationService(
         return await RecalculateAsync(reputationEvent.TargetType, reputationEvent.TargetId, cancellationToken);
     }
 
+    /// <summary>
+    /// Converts user or admin feedback into a weighted reputation event without storing private message content.
+    /// </summary>
+    /// <param name="feedback">Feedback request containing only privacy-safe target and reason data.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <returns>The recalculated reputation profile.</returns>
     public Task<ReputationProfile> SubmitFeedbackAsync(ReputationFeedbackRequest feedback, CancellationToken cancellationToken)
     {
         ValidateTarget(feedback.TargetId);
@@ -42,7 +69,8 @@ public sealed class ReputationService(
             throw new ArgumentException("Feedback reason is required.", nameof(feedback));
         }
 
-        var scoreImpact = DefaultImpact(feedback.EventType, feedback.Severity);
+        var scoreImpact = scoringPolicy.DefaultImpact(feedback.EventType, feedback.Severity);
+        var createdAtUtc = DateTimeOffset.UtcNow;
         var reputationEvent = new ReputationEvent(
             $"rep-event-{Guid.NewGuid():N}",
             feedback.TargetType,
@@ -52,14 +80,21 @@ public sealed class ReputationService(
             scoreImpact,
             feedback.ReporterTrustLevel,
             feedback.Reason,
-            DateTimeOffset.UtcNow,
-            ExpiresAt(feedback.EventType, feedback.Severity, DateTimeOffset.UtcNow),
-            IsConfirmed(feedback.EventType),
+            createdAtUtc,
+            scoringPolicy.ExpiresAt(feedback.EventType, feedback.Severity, createdAtUtc),
+            scoringPolicy.IsConfirmed(feedback.EventType),
             feedback.EventType == ReputationEventType.AccidentalIssue);
 
         return ApplyEventAsync(reputationEvent, cancellationToken);
     }
 
+    /// <summary>
+    /// Rebuilds a reputation profile from stored event history so score changes remain deterministic.
+    /// </summary>
+    /// <param name="targetType">Type of target being recalculated.</param>
+    /// <param name="targetId">Privacy-safe target identifier.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <returns>The recalculated and saved profile.</returns>
     public async Task<ReputationProfile> RecalculateAsync(ReputationSubjectType targetType, string targetId, CancellationToken cancellationToken)
     {
         ValidateTarget(targetId);
@@ -69,75 +104,41 @@ public sealed class ReputationService(
         return profile;
     }
 
-    public int CalculateScore(IReadOnlyCollection<ReputationEvent> events, DateTimeOffset asOfUtc)
-    {
-        var score = DefaultScore;
-        var abuseCount = 0;
+    /// <summary>
+    /// Calculates the current score through the configured scoring policy.
+    /// </summary>
+    /// <param name="events">Privacy-safe reputation events for one target.</param>
+    /// <param name="asOfUtc">UTC time used for decay calculations.</param>
+    /// <returns>A clamped 0-100 reputation score.</returns>
+    public int CalculateScore(IReadOnlyCollection<ReputationEvent> events, DateTimeOffset asOfUtc) =>
+        scoringPolicy.CalculateScore(events, asOfUtc);
 
-        foreach (var reputationEvent in events.OrderBy(item => item.CreatedAtUtc))
-        {
-            var decayedImpact = ApplyDecay(reputationEvent, asOfUtc);
-            if (reputationEvent.EventType is ReputationEventType.RepeatedAbuse or ReputationEventType.ConfirmedMaliciousBehavior)
-            {
-                abuseCount++;
-            }
+    /// <summary>
+    /// Maps a score to the user-facing HIP risk status.
+    /// </summary>
+    /// <param name="score">Calculated 0-100 reputation score.</param>
+    /// <returns>Risk status for the score band.</returns>
+    public RiskStatus CalculateStatus(int score) => scoringPolicy.CalculateStatus(score);
 
-            var repeatedAbuseMultiplier = abuseCount > 1 && decayedImpact < 0
-                ? 1m + Math.Min((abuseCount - 1) * 0.25m, 1m)
-                : 1m;
-
-            var weightedImpact = decayedImpact * ReporterWeights[reputationEvent.ReporterTrustLevel] * repeatedAbuseMultiplier;
-            score += (int)Math.Round(weightedImpact, MidpointRounding.AwayFromZero);
-        }
-
-        return Math.Clamp(score, 0, 100);
-    }
-
-    public RiskStatus CalculateStatus(int score) => score switch
-    {
-        <= 20 => RiskStatus.Dangerous,
-        <= 40 => RiskStatus.HighRisk,
-        <= 60 => RiskStatus.Caution,
-        <= 80 => RiskStatus.ProbablySafe,
-        _ => RiskStatus.Trusted
-    };
-
+    /// <summary>
+    /// Builds plain-English reputation explanations from the configured scoring policy.
+    /// </summary>
+    /// <param name="profile">Calculated reputation profile.</param>
+    /// <param name="events">Supporting privacy-safe reputation events.</param>
+    /// <returns>Plain-English explanations safe for UI/API display.</returns>
     public IReadOnlyCollection<string> Explain(ReputationProfile profile, IReadOnlyCollection<ReputationEvent> events)
     {
-        if (events.Count == 0)
-        {
-            return [$"{profile.TargetType} reputation starts at {DefaultScore}/100 until HIP receives privacy-safe trust signals."];
-        }
-
-        var explanations = new List<string>
-        {
-            $"{profile.TargetType} reputation is {profile.CurrentScore}/100 because HIP evaluated {events.Count} privacy-safe reputation event(s)."
-        };
-
-        if (events.Any(item => item.ScoreImpact < 0 &&
-            item.ReporterTrustLevel is ReporterTrustLevel.Trusted or ReporterTrustLevel.Moderator or ReporterTrustLevel.Admin))
-        {
-            explanations.Add($"{profile.TargetType} score lowered because trusted reporters submitted risk feedback.");
-        }
-
-        if (profile.ConfirmedAbuseCount > 0)
-        {
-            explanations.Add("Confirmed malicious behavior remains long-term and does not fully decay.");
-        }
-
-        if (profile.AccidentalIssueCount > 0)
-        {
-            explanations.Add("Accidental or low-risk issues can fade over time.");
-        }
-
-        if (events.Count(item => item.EventType is ReputationEventType.RepeatedAbuse or ReputationEventType.ConfirmedMaliciousBehavior) > 1)
-        {
-            explanations.Add("Repeated intentional abuse created a stronger penalty.");
-        }
-
-        return explanations;
+        return scoringPolicy.Explain(profile, events);
     }
 
+    /// <summary>
+    /// Builds the reputation profile from event history without mutating the event stream.
+    /// </summary>
+    /// <param name="targetType">Type of target being scored.</param>
+    /// <param name="targetId">Privacy-safe target identifier.</param>
+    /// <param name="events">Events used to calculate the profile.</param>
+    /// <param name="asOfUtc">UTC time used for scoring and profile freshness.</param>
+    /// <returns>A calculated reputation profile with explanations.</returns>
     private ReputationProfile BuildProfile(ReputationSubjectType targetType, string targetId, IReadOnlyCollection<ReputationEvent> events, DateTimeOffset asOfUtc)
     {
         var score = CalculateScore(events, asOfUtc);
@@ -156,87 +157,28 @@ public sealed class ReputationService(
         return profile with { Explanations = Explain(profile, events) };
     }
 
-    private static ReputationEvent NormalizeEvent(ReputationEvent reputationEvent)
+    /// <summary>
+    /// Fills safe defaults for event identifiers, timestamps, and expiry before persistence.
+    /// </summary>
+    /// <param name="reputationEvent">Event supplied by the caller.</param>
+    /// <returns>A normalized reputation event.</returns>
+    private ReputationEvent NormalizeEvent(ReputationEvent reputationEvent)
     {
         var now = DateTimeOffset.UtcNow;
+        var createdAtUtc = reputationEvent.CreatedAtUtc == default ? now : reputationEvent.CreatedAtUtc;
+
         return reputationEvent with
         {
             EventId = string.IsNullOrWhiteSpace(reputationEvent.EventId) ? $"rep-event-{Guid.NewGuid():N}" : reputationEvent.EventId,
-            CreatedAtUtc = reputationEvent.CreatedAtUtc == default ? now : reputationEvent.CreatedAtUtc,
-            ExpiresAtUtc = reputationEvent.ExpiresAtUtc ?? ExpiresAt(reputationEvent.EventType, reputationEvent.Severity, reputationEvent.CreatedAtUtc == default ? now : reputationEvent.CreatedAtUtc)
+            CreatedAtUtc = createdAtUtc,
+            ExpiresAtUtc = reputationEvent.ExpiresAtUtc ?? scoringPolicy.ExpiresAt(reputationEvent.EventType, reputationEvent.Severity, createdAtUtc)
         };
     }
 
-    private static decimal ApplyDecay(ReputationEvent reputationEvent, DateTimeOffset asOfUtc)
-    {
-        if (reputationEvent.ExpiresAtUtc.HasValue && reputationEvent.ExpiresAtUtc.Value <= asOfUtc &&
-            reputationEvent.IsAccidental && reputationEvent.Severity == ReputationEventSeverity.Low)
-        {
-            return 0m;
-        }
-
-        var ageDays = Math.Max(0, (asOfUtc - reputationEvent.CreatedAtUtc).TotalDays);
-
-        if (reputationEvent.IsConfirmed && reputationEvent.Severity is ReputationEventSeverity.Dangerous or ReputationEventSeverity.Critical)
-        {
-            var floor = reputationEvent.ScoreImpact * 0.5m;
-            var decayed = reputationEvent.ScoreImpact * (decimal)Math.Pow(0.98, ageDays / 30d);
-            return Math.Min(decayed, floor);
-        }
-
-        if (reputationEvent.Severity == ReputationEventSeverity.Medium)
-        {
-            return reputationEvent.ScoreImpact * (decimal)Math.Pow(0.95, ageDays / 30d);
-        }
-
-        if (reputationEvent.IsAccidental || reputationEvent.Severity == ReputationEventSeverity.Low)
-        {
-            return reputationEvent.ScoreImpact * (decimal)Math.Pow(0.80, ageDays / 30d);
-        }
-
-        return reputationEvent.ScoreImpact;
-    }
-
-    private static int DefaultImpact(ReputationEventType eventType, ReputationEventSeverity severity) => eventType switch
-    {
-        ReputationEventType.PositiveReport => severity == ReputationEventSeverity.Low ? 4 : 8,
-        ReputationEventType.FalsePositiveCorrection => 10,
-        ReputationEventType.ManualCorrection => 6,
-        ReputationEventType.AccidentalIssue => -SeverityImpact(severity) / 2,
-        ReputationEventType.SuspiciousReport => -SeverityImpact(severity),
-        ReputationEventType.RepeatedAbuse => -SeverityImpact(severity) - 8,
-        ReputationEventType.ConfirmedMaliciousBehavior => -SeverityImpact(severity) - 15,
-        _ => 0
-    };
-
-    private static int SeverityImpact(ReputationEventSeverity severity) => severity switch
-    {
-        ReputationEventSeverity.Low => 6,
-        ReputationEventSeverity.Medium => 12,
-        ReputationEventSeverity.High => 22,
-        ReputationEventSeverity.Dangerous => 35,
-        ReputationEventSeverity.Critical => 50,
-        _ => 0
-    };
-
-    private static DateTimeOffset? ExpiresAt(ReputationEventType eventType, ReputationEventSeverity severity, DateTimeOffset createdAtUtc)
-    {
-        if (eventType == ReputationEventType.AccidentalIssue && severity == ReputationEventSeverity.Low)
-        {
-            return createdAtUtc.AddDays(90);
-        }
-
-        if (severity == ReputationEventSeverity.Medium)
-        {
-            return createdAtUtc.AddDays(365);
-        }
-
-        return null;
-    }
-
-    private static bool IsConfirmed(ReputationEventType eventType) =>
-        eventType is ReputationEventType.ConfirmedMaliciousBehavior or ReputationEventType.RepeatedAbuse;
-
+    /// <summary>
+    /// Rejects empty target identifiers before they reach persistence or scoring.
+    /// </summary>
+    /// <param name="targetId">Privacy-safe target identifier to validate.</param>
     private static void ValidateTarget(string targetId)
     {
         if (string.IsNullOrWhiteSpace(targetId))
