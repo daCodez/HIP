@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using HIP.Application.Security;
 using HIP.Domain.Reputation;
+using Microsoft.Extensions.Logging;
 
 namespace HIP.Application.Reputation;
 
@@ -257,7 +258,8 @@ public interface IWeightedFeedbackAggregationService
 /// </summary>
 public sealed partial class WeightedFeedbackAggregationService(
     IWeightedFeedbackRepository repository,
-    IFeedbackWeightingPolicy feedbackWeightingPolicy) : IWeightedFeedbackAggregationService
+    IFeedbackWeightingPolicy feedbackWeightingPolicy,
+    ILogger<WeightedFeedbackAggregationService>? logger = null) : IWeightedFeedbackAggregationService
 {
     private static readonly TimeSpan AggregationWindow = TimeSpan.FromDays(14);
 
@@ -266,7 +268,7 @@ public sealed partial class WeightedFeedbackAggregationService(
     /// </summary>
     /// <param name="repository">Repository that stores privacy-safe feedback submissions.</param>
     public WeightedFeedbackAggregationService(IWeightedFeedbackRepository repository)
-        : this(repository, new DefaultFeedbackWeightingPolicy())
+        : this(repository, new DefaultFeedbackWeightingPolicy(), null)
     {
     }
 
@@ -274,9 +276,28 @@ public sealed partial class WeightedFeedbackAggregationService(
     public async Task<WeightedFeedbackSummary> SubmitAsync(WeightedFeedbackSubmission submission, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(submission);
-        var normalized = NormalizeAndValidate(submission);
+        WeightedFeedbackSubmission normalized;
+        try
+        {
+            normalized = NormalizeAndValidate(submission);
+        }
+        catch (ArgumentException exception)
+        {
+            logger?.LogWarning(exception, "Rejected weighted feedback because privacy-safe validation failed.");
+            throw;
+        }
+
         await repository.SaveAsync(normalized, cancellationToken);
-        return await GetSummaryAsync(normalized.Domain, cancellationToken);
+        var summary = await GetSummaryAsync(normalized.Domain, cancellationToken);
+
+        logger?.LogInformation(
+            "Accepted weighted feedback for {Domain} from {Source} as {FeedbackType} with reporter trust {ReporterTrustLevel}.",
+            normalized.Domain,
+            normalized.Source,
+            normalized.FeedbackType,
+            normalized.ReporterTrustLevel);
+
+        return summary;
     }
 
     /// <inheritdoc />
@@ -284,7 +305,17 @@ public sealed partial class WeightedFeedbackAggregationService(
     {
         var normalizedDomain = NormalizeDomain(domain);
         var recent = await repository.ListRecentAsync(normalizedDomain, DateTimeOffset.UtcNow.Subtract(AggregationWindow), cancellationToken);
-        return BuildSummary(normalizedDomain, recent);
+        var summary = BuildSummary(normalizedDomain, recent);
+
+        if (summary.RecommendedReview)
+        {
+            logger?.LogWarning(
+                "Weighted feedback recommends review for {Domain} after {RecentFeedbackCount} recent submissions.",
+                normalizedDomain,
+                summary.RecentFeedbackCount);
+        }
+
+        return summary;
     }
 
     /// <summary>

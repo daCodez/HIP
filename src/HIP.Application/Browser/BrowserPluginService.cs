@@ -1,5 +1,6 @@
 using HIP.Application.PublicLookup;
 using HIP.Domain.Risk;
+using Microsoft.Extensions.Logging;
 
 namespace HIP.Application.Browser;
 
@@ -10,7 +11,9 @@ namespace HIP.Application.Browser;
 /// The service only evaluates domains and URLs supplied by the extension; it does not inspect page text,
 /// form values, credentials, or private message content.
 /// </remarks>
-public sealed class BrowserPluginService(IPublicDomainLookupService publicDomainLookupService) : IBrowserPluginService
+public sealed class BrowserPluginService(
+    IPublicDomainLookupService publicDomainLookupService,
+    ILogger<BrowserPluginService>? logger = null) : IBrowserPluginService
 {
     private static readonly HashSet<string> ShortenerDomains = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -34,8 +37,16 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
     public async Task<BrowserScoreSiteResponse> ScoreSiteAsync(BrowserScoreSiteRequest request, CancellationToken cancellationToken)
     {
         var domain = NormalizeDomainFromRequest(request.Domain, request.Url);
+        logger?.LogInformation("HIP browser site score requested for domain {Domain}.", domain);
+
         var lookup = await publicDomainLookupService.LookupDomainAsync(domain, cancellationToken);
         var reasons = PlainEnglishReasons(lookup);
+
+        logger?.LogInformation(
+            "HIP browser site score completed for domain {Domain} with status {Status} and final score {FinalHipScore}.",
+            lookup.Domain,
+            lookup.Status,
+            lookup.FinalHipScore);
 
         return new BrowserScoreSiteResponse(
             lookup.Domain,
@@ -64,6 +75,7 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
         if (!Uri.TryCreate(request.PageUrl, UriKind.Absolute, out var pageUri) ||
             pageUri.Scheme is not ("http" or "https"))
         {
+            logger?.LogWarning("HIP browser link scan rejected an invalid page URL.");
             throw new ArgumentException("A valid HTTP or HTTPS page URL is required.", nameof(request));
         }
 
@@ -115,6 +127,13 @@ public sealed class BrowserPluginService(IPublicDomainLookupService publicDomain
                 lookup.PublicLookupUrl,
                 RequiresSafetyRoute(lookup.Status) ? SafetyPageUrl(linkUri.ToString(), lookup.Status) : null));
         }
+
+        logger?.LogInformation(
+            "HIP browser link scan completed for domain {Domain} with {SubmittedLinkCount} submitted links, {ScannableLinkCount} scannable links, and {AttentionLinkCount} attention links.",
+            pageDomain,
+            request.Links.Count,
+            results.Count,
+            results.Count(result => result.RequiresIcon || result.SafetyPageUrl is not null));
 
         return new BrowserScanLinksResponse(pageUri.ToString(), results);
     }

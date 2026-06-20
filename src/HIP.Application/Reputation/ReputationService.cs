@@ -1,5 +1,6 @@
 using HIP.Domain.Reputation;
 using HIP.Domain.Risk;
+using Microsoft.Extensions.Logging;
 
 namespace HIP.Application.Reputation;
 
@@ -9,7 +10,8 @@ namespace HIP.Application.Reputation;
 public sealed class ReputationService(
     IReputationEventRepository eventRepository,
     IReputationProfileRepository profileRepository,
-    IReputationScoringPolicy scoringPolicy) : IReputationService
+    IReputationScoringPolicy scoringPolicy,
+    ILogger<ReputationService>? logger = null) : IReputationService
 {
     /// <summary>
     /// Neutral starting score used before HIP has enough privacy-safe reputation evidence.
@@ -24,7 +26,7 @@ public sealed class ReputationService(
     public ReputationService(
         IReputationEventRepository eventRepository,
         IReputationProfileRepository profileRepository)
-        : this(eventRepository, profileRepository, new DefaultReputationScoringPolicy())
+        : this(eventRepository, profileRepository, new DefaultReputationScoringPolicy(), null)
     {
     }
 
@@ -38,8 +40,19 @@ public sealed class ReputationService(
     public async Task<ReputationProfile> GetProfileAsync(ReputationSubjectType targetType, string targetId, CancellationToken cancellationToken)
     {
         ValidateTarget(targetId);
-        return await profileRepository.GetAsync(targetType, targetId, cancellationToken) ??
-            BuildProfile(targetType, targetId, [], DateTimeOffset.UtcNow);
+        var profile = await profileRepository.GetAsync(targetType, targetId, cancellationToken);
+        if (profile is not null)
+        {
+            logger?.LogInformation(
+                "Loaded reputation profile for {TargetType} with status {Status} and score {Score}.",
+                targetType,
+                profile.Status,
+                profile.CurrentScore);
+            return profile;
+        }
+
+        logger?.LogInformation("Returned neutral reputation profile for {TargetType} because no events were found.", targetType);
+        return BuildProfile(targetType, targetId, [], DateTimeOffset.UtcNow);
     }
 
     /// <summary>
@@ -51,7 +64,15 @@ public sealed class ReputationService(
     public async Task<ReputationProfile> ApplyEventAsync(ReputationEvent reputationEvent, CancellationToken cancellationToken)
     {
         ValidateTarget(reputationEvent.TargetId);
-        await eventRepository.AddAsync(NormalizeEvent(reputationEvent), cancellationToken);
+        var normalized = NormalizeEvent(reputationEvent);
+        await eventRepository.AddAsync(normalized, cancellationToken);
+
+        logger?.LogInformation(
+            "Appended reputation event {EventType} with severity {Severity} for {TargetType}.",
+            normalized.EventType,
+            normalized.Severity,
+            normalized.TargetType);
+
         return await RecalculateAsync(reputationEvent.TargetType, reputationEvent.TargetId, cancellationToken);
     }
 
@@ -66,6 +87,7 @@ public sealed class ReputationService(
         ValidateTarget(feedback.TargetId);
         if (string.IsNullOrWhiteSpace(feedback.Reason))
         {
+            logger?.LogWarning("Rejected reputation feedback with missing reason for {TargetType}.", feedback.TargetType);
             throw new ArgumentException("Feedback reason is required.", nameof(feedback));
         }
 
@@ -101,6 +123,14 @@ public sealed class ReputationService(
         var events = await eventRepository.ListAsync(targetType, targetId, cancellationToken);
         var profile = BuildProfile(targetType, targetId, events, DateTimeOffset.UtcNow);
         await profileRepository.SaveAsync(profile, cancellationToken);
+
+        logger?.LogInformation(
+            "Recalculated reputation profile for {TargetType} from {EventCount} events with status {Status} and score {Score}.",
+            targetType,
+            events.Count,
+            profile.Status,
+            profile.CurrentScore);
+
         return profile;
     }
 

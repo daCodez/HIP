@@ -1,6 +1,8 @@
 using FluentValidation;
 using FluentValidation.Results;
 using HIP.Application.SiteSafety;
+using HIP.Tests.Support;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HIP.Tests.SiteSafety;
@@ -265,6 +267,33 @@ public sealed class SiteSafetyScannerTests
     }
 
     /// <summary>
+    /// Provider failures are logged and converted to safe evidence without logging raw URL query details.
+    /// </summary>
+    [Test]
+    public async Task Provider_failure_logs_safe_warning_without_raw_url()
+    {
+        var logger = new CapturingLogger<SiteSafetyScanner>();
+        var scanner = new SiteSafetyScanner(
+            new SiteSafetyScanValidator(),
+            logger,
+            [new ThrowingEvidenceProvider()]);
+
+        var result = await scanner.ScanAsync(
+            new SiteSafetyScanRequest("https://provider-failure.example/path?token=private"),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ProviderEvidence.SelectMany(evidence => evidence.Errors), Has.Some.Contains("Provider failed safely."));
+            Assert.That(logger.Entries.Any(entry =>
+                entry.LogLevel == LogLevel.Warning &&
+                entry.Message.Contains("ThrowingEvidenceProvider", StringComparison.OrdinalIgnoreCase) &&
+                entry.Message.Contains("failed safely", StringComparison.OrdinalIgnoreCase)), Is.True);
+            Assert.That(logger.Messages.Any(message => message.Contains("token=private", StringComparison.OrdinalIgnoreCase)), Is.False);
+        });
+    }
+
+    /// <summary>
     /// Site safety risk changes page, content, and final HIP scores without replacing the whole scoring model.
     /// </summary>
     [Test]
@@ -305,5 +334,21 @@ public sealed class SiteSafetyScannerTests
         /// <returns>This method always throws.</returns>
         public override Task<ValidationResult> ValidateAsync(ValidationContext<SiteSafetyScanRequest> context, CancellationToken cancellation = default) =>
             throw new InvalidOperationException("Simulated validator failure.");
+    }
+
+    /// <summary>
+    /// Test-only evidence provider that simulates an unexpected provider exception.
+    /// </summary>
+    private sealed class ThrowingEvidenceProvider : ISiteSafetyEvidenceProvider
+    {
+        /// <inheritdoc />
+        public string ProviderName => "ThrowingEvidenceProvider";
+
+        /// <inheritdoc />
+        public SiteSafetyEvidenceProviderType ProviderType => SiteSafetyEvidenceProviderType.ThreatIntel;
+
+        /// <inheritdoc />
+        public Task<SiteSafetyEvidence> CollectEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Simulated provider failure.");
     }
 }

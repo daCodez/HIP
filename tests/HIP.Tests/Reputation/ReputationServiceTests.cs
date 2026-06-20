@@ -1,6 +1,8 @@
 using HIP.Application.Reputation;
+using HIP.Tests.Support;
 using HIP.Domain.Reputation;
 using HIP.Domain.Risk;
+using Microsoft.Extensions.Logging;
 
 namespace HIP.Tests.Reputation;
 
@@ -151,8 +153,67 @@ public sealed class ReputationServiceTests
         Assert.That(typeof(ReputationFeedbackRequest).GetProperties().Select(property => property.Name), Does.Not.Contain("PrivateChatLog"));
     }
 
-    private static ReputationService Service() =>
-        new(new InMemoryReputationEventRepository(), new InMemoryReputationProfileRepository());
+    [Test]
+    public async Task SubmitFeedbackAsync_logs_reputation_update_without_private_reason()
+    {
+        var logger = new CapturingLogger<ReputationService>();
+        var service = Service(logger);
+        var feedback = new ReputationFeedbackRequest(
+            ReputationSubjectType.Domain,
+            "log-safe.example",
+            ReputationEventType.SuspiciousReport,
+            ReputationEventSeverity.High,
+            ReporterTrustLevel.Trusted,
+            "Suspicious redirect report with token=private-marker.",
+            "browser-extension",
+            "sha256:sample");
+
+        await service.SubmitFeedbackAsync(feedback, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(logger.Entries.Any(entry =>
+                entry.LogLevel == LogLevel.Information &&
+                entry.Message.Contains("Appended reputation event", StringComparison.OrdinalIgnoreCase)), Is.True);
+            Assert.That(logger.Entries.Any(entry =>
+                entry.LogLevel == LogLevel.Information &&
+                entry.Message.Contains("Recalculated reputation profile", StringComparison.OrdinalIgnoreCase)), Is.True);
+            Assert.That(logger.Messages.Any(message => message.Contains("token=private-marker", StringComparison.OrdinalIgnoreCase)), Is.False);
+        });
+    }
+
+    [Test]
+    public void SubmitFeedbackAsync_logs_missing_reason_rejection()
+    {
+        var logger = new CapturingLogger<ReputationService>();
+        var service = Service(logger);
+        var feedback = new ReputationFeedbackRequest(
+            ReputationSubjectType.Domain,
+            "missing-reason.example",
+            ReputationEventType.SuspiciousReport,
+            ReputationEventSeverity.Medium,
+            ReporterTrustLevel.Anonymous,
+            "",
+            "browser-extension",
+            "sha256:sample");
+
+        var exception = Assert.ThrowsAsync<ArgumentException>(() => service.SubmitFeedbackAsync(feedback, CancellationToken.None));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception!.Message, Does.Contain("Feedback reason is required"));
+            Assert.That(logger.Entries.Any(entry =>
+                entry.LogLevel == LogLevel.Warning &&
+                entry.Message.Contains("Rejected reputation feedback", StringComparison.OrdinalIgnoreCase)), Is.True);
+        });
+    }
+
+    private static ReputationService Service(CapturingLogger<ReputationService>? logger = null) =>
+        new(
+            new InMemoryReputationEventRepository(),
+            new InMemoryReputationProfileRepository(),
+            new DefaultReputationScoringPolicy(),
+            logger);
 
     private static ReputationFeedbackRequest Feedback(string targetId, ReporterTrustLevel reporterTrustLevel) =>
         new(

@@ -1,7 +1,10 @@
 using System.Text.Json;
 using HIP.Application.Reputation;
+using HIP.Application.Security;
 using HIP.Application.SiteSafety;
+using HIP.Tests.Support;
 using HIP.Domain.Reputation;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HIP.Tests.Reputation;
@@ -197,10 +200,73 @@ public sealed class WeightedFeedbackAggregationTests
     }
 
     /// <summary>
+    /// Accepted feedback logs domain-level diagnostics without leaking hashes or private markers.
+    /// </summary>
+    [Test]
+    public async Task SubmitAsync_logs_accepted_feedback_without_private_fields()
+    {
+        var logger = new CapturingLogger<WeightedFeedbackAggregationService>();
+        var service = Service(logger);
+
+        await service.SubmitAsync(
+            Submission("logged-feedback.example", HipFeedbackType.LooksSuspicious, ReporterTrustLevel.Trusted, reporterHash: "reporter-private-hash", pageHash: "sha256:private-page"),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(logger.Entries.Any(entry =>
+                entry.LogLevel == LogLevel.Information &&
+                entry.Message.Contains("Accepted weighted feedback", StringComparison.OrdinalIgnoreCase) &&
+                entry.Message.Contains("logged-feedback.example", StringComparison.OrdinalIgnoreCase)), Is.True);
+            Assert.That(logger.Messages.Any(message => message.Contains("reporter-private-hash", StringComparison.OrdinalIgnoreCase)), Is.False);
+            Assert.That(logger.Messages.Any(message => message.Contains("sha256:private-page", StringComparison.OrdinalIgnoreCase)), Is.False);
+        });
+    }
+
+    /// <summary>
+    /// Rejected feedback logs a useful validation warning without echoing the rejected private-looking value.
+    /// </summary>
+    [Test]
+    public void SubmitAsync_logs_rejected_private_marker_without_value()
+    {
+        var logger = new CapturingLogger<WeightedFeedbackAggregationService>();
+        var service = Service(logger);
+        var submission = Submission("private-log.example", HipFeedbackType.LooksSuspicious, ReporterTrustLevel.Anonymous, pageHash: "token=secret-value");
+
+        Assert.ThrowsAsync<ArgumentException>(() => service.SubmitAsync(submission, CancellationToken.None));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(logger.Entries.Any(entry =>
+                entry.LogLevel == LogLevel.Warning &&
+                entry.Message.Contains("Rejected weighted feedback", StringComparison.OrdinalIgnoreCase)), Is.True);
+            Assert.That(logger.Messages.Any(message => message.Contains("token=secret-value", StringComparison.OrdinalIgnoreCase)), Is.False);
+        });
+    }
+
+    /// <summary>
+    /// Review-worthy feedback emits an operator-visible warning so the path is easy to trace.
+    /// </summary>
+    [Test]
+    public async Task GetSummaryAsync_logs_review_recommendation()
+    {
+        var logger = new CapturingLogger<WeightedFeedbackAggregationService>();
+        var service = Service(logger);
+        for (var index = 0; index < 5; index++)
+        {
+            await service.SubmitAsync(Submission("review-log.example", HipFeedbackType.LooksSuspicious, ReporterTrustLevel.Trusted), CancellationToken.None);
+        }
+
+        Assert.That(logger.Entries.Any(entry =>
+            entry.LogLevel == LogLevel.Warning &&
+            entry.Message.Contains("Weighted feedback recommends review", StringComparison.OrdinalIgnoreCase)), Is.True);
+    }
+
+    /// <summary>
     /// Creates a feedback aggregation service with an in-memory repository.
     /// </summary>
-    private static WeightedFeedbackAggregationService Service() =>
-        new(new InMemoryWeightedFeedbackRepository());
+    private static WeightedFeedbackAggregationService Service(CapturingLogger<WeightedFeedbackAggregationService>? logger = null) =>
+        new(new InMemoryWeightedFeedbackRepository(), new DefaultFeedbackWeightingPolicy(), logger);
 
     /// <summary>
     /// Creates a scanner with only browser-observed and weighted-feedback evidence providers.
