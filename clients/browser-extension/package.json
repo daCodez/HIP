@@ -1,0 +1,9 @@
+{
+  "name": "hip-browser-extension",
+  "private": true,
+  "version": "0.1.7",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests"
+  }
+}
