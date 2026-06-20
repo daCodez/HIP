@@ -4,6 +4,7 @@ import test from "node:test";
 import { fetchWithTimeout, HIP_FETCH_TIMEOUT_MS } from "../src/hipApiClient.js";
 
 const contentSource = await readFile(new URL("../src/content.js", import.meta.url), "utf8");
+const browserScanAssessmentSource = await readFile(new URL("../src/browserScanAssessment.js", import.meta.url), "utf8");
 const popupSource = await readFile(new URL("../src/popup.js", import.meta.url), "utf8");
 const apiClientSource = await readFile(new URL("../src/hipApiClient.js", import.meta.url), "utf8");
 const backgroundSource = await readFile(new URL("../src/background.js", import.meta.url), "utf8");
@@ -58,7 +59,8 @@ test("content script preserves layered Site Safety scores in stored scan metadat
   assert.equal(contentSource.includes("pageTrustScore: String(lastSummary.pageTrustScore"), true);
   assert.equal(contentSource.includes("contentRiskScore: String(lastSummary.contentRiskScore"), true);
   assert.equal(contentSource.includes("finalHipScore: String(lastSummary.finalHipScore"), true);
-  assert.equal(contentSource.includes("function mapSiteSafetyStatus"), true);
+  assert.equal(contentSource.includes("browserScanAssessment(currentLookup, lastSummary)"), true);
+  assert.equal(browserScanAssessmentSource.includes("function mapSiteSafetyStatus"), true);
 });
 
 test("content script is guarded against duplicate dev-time injection", () => {
