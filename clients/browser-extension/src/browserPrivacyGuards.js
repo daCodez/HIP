@@ -1,31 +1,18 @@
 /**
- * Status: New
- * Changed: 2026-06-20 21:05 UTC
+ * Status: Updated
+ * Changed: 2026-06-21 02:02 UTC
  * Developer: HIP Development Team
  * Assisted by: Codex
- * Description: Adds one shared browser privacy helper so scan code can reuse the same safe URL rules.
+ * Description: Keeps all browser scan URL checks in one place so HIP does not send private or local addresses by mistake.
  */
 (function registerHipBrowserPrivacyGuards(globalScope) {
   "use strict";
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 21:05 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Cleans a host name so different parts of the extension compare domains the same way.
-   */
   function normalizeHost(hostname) {
     return (hostname || "").replace(/^www\./i, "").toLowerCase();
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 21:05 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Removes private URL pieces before optional raw URL diagnostics can be sent.
-   */
+  // Raw page URLs are optional diagnostics, so remove query strings and fragments before anything can leave the browser.
   function stripQueryAndFragment(pageUrl) {
     try {
       const url = new URL(pageUrl);
@@ -41,13 +28,7 @@
     }
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 21:05 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Spots HIP's own pages so the plugin does not scan itself and create noisy local errors.
-   */
+  // HIP pages already contain HIP UI and API calls, so scanning them creates loops instead of useful safety evidence.
   function isHipOwnedPage(pageUrl, currentSettings = {}) {
     try {
       const pageOrigin = new URL(pageUrl).origin;
@@ -60,13 +41,7 @@
     }
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 21:05 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Blocks localhost and private-network targets so HIP does not send local addresses to Site Safety.
-   */
+  // Internal hosts can expose local services or private networks, so they are never submitted for Site Safety scans.
   function isInternalHost(hostname) {
     const host = normalizeHost(hostname);
     if (!host ||
@@ -94,13 +69,6 @@
       (octets[0] === 192 && octets[1] === 168);
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 21:05 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Checks whether a page URL is safe for the Site Safety API before any scan request is made.
-   */
   function isSiteSafetyEligibleUrl(pageUrl, currentSettings = {}) {
     try {
       const url = new URL(pageUrl);
@@ -112,13 +80,7 @@
     }
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 21:05 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Keeps optional evidence URL lists public-only before they leave the browser.
-   */
+  // Evidence URLs are optional provider hints, not page content, so keep only public web URLs.
   function filterSafePublicUrls(values, currentSettings = {}) {
     if (!Array.isArray(values)) {
       return [];

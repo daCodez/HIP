@@ -63,13 +63,6 @@ test("browser scan assessment recommends safety routing for risky statuses", () 
   assert.equal(helper.recommendedSiteAction("MostlyTrusted"), "Allow");
 });
 
-/**
- * Status: New
- * Changed: 2026-06-20 20:32 UTC
- * Developer: HIP Development Team
- * Assisted by: Codex
- * Description: Loads the classic content-script helper in a tiny fake browser so tests can read its public helper box.
- */
 function loadHelper() {
   const sandbox = { globalThis: {} };
   vm.runInNewContext(read("src/browserScanAssessment.js"), sandbox);

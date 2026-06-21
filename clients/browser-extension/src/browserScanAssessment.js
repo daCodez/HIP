@@ -4,11 +4,11 @@
   const riskyStatuses = new Set(["Suspicious", "HighRisk", "Dangerous", "Critical"]);
 
   /**
-   * Status: New
-   * Changed: 2026-06-20 20:32 UTC
+   * Status: Updated
+   * Changed: 2026-06-21 02:02 UTC
    * Developer: HIP Development Team
    * Assisted by: Codex
-   * Description: Gives the content script one small helper box for turning safe scan counts into a site result.
+   * Description: Turns privacy-safe scan facts into the site result the plugin can save and show.
    */
   function browserScanAssessment(lookup, summary = {}) {
     if (summary.siteSafetyDataSource === "SiteSafetyScan" && Number.isInteger(summary.finalHipScore)) {
@@ -45,25 +45,11 @@
     };
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 20:32 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Picks safe explanation text from HIP data without looking at private page words.
-   */
   function safeReasons(lookup) {
     const reasons = lookup?.knownRisks?.length ? lookup.knownRisks : lookup?.explanations || lookup?.reasons || [];
     return reasons.length > 0 ? reasons : ["No risky links found by the browser plugin scan."];
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 20:32 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Changes Site Safety labels into the labels the plugin saves for dashboards and lookup pages.
-   */
   function mapSiteSafetyStatus(status) {
     if (status === "Clean") {
       return "MostlyTrusted";
@@ -78,13 +64,7 @@
       : "Unknown";
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 20:32 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Explains that HIP used safe browser observations instead of private page content.
-   */
+  // The stored reason must describe structural observations only, not private page text or messages.
   function siteSafetyScanReasons(summary = {}) {
     const reasons = ["HIP ran a privacy-safe Site Safety scan using structural browser observations."];
     if (summary.confidenceLevel) {
@@ -98,13 +78,6 @@
     return reasons;
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 20:32 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Spots the temporary "we have not scanned this yet" response so a real browser scan can replace it.
-   */
   function isLookupNoDataState(lookup) {
     const reasons = [...(lookup?.knownRisks || []), ...(lookup?.explanations || []), ...(lookup?.reasons || [])];
     return !lookup ||
@@ -112,13 +85,7 @@
       reasons.some(reason => typeof reason === "string" && reason.includes("HIP has not scanned this domain yet"));
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 20:32 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Turns safe link counts into a cautious status without pretending unknown sites are fully trusted.
-   */
+  // Unknown clean pages should be cautious, not fully trusted, because absence of bad links is not proof of trust.
   function browserScanStatus(score, dangerousLinks, suspiciousLinks, riskyLinks, unknownLinks) {
     if (dangerousLinks > 0) {
       return "Dangerous";
@@ -135,13 +102,7 @@
     return "MostlyTrusted";
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 20:32 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Builds plain reasons from counts, not from private messages or page text.
-   */
+  // Reasons are built from counts only so chat text, form values, and page body text are never stored as evidence.
   function browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangerousLinks, unknownLinks, downloadCandidates, clientChatLinkCandidates = 0 }) {
     const reasons = [`Browser plugin scanned ${linksScanned} external links on this page without sending page text or form values.`];
 
@@ -172,13 +133,6 @@
     return reasons;
   }
 
-  /**
-   * Status: New
-   * Changed: 2026-06-20 20:32 UTC
-   * Developer: HIP Development Team
-   * Assisted by: Codex
-   * Description: Chooses the safe next action from the final status the user sees.
-   */
   function recommendedSiteAction(status) {
     if (riskyStatuses.has(status)) {
       return "RouteToSafetyPage";

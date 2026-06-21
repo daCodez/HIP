@@ -50,13 +50,6 @@ test("browser privacy guards filter evidence URL lists to public URLs only", () 
   assert.deepEqual(guards.filterSafePublicUrls(values, settings), ["https://example.com/file.zip"]);
 });
 
-/**
- * Status: New
- * Changed: 2026-06-20 21:05 UTC
- * Developer: HIP Development Team
- * Assisted by: Codex
- * Description: Loads the classic privacy helper in a tiny fake browser so tests can check its safe URL rules.
- */
 function loadGuards() {
   const sandbox = { URL };
   sandbox.globalThis = sandbox;
@@ -64,13 +57,6 @@ function loadGuards() {
   return sandbox.globalThis.HipBrowserPrivacyGuards;
 }
 
-/**
- * Status: New
- * Changed: 2026-06-20 21:05 UTC
- * Developer: HIP Development Team
- * Assisted by: Codex
- * Description: Reads browser extension files so these tests check the real unpacked-extension assets.
- */
 function read(relativePath) {
   return readFileSync(join(extensionRoot, relativePath), "utf8");
 }
