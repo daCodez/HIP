@@ -273,7 +273,7 @@ export function externalEvidenceFor(siteSafety = {}) {
  * Converts a single provider result into a safe display row.
  */
 function externalEvidenceRow(provider) {
-  const providerName = safeDisplayText(provider?.providerName || provider?.ProviderName || "External provider");
+  const providerName = providerDisplayName(provider?.providerName || provider?.ProviderName || "External provider");
   const confidence = provider?.confidence ?? provider?.Confidence ?? "Unknown";
   const items = Array.isArray(provider?.evidenceItems)
     ? provider.evidenceItems
@@ -283,7 +283,7 @@ function externalEvidenceRow(provider) {
   const firstItem = items[0] || {};
   const status = firstItem.status || firstItem.Status || "Unknown";
   const value = firstItem.value || firstItem.Value || "";
-  const summary = safeDisplayText(firstItem.summary || firstItem.Summary || provider?.errors?.[0] || provider?.Errors?.[0] || "Provider returned no displayable evidence yet.");
+  const summary = providerSummary(items, provider, confidence);
   const statusLabel = value
     ? `${statusLabelForProvider(status)} ${safeDisplayText(value)}`
     : statusLabelForProvider(status);
@@ -291,8 +291,45 @@ function externalEvidenceRow(provider) {
   return {
     providerName,
     statusLabel,
-    summary: `${summary} Confidence: ${confidence}.`
+    summary
   };
+}
+
+/**
+ * Status: Updated
+ * Changed: 2026-06-21 11:13 UTC
+ * Developer: HIP Development Team
+ * Assisted by: Codex
+ * Description: Turns code-style provider names into normal words so people can understand who checked the site.
+ */
+function providerDisplayName(value) {
+  const text = safeDisplayText(value || "External provider");
+  return text
+    .replace(/Provider$/, " Provider")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Status: Updated
+ * Changed: 2026-06-21 11:13 UTC
+ * Developer: HIP Development Team
+ * Assisted by: Codex
+ * Description: Shows several safe evidence details instead of hiding everything after the first provider result.
+ */
+function providerSummary(items, provider, confidence) {
+  const summaries = items
+    .slice(0, 4)
+    .map(item => safeDisplayText(item.summary || item.Summary || ""))
+    .filter(Boolean);
+
+  if (summaries.length > 0) {
+    return `${summaries.join(" ")} Confidence: ${confidence}.`;
+  }
+
+  const error = provider?.errors?.[0] || provider?.Errors?.[0];
+  return `${safeDisplayText(error || "Provider returned no displayable evidence yet.")} Confidence: ${confidence}.`;
 }
 
 /**

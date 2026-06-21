@@ -603,18 +603,7 @@ public sealed class BrowserObservedSignalProvider : ISiteSafetyEvidenceProvider
 
         if (items.Count == 0)
         {
-            items.Add(new SiteSafetyEvidenceItem(
-                "BrowserObserved",
-                "NoRiskSignals",
-                SiteSafetyEvidenceStatus.Clean,
-                0,
-                5,
-                "The browser plugin did not observe obvious page safety risk signals.",
-                EvidenceType: "BrowserObserved",
-                Confidence: 60,
-                Severity: SiteSafetyEvidenceSeverity.Info,
-                EvidenceQuality: SiteSafetyEvidenceItemQuality.Weak,
-                IsPositiveSignal: true));
+            AddCleanObservationEvidence(items, signals);
         }
 
         return Task.FromResult(new SiteSafetyEvidence(
@@ -677,6 +666,90 @@ public sealed class BrowserObservedSignalProvider : ISiteSafetyEvidenceProvider
                 IsBlockingSignal: riskImpact >= 85));
         }
     }
+
+    /// <summary>
+    /// Status: New
+    /// Changed: 2026-06-21 11:13 UTC
+    /// Developer: HIP Development Team
+    /// Assisted by: Codex
+    /// Description: Shows which safe page checks were completed so the popup does not look empty or fake.
+    /// </summary>
+    /// <param name="items">Evidence list that receives the safe observation details.</param>
+    /// <param name="signals">Privacy-safe browser observations collected without page text or form values.</param>
+    private static void AddCleanObservationEvidence(ICollection<SiteSafetyEvidenceItem> items, SiteSafetyObservedSignals signals)
+    {
+        items.Add(new SiteSafetyEvidenceItem(
+            "BrowserObserved",
+            "No obvious risk",
+            SiteSafetyEvidenceStatus.Clean,
+            0,
+            5,
+            "HIP checked this page for risky links, forms, downloads, redirects, and script signals. No obvious malware or phishing signals were observed.",
+            EvidenceType: "BrowserObserved",
+            Confidence: 60,
+            Severity: SiteSafetyEvidenceSeverity.Info,
+            EvidenceQuality: SiteSafetyEvidenceItemQuality.Weak,
+            IsPositiveSignal: true));
+
+        items.Add(new SiteSafetyEvidenceItem(
+            "LinksChecked",
+            (signals.ShortenedLinkCount + signals.ObfuscatedLinkCount + (signals.RedirectChain?.Count ?? 0)).ToString(),
+            SiteSafetyEvidenceStatus.Clean,
+            0,
+            0,
+            $"HIP checked for shortened links, broken-up links, and redirect clues without sending the words on the page. It found {signals.ShortenedLinkCount} shortened link signal(s), {signals.ObfuscatedLinkCount} obfuscated link signal(s), and {signals.RedirectChain?.Count ?? 0} redirect clue(s).",
+            EvidenceType: "BrowserObservedCount",
+            Confidence: 60,
+            Severity: SiteSafetyEvidenceSeverity.Info,
+            EvidenceQuality: SiteSafetyEvidenceItemQuality.Weak,
+            IsPositiveSignal: true));
+
+        items.Add(new SiteSafetyEvidenceItem(
+            "FormsChecked",
+            (signals.HasLoginForm || signals.HasPasswordField || signals.HasPaymentField ? 1 : 0).ToString(),
+            SiteSafetyEvidenceStatus.Clean,
+            0,
+            0,
+            $"HIP checked for sign-in, credential, and payment signals without reading anything typed into the page. Login form: {YesNo(signals.HasLoginForm)}, credential field: {YesNo(signals.HasPasswordField)}, payment field: {YesNo(signals.HasPaymentField)}.",
+            EvidenceType: "BrowserObservedCount",
+            Confidence: 60,
+            Severity: SiteSafetyEvidenceSeverity.Info,
+            EvidenceQuality: SiteSafetyEvidenceItemQuality.Weak,
+            IsPositiveSignal: true));
+
+        items.Add(new SiteSafetyEvidenceItem(
+            "DownloadsChecked",
+            (signals.DownloadLinks?.Count ?? 0).ToString(),
+            SiteSafetyEvidenceStatus.Clean,
+            0,
+            0,
+            $"HIP checked {signals.DownloadLinks?.Count ?? 0} download candidate(s) for risky file types.",
+            EvidenceType: "BrowserObservedCount",
+            Confidence: 60,
+            Severity: SiteSafetyEvidenceSeverity.Info,
+            EvidenceQuality: SiteSafetyEvidenceItemQuality.Weak,
+            IsPositiveSignal: true));
+
+        items.Add(new SiteSafetyEvidenceItem(
+            "ScriptsChecked",
+            (signals.ExternalScriptUrls?.Count ?? 0).ToString(),
+            SiteSafetyEvidenceStatus.Clean,
+            0,
+            0,
+            $"HIP checked {signals.ExternalScriptUrls?.Count ?? 0} external script reference(s) and {signals.InlineScriptCount} inline script block(s) for suspicious structure.",
+            EvidenceType: "BrowserObservedCount",
+            Confidence: 60,
+            Severity: SiteSafetyEvidenceSeverity.Info,
+            EvidenceQuality: SiteSafetyEvidenceItemQuality.Weak,
+            IsPositiveSignal: true));
+    }
+
+    /// <summary>
+    /// Converts a true or false signal into a plain-English display word.
+    /// </summary>
+    /// <param name="value">Signal value.</param>
+    /// <returns>Yes when true; otherwise No.</returns>
+    private static string YesNo(bool value) => value ? "Yes" : "No";
 
     /// <summary>
     /// Checks a URL or path extension without fetching or opening the resource.

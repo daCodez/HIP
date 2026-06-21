@@ -242,3 +242,28 @@ test("popup markup contains primary UX fields and feedback controls", () => {
   assert.equal(popupHtml.includes("Looks Suspicious"), true);
   assert.equal(popupHtml.includes("Report Issue"), true);
 });
+
+test("external evidence view model shows readable provider names and multiple details", () => {
+  const evidence = externalEvidenceFor({
+    providerEvidence: [{
+      providerName: "BrowserObservedSignalProvider",
+      confidence: 60,
+      evidenceItems: [{
+        status: "Clean",
+        value: "No obvious risk",
+        summary: "HIP checked this page for risky links, forms, downloads, redirects, and script signals."
+      }, {
+        status: "Clean",
+        value: "0",
+        summary: "HIP checked for sign-in, credential, and payment signals without reading anything typed into the page."
+      }]
+    }]
+  });
+
+  assert.equal(evidence.length, 1);
+  assert.equal(evidence[0].providerName, "Browser Observed Signal Provider");
+  assert.equal(evidence[0].statusLabel, "Clean No obvious risk");
+  assert.equal(evidence[0].summary.includes("risky links, forms, downloads"), true);
+  assert.equal(evidence[0].summary.includes("without reading anything typed into the page"), true);
+  assert.equal(evidence[0].summary.endsWith("Confidence: 60."), true);
+});

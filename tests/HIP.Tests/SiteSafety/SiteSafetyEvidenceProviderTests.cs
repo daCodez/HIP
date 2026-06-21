@@ -631,6 +631,35 @@ public sealed class SiteSafetyEvidenceProviderTests
     }
 
     /// <summary>
+    /// Verifies clean browser evidence still explains what privacy-safe checks ran.
+    /// </summary>
+    [Test]
+    public async Task Browser_observed_provider_returns_clean_check_details_when_no_risk_is_seen()
+    {
+        var provider = new BrowserObservedSignalProvider();
+        var context = Context() with
+        {
+            ObservedSignals = new SiteSafetyObservedSignals(
+                ExternalScriptUrls: ["https://cdn.example.com/app.js"],
+                InlineScriptCount: 2,
+                DownloadLinks: ["https://example.com/file.txt"])
+        };
+
+        var evidence = await provider.CollectEvidenceAsync(context, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(evidence.EvidenceItems, Has.Some.Property(nameof(SiteSafetyEvidenceItem.Category)).EqualTo("BrowserObserved"));
+            Assert.That(evidence.EvidenceItems, Has.Some.Property(nameof(SiteSafetyEvidenceItem.Category)).EqualTo("LinksChecked"));
+            Assert.That(evidence.EvidenceItems, Has.Some.Property(nameof(SiteSafetyEvidenceItem.Category)).EqualTo("FormsChecked"));
+            Assert.That(evidence.EvidenceItems, Has.Some.Property(nameof(SiteSafetyEvidenceItem.Category)).EqualTo("DownloadsChecked"));
+            Assert.That(evidence.EvidenceItems, Has.Some.Property(nameof(SiteSafetyEvidenceItem.Category)).EqualTo("ScriptsChecked"));
+            Assert.That(evidence.EvidenceItems.Select(item => item.Summary), Has.Some.Contains("No obvious malware or phishing signals were observed."));
+            Assert.That(evidence.ToString(), Does.Not.Contain("form value"));
+        });
+    }
+
+    /// <summary>
     /// Creates a scanner with production validation and test evidence providers.
     /// </summary>
     private static SiteSafetyScanner CreateScanner(params ISiteSafetyEvidenceProvider[] providers) =>
