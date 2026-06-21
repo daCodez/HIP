@@ -47,6 +47,13 @@ test("content script runs Site Safety during automatic page scan", () => {
   assert.equal(contentSource.includes("buildSiteSafetyRequest()"), true);
 });
 
+test("content script publishes compact Site Safety results for the popup", () => {
+  assert.equal(contentSource.includes("lastSummary.siteSafety = compactSiteSafetyResult(response.result);"), true);
+  assert.equal(contentSource.includes("function compactSiteSafetyResult"), true);
+  assert.equal(contentSource.includes("function safeProviderEvidence"), true);
+  assert.equal(contentSource.includes("errors:"), false);
+});
+
 test("content script skips private and HIP owned URLs before Site Safety", () => {
   assert.equal(contentSource.includes("isSiteSafetyEligibleUrl(window.location.href, settings)"), true);
   assert.equal(contentSource.includes("filterSafePublicUrls(lastSummary.downloadLinks, settings)"), true);
@@ -90,6 +97,17 @@ test("popup starts scanner once when no cached page-load summary exists", () => 
   assert.equal(popupSource.includes("popupStartedContentScan"), true);
   assert.equal(popupSource.includes("chrome.scripting.executeScript"), true);
   assert.equal(popupSource.includes('"src/content.js"'), true);
+});
+
+test("popup renders completed content-script Site Safety before duplicate API scan", () => {
+  const summaryIndex = popupSource.indexOf("const summarySiteSafety = siteSafetyResultFromSummary(summary);");
+  const renderIndex = popupSource.indexOf("return renderSiteSafetyResult(summarySiteSafety);", summaryIndex);
+  const apiScanIndex = popupSource.indexOf("const result = await client.scanSiteSafety(request);", renderIndex);
+
+  assert.equal(summaryIndex > -1, true);
+  assert.equal(renderIndex > summaryIndex, true);
+  assert.equal(apiScanIndex > renderIndex, true);
+  assert.equal(popupSource.includes("function isCompleteSiteSafetySummary"), true);
 });
 
 test("popup fallback injection includes every content script dependency", () => {

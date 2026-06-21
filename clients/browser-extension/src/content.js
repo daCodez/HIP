@@ -555,7 +555,93 @@
     lastSummary.providerEvidenceCount = Array.isArray(response.result?.providerEvidence)
       ? response.result.providerEvidence.length
       : 0;
+    lastSummary.siteSafety = compactSiteSafetyResult(response.result);
     return response.result;
+  }
+
+  /**
+   * Status: Updated
+   * Changed: 2026-06-21 16:12 UTC
+   * Developer: HIP Development Team
+   * Assisted by: Codex
+   * Description: Copies only safe scan details into the popup cache so the popup can stop saying "Checking".
+   */
+  function compactSiteSafetyResult(result = {}) {
+    if (!result || typeof result !== "object") {
+      return null;
+    }
+
+    return {
+      status: safeText(result.status, "Unknown"),
+      summary: safeText(result.summary, "HIP finished checking page safety signals."),
+      confidenceLevel: safeText(result.confidenceLevel, "Unknown"),
+      malwareRiskScore: safeNumber(result.malwareRiskScore),
+      phishingRiskScore: safeNumber(result.phishingRiskScore),
+      redirectRiskScore: safeNumber(result.redirectRiskScore),
+      downloadRiskScore: safeNumber(result.downloadRiskScore),
+      scriptRiskScore: safeNumber(result.scriptRiskScore),
+      domainTrustScore: safeNumber(result.domainTrustScore),
+      pageTrustScore: safeNumber(result.pageTrustScore),
+      contentRiskScore: safeNumber(result.contentRiskScore),
+      finalHipScore: safeNumber(result.finalHipScore),
+      warnings: safeTextList(result.warnings),
+      providerEvidence: safeProviderEvidence(result.providerEvidence),
+      scannedAtUtc: safeText(result.scannedAtUtc, new Date().toISOString())
+    };
+  }
+
+  /**
+   * Converts display text to a bounded string so cached popup data cannot carry private page content.
+   */
+  function safeText(value, fallback = "") {
+    if (typeof value !== "string") {
+      return fallback;
+    }
+
+    return value.slice(0, 500);
+  }
+
+  /**
+   * Keeps numeric scan scores numeric while dropping malformed values from popup cache data.
+   */
+  function safeNumber(value) {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  /**
+   * Keeps warning text short and bounded because warnings are shown in the popup.
+   */
+  function safeTextList(values = []) {
+    if (!Array.isArray(values)) {
+      return [];
+    }
+
+    return values
+      .filter(value => typeof value === "string")
+      .slice(0, 10)
+      .map(value => value.slice(0, 300));
+  }
+
+  /**
+   * Keeps normalized provider summaries but drops provider error details and raw request fields.
+   */
+  function safeProviderEvidence(providerEvidence = []) {
+    if (!Array.isArray(providerEvidence)) {
+      return [];
+    }
+
+    return providerEvidence.slice(0, 8).map(provider => ({
+      providerName: safeText(provider?.providerName, "Provider"),
+      confidence: safeNumber(provider?.confidence),
+      evidenceItems: Array.isArray(provider?.evidenceItems)
+        ? provider.evidenceItems.slice(0, 8).map(item => ({
+          type: safeText(item?.type, "Evidence"),
+          status: safeText(item?.status, "Unknown"),
+          value: safeText(item?.value, ""),
+          summary: safeText(item?.summary, "")
+        }))
+        : []
+    }));
   }
 
   /**
@@ -967,6 +1053,7 @@
       finalHipScore: null,
       confidenceLevel: "Unknown",
       providerEvidenceCount: 0,
+      siteSafety: null,
       scanResultSubmission: "Pending",
       scanResultDataSource: "Pending",
       scanStage: "Pending",
