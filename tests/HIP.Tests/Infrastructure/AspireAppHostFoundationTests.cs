@@ -41,10 +41,10 @@ public sealed class AspireAppHostFoundationTests
     }
 
     /// <summary>
-    /// Confirms HIP uses PostgreSQL by default while retaining explicit SQLite support for isolated tests.
+    /// Confirms HIP runtime services require PostgreSQL and do not keep SQLite as a production fallback.
     /// </summary>
     [Test]
-    public void Infrastructure_requires_postgresql_connection_and_keeps_explicit_sqlite_switch()
+    public void Infrastructure_requires_postgresql_connection_and_has_no_runtime_sqlite_fallback()
     {
         var source = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.Infrastructure", "DependencyInjection.cs"));
         var project = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.Infrastructure", "HIP.Infrastructure.csproj"));
@@ -52,9 +52,11 @@ public sealed class AspireAppHostFoundationTests
         Assert.That(source, Does.Contain("HIP requires ConnectionStrings:HipDatabase"));
         Assert.That(source, Does.Not.Contain("?? \"Data Source=hip-dev.db\""));
         Assert.That(source, Does.Contain("UseNpgsql(connectionString)"));
-        Assert.That(source, Does.Contain("UseSqlite(connectionString)"));
+        Assert.That(source, Does.Not.Contain("UseSqlite(connectionString)"));
+        Assert.That(source, Does.Contain("HIP runtime persistence requires PostgreSQL"));
         Assert.That(source, Does.Contain("HipInfrastructure:DatabaseProvider"));
         Assert.That(project, Does.Contain("Npgsql.EntityFrameworkCore.PostgreSQL"));
+        Assert.That(project, Does.Not.Contain("Microsoft.EntityFrameworkCore.Sqlite"));
     }
 
     /// <summary>

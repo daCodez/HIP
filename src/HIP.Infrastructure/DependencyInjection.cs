@@ -74,21 +74,21 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Selects the EF Core provider from configuration. PostgreSQL is the runtime default; SQLite is only used
-    /// when explicitly requested by tests or isolated local tooling.
+    /// Selects the EF Core provider from configuration. HIP runtime persistence is PostgreSQL-only so the
+    /// deployed app does not carry the vulnerable SQLite native dependency reported by package audit tooling.
     /// </summary>
     /// <param name="options">EF Core options builder being configured for HIP persistence.</param>
     /// <param name="connectionString">Database connection string supplied by configuration or Aspire service discovery.</param>
     /// <param name="databaseProvider">Optional provider name, such as PostgreSQL or SQLite.</param>
     private static void ConfigureDatabaseProvider(DbContextOptionsBuilder options, string connectionString, string? databaseProvider)
     {
-        if (ShouldUsePostgreSql(connectionString, databaseProvider))
+        if (!ShouldUsePostgreSql(connectionString, databaseProvider))
         {
-            options.UseNpgsql(connectionString);
-            return;
+            throw new InvalidOperationException(
+                "HIP runtime persistence requires PostgreSQL. Run HIP.AppHost to use Aspire-managed PostgreSQL, or set ConnectionStrings__HipDatabase to a PostgreSQL connection string. SQLite is supported only by tests that configure DbContext directly.");
         }
 
-        options.UseSqlite(connectionString);
+        options.UseNpgsql(connectionString);
     }
 
     /// <summary>

@@ -168,16 +168,11 @@ public sealed class HipRecordStore(HipDbContext dbContext, IHipRecordEncryptor? 
     }
 
     /// <summary>
-    /// Detects duplicate-key errors from relational providers without depending on one database for all HIP deployments.
-    /// PostgreSQL reports SQL state 23505 and SQLite reports error code 19 for unique constraint failures.
+    /// Detects duplicate-key errors through the shared classifier so HIP can retry insert races without carrying
+    /// test-only database provider assemblies in runtime projects.
     /// </summary>
     /// <param name="exception">EF Core update exception raised while saving a generic HIP record.</param>
     /// <returns>True when the exception represents a duplicate primary key insert race.</returns>
     private static bool IsDuplicateKeyViolation(DbUpdateException exception) =>
-        exception.InnerException switch
-        {
-            Npgsql.PostgresException postgresException => postgresException.SqlState == "23505",
-            Microsoft.Data.Sqlite.SqliteException sqliteException => sqliteException.SqliteErrorCode == 19,
-            _ => false
-        };
+        RelationalExceptionClassifier.IsDuplicateKeyViolation(exception);
 }
