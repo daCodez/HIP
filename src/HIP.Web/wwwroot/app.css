@@ -472,7 +472,13 @@ h1:focus {
 .simulation-grid span {
     padding: 10px;
     border-radius: 6px;
-    background: #f8fafc;
+    color: #e5eef8;
+    background: #0b1b2a;
+    border: 1px solid #1f3a55;
+}
+
+.simulation-grid strong {
+    color: #ffffff;
 }
 
 .admin-rule-table {
