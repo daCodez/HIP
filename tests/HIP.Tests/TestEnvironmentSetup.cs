@@ -5,8 +5,8 @@ namespace HIP.Tests;
 /// </summary>
 /// <remarks>
 /// HIP runtime hosts now require an explicit database connection so they do not silently fall back to SQLite.
-/// API and Web integration tests still need an isolated local database without requiring Aspire containers, so this
-/// setup fixture supplies a test-only SQLite connection when the developer has not already provided one.
+/// API and Web integration tests still need isolated persistence without requiring Aspire containers, so this setup
+/// fixture requests HIP's test-only EF Core in-memory provider when the developer has not already provided one.
 /// </remarks>
 [SetUpFixture]
 public sealed class TestEnvironmentSetup
@@ -19,13 +19,12 @@ public sealed class TestEnvironmentSetup
     {
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__HipDatabase")))
         {
-            var databasePath = Path.Combine(Path.GetTempPath(), $"hip-tests-{Environment.ProcessId}.db");
-            Environment.SetEnvironmentVariable("ConnectionStrings__HipDatabase", $"Data Source={databasePath}");
+            Environment.SetEnvironmentVariable("ConnectionStrings__HipDatabase", $"hip-tests-{Environment.ProcessId}");
         }
 
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("HipInfrastructure__DatabaseProvider")))
         {
-            Environment.SetEnvironmentVariable("HipInfrastructure__DatabaseProvider", "SQLite");
+            Environment.SetEnvironmentVariable("HipInfrastructure__DatabaseProvider", "InMemory");
         }
     }
 }

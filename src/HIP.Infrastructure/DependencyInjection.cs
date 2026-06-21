@@ -36,7 +36,7 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException("HIP requires ConnectionStrings:HipDatabase. Run HIP.AppHost to use Aspire-managed PostgreSQL, or set ConnectionStrings__HipDatabase explicitly for direct project runs.");
         var databaseProvider = configuration["HipInfrastructure:DatabaseProvider"];
 
-        services.AddDbContext<HipDbContext>(options => ConfigureDatabaseProvider(options, connectionString, databaseProvider));
+        services.AddDbContext<HipDbContext>(options => ConfigureDatabaseProvider(options, connectionString, databaseProvider, isLocalDevelopment));
         services.AddSingleton(BindRecordEncryptionOptions(configuration, isLocalDevelopment));
         services.AddSingleton(BindPrivacyHashingOptions(configuration, isLocalDevelopment));
         services.AddSingleton<IHipRecordEncryptor, DevelopmentHipRecordEncryptor>();
@@ -75,22 +75,45 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Selects the EF Core provider from configuration. HIP runtime persistence is PostgreSQL-only so the
-    /// deployed app does not carry the vulnerable SQLite native dependency reported by package audit tooling.
+    /// Selects the EF Core provider from configuration. HIP runtime persistence is PostgreSQL-only, while
+    /// local test hosts may opt into EF Core's in-memory provider so integration tests do not require Docker.
     /// </summary>
     /// <param name="options">EF Core options builder being configured for HIP persistence.</param>
     /// <param name="connectionString">Database connection string supplied by configuration or Aspire service discovery.</param>
-    /// <param name="databaseProvider">Optional provider name, such as PostgreSQL or SQLite.</param>
-    private static void ConfigureDatabaseProvider(DbContextOptionsBuilder options, string connectionString, string? databaseProvider)
+    /// <param name="databaseProvider">Optional provider name, such as PostgreSQL or InMemory.</param>
+    /// <param name="isLocalDevelopment">Whether non-production-only test providers may be used.</param>
+    private static void ConfigureDatabaseProvider(
+        DbContextOptionsBuilder options,
+        string connectionString,
+        string? databaseProvider,
+        bool isLocalDevelopment)
     {
+        if (ShouldUseInMemory(databaseProvider, isLocalDevelopment))
+        {
+            // The in-memory provider is intentionally restricted to local Development/Test hosts. It keeps
+            // WebApplicationFactory tests lightweight without reintroducing SQLite as a runtime fallback.
+            options.UseInMemoryDatabase(connectionString);
+            return;
+        }
+
         if (!ShouldUsePostgreSql(connectionString, databaseProvider))
         {
             throw new InvalidOperationException(
-                "HIP runtime persistence requires PostgreSQL. Run HIP.AppHost to use Aspire-managed PostgreSQL, or set ConnectionStrings__HipDatabase to a PostgreSQL connection string. SQLite is supported only by tests that configure DbContext directly.");
+                "HIP runtime persistence requires PostgreSQL. Run HIP.AppHost to use Aspire-managed PostgreSQL, or set ConnectionStrings__HipDatabase to a PostgreSQL connection string. Lightweight in-memory persistence is supported only for local test hosts.");
         }
 
         options.UseNpgsql(connectionString);
     }
+
+    /// <summary>
+    /// Allows the EF Core in-memory provider only for local test hosts that explicitly request it.
+    /// </summary>
+    /// <param name="databaseProvider">Configured provider name.</param>
+    /// <param name="isLocalDevelopment">Whether the current host is a local Development/Test process.</param>
+    /// <returns>True when the test-only in-memory provider may be selected.</returns>
+    private static bool ShouldUseInMemory(string? databaseProvider, bool isLocalDevelopment) =>
+        isLocalDevelopment
+        && string.Equals(databaseProvider, "InMemory", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Detects PostgreSQL configuration without treating every arbitrary connection string as safe for Npgsql.
