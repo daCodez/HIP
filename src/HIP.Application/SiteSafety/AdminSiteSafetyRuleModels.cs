@@ -612,7 +612,7 @@ public static class AdminSiteSafetyRuleEvaluator
     public static IReadOnlyCollection<SiteSafetyRuleResult> Evaluate(AdminSiteSafetyRule rule, SiteSafetyRuleInput input)
     {
         if (rule.Status is AdminSiteSafetyRuleStatus.Disabled or AdminSiteSafetyRuleStatus.Archived ||
-            !rule.Conditions.All(condition => ConditionMatches(condition, input)))
+            !rule.Conditions.All(condition => AdminSiteSafetyRuleConditionEvaluator.Matches(condition, input)))
         {
             return [];
         }
@@ -628,7 +628,7 @@ public static class AdminSiteSafetyRuleEvaluator
     {
         var isInactive = rule.Status is AdminSiteSafetyRuleStatus.Disabled or AdminSiteSafetyRuleStatus.Archived;
         var conditionResults = rule.Conditions
-            .Select(condition => DescribeConditionResult(condition, input))
+            .Select(condition => AdminSiteSafetyRuleConditionEvaluator.Describe(condition, input))
             .ToArray();
         var matchedConditions = conditionResults
             .Where(condition => condition.Matched)
@@ -666,29 +666,6 @@ public static class AdminSiteSafetyRuleEvaluator
             approvalRequired,
             recommendedMode,
             SimulationRecommendation(matched, isInactive, approvalRequired, recommendedMode));
-    }
-
-    /// <summary>
-    /// Evaluates a condition against an allow-listed rule input field.
-    /// </summary>
-    private static bool ConditionMatches(AdminSiteSafetyRuleCondition condition, SiteSafetyRuleInput input)
-    {
-        var actual = FieldValue(condition.Field, input);
-        return condition.Operator switch
-        {
-            AdminSiteSafetyRuleOperator.Equals => EqualsValue(actual, condition.Value),
-            AdminSiteSafetyRuleOperator.NotEquals => !EqualsValue(actual, condition.Value),
-            AdminSiteSafetyRuleOperator.GreaterThan => CompareNumber(actual, condition.Value, value => value > 0),
-            AdminSiteSafetyRuleOperator.GreaterThanOrEqual => CompareNumber(actual, condition.Value, value => value >= 0),
-            AdminSiteSafetyRuleOperator.LessThan => CompareNumber(actual, condition.Value, value => value < 0),
-            AdminSiteSafetyRuleOperator.LessThanOrEqual => CompareNumber(actual, condition.Value, value => value <= 0),
-            AdminSiteSafetyRuleOperator.Contains => ContainsValue(actual, condition.Value),
-            AdminSiteSafetyRuleOperator.ContainsAny => ContainsAnyValue(actual, condition.Value),
-            AdminSiteSafetyRuleOperator.StartsWith => actual?.ToString()?.StartsWith(condition.Value.ToString(), StringComparison.OrdinalIgnoreCase) == true,
-            AdminSiteSafetyRuleOperator.EndsWith => actual?.ToString()?.EndsWith(condition.Value.ToString(), StringComparison.OrdinalIgnoreCase) == true,
-            AdminSiteSafetyRuleOperator.InList => InList(actual, condition.Value),
-            _ => false
-        };
     }
 
     /// <summary>
@@ -814,37 +791,6 @@ public static class AdminSiteSafetyRuleEvaluator
     }
 
     /// <summary>
-    /// Describes a condition result using only allow-listed privacy-safe simulation fields.
-    /// </summary>
-    private static AdminSiteSafetyRuleConditionSimulationResult DescribeConditionResult(AdminSiteSafetyRuleCondition condition, SiteSafetyRuleInput input)
-    {
-        var actual = FieldValue(condition.Field, input);
-        var matched = ConditionMatches(condition, input);
-        var expectedValue = condition.Value.ToString();
-        var actualValue = DisplayValue(actual);
-        var description = $"{condition.Field} {condition.Operator} {expectedValue} (actual: {actualValue})";
-
-        return new AdminSiteSafetyRuleConditionSimulationResult(
-            condition.Field,
-            condition.Operator,
-            expectedValue,
-            actualValue,
-            matched,
-            description);
-    }
-
-    /// <summary>
-    /// Formats allow-listed simulation facts for admin diagnostics without exposing private content.
-    /// </summary>
-    private static string DisplayValue(object? value) =>
-        value switch
-        {
-            null => "not set",
-            IEnumerable<string> values => string.Join(", ", values),
-            _ => value.ToString() ?? "not set"
-        };
-
-    /// <summary>
     /// Decides whether a simulated rule needs approval before enforcement.
     /// </summary>
     private static bool RequiresApproval(AdminSiteSafetyRule rule) =>
@@ -876,91 +822,4 @@ public static class AdminSiteSafetyRuleEvaluator
         return matched ? Recommendation(approvalRequired, recommendedMode) : "The rule did not match the simulation input.";
     }
 
-    /// <summary>
-    /// Gets a safe field value from the rule input.
-    /// </summary>
-    private static object? FieldValue(string field, SiteSafetyRuleInput input) => field switch
-    {
-        "Domain" => input.Domain,
-        "Tld" => input.Tld,
-        "HasHttps" => input.HasHttps,
-        "RedirectCount" => input.RedirectCount,
-        "ShortenedLinkCount" => input.ShortenedLinkCount,
-        "ObfuscatedLinkCount" => input.ObfuscatedLinkCount,
-        "ExternalScriptCount" => input.ExternalScriptCount,
-        "InlineScriptCount" => input.InlineScriptCount,
-        "SuspiciousScriptPatternCount" => input.SuspiciousScriptPatternCount,
-        "ExecutableDownloadCount" => input.ExecutableDownloadCount,
-        "ArchiveDownloadCount" => input.ArchiveDownloadCount,
-        "HasLoginForm" => input.HasLoginForm,
-        "HasPasswordField" => input.HasPasswordField,
-        "HasPaymentField" => input.HasPaymentField,
-        "KnownAbuseReports" => input.KnownAbuseReports,
-        "DomainReputationScore" => input.DomainReputationScore,
-        "PageReputationScore" => input.PageReputationScore,
-        "MatchedRiskTerms" => input.MatchedRiskTerms,
-        "ProviderEvidenceType" => input.ProviderEvidence.Select(item => item.ProviderType.ToString()).ToArray(),
-        "ProviderEvidenceStatus" => input.ProviderEvidence.SelectMany(item => item.EvidenceItems).Select(item => item.Status.ToString()).ToArray(),
-        _ => null
-    };
-
-    /// <summary>
-    /// Compares scalar values without unsafe expression evaluation.
-    /// </summary>
-    private static bool EqualsValue(object? actual, JsonElement expected) =>
-        actual switch
-        {
-            bool value => expected.ValueKind == JsonValueKind.True && value || expected.ValueKind == JsonValueKind.False && !value,
-            int value => expected.TryGetInt32(out var expectedNumber) && value == expectedNumber,
-            string value => string.Equals(value, expected.ToString(), StringComparison.OrdinalIgnoreCase),
-            _ => string.Equals(actual?.ToString(), expected.ToString(), StringComparison.OrdinalIgnoreCase)
-        };
-
-    /// <summary>
-    /// Compares numeric values with a caller-provided comparison predicate.
-    /// </summary>
-    private static bool CompareNumber(object? actual, JsonElement expected, Func<int, bool> comparison)
-    {
-        if (!expected.TryGetInt32(out var expectedNumber) || actual is not int actualNumber)
-        {
-            return false;
-        }
-
-        return comparison(actualNumber.CompareTo(expectedNumber));
-    }
-
-    /// <summary>
-    /// Checks whether a scalar or collection contains a string value.
-    /// </summary>
-    private static bool ContainsValue(object? actual, JsonElement expected)
-    {
-        var expectedValue = expected.ToString();
-        return actual switch
-        {
-            string value => value.Contains(expectedValue, StringComparison.OrdinalIgnoreCase),
-            IEnumerable<string> values => values.Any(value => value.Contains(expectedValue, StringComparison.OrdinalIgnoreCase)),
-            _ => false
-        };
-    }
-
-    /// <summary>
-    /// Checks whether a collection field contains at least one expected value.
-    /// </summary>
-    private static bool ContainsAnyValue(object? actual, JsonElement expected)
-    {
-        if (actual is not IEnumerable<string> values || expected.ValueKind != JsonValueKind.Array)
-        {
-            return false;
-        }
-
-        var actualValues = values.ToArray();
-        return expected.EnumerateArray().Any(item => actualValues.Contains(item.ToString(), StringComparer.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Checks whether the actual scalar value is listed in an expected array.
-    /// </summary>
-    private static bool InList(object? actual, JsonElement expected) =>
-        expected.ValueKind == JsonValueKind.Array &&
-        expected.EnumerateArray().Any(item => string.Equals(actual?.ToString(), item.ToString(), StringComparison.OrdinalIgnoreCase));
 }
