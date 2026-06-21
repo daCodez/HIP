@@ -92,6 +92,21 @@ test("popup starts scanner once when no cached page-load summary exists", () => 
   assert.equal(popupSource.includes('"src/content.js"'), true);
 });
 
+test("popup fallback injection includes every content script dependency", () => {
+  const rendererIndex = popupSource.indexOf('"src/riskBadgeRenderer.js"');
+  const routerIndex = popupSource.indexOf('"src/safetyPageRouter.js"');
+  const privacyIndex = popupSource.indexOf('"src/browserPrivacyGuards.js"');
+  const assessmentIndex = popupSource.indexOf('"src/browserScanAssessment.js"');
+  const contentIndex = popupSource.indexOf('"src/content.js"');
+
+  assert.equal(rendererIndex > -1, true);
+  assert.equal(routerIndex > rendererIndex, true);
+  assert.equal(privacyIndex > routerIndex, true);
+  assert.equal(assessmentIndex > privacyIndex, true);
+  assert.equal(contentIndex > assessmentIndex, true);
+  assert.equal(popupSource.includes("HIP content scanner not attached yet; attempting one-time injection."), false);
+});
+
 test("popup skips site safety scan for ineligible local HIP pages", () => {
   assert.equal(popupSource.includes("isSiteSafetyScanEligibleUrl"), true);
   assert.equal(popupSource.includes("!activeTabUrl || !isSiteSafetyScanEligibleUrl(activeTabUrl, settings)"), true);

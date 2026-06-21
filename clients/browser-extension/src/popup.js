@@ -262,8 +262,9 @@ async function startContentScanIfNeeded() {
   try {
     await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
     return;
-  } catch (firstError) {
-    console.warn("HIP content scanner not attached yet; attempting one-time injection.", firstError);
+  } catch {
+    // This is expected after an unpacked-extension reload: Chrome keeps old tabs open
+    // without the new content script attached, so the popup injects it once below.
   }
 
   try {
@@ -275,8 +276,11 @@ async function startContentScanIfNeeded() {
 }
 
 /**
- * Injects the same ordered scripts from manifest.json into an already-open tab.
- * The content script has an idempotency guard, so this is safe when a dev reload races with page load.
+ * Status: Updated
+ * Changed: 2026-06-21 11:41 UTC
+ * Developer: HIP Development Team
+ * Assisted by: Codex
+ * Description: Adds every helper script before the scanner so old tabs can be fixed without reloading the page.
  */
 async function injectContentScanner(tabId) {
   await chrome.scripting.executeScript({
@@ -284,6 +288,8 @@ async function injectContentScanner(tabId) {
     files: [
       "src/riskBadgeRenderer.js",
       "src/safetyPageRouter.js",
+      "src/browserPrivacyGuards.js",
+      "src/browserScanAssessment.js",
       "src/content.js"
     ]
   });
