@@ -299,13 +299,26 @@ async function injectContentScanner(tabId) {
  * Determines whether a summary has enough data to replace loading indicators.
  */
 function isUsefulSummary(summary = {}) {
-  return Boolean(summary.updatedAt) ||
-    summary.apiStatus === "Available" ||
+  return isCompleteSiteSafetySummary(summary) ||
     summary.apiStatus === "Unavailable" ||
-    (summary.linksScanned ?? 0) > 0 ||
     summary.scanResultSubmission === "Success" ||
     summary.scanResultSubmission === "Failure" ||
     summary.scanResultSubmission === "Disabled";
+}
+
+/**
+ * Status: Updated
+ * Changed: 2026-06-21 16:12 UTC
+ * Developer: HIP Development Team
+ * Assisted by: Codex
+ * Description: Treats a page scan as complete only after Site Safety has finished or safely stopped.
+ */
+function isCompleteSiteSafetySummary(summary = {}) {
+  return Boolean(summary.siteSafety) ||
+    summary.siteSafetyDataSource === "SiteSafetyScan" ||
+    summary.siteSafetyStatus === "Unavailable" ||
+    summary.siteSafetyStatus === "Skipped" ||
+    summary.siteSafetyDataSource === "IneligibleUrl";
 }
 
 /**
@@ -317,11 +330,23 @@ async function renderSiteSafety(summary = {}) {
     return null;
   }
 
+  const summarySiteSafety = siteSafetyResultFromSummary(summary);
+  if (summarySiteSafety) {
+    return renderSiteSafetyResult(summarySiteSafety);
+  }
+
   const request = client.buildSiteSafetyRequest(activeTabUrl, {
     ...summary,
     pluginVersion: elements.pluginVersion.textContent || null
   });
   const result = await client.scanSiteSafety(request);
+  return renderSiteSafetyResult(result);
+}
+
+/**
+ * Renders a finished Site Safety result from either the content script cache or the API.
+ */
+function renderSiteSafetyResult(result) {
   activeSiteSafety = result;
   const viewModel = buildSiteSafetyViewModel(result);
   elements.siteSafetyPanel.hidden = false;
@@ -337,6 +362,37 @@ async function renderSiteSafety(summary = {}) {
   renderExternalEvidence(viewModel.externalEvidence);
   renderWarnings(viewModel.warnings);
   return result;
+}
+
+/**
+ * Uses the completed content-script Site Safety result first so the popup does not run a duplicate scan.
+ */
+function siteSafetyResultFromSummary(summary = {}) {
+  if (summary.siteSafety && typeof summary.siteSafety === "object") {
+    return summary.siteSafety;
+  }
+
+  if (summary.siteSafetyDataSource !== "SiteSafetyScan") {
+    return null;
+  }
+
+  return {
+    status: summary.siteSafetyStatus || "Unknown",
+    summary: "HIP finished checking page safety signals.",
+    confidenceLevel: summary.confidenceLevel || "Unknown",
+    malwareRiskScore: null,
+    phishingRiskScore: null,
+    redirectRiskScore: null,
+    downloadRiskScore: null,
+    scriptRiskScore: null,
+    domainTrustScore: summary.domainTrustScore ?? null,
+    pageTrustScore: summary.pageTrustScore ?? null,
+    contentRiskScore: summary.contentRiskScore ?? null,
+    finalHipScore: summary.finalHipScore ?? null,
+    warnings: [],
+    providerEvidence: [],
+    scannedAtUtc: summary.siteSafetyScannedAtUtc || summary.updatedAt || null
+  };
 }
 
 /**
@@ -486,7 +542,18 @@ async function refreshScan() {
  */
 function handleSiteSafetyUnavailable(_error) {
   activeSiteSafety = null;
-  elements.siteSafetyPanel.hidden = true;
+  elements.siteSafetyPanel.hidden = false;
+  elements.siteSafetyStatus.textContent = "Unavailable";
+  elements.siteSafetyStatus.dataset.status = "Unknown";
+  elements.siteSafetyConfidence.textContent = "Unknown";
+  elements.siteSafetySummary.textContent = "HIP could not complete the page safety scan right now.";
+  elements.malwareRisk.textContent = "Unknown";
+  elements.phishingRisk.textContent = "Unknown";
+  elements.redirectRisk.textContent = "Unknown";
+  elements.downloadRisk.textContent = "Unknown";
+  elements.scriptRisk.textContent = "Unknown";
+  renderExternalEvidence([]);
+  renderWarnings([]);
 }
 
 /**
