@@ -520,9 +520,23 @@ public interface IExternalSiteEvidenceCache
 /// <summary>
 /// In-memory external evidence cache for development and tests.
 /// </summary>
+/// <remarks>
+/// Updated 2026-06-21 10:13 UTC by HIP Development Team. Assisted by Codex.
+/// Uses <see cref="TimeProvider"/> so provider cache expiry can be tested with a fake clock instead of waiting in real time.
+/// </remarks>
 public sealed class InMemoryExternalSiteEvidenceCache : IExternalSiteEvidenceCache
 {
+    private readonly TimeProvider timeProvider;
     private readonly Dictionary<string, SiteSafetyEvidence> cache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Creates a provider evidence cache.
+    /// </summary>
+    /// <param name="timeProvider">Clock used to decide whether cached provider evidence is still fresh.</param>
+    public InMemoryExternalSiteEvidenceCache(TimeProvider? timeProvider = null)
+    {
+        this.timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     /// <inheritdoc />
     public SiteSafetyEvidence? GetFresh(string providerName, string domain, string? urlHash)
@@ -533,7 +547,7 @@ public sealed class InMemoryExternalSiteEvidenceCache : IExternalSiteEvidenceCac
             return null;
         }
 
-        if (evidence.ExpiresAtUtc <= DateTimeOffset.UtcNow)
+        if (evidence.ExpiresAtUtc <= timeProvider.GetUtcNow())
         {
             cache.Remove(key);
             return null;

@@ -33,18 +33,30 @@ public sealed class ExternalProviderCircuitOpenException(string providerName)
 /// <remarks>
 /// Production deployments should replace this with distributed resilience primitives, but the policy shape already
 /// isolates providers so SSL Labs, Web Risk, VirusTotal, or future scanners cannot exhaust the whole application.
+/// Updated 2026-06-21 10:13 UTC by HIP Development Team. Assisted by Codex.
+/// The policy now uses <see cref="TimeProvider"/> so circuit-breaker behavior can be tested without sleeping.
 /// </remarks>
 public sealed class InMemoryExternalProviderResiliencePolicy : IExternalProviderResiliencePolicy
 {
     private const int FailureThreshold = 3;
     private static readonly TimeSpan BreakDuration = TimeSpan.FromMinutes(1);
+    private readonly TimeProvider timeProvider;
     private readonly ConcurrentDictionary<string, ProviderCircuitState> states = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Creates an in-memory resilience policy for external provider calls.
+    /// </summary>
+    /// <param name="timeProvider">Clock used to decide when provider circuits open and close.</param>
+    public InMemoryExternalProviderResiliencePolicy(TimeProvider? timeProvider = null)
+    {
+        this.timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     /// <inheritdoc />
     public async Task<T> ExecuteAsync<T>(string providerName, Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken)
     {
         var state = states.GetOrAdd(providerName, _ => new ProviderCircuitState());
-        if (state.IsOpen(DateTimeOffset.UtcNow))
+        if (state.IsOpen(timeProvider.GetUtcNow()))
         {
             throw new ExternalProviderCircuitOpenException(providerName);
         }
@@ -58,7 +70,7 @@ public sealed class InMemoryExternalProviderResiliencePolicy : IExternalProvider
         }
         catch
         {
-            state.RecordFailure(DateTimeOffset.UtcNow);
+            state.RecordFailure(timeProvider.GetUtcNow());
             throw;
         }
         finally

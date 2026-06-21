@@ -192,6 +192,71 @@ public sealed class SiteSafetyEvidenceProviderTests
     }
 
     /// <summary>
+    /// Verifies provider cache expiry uses the injected clock so tests and future workers do not depend on real time.
+    /// </summary>
+    [Test]
+    public void External_evidence_cache_uses_injected_clock_for_expiry()
+    {
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 06, 21, 10, 13, 00, TimeSpan.Zero));
+        var cache = new InMemoryExternalSiteEvidenceCache(clock);
+        var evidence = SslLabsEvidence("A", SiteSafetyEvidenceStatus.Positive, risk: 0, trust: 5) with
+        {
+            CheckedAtUtc = clock.GetUtcNow(),
+            ExpiresAtUtc = clock.GetUtcNow().AddMinutes(5)
+        };
+
+        cache.Store(evidence);
+
+        var fresh = cache.GetFresh(evidence.ProviderName, evidence.Domain, evidence.UrlHash);
+        clock.Advance(TimeSpan.FromMinutes(6));
+        var expired = cache.GetFresh(evidence.ProviderName, evidence.Domain, evidence.UrlHash);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(fresh, Is.Not.Null);
+            Assert.That(expired, Is.Null);
+        });
+    }
+
+    /// <summary>
+    /// Verifies provider circuit breakers reopen after the configured break window without sleeping in tests.
+    /// </summary>
+    [Test]
+    public async Task External_provider_circuit_uses_injected_clock_for_recovery()
+    {
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 06, 21, 10, 13, 00, TimeSpan.Zero));
+        var policy = new InMemoryExternalProviderResiliencePolicy(clock);
+        var failures = 0;
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                await policy.ExecuteAsync<int>("TestProvider", _ =>
+                {
+                    failures++;
+                    throw new InvalidOperationException("Simulated provider failure.");
+                }, CancellationToken.None);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        Assert.ThrowsAsync<ExternalProviderCircuitOpenException>(() =>
+            policy.ExecuteAsync("TestProvider", _ => Task.FromResult(1), CancellationToken.None));
+
+        clock.Advance(TimeSpan.FromMinutes(2));
+        var recovered = await policy.ExecuteAsync("TestProvider", _ => Task.FromResult(42), CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(failures, Is.EqualTo(3));
+            Assert.That(recovered, Is.EqualTo(42));
+        });
+    }
+
+    /// <summary>
     /// Verifies concrete providers follow the MVP default: SSL Labs is live, credentialed providers remain disabled.
     /// </summary>
     [Test]
@@ -674,5 +739,25 @@ public sealed class SiteSafetyEvidenceProviderTests
             RequestUris.Add(request.RequestUri);
             return Task.FromResult(responseFactory(request));
         }
+    }
+
+    /// <summary>
+    /// Simple test clock for provider cache and resilience tests.
+    /// </summary>
+    private sealed class ManualTimeProvider(DateTimeOffset initialUtc) : TimeProvider
+    {
+        private DateTimeOffset currentUtc = initialUtc;
+
+        /// <summary>
+        /// Gets the current fake UTC time.
+        /// </summary>
+        /// <returns>The current fake UTC time.</returns>
+        public override DateTimeOffset GetUtcNow() => currentUtc;
+
+        /// <summary>
+        /// Moves the fake clock forward.
+        /// </summary>
+        /// <param name="duration">How far to advance the fake clock.</param>
+        public void Advance(TimeSpan duration) => currentUtc = currentUtc.Add(duration);
     }
 }
