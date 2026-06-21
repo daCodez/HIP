@@ -290,6 +290,71 @@ public sealed class SiteSafetyEvidenceProviderTests
     }
 
     /// <summary>
+    /// Verifies the slow-path collector can run external providers even when request-path scans skip them.
+    /// </summary>
+    [Test]
+    public async Task External_collector_runs_external_providers_off_request_path()
+    {
+        var options = new ExternalSiteEvidenceOptions
+        {
+            ExternalProvidersEnabled = true,
+            RunExternalProvidersOnRequestPath = false
+        };
+        var providerOptions = new ExternalProviderOptions { Enabled = true };
+        var provider = new TestExternalProvider(new InMemoryExternalSiteEvidenceCache(), options, providerOptions);
+        var collector = CreateExternalCollector(provider);
+
+        var evidence = await collector.CollectAsync(new SiteSafetyScanRequest("https://example.com/login?token=secret"), CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(provider.ExternalCallCount, Is.EqualTo(1));
+            Assert.That(evidence.Single().ProviderName, Is.EqualTo("TestExternalProvider"));
+            Assert.That(evidence.Single().Domain, Is.EqualTo("example.com"));
+            Assert.That(evidence.Single().ToString(), Does.Not.Contain("token=secret"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies the external collector returns safe error evidence when a provider fails.
+    /// </summary>
+    [Test]
+    public async Task External_collector_returns_safe_error_evidence_when_provider_fails()
+    {
+        var collector = CreateExternalCollector(new ThrowingExternalProvider());
+
+        var evidence = await collector.CollectAsync(new SiteSafetyScanRequest("https://example.com/private?password=secret"), CancellationToken.None);
+
+        var failure = evidence.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(failure.ProviderName, Is.EqualTo("ThrowingExternalProvider"));
+            Assert.That(failure.Errors, Has.Some.EqualTo("Provider failed safely."));
+            Assert.That(failure.IsAuthoritativeForRisk, Is.False);
+            Assert.That(failure.IsAuthoritativeForTrust, Is.False);
+            Assert.That(failure.ToString(), Does.Not.Contain("password=secret"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies the external collector rejects private scan targets before any external provider can receive them.
+    /// </summary>
+    [Test]
+    public void External_collector_rejects_private_targets_before_provider_call()
+    {
+        var providerOptions = new ExternalProviderOptions { Enabled = true };
+        var provider = new TestExternalProvider(
+            new InMemoryExternalSiteEvidenceCache(),
+            new ExternalSiteEvidenceOptions { ExternalProvidersEnabled = true },
+            providerOptions);
+        var collector = CreateExternalCollector(provider);
+
+        Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
+            collector.CollectAsync(new SiteSafetyScanRequest("http://localhost/admin"), CancellationToken.None));
+        Assert.That(provider.ExternalCallCount, Is.EqualTo(0));
+    }
+
+    /// <summary>
     /// Verifies a provider-specific disabled switch prevents external collection even when the global switch is on.
     /// </summary>
     [Test]
@@ -572,6 +637,12 @@ public sealed class SiteSafetyEvidenceProviderTests
         new(new SiteSafetyScanValidator(), NullLogger<SiteSafetyScanner>.Instance, providers);
 
     /// <summary>
+    /// Creates an external collector with production validation and test evidence providers.
+    /// </summary>
+    private static ExternalSiteEvidenceCollector CreateExternalCollector(params ISiteSafetyEvidenceProvider[] providers) =>
+        new(new SiteSafetyScanValidator(), providers, NullLogger<ExternalSiteEvidenceCollector>.Instance);
+
+    /// <summary>
     /// Creates a privacy-safe provider context for direct provider tests.
     /// </summary>
     private static SiteSafetyEvidenceContext Context(string url = "https://example.com") =>
@@ -719,8 +790,32 @@ public sealed class SiteSafetyEvidenceProviderTests
         protected override Task<SiteSafetyEvidence> CollectExternalEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken)
         {
             ExternalCallCount++;
-            return Task.FromResult(ThreatIntelEvidence("PhishingMatch", SiteSafetyEvidenceStatus.Dangerous, 95));
+            return Task.FromResult(ThreatIntelEvidence("PhishingMatch", SiteSafetyEvidenceStatus.Dangerous, 95) with
+            {
+                ProviderName = ProviderName,
+                Domain = context.Domain,
+                UrlHash = context.UrlHash
+            });
         }
+    }
+
+    /// <summary>
+    /// Test external provider that simulates an unexpected provider failure.
+    /// </summary>
+    private sealed class ThrowingExternalProvider : IExternalSiteEvidenceProvider
+    {
+        /// <inheritdoc />
+        public string ProviderName => "ThrowingExternalProvider";
+
+        /// <inheritdoc />
+        public SiteSafetyEvidenceProviderType ProviderType => SiteSafetyEvidenceProviderType.ThreatIntel;
+
+        /// <inheritdoc />
+        public ExternalSiteEvidenceOptions CurrentOptions => new();
+
+        /// <inheritdoc />
+        public Task<SiteSafetyEvidence> CollectEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Simulated provider failure.");
     }
 
     /// <summary>

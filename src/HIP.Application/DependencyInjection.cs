@@ -102,6 +102,7 @@ public static class DependencyInjection
         services.AddScoped<IBrowserScanResultQueryService>(provider => (BrowserScanResultService)provider.GetRequiredService<IBrowserScanResultService>());
         services.AddScoped<IAdminScanDetailService, AdminScanDetailService>();
         services.AddScoped<ISiteSafetyScanner, SiteSafetyScanner>();
+        services.AddScoped<IExternalSiteEvidenceCollector, ExternalSiteEvidenceCollector>();
         services.AddScoped<ISiteSafetyScanResultStorageService, SiteSafetyScanResultStorageService>();
         services.AddScoped<IValidator<SiteSafetyScanRequest>, SiteSafetyScanValidator>();
         services.AddSingleton<IValidator<AdminSiteSafetyRule>, AdminSiteSafetyRuleValidator>();
