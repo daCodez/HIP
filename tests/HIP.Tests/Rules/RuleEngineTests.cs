@@ -186,6 +186,36 @@ public sealed class RuleEngineTests
         Assert.That(result.RiskLevel, Is.EqualTo(RiskStatus.HighRisk));
     }
 
+    [Test]
+    public void Block_action_routes_to_safety_and_requires_review()
+    {
+        var rule = NewDomainShortenerRule(RuleMode.Active) with
+        {
+            Actions = [new RuleAction(RuleActionType.Block, JsonSerializer.SerializeToElement(true))]
+        };
+
+        var result = new RuleActionApplier(new RuleMatchingEngine()).Apply(rule, MatchingFacts());
+
+        Assert.That(result.RiskLevel, Is.EqualTo(RiskStatus.Critical));
+        Assert.That(result.ShouldRouteToSafetyPage, Is.True);
+        Assert.That(result.RequiresReview, Is.True);
+    }
+
+    [Test]
+    public void Unknown_action_type_is_ignored_without_throwing()
+    {
+        var rule = NewDomainShortenerRule(RuleMode.Active) with
+        {
+            Actions = [new RuleAction((RuleActionType)999, JsonSerializer.SerializeToElement(true))]
+        };
+
+        var result = new RuleActionApplier(new RuleMatchingEngine()).Apply(rule, MatchingFacts());
+
+        Assert.That(result.RiskLevel, Is.EqualTo(RiskStatus.Unknown));
+        Assert.That(result.ScoreDelta, Is.EqualTo(0));
+        Assert.That(result.Reasons, Is.Empty);
+    }
+
     public static TrustRule NewDomainShortenerRule(RuleMode mode) => new(
         "new-domain-shortener-high-risk",
         "New Domain With Shortened URL",
@@ -216,6 +246,12 @@ public sealed class RuleEngineTests
         var matching = new RuleMatchingEngine();
         return new RuleEvaluationService(matching, new RuleActionApplier(matching));
     }
+
+    private static FactSet MatchingFacts() => new(new Dictionary<string, object?>
+    {
+        ["domain.ageDays"] = 12,
+        ["url.usesShortener"] = true
+    });
 
     private static RuleScanContext MatchingContext() =>
         new(
