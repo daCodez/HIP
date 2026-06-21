@@ -42,6 +42,21 @@ public sealed class ReputationServiceTests
     }
 
     [Test]
+    public void Unknown_reporter_trust_level_falls_back_to_anonymous_weight()
+    {
+        var service = Service();
+        var unknownTrustLevel = (ReporterTrustLevel)999;
+        var unknownReporterScore = service.CalculateScore([
+            Event(ReputationEventType.SuspiciousReport, ReputationEventSeverity.High, -20, unknownTrustLevel)
+        ], DateTimeOffset.UtcNow);
+        var anonymousReporterScore = service.CalculateScore([
+            Event(ReputationEventType.SuspiciousReport, ReputationEventSeverity.High, -20, ReporterTrustLevel.Anonymous)
+        ], DateTimeOffset.UtcNow);
+
+        Assert.That(unknownReporterScore, Is.EqualTo(anonymousReporterScore));
+    }
+
+    [Test]
     public void Accidental_issue_decays()
     {
         var service = Service();

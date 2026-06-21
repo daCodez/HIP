@@ -8,6 +8,15 @@ namespace HIP.Application.Reputation;
 /// </summary>
 public sealed class DefaultReputationScoringPolicy : IReputationScoringPolicy
 {
+    private static readonly IReadOnlyList<IReputationDecayRule> DecayRules =
+    [
+        new ExpiredAccidentalIssueDecayRule(),
+        new ConfirmedDangerousAbuseDecayRule(),
+        new MediumSeverityDecayRule(),
+        new LowConfidenceEventDecayRule(),
+        new NoDecayRule()
+    ];
+
     /// <summary>
     /// Gets the neutral starting score used before HIP receives privacy-safe reputation events.
     /// </summary>
@@ -38,7 +47,7 @@ public sealed class DefaultReputationScoringPolicy : IReputationScoringPolicy
 
         foreach (var reputationEvent in events.OrderBy(item => item.CreatedAtUtc))
         {
-            var decayedImpact = ApplyDecay(reputationEvent, asOfUtc);
+            var decayedImpact = ApplyDecayRule(reputationEvent, asOfUtc);
             if (reputationEvent.EventType is ReputationEventType.RepeatedAbuse or ReputationEventType.ConfirmedMaliciousBehavior)
             {
                 abuseCount++;
@@ -48,7 +57,7 @@ public sealed class DefaultReputationScoringPolicy : IReputationScoringPolicy
                 ? 1m + Math.Min((abuseCount - 1) * 0.25m, 1m)
                 : 1m;
 
-            var weightedImpact = decayedImpact * ReporterWeights[reputationEvent.ReporterTrustLevel] * repeatedAbuseMultiplier;
+            var weightedImpact = decayedImpact * ReporterWeight(reputationEvent.ReporterTrustLevel) * repeatedAbuseMultiplier;
             score += (int)Math.Round(weightedImpact, MidpointRounding.AwayFromZero);
         }
 
@@ -136,40 +145,23 @@ public sealed class DefaultReputationScoringPolicy : IReputationScoringPolicy
         eventType is ReputationEventType.ConfirmedMaliciousBehavior or ReputationEventType.RepeatedAbuse;
 
     /// <summary>
-    /// Applies decay rules while preserving long-term penalties for confirmed dangerous abuse.
+    /// Evaluates the ordered decay rule collection and returns the first matching score impact.
     /// </summary>
-    /// <param name="reputationEvent">Reputation event being decayed.</param>
-    /// <param name="asOfUtc">UTC time used to calculate event age.</param>
-    /// <returns>Decayed score impact.</returns>
-    private static decimal ApplyDecay(ReputationEvent reputationEvent, DateTimeOffset asOfUtc)
-    {
-        if (reputationEvent.ExpiresAtUtc.HasValue && reputationEvent.ExpiresAtUtc.Value <= asOfUtc &&
-            reputationEvent.IsAccidental && reputationEvent.Severity == ReputationEventSeverity.Low)
-        {
-            return 0m;
-        }
+    /// <param name="reputationEvent">Privacy-safe reputation event being scored.</param>
+    /// <param name="asOfUtc">UTC time used for decay calculations.</param>
+    /// <returns>Decayed score impact before reporter weighting.</returns>
+    private static decimal ApplyDecayRule(ReputationEvent reputationEvent, DateTimeOffset asOfUtc) =>
+        DecayRules.First(rule => rule.Matches(reputationEvent, asOfUtc)).Apply(reputationEvent, asOfUtc);
 
-        var ageDays = Math.Max(0, (asOfUtc - reputationEvent.CreatedAtUtc).TotalDays);
-
-        if (reputationEvent.IsConfirmed && reputationEvent.Severity is ReputationEventSeverity.Dangerous or ReputationEventSeverity.Critical)
-        {
-            var floor = reputationEvent.ScoreImpact * 0.5m;
-            var decayed = reputationEvent.ScoreImpact * (decimal)Math.Pow(0.98, ageDays / 30d);
-            return Math.Min(decayed, floor);
-        }
-
-        if (reputationEvent.Severity == ReputationEventSeverity.Medium)
-        {
-            return reputationEvent.ScoreImpact * (decimal)Math.Pow(0.95, ageDays / 30d);
-        }
-
-        if (reputationEvent.IsAccidental || reputationEvent.Severity == ReputationEventSeverity.Low)
-        {
-            return reputationEvent.ScoreImpact * (decimal)Math.Pow(0.80, ageDays / 30d);
-        }
-
-        return reputationEvent.ScoreImpact;
-    }
+    /// <summary>
+    /// Gets the reporter weight, falling back to anonymous weight for malformed enum values.
+    /// </summary>
+    /// <param name="reporterTrustLevel">Reporter trust level supplied by the caller.</param>
+    /// <returns>Conservative weight used before a feedback event affects reputation.</returns>
+    private static decimal ReporterWeight(ReporterTrustLevel reporterTrustLevel) =>
+        ReporterWeights.TryGetValue(reporterTrustLevel, out var weight)
+            ? weight
+            : ReporterWeights[ReporterTrustLevel.Anonymous];
 
     /// <summary>
     /// Converts event severity into a default reputation impact magnitude.
