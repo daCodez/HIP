@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HIP.ApiService\HIP.ApiService.csproj" />
+    <ProjectReference Include="..\HIP.SandboxWorker\HIP.SandboxWorker.csproj" />
     <ProjectReference Include="..\HIP.Web\HIP.Web.csproj" />
   </ItemGroup>
 

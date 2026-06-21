@@ -53,4 +53,14 @@ builder.AddProject<Projects.HIP_Web>("hip-web", launchProfileName: "http")
     .WaitFor(redis)
     .WithEnvironment("HipInfrastructure__DatabaseProvider", "PostgreSQL");
 
+builder.AddProject<Projects.HIP_SandboxWorker>("hip-sandbox-worker")
+    .WithReference(hipDatabase)
+    .WaitFor(hipDatabase)
+    .WithReference(redis)
+    .WaitFor(redis)
+    .WithEnvironment("HipInfrastructure__DatabaseProvider", "PostgreSQL")
+    // The worker is registered now so Aspire starts it with the rest of HIP.
+    // Browser execution stays disabled until the hardened runner exists.
+    .WithEnvironment("SandboxWorker__ExecuteBrowserSandbox", "false");
+
 builder.Build().Run();
