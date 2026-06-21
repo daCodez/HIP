@@ -51,6 +51,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<PrivacySafeReport>, PrivacySafeReportValidator>();
         services.AddSingleton<IAiRiskAnalysisService, NoOpAiRiskAnalysisService>();
         services.AddSingleton<IHipAiRiskAnalyzer, DevelopmentHipAiRiskAnalyzer>();
+        services.AddSingleton<IRuleConditionEvaluator, RuleConditionEvaluator>();
         services.AddSingleton<IRuleMatchingEngine, RuleMatchingEngine>();
         services.AddSingleton<IRuleActionApplier, RuleActionApplier>();
         services.AddSingleton<IRuleEvaluationService, RuleEvaluationService>();

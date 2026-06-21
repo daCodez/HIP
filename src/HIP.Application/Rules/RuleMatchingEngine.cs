@@ -1,11 +1,36 @@
-using System.Globalization;
-using System.Text.Json;
 using HIP.Domain.Rules;
 
 namespace HIP.Application.Rules;
 
+/// <summary>
+/// Status: Updated
+/// Changed: 2026-06-21 09:33 UTC
+/// Developer: HIP Development Team
+/// Assisted by: Codex
+/// Description: Walks each rule condition and delegates operator logic to a focused evaluator so rule matching is easier to test.
+/// </summary>
 public sealed class RuleMatchingEngine : IRuleMatchingEngine
 {
+    private readonly IRuleConditionEvaluator conditionEvaluator;
+
+    /// <summary>
+    /// Creates a matching engine with the built-in HIP condition evaluator.
+    /// </summary>
+    public RuleMatchingEngine()
+        : this(new RuleConditionEvaluator())
+    {
+    }
+
+    /// <summary>
+    /// Creates a matching engine with an injected evaluator so tests and future rule engines can share the same matching loop.
+    /// </summary>
+    /// <param name="conditionEvaluator">The evaluator used for safe structured operators.</param>
+    public RuleMatchingEngine(IRuleConditionEvaluator conditionEvaluator)
+    {
+        this.conditionEvaluator = conditionEvaluator;
+    }
+
+    /// <inheritdoc />
     public RuleMatchResult Match(TrustRule rule, FactSet facts)
     {
         ArgumentNullException.ThrowIfNull(rule);
@@ -22,7 +47,7 @@ public sealed class RuleMatchingEngine : IRuleMatchingEngine
         foreach (var condition in rule.Conditions)
         {
             if (!facts.TryGetValue(condition.Field, out var factValue) ||
-                !Evaluate(factValue, condition.Operator, condition.Value))
+                !conditionEvaluator.IsMatch(factValue, condition.Operator, condition.Value))
             {
                 failed.Add(condition.Field);
                 continue;
@@ -33,57 +58,4 @@ public sealed class RuleMatchingEngine : IRuleMatchingEngine
 
         return new RuleMatchResult(rule, failed.Count == 0, matched, failed);
     }
-
-    private static bool Evaluate(object? factValue, RuleOperator ruleOperator, JsonElement expected) => ruleOperator switch
-    {
-        RuleOperator.Equals => ValuesEqual(factValue, expected),
-        RuleOperator.NotEquals => !ValuesEqual(factValue, expected),
-        RuleOperator.GreaterThan => Compare(factValue, expected) > 0,
-        RuleOperator.GreaterThanOrEqual => Compare(factValue, expected) >= 0,
-        RuleOperator.LessThan => Compare(factValue, expected) < 0,
-        RuleOperator.LessThanOrEqual => Compare(factValue, expected) <= 0,
-        RuleOperator.Contains => Text(factValue).Contains(Text(expected), StringComparison.OrdinalIgnoreCase),
-        RuleOperator.StartsWith => Text(factValue).StartsWith(Text(expected), StringComparison.OrdinalIgnoreCase),
-        RuleOperator.EndsWith => Text(factValue).EndsWith(Text(expected), StringComparison.OrdinalIgnoreCase),
-        _ => false
-    };
-
-    private static bool ValuesEqual(object? factValue, JsonElement expected)
-    {
-        if (expected.ValueKind is JsonValueKind.True or JsonValueKind.False)
-        {
-            return factValue is bool value && value == expected.GetBoolean();
-        }
-
-        if (expected.ValueKind == JsonValueKind.Number)
-        {
-            return decimal.TryParse(Convert.ToString(factValue, CultureInfo.InvariantCulture), NumberStyles.Number, CultureInfo.InvariantCulture, out var factNumber) &&
-                   expected.TryGetDecimal(out var expectedNumber) &&
-                   factNumber == expectedNumber;
-        }
-
-        return string.Equals(Text(factValue), Text(expected), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static int Compare(object? factValue, JsonElement expected)
-    {
-        if (!decimal.TryParse(Convert.ToString(factValue, CultureInfo.InvariantCulture), NumberStyles.Number, CultureInfo.InvariantCulture, out var factNumber) ||
-            !expected.TryGetDecimal(out var expectedNumber))
-        {
-            return string.Compare(Text(factValue), Text(expected), StringComparison.OrdinalIgnoreCase);
-        }
-
-        return factNumber.CompareTo(expectedNumber);
-    }
-
-    private static string Text(object? value) => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
-
-    private static string Text(JsonElement value) => value.ValueKind switch
-    {
-        JsonValueKind.String => value.GetString() ?? string.Empty,
-        JsonValueKind.True => bool.TrueString,
-        JsonValueKind.False => bool.FalseString,
-        JsonValueKind.Number => value.GetRawText(),
-        _ => value.ToString()
-    };
 }

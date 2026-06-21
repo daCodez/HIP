@@ -88,13 +88,7 @@ public sealed class RuleEvaluationService(
             .Where(action => action.Type is RuleActionType.AddReason or RuleActionType.AddWarning)
             .Select(action => ValueText(action.Value));
 
-    private static string ValueText(JsonElement value) => value.ValueKind switch
-    {
-        JsonValueKind.String => value.GetString() ?? string.Empty,
-        JsonValueKind.True => bool.TrueString,
-        JsonValueKind.False => bool.FalseString,
-        _ => value.ToString()
-    };
+    private static string ValueText(JsonElement value) => RuleValueConverter.Text(value);
 
     private static RiskStatus HighestRisk(RiskStatus current, RiskStatus candidate) =>
         RiskWeight(candidate) > RiskWeight(current) ? candidate : current;

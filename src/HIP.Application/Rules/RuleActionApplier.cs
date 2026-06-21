@@ -65,8 +65,7 @@ public sealed class RuleActionApplier(IRuleMatchingEngine matchingEngine) : IRul
         return new AppliedRuleResult(rule, true, riskLevel, scoreDelta, reasons, routeToSafetyPage, requiresReview, markedForSimulation);
     }
 
-    private static string Text(System.Text.Json.JsonElement value) =>
-        value.ValueKind == System.Text.Json.JsonValueKind.String ? value.GetString() ?? string.Empty : value.ToString();
+    private static string Text(System.Text.Json.JsonElement value) => RuleValueConverter.Text(value);
 
     private static int Number(System.Text.Json.JsonElement value) =>
         value.ValueKind == System.Text.Json.JsonValueKind.Number && value.TryGetInt32(out var number) ? number : 0;

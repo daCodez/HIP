@@ -94,6 +94,26 @@ public sealed class RuleEngineTests
     }
 
     [Test]
+    public void RuleConditionEvaluator_supports_text_operators_without_touching_match_loop()
+    {
+        var evaluator = new RuleConditionEvaluator();
+
+        Assert.That(evaluator.IsMatch("secure-login.example", RuleOperator.Contains, JsonSerializer.SerializeToElement("LOGIN")), Is.True);
+        Assert.That(evaluator.IsMatch("secure-login.example", RuleOperator.StartsWith, JsonSerializer.SerializeToElement("secure")), Is.True);
+        Assert.That(evaluator.IsMatch("secure-login.example", RuleOperator.EndsWith, JsonSerializer.SerializeToElement(".example")), Is.True);
+    }
+
+    [Test]
+    public void RuleConditionEvaluator_returns_false_for_unsupported_operator_values()
+    {
+        var evaluator = new RuleConditionEvaluator();
+
+        var result = evaluator.IsMatch("anything", (RuleOperator)999, JsonSerializer.SerializeToElement("anything"));
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
     public void Disabled_rule_does_not_run()
     {
         var rule = NewDomainShortenerRule(RuleMode.Disabled) with { Enabled = false };
