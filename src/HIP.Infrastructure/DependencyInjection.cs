@@ -66,6 +66,7 @@ public static class DependencyInjection
         services.AddScoped<IInboxEventRepository, EfInboxEventRepository>();
         services.AddScoped<IScanResultCache, EfScanResultCache>();
         services.AddScoped<IScanIngestionQueue, EfScanIngestionQueue>();
+        services.AddScoped<ISandboxLinkScanQueue, EfSandboxLinkScanQueue>();
         services.AddScoped<IScanResultDedupeService, EfScanResultDedupeService>();
         services.AddScoped<IDashboardScanAggregateStore, EfDashboardScanAggregateStore>();
         services.AddScoped<IPlatformConnectionRepository, EfPlatformConnectionRepository>();

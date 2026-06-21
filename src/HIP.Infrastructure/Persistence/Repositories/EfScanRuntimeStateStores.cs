@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using HIP.Application.Browser;
 using HIP.Application.Scalability;
+using HIP.Application.SiteSafety;
 using HIP.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -61,6 +62,43 @@ public sealed class EfScanIngestionQueue(HipRecordStore store) : IScanIngestionQ
         }
 
         var queued = await store.ListAsync<ScanIngestionRequest>(Partition, cancellationToken);
+        var batch = queued
+            .OrderBy(request => request.RequestedAtUtc)
+            .ThenBy(request => request.RequestId, StringComparer.Ordinal)
+            .Take(boundedMax)
+            .ToArray();
+
+        foreach (var request in batch)
+        {
+            await store.RemoveAsync(Partition, request.RequestId, cancellationToken);
+        }
+
+        return batch;
+    }
+}
+
+/// <summary>
+/// Persists sandbox link scan requests for a future isolated Docker or browser worker.
+/// </summary>
+/// <param name="store">Encrypted HIP record store used for queued runtime state.</param>
+public sealed class EfSandboxLinkScanQueue(HipRecordStore store) : ISandboxLinkScanQueue
+{
+    private const string Partition = "sandbox-link-scan-queue";
+
+    /// <inheritdoc />
+    public Task EnqueueAsync(SandboxLinkScanRequest request, CancellationToken cancellationToken) =>
+        store.SaveAsync(Partition, request.RequestId, request, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<SandboxLinkScanRequest>> DequeueBatchAsync(int maxCount, CancellationToken cancellationToken)
+    {
+        var boundedMax = Math.Max(0, maxCount);
+        if (boundedMax == 0)
+        {
+            return Array.Empty<SandboxLinkScanRequest>();
+        }
+
+        var queued = await store.ListAsync<SandboxLinkScanRequest>(Partition, cancellationToken);
         var batch = queued
             .OrderBy(request => request.RequestedAtUtc)
             .ThenBy(request => request.RequestId, StringComparer.Ordinal)

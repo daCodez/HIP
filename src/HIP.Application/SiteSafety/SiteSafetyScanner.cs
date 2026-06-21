@@ -18,7 +18,8 @@ public sealed class SiteSafetyScanner(
     ILogger<SiteSafetyScanner> logger,
     IEnumerable<ISiteSafetyEvidenceProvider>? evidenceProviders = null,
     SiteSafetyRuleOptions? ruleOptions = null,
-    IAdminSiteSafetyRuleRepository? adminRuleRepository = null) : ISiteSafetyScanner
+    IAdminSiteSafetyRuleRepository? adminRuleRepository = null,
+    ISandboxLinkScanService? sandboxLinkScanService = null) : ISiteSafetyScanner
 {
     private static readonly ConcurrentDictionary<string, CachedSiteSafetyScan> RecentScans = new();
 
@@ -124,6 +125,7 @@ public sealed class SiteSafetyScanner(
                 RecentScans[cacheKey] = new CachedSiteSafetyScan(result, DateTimeOffset.UtcNow.Add(options.ScanCacheDuration));
             }
 
+            await QueueSandboxScanIfNeededAsync(request, result, cancellationToken);
             return result;
         }
         catch (ValidationException)
@@ -310,6 +312,33 @@ public sealed class SiteSafetyScanner(
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Queues slow-path sandbox work without letting queue failures break the primary scan result.
+    /// </summary>
+    /// <param name="request">Original privacy-safe scan request.</param>
+    /// <param name="result">Completed scan result.</param>
+    /// <param name="cancellationToken">Token used to cancel queue work.</param>
+    private async Task QueueSandboxScanIfNeededAsync(SiteSafetyScanRequest request, SiteSafetyScanResult result, CancellationToken cancellationToken)
+    {
+        if (sandboxLinkScanService is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await sandboxLinkScanService.QueueIfNeededAsync(request, result, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "HIP sandbox link scan queue failed for domain {Domain}; primary scoring result was preserved.", result.Domain);
+        }
     }
 
     /// <summary>
