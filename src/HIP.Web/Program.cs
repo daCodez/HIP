@@ -1122,6 +1122,36 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     })
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
+
+    siteSafetyApi.MapPost("/external-evidence/check", async (
+        SiteSafetyScanRequest request,
+        HttpContext httpContext,
+        ExternalSiteEvidenceOptions defaultOptions,
+        IExternalSiteEvidenceSettingsStore settingsStore,
+        IExternalSiteEvidenceCollector collector,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var scopedOptions = await LoadScopedExternalProviderOptionsAsync(httpContext, settingsStore, cancellationToken);
+            using var _ = defaultOptions.UseScopedOverride(scopedOptions);
+            var evidence = await collector.CollectAsync(request, cancellationToken);
+            var domain = evidence.FirstOrDefault()?.Domain ?? new Uri(request.Url, UriKind.Absolute).Host.Trim().TrimEnd('.').ToLowerInvariant();
+            var checkedAtUtc = evidence.FirstOrDefault()?.CheckedAtUtc ?? DateTimeOffset.UtcNow;
+            return Results.Ok(new
+            {
+                Domain = domain,
+                CheckedAtUtc = checkedAtUtc,
+                ProviderEvidence = ToSiteSafetyProviderEvidenceResponse(evidence)
+            });
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException or UriFormatException)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    })
+        .RequireCors(HipCorsPolicies.ClientWrite)
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 }
 
 /// <summary>
@@ -1259,7 +1289,22 @@ static object ToSiteSafetyScanResponse(SiteSafetyScanResult result) => new
     result.PageTrustScore,
     result.ContentRiskScore,
     result.FinalHipScore,
-    ProviderEvidence = result.ProviderEvidence.Select(evidence => new
+    ProviderEvidence = ToSiteSafetyProviderEvidenceResponse(result.ProviderEvidence),
+    result.ScoreImpact
+};
+
+/// <summary>
+/// Converts provider evidence to the public-safe anonymous JSON shape used by HIP.Web local APIs.
+/// </summary>
+/// <param name="providerEvidence">Normalized evidence records from a scan or explicit external check.</param>
+/// <returns>Public-safe provider evidence objects.</returns>
+/// <remarks>
+/// Updated 2026-06-21 10:57 UTC by HIP Development Team. Assisted by Codex.
+/// Keeping this helper shared prevents the local Web API from showing different provider details than the
+/// main ApiService route.
+/// </remarks>
+static object[] ToSiteSafetyProviderEvidenceResponse(IEnumerable<SiteSafetyEvidence> providerEvidence) =>
+    providerEvidence.Select(evidence => new
     {
         evidence.ProviderName,
         ProviderType = evidence.ProviderType.ToString(),
@@ -1281,9 +1326,7 @@ static object ToSiteSafetyScanResponse(SiteSafetyScanResult result) => new
             item.TrustImpact,
             item.Summary
         }).ToArray()
-    }).ToArray(),
-    result.ScoreImpact
-};
+    }).ToArray();
 
 static void MapAiApis(RouteGroupBuilder aiApi)
 {

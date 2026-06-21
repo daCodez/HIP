@@ -759,6 +759,36 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
+
+    siteSafetyApi.MapPost("/external-evidence/check", async (
+        SiteSafetyScanRequest request,
+        HttpContext httpContext,
+        ExternalSiteEvidenceOptions defaultOptions,
+        IExternalSiteEvidenceSettingsStore settingsStore,
+        IExternalSiteEvidenceCollector collector,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var scopedOptions = await LoadScopedExternalProviderOptionsAsync(httpContext, settingsStore, cancellationToken);
+            using var _ = defaultOptions.UseScopedOverride(scopedOptions);
+            var evidence = await collector.CollectAsync(request, cancellationToken);
+            var domain = evidence.FirstOrDefault()?.Domain ?? new Uri(request.Url, UriKind.Absolute).Host.Trim().TrimEnd('.').ToLowerInvariant();
+            var checkedAtUtc = evidence.FirstOrDefault()?.CheckedAtUtc ?? DateTimeOffset.UtcNow;
+            return Results.Ok(new ExternalSiteEvidenceCheckResponse(domain, checkedAtUtc, ToSiteSafetyProviderEvidenceResponses(evidence)));
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException or UriFormatException)
+        {
+            return Results.BadRequest(new ApiErrorResponse(ex.Message));
+        }
+    })
+    .WithName("ApiServiceCheckExternalSiteEvidence")
+    .WithSummary("Runs explicitly requested external site evidence providers.")
+    .WithDescription(GetExternalSiteEvidenceCheckDescription())
+    .Produces<ExternalSiteEvidenceCheckResponse>()
+    .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+    .RequireCors(HipCorsPolicies.ClientWrite)
+    .RequireRateLimiting(PublicScanPolicy);
 }
 
 /// <summary>
@@ -807,7 +837,21 @@ static SiteSafetyScanApiResponse ToSiteSafetyScanResponse(SiteSafetyScanResult r
         result.PageTrustScore,
         result.ContentRiskScore,
         result.FinalHipScore,
-        result.ProviderEvidence.Select(evidence => new SiteSafetyProviderEvidenceApiResponse(
+        ToSiteSafetyProviderEvidenceResponses(result.ProviderEvidence),
+        result.ScoreImpact);
+
+/// <summary>
+/// Converts normalized provider evidence to public-safe API DTOs.
+/// </summary>
+/// <param name="providerEvidence">Provider evidence returned by the scanner or external collector.</param>
+/// <returns>Public-safe provider evidence responses.</returns>
+/// <remarks>
+/// Updated 2026-06-21 10:47 UTC by HIP Development Team. Assisted by Codex.
+/// This keeps the scan and external-evidence endpoints using one response shape, so provider results are
+/// easier to compare and less likely to drift.
+/// </remarks>
+static IReadOnlyList<SiteSafetyProviderEvidenceApiResponse> ToSiteSafetyProviderEvidenceResponses(IEnumerable<SiteSafetyEvidence> providerEvidence) =>
+    providerEvidence.Select(evidence => new SiteSafetyProviderEvidenceApiResponse(
             evidence.ProviderName,
             evidence.ProviderType.ToString(),
             evidence.TargetType.ToString(),
@@ -825,8 +869,32 @@ static SiteSafetyScanApiResponse ToSiteSafetyScanResponse(SiteSafetyScanResult r
                 item.Status.ToString(),
                 item.RiskImpact,
                 item.TrustImpact,
-                item.Summary)).ToArray())).ToArray(),
-        result.ScoreImpact);
+                item.Summary)).ToArray())).ToArray();
+
+/// <summary>
+/// Provides detailed Swagger text for explicitly requested external evidence checks.
+/// </summary>
+/// <returns>Markdown description shown in Swagger UI.</returns>
+static string GetExternalSiteEvidenceCheckDescription() => """
+    Runs configured external site-safety evidence providers for a URL.
+
+    Use this endpoint when:
+    - An admin or local test wants to verify SSL Labs / Qualys-style TLS evidence.
+    - A future slow-path worker wants to refresh provider evidence outside the browser request path.
+    - You need normalized external provider results without changing the live score directly.
+
+    Important behavior:
+    - This endpoint returns evidence only. HIP scoring still decides final trust and risk labels.
+    - Provider failures return safe evidence errors instead of crashing the API.
+    - Clean provider results do not automatically make an unknown domain trusted.
+    - Threat-intel hits may later influence scoring when the evidence is used by the scanner or projections.
+
+    Privacy:
+    - The scan request may include the current URL and privacy-safe observed counts.
+    - HIP strips query strings and fragments before hashing or returning evidence.
+    - Do not send page text, form values, passwords, tokens, cookies, private messages, or browsing history.
+    - Providers should prefer domain-only checks. Full URL submission remains disabled unless policy explicitly allows it.
+    """;
 
 /// <summary>
 /// Provides detailed Swagger text for the public lookup endpoint.
@@ -1169,6 +1237,22 @@ sealed record SiteSafetyScanApiResponse(
     int FinalHipScore,
     IReadOnlyList<SiteSafetyProviderEvidenceApiResponse> ProviderEvidence,
     object? ScoreImpact);
+
+/// <summary>
+/// Response returned when HIP explicitly checks external site safety evidence providers.
+/// </summary>
+/// <param name="Domain">Normalized public domain that was checked.</param>
+/// <param name="CheckedAtUtc">UTC time associated with the first provider response.</param>
+/// <param name="ProviderEvidence">Normalized provider evidence records.</param>
+/// <remarks>
+/// New 2026-06-21 10:47 UTC by HIP Development Team. Assisted by Codex.
+/// This response intentionally contains provider evidence only, not a final score, because external scanners
+/// provide facts and HIP scoring decides the final label.
+/// </remarks>
+sealed record ExternalSiteEvidenceCheckResponse(
+    string Domain,
+    DateTimeOffset CheckedAtUtc,
+    IReadOnlyList<SiteSafetyProviderEvidenceApiResponse> ProviderEvidence);
 
 /// <summary>
 /// Detailed Swagger response for one normalized evidence provider result.
