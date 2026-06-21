@@ -137,6 +137,73 @@ public sealed class ReputationServiceTests
         Assert.That(service.CalculateStatus(score), Is.EqualTo(expected));
     }
 
+    [TestCase(-10, RiskStatus.Dangerous)]
+    [TestCase(120, RiskStatus.Trusted)]
+    public void Score_status_clamps_out_of_range_values(int score, RiskStatus expected)
+    {
+        var service = Service();
+
+        Assert.That(service.CalculateStatus(score), Is.EqualTo(expected));
+    }
+
+    [TestCase(ReputationEventType.PositiveReport, ReputationEventSeverity.Low, 4)]
+    [TestCase(ReputationEventType.PositiveReport, ReputationEventSeverity.High, 8)]
+    [TestCase(ReputationEventType.FalsePositiveCorrection, ReputationEventSeverity.Medium, 10)]
+    [TestCase(ReputationEventType.ManualCorrection, ReputationEventSeverity.Medium, 6)]
+    [TestCase(ReputationEventType.AccidentalIssue, ReputationEventSeverity.Medium, -6)]
+    [TestCase(ReputationEventType.SuspiciousReport, ReputationEventSeverity.High, -22)]
+    [TestCase(ReputationEventType.RepeatedAbuse, ReputationEventSeverity.High, -30)]
+    [TestCase(ReputationEventType.ConfirmedMaliciousBehavior, ReputationEventSeverity.Critical, -65)]
+    public void Default_impact_uses_expected_event_rule(
+        ReputationEventType eventType,
+        ReputationEventSeverity severity,
+        int expectedImpact)
+    {
+        var policy = new DefaultReputationScoringPolicy();
+
+        var impact = policy.DefaultImpact(eventType, severity);
+
+        Assert.That(impact, Is.EqualTo(expectedImpact));
+    }
+
+    [Test]
+    public void Unknown_event_type_has_no_default_impact()
+    {
+        var policy = new DefaultReputationScoringPolicy();
+        var unknownEventType = (ReputationEventType)999;
+
+        var impact = policy.DefaultImpact(unknownEventType, ReputationEventSeverity.High);
+
+        Assert.That(impact, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Expiry_rules_preserve_reputation_retention_windows()
+    {
+        var policy = new DefaultReputationScoringPolicy();
+        var createdAtUtc = new DateTimeOffset(2026, 6, 20, 12, 0, 0, TimeSpan.Zero);
+
+        var accidentalLowExpiry = policy.ExpiresAt(
+            ReputationEventType.AccidentalIssue,
+            ReputationEventSeverity.Low,
+            createdAtUtc);
+        var mediumSeverityExpiry = policy.ExpiresAt(
+            ReputationEventType.SuspiciousReport,
+            ReputationEventSeverity.Medium,
+            createdAtUtc);
+        var highSeverityExpiry = policy.ExpiresAt(
+            ReputationEventType.SuspiciousReport,
+            ReputationEventSeverity.High,
+            createdAtUtc);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(accidentalLowExpiry, Is.EqualTo(createdAtUtc.AddDays(90)));
+            Assert.That(mediumSeverityExpiry, Is.EqualTo(createdAtUtc.AddDays(365)));
+            Assert.That(highSeverityExpiry, Is.Null);
+        });
+    }
+
     [Test]
     public async Task Explanation_is_returned()
     {

@@ -8,6 +8,55 @@ namespace HIP.Application.Reputation;
 /// </summary>
 public sealed class DefaultReputationScoringPolicy : IReputationScoringPolicy
 {
+    private static readonly IReadOnlyList<ReputationEventImpactRule> ImpactRules =
+    [
+        new(
+            "positive-report-impact",
+            eventType => eventType == ReputationEventType.PositiveReport,
+            severity => severity == ReputationEventSeverity.Low ? 4 : 8),
+        new(
+            "false-positive-correction-impact",
+            eventType => eventType == ReputationEventType.FalsePositiveCorrection,
+            _ => 10),
+        new(
+            "manual-correction-impact",
+            eventType => eventType == ReputationEventType.ManualCorrection,
+            _ => 6),
+        new(
+            "accidental-issue-impact",
+            eventType => eventType == ReputationEventType.AccidentalIssue,
+            severity => -SeverityImpact(severity) / 2),
+        new(
+            "suspicious-report-impact",
+            eventType => eventType == ReputationEventType.SuspiciousReport,
+            severity => -SeverityImpact(severity)),
+        new(
+            "repeated-abuse-impact",
+            eventType => eventType == ReputationEventType.RepeatedAbuse,
+            severity => -SeverityImpact(severity) - 8),
+        new(
+            "confirmed-malicious-impact",
+            eventType => eventType == ReputationEventType.ConfirmedMaliciousBehavior,
+            severity => -SeverityImpact(severity) - 15),
+        new("no-impact", _ => true, _ => 0)
+    ];
+
+    private static readonly IReadOnlyList<ReputationStatusBand> StatusBands =
+    [
+        new(20, RiskStatus.Dangerous),
+        new(40, RiskStatus.HighRisk),
+        new(60, RiskStatus.Caution),
+        new(80, RiskStatus.ProbablySafe),
+        new(100, RiskStatus.Trusted)
+    ];
+
+    private static readonly IReadOnlyList<IReputationExpiryRule> ExpiryRules =
+    [
+        new AccidentalLowIssueExpiryRule(),
+        new MediumSeverityExpiryRule(),
+        new NoExpiryRule()
+    ];
+
     private static readonly IReadOnlyList<IReputationDecayRule> DecayRules =
     [
         new ExpiredAccidentalIssueDecayRule(),
@@ -65,14 +114,8 @@ public sealed class DefaultReputationScoringPolicy : IReputationScoringPolicy
     }
 
     /// <inheritdoc />
-    public RiskStatus CalculateStatus(int score) => score switch
-    {
-        <= 20 => RiskStatus.Dangerous,
-        <= 40 => RiskStatus.HighRisk,
-        <= 60 => RiskStatus.Caution,
-        <= 80 => RiskStatus.ProbablySafe,
-        _ => RiskStatus.Trusted
-    };
+    public RiskStatus CalculateStatus(int score) =>
+        StatusBands.First(band => Math.Clamp(score, 0, 100) <= band.MaximumScore).Status;
 
     /// <inheritdoc />
     public IReadOnlyCollection<string> Explain(ReputationProfile profile, IReadOnlyCollection<ReputationEvent> events)
@@ -112,33 +155,12 @@ public sealed class DefaultReputationScoringPolicy : IReputationScoringPolicy
     }
 
     /// <inheritdoc />
-    public int DefaultImpact(ReputationEventType eventType, ReputationEventSeverity severity) => eventType switch
-    {
-        ReputationEventType.PositiveReport => severity == ReputationEventSeverity.Low ? 4 : 8,
-        ReputationEventType.FalsePositiveCorrection => 10,
-        ReputationEventType.ManualCorrection => 6,
-        ReputationEventType.AccidentalIssue => -SeverityImpact(severity) / 2,
-        ReputationEventType.SuspiciousReport => -SeverityImpact(severity),
-        ReputationEventType.RepeatedAbuse => -SeverityImpact(severity) - 8,
-        ReputationEventType.ConfirmedMaliciousBehavior => -SeverityImpact(severity) - 15,
-        _ => 0
-    };
+    public int DefaultImpact(ReputationEventType eventType, ReputationEventSeverity severity) =>
+        ImpactRules.First(rule => rule.Matches(eventType)).CalculateImpact(severity);
 
     /// <inheritdoc />
-    public DateTimeOffset? ExpiresAt(ReputationEventType eventType, ReputationEventSeverity severity, DateTimeOffset createdAtUtc)
-    {
-        if (eventType == ReputationEventType.AccidentalIssue && severity == ReputationEventSeverity.Low)
-        {
-            return createdAtUtc.AddDays(90);
-        }
-
-        if (severity == ReputationEventSeverity.Medium)
-        {
-            return createdAtUtc.AddDays(365);
-        }
-
-        return null;
-    }
+    public DateTimeOffset? ExpiresAt(ReputationEventType eventType, ReputationEventSeverity severity, DateTimeOffset createdAtUtc) =>
+        ExpiryRules.First(rule => rule.Matches(eventType, severity)).Apply(createdAtUtc);
 
     /// <inheritdoc />
     public bool IsConfirmed(ReputationEventType eventType) =>

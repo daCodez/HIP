@@ -1,6 +1,98 @@
 using HIP.Domain.Reputation;
+using HIP.Domain.Risk;
 
 namespace HIP.Application.Reputation;
+
+/// <summary>
+/// Maps a reputation event type to its default score impact.
+/// </summary>
+/// <param name="RuleId">Stable rule identifier used when reviewing reputation defaults.</param>
+/// <param name="Matches">Predicate that selects the event type handled by this rule.</param>
+/// <param name="CalculateImpact">Function that calculates the impact for the supplied severity.</param>
+internal sealed record ReputationEventImpactRule(
+    string RuleId,
+    Func<ReputationEventType, bool> Matches,
+    Func<ReputationEventSeverity, int> CalculateImpact);
+
+/// <summary>
+/// Maps a calculated reputation score to a HIP risk status.
+/// </summary>
+/// <param name="MaximumScore">Highest score included in the band.</param>
+/// <param name="Status">Status returned for the score band.</param>
+internal sealed record ReputationStatusBand(int MaximumScore, RiskStatus Status);
+
+/// <summary>
+/// Represents one deterministic rule used to calculate when a reputation event can expire.
+/// </summary>
+internal interface IReputationExpiryRule
+{
+    /// <summary>
+    /// Gets the stable rule identifier used when auditing retention behavior.
+    /// </summary>
+    string RuleId { get; }
+
+    /// <summary>
+    /// Determines whether this rule should set expiry for the event type and severity.
+    /// </summary>
+    /// <param name="eventType">Type of reputation event.</param>
+    /// <param name="severity">Severity assigned to the event.</param>
+    /// <returns>True when this rule should calculate expiry.</returns>
+    bool Matches(ReputationEventType eventType, ReputationEventSeverity severity);
+
+    /// <summary>
+    /// Calculates the expiry timestamp for the matching event.
+    /// </summary>
+    /// <param name="createdAtUtc">UTC creation time of the event.</param>
+    /// <returns>Expiry timestamp, or null for long-term evidence.</returns>
+    DateTimeOffset? Apply(DateTimeOffset createdAtUtc);
+}
+
+/// <summary>
+/// Expires low-severity accidental issues after a short retention window.
+/// </summary>
+internal sealed class AccidentalLowIssueExpiryRule : IReputationExpiryRule
+{
+    /// <inheritdoc />
+    public string RuleId => "accidental-low-issue-expiry";
+
+    /// <inheritdoc />
+    public bool Matches(ReputationEventType eventType, ReputationEventSeverity severity) =>
+        eventType == ReputationEventType.AccidentalIssue && severity == ReputationEventSeverity.Low;
+
+    /// <inheritdoc />
+    public DateTimeOffset? Apply(DateTimeOffset createdAtUtc) => createdAtUtc.AddDays(90);
+}
+
+/// <summary>
+/// Expires medium-severity events after one year so moderate evidence can age out.
+/// </summary>
+internal sealed class MediumSeverityExpiryRule : IReputationExpiryRule
+{
+    /// <inheritdoc />
+    public string RuleId => "medium-severity-expiry";
+
+    /// <inheritdoc />
+    public bool Matches(ReputationEventType eventType, ReputationEventSeverity severity) =>
+        severity == ReputationEventSeverity.Medium;
+
+    /// <inheritdoc />
+    public DateTimeOffset? Apply(DateTimeOffset createdAtUtc) => createdAtUtc.AddDays(365);
+}
+
+/// <summary>
+/// Keeps strong or long-term events without expiry when no safer expiry rule applies.
+/// </summary>
+internal sealed class NoExpiryRule : IReputationExpiryRule
+{
+    /// <inheritdoc />
+    public string RuleId => "no-expiry";
+
+    /// <inheritdoc />
+    public bool Matches(ReputationEventType eventType, ReputationEventSeverity severity) => true;
+
+    /// <inheritdoc />
+    public DateTimeOffset? Apply(DateTimeOffset createdAtUtc) => null;
+}
 
 /// <summary>
 /// Represents one deterministic rule used to convert a reputation event into a decayed score impact.
