@@ -19,6 +19,14 @@ public sealed record SandboxWorkerOptions(
     int MaxExecutionSeconds = 15)
 {
     /// <summary>
+    /// Creates default options for .NET configuration binding, which requires a parameterless constructor.
+    /// </summary>
+    public SandboxWorkerOptions()
+        : this(true, 5, 5000, false, 15)
+    {
+    }
+
+    /// <summary>
     /// Configuration section name used by appsettings, environment variables, and Aspire.
     /// </summary>
     public const string SectionName = "SandboxWorker";

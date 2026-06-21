@@ -22,6 +22,18 @@ public sealed class SandboxWorkerOptionsTests
     }
 
     /// <summary>
+    /// Confirms .NET options binding can dynamically create the options object at startup.
+    /// </summary>
+    [Test]
+    public void Options_can_be_created_by_configuration_binder()
+    {
+        var options = Activator.CreateInstance<SandboxWorkerOptions>();
+
+        Assert.That(options, Is.Not.Null);
+        Assert.That(SandboxWorkerOptions.Validate(options), Is.EqualTo(true));
+    }
+
+    /// <summary>
     /// Confirms a huge batch is rejected so one worker cannot grab too much queue work at once.
     /// </summary>
     [Test]
