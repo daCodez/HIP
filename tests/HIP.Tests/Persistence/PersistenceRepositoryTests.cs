@@ -580,6 +580,21 @@ public sealed class PersistenceRepositoryTests
     }
 
     /// <summary>
+    /// Verifies public lookup does not fail when a local database has typed scan tables but is missing legacy fallback storage.
+    /// </summary>
+    [Test]
+    public async Task BrowserScanResultLookupTreatsMissingLegacyRecordTableAsNoLegacyData()
+    {
+        await using var database = await CreateDatabaseAsync();
+        await database.Context.Database.ExecuteSqlRawAsync("DROP TABLE hip_records;");
+        var repository = new EfBrowserScanResultRepository(database.Context, new HipRecordStore(database.Context));
+
+        var latest = await repository.GetLatestByDomainAsync("missing-legacy.example", CancellationToken.None);
+
+        Assert.That(latest, Is.Null);
+    }
+
+    /// <summary>
     /// Verifies dashboard scan counters persist into the typed aggregate projection table.
     /// </summary>
     [Test]

@@ -120,7 +120,7 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
             return typedResults.Select(FromEntity).ToArray();
         }
 
-        return (await legacyStore.ListRecentAsync<BrowserScanResultRecord>(Partition, boundedMax, cancellationToken))
+        return (await ListRecentLegacyAsync(boundedMax, cancellationToken))
             .OrderByDescending(result => result.LastCheckedUtc)
             .ToArray();
     }
@@ -130,8 +130,38 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
     /// </summary>
     /// <param name="cancellationToken">Token used to cancel fallback reads.</param>
     /// <returns>Legacy scan records.</returns>
-    private Task<IReadOnlyCollection<BrowserScanResultRecord>> ListLegacyAsync(CancellationToken cancellationToken) =>
-        legacyStore.ListAsync<BrowserScanResultRecord>(Partition, cancellationToken);
+    private async Task<IReadOnlyCollection<BrowserScanResultRecord>> ListLegacyAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await legacyStore.ListAsync<BrowserScanResultRecord>(Partition, cancellationToken);
+        }
+        catch (Exception exception) when (RelationalExceptionClassifier.IsMissingRelation(exception))
+        {
+            // The generic encrypted table is only a migration fallback for older local scan data. If a partial local
+            // database is missing that table, public lookup should return "no scan yet" instead of failing the request.
+            return Array.Empty<BrowserScanResultRecord>();
+        }
+    }
+
+    /// <summary>
+    /// Lists bounded legacy scan rows only when the optional generic fallback table exists.
+    /// </summary>
+    /// <param name="maxCount">Maximum number of legacy scan rows to read.</param>
+    /// <param name="cancellationToken">Token used to cancel fallback reads.</param>
+    /// <returns>Legacy scan records, or an empty result when the legacy table is absent.</returns>
+    private async Task<IReadOnlyCollection<BrowserScanResultRecord>> ListRecentLegacyAsync(int maxCount, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await legacyStore.ListRecentAsync<BrowserScanResultRecord>(Partition, maxCount, cancellationToken);
+        }
+        catch (Exception exception) when (RelationalExceptionClassifier.IsMissingRelation(exception))
+        {
+            // Missing legacy storage should not break live dashboard reads; typed scan rows are the current source.
+            return Array.Empty<BrowserScanResultRecord>();
+        }
+    }
 
     /// <summary>
     /// Creates a typed scan entity from a privacy-safe application record.
