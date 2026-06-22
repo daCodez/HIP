@@ -178,6 +178,41 @@ public sealed class PersistenceRepositoryTests
     }
 
     /// <summary>
+    /// Verifies local development startup also repairs an existing database that is missing the generic encrypted table.
+    /// </summary>
+    [Test]
+    public async Task DatabaseInitializerAddsGenericRecordTableToExistingDevelopmentDatabase()
+    {
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync();
+        await using (var command = connection.CreateCommand())
+        {
+            // This marker table makes the database non-empty, matching the local failure mode where EnsureCreated
+            // refuses to create the EF model but HIP still needs its missing development tables added safely.
+            command.CommandText =
+                """
+                CREATE TABLE existing_local_marker (
+                    Id TEXT NOT NULL CONSTRAINT PK_existing_local_marker PRIMARY KEY
+                );
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var services = new ServiceCollection();
+        services.AddDbContext<HipDbContext>(options => options.UseSqlite(connection));
+        using var provider = services.BuildServiceProvider();
+
+        await HipDatabaseInitializer.EnsureCreatedAsync(provider, isLocalDevelopment: true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(SqliteTableExists(connection, "hip_records"), Is.True);
+            Assert.That(SqliteTableExists(connection, "hip_browser_scan_results"), Is.True);
+            Assert.That(SqliteTableExists(connection, "hip_dashboard_scan_aggregates"), Is.True);
+        });
+    }
+
+    /// <summary>
     /// Verifies the development encryption key cannot be used when production safety is requested.
     /// </summary>
     [Test]

@@ -22,7 +22,7 @@ public static class HipDatabaseInitializer
         if (isLocalDevelopment)
         {
             await dbContext.Database.EnsureCreatedAsync(cancellationToken);
-            await EnsureDevelopmentHotPathTablesAsync(dbContext, cancellationToken);
+            await EnsureDevelopmentTablesAsync(dbContext, cancellationToken);
             return;
         }
 
@@ -36,37 +36,50 @@ public static class HipDatabaseInitializer
     }
 
     /// <summary>
-    /// Adds typed hot-path tables to an existing local development database without destroying current data.
+    /// Adds missing local development tables to an existing database without destroying current data.
     /// </summary>
     /// <param name="dbContext">HIP database context.</param>
     /// <param name="cancellationToken">Token used to cancel schema initialization.</param>
     /// <remarks>
     /// EF Core <c>EnsureCreated</c> does not evolve an already-created database. HIP uses this additive development
-    /// initializer until formal migrations are introduced, so local Postgres/SQLite databases receive the typed scan
-    /// tables needed for live dashboard reads without wiping the generic encrypted record table.
+    /// initializer until formal migrations are introduced, so local Postgres/SQLite databases receive both the generic
+    /// encrypted record table and typed scan tables without wiping existing local data.
     /// </remarks>
-    private static async Task EnsureDevelopmentHotPathTablesAsync(HipDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task EnsureDevelopmentTablesAsync(HipDbContext dbContext, CancellationToken cancellationToken)
     {
         var providerName = dbContext.Database.ProviderName ?? string.Empty;
         if (providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
         {
-            await EnsurePostgreSqlHotPathTablesAsync(dbContext, cancellationToken);
+            await EnsurePostgreSqlDevelopmentTablesAsync(dbContext, cancellationToken);
             return;
         }
 
         if (providerName.Contains("Sqlite", StringComparison.OrdinalIgnoreCase))
         {
-            await EnsureSqliteHotPathTablesAsync(dbContext, cancellationToken);
+            await EnsureSqliteDevelopmentTablesAsync(dbContext, cancellationToken);
         }
     }
 
     /// <summary>
-    /// Creates PostgreSQL hot-path tables and indexes when missing.
+    /// Creates PostgreSQL development tables and indexes when missing.
     /// </summary>
     /// <param name="dbContext">HIP database context.</param>
     /// <param name="cancellationToken">Token used to cancel schema initialization.</param>
-    private static async Task EnsurePostgreSqlHotPathTablesAsync(HipDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task EnsurePostgreSqlDevelopmentTablesAsync(HipDbContext dbContext, CancellationToken cancellationToken)
     {
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS hip_records (
+                "Partition" character varying(160) NOT NULL,
+                "Id" character varying(220) NOT NULL,
+                "Json" text NOT NULL,
+                "CreatedAtUtc" timestamp with time zone NOT NULL,
+                "UpdatedAtUtc" timestamp with time zone NOT NULL,
+                CONSTRAINT "PK_hip_records" PRIMARY KEY ("Partition", "Id")
+            );
+            """,
+            cancellationToken);
+
         await dbContext.Database.ExecuteSqlRawAsync(
             """
             CREATE TABLE IF NOT EXISTS hip_browser_scan_results (
@@ -117,12 +130,25 @@ public static class HipDatabaseInitializer
     }
 
     /// <summary>
-    /// Creates SQLite hot-path tables and indexes when missing.
+    /// Creates SQLite development tables and indexes when missing.
     /// </summary>
     /// <param name="dbContext">HIP database context.</param>
     /// <param name="cancellationToken">Token used to cancel schema initialization.</param>
-    private static async Task EnsureSqliteHotPathTablesAsync(HipDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task EnsureSqliteDevelopmentTablesAsync(HipDbContext dbContext, CancellationToken cancellationToken)
     {
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS hip_records (
+                "Partition" TEXT NOT NULL,
+                "Id" TEXT NOT NULL,
+                "Json" TEXT NOT NULL,
+                "CreatedAtUtc" TEXT NOT NULL,
+                "UpdatedAtUtc" TEXT NOT NULL,
+                CONSTRAINT "PK_hip_records" PRIMARY KEY ("Partition", "Id")
+            );
+            """,
+            cancellationToken);
+
         await dbContext.Database.ExecuteSqlRawAsync(
             """
             CREATE TABLE IF NOT EXISTS hip_browser_scan_results (
@@ -177,6 +203,12 @@ public static class HipDatabaseInitializer
     /// <param name="cancellationToken">Token used to cancel schema initialization.</param>
     private static async Task CreateIndexesAsync(HipDbContext dbContext, CancellationToken cancellationToken)
     {
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            CREATE INDEX IF NOT EXISTS "IX_hip_records_UpdatedAtUtc"
+            ON hip_records ("UpdatedAtUtc");
+            """,
+            cancellationToken);
         await dbContext.Database.ExecuteSqlRawAsync(
             """
             CREATE INDEX IF NOT EXISTS "IX_hip_browser_scan_results_Domain"
