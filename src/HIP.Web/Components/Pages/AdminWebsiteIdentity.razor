@@ -1,0 +1,218 @@
+@page "/admin/identity/websites"
+@attribute [Authorize(Policy = AdminPolicies.CanManageRules)]
+@rendermode InteractiveServer
+@inject IWebsiteIdentityService WebsiteIdentityService
+
+<PageTitle>HIP Website Identity</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">Website Identity</p>
+            <h1>Register A Website</h1>
+            <p>Register a domain, add the HIP DNS TXT record, then verify domain control. Verification proves control of the domain, not that the website is automatically safe.</p>
+        </div>
+    </section>
+
+    <section class="hip-card-row two">
+        <article class="rule-builder-panel">
+            <h2>Domain Registration</h2>
+            <label>
+                Domain
+                <input @bind="_domain" placeholder="example.com" autocomplete="off" />
+            </label>
+            <label>
+                Display name
+                <input @bind="_displayName" placeholder="Example Website" autocomplete="off" />
+            </label>
+            <label>
+                Verification method
+                <select @bind="_verificationMethod">
+                    <option value="@VerificationMethod.DnsTxt">DNS TXT</option>
+                    <option value="@VerificationMethod.WellKnownHipJson">.well-known/hip.json</option>
+                </select>
+            </label>
+            <div class="rule-button-row">
+                <button class="primary-button" type="button" @onclick="RegisterWebsiteAsync" disabled="@_isBusy">Register Website</button>
+                <button type="button" @onclick="ClearForm" disabled="@_isBusy">Clear</button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_message))
+            {
+                <p class="admin-message">@_message</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <p class="admin-error">@_error</p>
+            }
+        </article>
+
+        <article class="rule-builder-panel">
+            <h2>Verification Result</h2>
+            @if (_registered is null)
+            {
+                <p>No website registered in this session yet.</p>
+            }
+            else
+            {
+                <dl class="hip-definition-list">
+                    <div>
+                        <dt>Domain</dt>
+                        <dd>@_registered.WebsiteIdentity.Domain</dd>
+                    </div>
+                    <div>
+                        <dt>HIP identity</dt>
+                        <dd>@_registered.WebsiteIdentity.HipIdentityId</dd>
+                    </div>
+                    <div>
+                        <dt>Status</dt>
+                        <dd>@_registered.WebsiteIdentity.VerificationStatus</dd>
+                    </div>
+                    <div>
+                        <dt>Method</dt>
+                        <dd>@_registered.VerificationRequest.Method</dd>
+                    </div>
+                </dl>
+            }
+        </article>
+    </section>
+
+    @if (_registered is not null)
+    {
+        <section class="rule-builder-panel">
+            <h2>Add This DNS Record</h2>
+            <p>Add this TXT record to your domain DNS, then click Verify Domain.</p>
+            <div class="json-preview">
+                <pre>@DnsRecordText</pre>
+            </div>
+            <div class="rule-button-row">
+                <button class="primary-button" type="button" @onclick="VerifyWebsiteAsync" disabled="@_isBusy">Verify Domain</button>
+                <a class="secondary-button" href="@LookupHref">Open Public Lookup</a>
+            </div>
+            @if (_verified is not null)
+            {
+                <dl class="hip-definition-list">
+                    <div>
+                        <dt>Verified status</dt>
+                        <dd>@_verified.VerificationStatus</dd>
+                    </div>
+                    <div>
+                        <dt>Verified at UTC</dt>
+                        <dd>@(_verified.VerifiedAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "Not verified yet")</dd>
+                    </div>
+                </dl>
+            }
+        </section>
+    }
+
+    <section class="rule-builder-panel">
+        <h2>MVP Notes</h2>
+        <ul class="hip-x-list">
+            <li>DNS verification proves domain control only.</li>
+            <li>HIP still scores website safety, reputation, and content risk separately.</li>
+            <li>Do not paste private keys, passwords, or unrelated website content into this form.</li>
+        </ul>
+    </section>
+</main>
+
+@code {
+    private string _domain = string.Empty;
+    private string _displayName = string.Empty;
+    private VerificationMethod _verificationMethod = VerificationMethod.DnsTxt;
+    private WebsiteIdentityRegistrationResponse? _registered;
+    private WebsiteIdentity? _verified;
+    private bool _isBusy;
+    private string _message = string.Empty;
+    private string _error = string.Empty;
+
+    private string DnsRecordText =>
+        _registered is null
+            ? string.Empty
+            : $"_hip.{_registered.WebsiteIdentity.Domain} TXT \"hip-site-verification={_registered.VerificationRequest.Token}\"";
+
+    private string LookupHref =>
+        _registered is null
+            ? "/lookup"
+            : $"/lookup/domain/{Uri.EscapeDataString(_registered.WebsiteIdentity.Domain)}";
+
+    /// <summary>
+    /// Registers a website identity and creates the verification challenge that the admin must publish.
+    /// </summary>
+    private async Task RegisterWebsiteAsync()
+    {
+        await RunSafelyAsync(async () =>
+        {
+            _registered = await WebsiteIdentityService.RegisterAsync(
+                new WebsiteIdentityRegistrationRequest(_domain, _displayName, _verificationMethod),
+                CancellationToken.None);
+            _verified = null;
+            _message = "Website registered. Add the verification record before verifying the domain.";
+        });
+    }
+
+    /// <summary>
+    /// Verifies the current website identity by checking the existing verification challenge.
+    /// </summary>
+    private async Task VerifyWebsiteAsync()
+    {
+        if (_registered is null)
+        {
+            _error = "Register a website before verifying it.";
+            return;
+        }
+
+        await RunSafelyAsync(async () =>
+        {
+            _verified = await WebsiteIdentityService.VerifyAsync(
+                new WebsiteVerificationRequest(
+                    _registered.WebsiteIdentity.Domain,
+                    _registered.VerificationRequest.Method,
+                    _registered.VerificationRequest.Token),
+                CancellationToken.None);
+            _message = _verified.VerificationStatus == VerificationStatus.Verified
+                ? "Domain verified. HIP can now associate identity signals with this domain."
+                : "Domain is not verified yet. Check that the DNS TXT record has propagated.";
+        });
+    }
+
+    /// <summary>
+    /// Clears local form state without changing any registered identities.
+    /// </summary>
+    private void ClearForm()
+    {
+        _domain = string.Empty;
+        _displayName = string.Empty;
+        _verificationMethod = VerificationMethod.DnsTxt;
+        _registered = null;
+        _verified = null;
+        _message = string.Empty;
+        _error = string.Empty;
+    }
+
+    /// <summary>
+    /// Runs a UI action with one consistent busy state and safe plain-English error handling.
+    /// </summary>
+    /// <param name="action">Registration or verification action to run.</param>
+    private async Task RunSafelyAsync(Func<Task> action)
+    {
+        _isBusy = true;
+        _error = string.Empty;
+        _message = string.Empty;
+
+        try
+        {
+            await action();
+        }
+        catch (ArgumentException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+}

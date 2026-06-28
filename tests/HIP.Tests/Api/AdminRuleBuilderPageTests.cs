@@ -76,6 +76,36 @@ public sealed class AdminRuleBuilderPageTests
         Assert.That(html, Does.Contain("VirusTotal"));
     }
 
+    [Test]
+    public async Task Admin_website_registration_page_loads_for_admin()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddAdmin(client);
+
+        var response = await client.GetAsync("/admin/identity/websites");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(html, Does.Contain("Register A Website"));
+        Assert.That(html, Does.Contain("DNS TXT"));
+        Assert.That(html, Does.Contain("Verification proves control of the domain"));
+    }
+
+    [Test]
+    public async Task Admin_website_registration_page_is_protected()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var response = await client.GetAsync("/admin/identity/websites");
+
+        Assert.That(response.StatusCode, Is.Not.EqualTo(HttpStatusCode.OK));
+    }
+
     private static void AddAdmin(HttpClient client)
     {
         client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Admin");
