@@ -125,6 +125,44 @@ public sealed class PersistenceRepositoryTests
     }
 
     /// <summary>
+    /// Verifies local development can read records encrypted before Aspire supplied the newer local encryption key.
+    /// </summary>
+    [Test]
+    public async Task RecordStoreCanReadRowsEncryptedWithLegacyDevelopmentKey()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var legacyEncryptor = new DevelopmentHipRecordEncryptor();
+        var currentEncryptor = new DevelopmentHipRecordEncryptor(new HipRecordEncryptionOptions(
+            "hip-local-dev-record-key-32bytes!",
+            LegacyKeys: [DevelopmentHipRecordEncryptor.DevelopmentOnlyKey]));
+        var profile = new ReputationProfile(
+            "rep-domain-legacy-encrypted",
+            ReputationSubjectType.Domain,
+            "legacy-encrypted.example",
+            61,
+            RiskStatus.ProbablySafe,
+            1,
+            0,
+            0,
+            DateTimeOffset.UtcNow,
+            ["Legacy encrypted row"]);
+        database.Context.Records.Add(new HipDbRecord
+        {
+            Partition = "reputation-profile",
+            Id = "domain:legacy-encrypted.example",
+            Json = legacyEncryptor.Protect(JsonSerializer.Serialize(profile, JsonOptions)),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow
+        });
+        await database.Context.SaveChangesAsync();
+        IReputationProfileRepository repository = new EfReputationProfileRepository(new HipRecordStore(database.Context, currentEncryptor));
+
+        var retrieved = await repository.GetAsync(ReputationSubjectType.Domain, "legacy-encrypted.example", CancellationToken.None);
+
+        Assert.That(retrieved?.CurrentScore, Is.EqualTo(61));
+    }
+
+    /// <summary>
     /// Verifies production startup refuses unsafe EnsureCreated database setup when migrations are absent.
     /// </summary>
     [Test]

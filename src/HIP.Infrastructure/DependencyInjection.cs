@@ -137,7 +137,33 @@ public static class DependencyInjection
     private static HipRecordEncryptionOptions BindRecordEncryptionOptions(IConfiguration configuration, bool isLocalDevelopment) =>
         new(
             configuration["HipSecurity:RecordEncryptionKey"] ?? DevelopmentHipRecordEncryptor.DevelopmentOnlyKey,
-            AllowDevelopmentKey: isLocalDevelopment);
+            AllowDevelopmentKey: isLocalDevelopment,
+            LegacyKeys: BindLegacyRecordEncryptionKeys(configuration, isLocalDevelopment));
+
+    /// <summary>
+    /// Binds legacy record encryption keys that may read older local rows after a development key rotation.
+    /// </summary>
+    /// <param name="configuration">Application configuration.</param>
+    /// <param name="isLocalDevelopment">Whether local development compatibility fallbacks may be used.</param>
+    /// <returns>Configured legacy keys plus the former built-in development key for local compatibility.</returns>
+    private static IReadOnlyCollection<string> BindLegacyRecordEncryptionKeys(IConfiguration configuration, bool isLocalDevelopment)
+    {
+        var configured = configuration
+            .GetSection("HipSecurity:LegacyRecordEncryptionKeys")
+            .Get<string[]>() ?? [];
+        if (!isLocalDevelopment)
+        {
+            return configured;
+        }
+
+        var currentKey = configuration["HipSecurity:RecordEncryptionKey"] ?? DevelopmentHipRecordEncryptor.DevelopmentOnlyKey;
+        return configured
+            .Append(DevelopmentHipRecordEncryptor.DevelopmentOnlyKey)
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Where(key => !string.Equals(key, currentKey, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
 
     /// <summary>
     /// Binds privacy HMAC settings and disables default keys outside local Development.

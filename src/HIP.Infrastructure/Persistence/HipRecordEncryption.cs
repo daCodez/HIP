@@ -11,7 +11,8 @@ namespace HIP.Infrastructure.Persistence;
 /// <param name="AllowDevelopmentKey">Whether the built-in development key may be used.</param>
 public sealed record HipRecordEncryptionOptions(
     string Key = DevelopmentHipRecordEncryptor.DevelopmentOnlyKey,
-    bool AllowDevelopmentKey = true);
+    bool AllowDevelopmentKey = true,
+    IReadOnlyCollection<string>? LegacyKeys = null);
 
 /// <summary>
 /// Encrypts and decrypts JSON payloads stored in HIP's generic record table.
@@ -49,6 +50,7 @@ public sealed class DevelopmentHipRecordEncryptor : IHipRecordEncryptor
 
     private const string EnvelopeMarker = "hip-record-envelope";
     private readonly byte[] keyBytes;
+    private readonly IReadOnlyCollection<byte[]> legacyKeyBytes;
 
     /// <summary>
     /// Creates an AES-GCM record encryptor and refuses demo keys when the host disables them.
@@ -64,6 +66,7 @@ public sealed class DevelopmentHipRecordEncryptor : IHipRecordEncryptor
         }
 
         keyBytes = SHA256.HashData(Encoding.UTF8.GetBytes(resolved.Key));
+        legacyKeyBytes = ResolveLegacyKeys(resolved).ToArray();
     }
 
     /// <inheritdoc />
@@ -109,9 +112,20 @@ public sealed class DevelopmentHipRecordEncryptor : IHipRecordEncryptor
         var tag = Convert.FromBase64String(envelope.Tag);
         var plaintext = new byte[ciphertext.Length];
 
-        using var aes = new AesGcm(keyBytes, tag.Length);
-        aes.Decrypt(nonce, ciphertext, tag, plaintext);
-        return Encoding.UTF8.GetString(plaintext);
+        if (TryDecrypt(keyBytes, nonce, ciphertext, tag, plaintext))
+        {
+            return Encoding.UTF8.GetString(plaintext);
+        }
+
+        foreach (var legacyKeyBytesCandidate in legacyKeyBytes)
+        {
+            if (TryDecrypt(legacyKeyBytesCandidate, nonce, ciphertext, tag, plaintext))
+            {
+                return Encoding.UTF8.GetString(plaintext);
+            }
+        }
+
+        throw new InvalidOperationException("HIP could not decrypt a persisted record with the configured record encryption key. For local development, clear the old database volume or configure the previous key as a legacy key.");
     }
 
     /// <summary>
@@ -130,6 +144,63 @@ public sealed class DevelopmentHipRecordEncryptor : IHipRecordEncryptor
     private static bool IsDevelopmentKey(string? key) =>
         string.IsNullOrWhiteSpace(key) ||
         key.Equals(DevelopmentOnlyKey, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Builds the set of older keys that may read existing local records without changing the key used for new writes.
+    /// </summary>
+    /// <param name="options">Encryption options supplied by the host.</param>
+    /// <returns>Hashed legacy keys that are safe to try during decryption.</returns>
+    private static IEnumerable<byte[]> ResolveLegacyKeys(HipRecordEncryptionOptions options)
+    {
+        foreach (var legacyKey in options.LegacyKeys ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(legacyKey))
+            {
+                continue;
+            }
+
+            if (!options.AllowDevelopmentKey && IsDevelopmentKey(legacyKey))
+            {
+                throw new InvalidOperationException("HIP Record encryption legacy keys cannot include development keys outside local Development.");
+            }
+
+            if (string.Equals(legacyKey, options.Key, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            yield return SHA256.HashData(Encoding.UTF8.GetBytes(legacyKey));
+        }
+    }
+
+    /// <summary>
+    /// Attempts AES-GCM decryption with one key and reports authentication mismatch without leaking encrypted content.
+    /// </summary>
+    /// <param name="candidateKeyBytes">Candidate key bytes.</param>
+    /// <param name="nonce">Stored nonce.</param>
+    /// <param name="ciphertext">Stored ciphertext.</param>
+    /// <param name="tag">Stored authentication tag.</param>
+    /// <param name="plaintext">Output buffer for decrypted JSON.</param>
+    /// <returns>True when the candidate key authenticated and decrypted the record.</returns>
+    private static bool TryDecrypt(
+        byte[] candidateKeyBytes,
+        byte[] nonce,
+        byte[] ciphertext,
+        byte[] tag,
+        byte[] plaintext)
+    {
+        try
+        {
+            using var aes = new AesGcm(candidateKeyBytes, tag.Length);
+            aes.Decrypt(nonce, ciphertext, tag, plaintext);
+            return true;
+        }
+        catch (AuthenticationTagMismatchException)
+        {
+            Array.Clear(plaintext);
+            return false;
+        }
+    }
 
     /// <summary>
     /// Versioned encrypted record envelope stored inside the existing JSON column.
