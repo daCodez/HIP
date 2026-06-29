@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using HIP.Application.PublicLookup;
 using HIP.Domain.Identity;
 using Microsoft.Extensions.Logging;
@@ -10,10 +9,10 @@ namespace HIP.Application.Identity;
 /// </summary>
 public sealed class DnsDomainVerificationService(
     IDnsTxtRecordResolver txtRecordResolver,
+    IDomainVerificationRequestRepository verificationRepository,
     ILogger<DnsDomainVerificationService> logger) : IDomainVerificationService
 {
     private const string VerificationPrefix = "hip-site-verification=";
-    private static readonly ConcurrentDictionary<string, DomainVerificationRequest> Requests = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Creates a domain verification challenge token for DNS TXT or .well-known based verification.
@@ -22,7 +21,7 @@ public sealed class DnsDomainVerificationService(
     /// <param name="method">Verification method requested by the owner.</param>
     /// <param name="cancellationToken">Token used to cancel the operation.</param>
     /// <returns>The created verification request.</returns>
-    public Task<DomainVerificationRequest> StartAsync(string domain, VerificationMethod method, CancellationToken cancellationToken)
+    public async Task<DomainVerificationRequest> StartAsync(string domain, VerificationMethod method, CancellationToken cancellationToken)
     {
         if (method is not (VerificationMethod.DnsTxt or VerificationMethod.WellKnownHipJson))
         {
@@ -38,8 +37,7 @@ public sealed class DnsDomainVerificationService(
             DateTimeOffset.UtcNow,
             null);
 
-        Requests[Key(normalized, method)] = request;
-        return Task.FromResult(request);
+        return await verificationRepository.SaveAsync(request, cancellationToken);
     }
 
     /// <summary>
@@ -53,7 +51,8 @@ public sealed class DnsDomainVerificationService(
     public async Task<DomainVerificationRequest> VerifyAsync(string domain, VerificationMethod method, string token, CancellationToken cancellationToken)
     {
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
-        if (!Requests.TryGetValue(Key(normalized, method), out var request))
+        var request = await verificationRepository.GetAsync(normalized, method, cancellationToken);
+        if (request is null)
         {
             throw new ArgumentException("Domain verification request was not found.", nameof(domain));
         }
@@ -70,8 +69,7 @@ public sealed class DnsDomainVerificationService(
             Status = status,
             VerifiedAtUtc = status == VerificationStatus.Verified ? DateTimeOffset.UtcNow : null
         };
-        Requests[Key(normalized, method)] = updated;
-        return updated;
+        return await verificationRepository.SaveAsync(updated, cancellationToken);
     }
 
     /// <summary>
@@ -110,14 +108,6 @@ public sealed class DnsDomainVerificationService(
                 "HIP could not complete the DNS check yet. Try again after DNS is available.");
         }
     }
-
-    /// <summary>
-    /// Creates a stable lookup key for stored in-memory verification challenges.
-    /// </summary>
-    /// <param name="domain">Normalized domain.</param>
-    /// <param name="method">Verification method.</param>
-    /// <returns>Dictionary key for a verification request.</returns>
-    private static string Key(string domain, VerificationMethod method) => $"{method}:{domain}";
 
     /// <summary>
     /// Converts a user-supplied token into the raw token value HIP expects inside the TXT record.

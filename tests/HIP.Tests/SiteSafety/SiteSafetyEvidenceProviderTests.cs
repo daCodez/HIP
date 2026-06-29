@@ -267,9 +267,9 @@ public sealed class SiteSafetyEvidenceProviderTests
         var handler = new StubHttpMessageHandler(_ => JsonResponse("""{"status":"READY","endpoints":[{"grade":"A"}]}"""));
         ISiteSafetyEvidenceProvider[] providers =
         [
-            new SslLabsSiteEvidenceProvider(cache, options, new HttpClient(handler)),
-            new GoogleWebRiskSiteEvidenceProvider(cache, options),
-            new VirusTotalSiteEvidenceProvider(cache, options)
+            new SslLabsSiteEvidenceProvider(cache, options, TestResiliencePolicy(), new HttpClient(handler)),
+            new GoogleWebRiskSiteEvidenceProvider(cache, options, TestResiliencePolicy()),
+            new VirusTotalSiteEvidenceProvider(cache, options, TestResiliencePolicy())
         ];
 
         var evidence = new List<SiteSafetyEvidence>();
@@ -386,7 +386,7 @@ public sealed class SiteSafetyEvidenceProviderTests
             ExternalProvidersEnabled = true,
             GoogleWebRisk = new ExternalProviderOptions { Enabled = true }
         };
-        var provider = new GoogleWebRiskSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), options);
+        var provider = new GoogleWebRiskSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), options, TestResiliencePolicy());
 
         var evidence = await provider.CollectEvidenceAsync(Context(), CancellationToken.None);
 
@@ -412,7 +412,7 @@ public sealed class SiteSafetyEvidenceProviderTests
             ExternalProvidersEnabled = true,
             SslLabs = new ExternalProviderOptions { Enabled = true }
         };
-        var provider = new SslLabsSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), options, new HttpClient(handler));
+        var provider = new SslLabsSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), options, TestResiliencePolicy(), new HttpClient(handler));
 
         var evidence = await provider.CollectEvidenceAsync(Context("https://example.com/login?password=secret"), CancellationToken.None);
 
@@ -437,6 +437,7 @@ public sealed class SiteSafetyEvidenceProviderTests
         var provider = new SslLabsSiteEvidenceProvider(
             new InMemoryExternalSiteEvidenceCache(),
             EnabledSslLabsOptions(),
+            TestResiliencePolicy(),
             new HttpClient(handler));
 
         var evidence = await provider.CollectEvidenceAsync(Context("https://example.com/login?password=secret"), CancellationToken.None);
@@ -467,6 +468,7 @@ public sealed class SiteSafetyEvidenceProviderTests
         var provider = new SslLabsSiteEvidenceProvider(
             new InMemoryExternalSiteEvidenceCache(),
             EnabledSslLabsOptions(),
+            TestResiliencePolicy(),
             new HttpClient(handler));
 
         var evidence = await provider.CollectEvidenceAsync(Context(), CancellationToken.None);
@@ -491,6 +493,7 @@ public sealed class SiteSafetyEvidenceProviderTests
         var provider = new SslLabsSiteEvidenceProvider(
             new InMemoryExternalSiteEvidenceCache(),
             EnabledSslLabsOptions(),
+            TestResiliencePolicy(),
             new HttpClient(handler));
 
         var evidence = await provider.CollectEvidenceAsync(Context(), CancellationToken.None);
@@ -516,6 +519,7 @@ public sealed class SiteSafetyEvidenceProviderTests
         var provider = new SslLabsSiteEvidenceProvider(
             new InMemoryExternalSiteEvidenceCache(),
             EnabledSslLabsOptions(),
+            TestResiliencePolicy(),
             new HttpClient(handler));
 
         var evidence = await provider.CollectEvidenceAsync(Context("https://example.com/private?token=secret"), CancellationToken.None);
@@ -535,7 +539,7 @@ public sealed class SiteSafetyEvidenceProviderTests
     [Test]
     public void Ssl_labs_provider_normalizes_tls_grade_as_small_trust_signal()
     {
-        var provider = new SslLabsSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), new ExternalSiteEvidenceOptions());
+        var provider = new SslLabsSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), new ExternalSiteEvidenceOptions(), TestResiliencePolicy());
 
         var evidence = provider.CreateTlsGradeEvidence(Context(), "A", "TLS scanner reported strong TLS configuration.");
 
@@ -561,7 +565,7 @@ public sealed class SiteSafetyEvidenceProviderTests
     [Test]
     public void Google_web_risk_provider_normalizes_phishing_match()
     {
-        var provider = new GoogleWebRiskSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), new ExternalSiteEvidenceOptions());
+        var provider = new GoogleWebRiskSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), new ExternalSiteEvidenceOptions(), TestResiliencePolicy());
 
         var evidence = provider.CreateThreatMatchEvidence(Context(), "SOCIAL_ENGINEERING");
 
@@ -587,7 +591,7 @@ public sealed class SiteSafetyEvidenceProviderTests
     [Test]
     public void VirusTotal_provider_normalizes_malware_match()
     {
-        var provider = new VirusTotalSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), new ExternalSiteEvidenceOptions());
+        var provider = new VirusTotalSiteEvidenceProvider(new InMemoryExternalSiteEvidenceCache(), new ExternalSiteEvidenceOptions(), TestResiliencePolicy());
 
         var evidence = provider.CreateMalwareMatchEvidence(Context(), "malicious");
 
@@ -761,6 +765,12 @@ public sealed class SiteSafetyEvidenceProviderTests
             authoritativeTrust);
 
     /// <summary>
+    /// Creates the explicit test resilience policy required by external providers after runtime in-memory fallbacks were removed.
+    /// </summary>
+    /// <returns>A deterministic in-memory policy used only inside provider unit tests.</returns>
+    private static InMemoryExternalProviderResiliencePolicy TestResiliencePolicy() => new();
+
+    /// <summary>
     /// Test provider that returns a fixed normalized evidence record.
     /// </summary>
     private sealed class StaticEvidenceProvider(SiteSafetyEvidence evidence) : ISiteSafetyEvidenceProvider
@@ -799,7 +809,7 @@ public sealed class SiteSafetyEvidenceProviderTests
         IExternalSiteEvidenceCache cache,
         ExternalSiteEvidenceOptions options,
         ExternalProviderOptions? providerOptions = null)
-        : ExternalSiteEvidenceProviderBase(cache, options)
+        : ExternalSiteEvidenceProviderBase(cache, options, TestResiliencePolicy())
     {
         /// <summary>
         /// Gets how many times the external scanner path was invoked.

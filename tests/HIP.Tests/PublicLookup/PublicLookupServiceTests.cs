@@ -52,7 +52,7 @@ public sealed class PublicLookupServiceTests
     [Test]
     public void LookupDomainAsync_rejects_invalid_domain_input()
     {
-        var service = new PublicDomainLookupService();
+        var service = new PublicDomainLookupService(new InMemoryBrowserScanResultRepository());
 
         Assert.ThrowsAsync<ArgumentException>(() => service.LookupDomainAsync("https://example.com/path", CancellationToken.None));
     }
@@ -92,7 +92,7 @@ public sealed class PublicLookupServiceTests
     [Test]
     public async Task Lookup_returns_unknown_when_no_stored_data_exists()
     {
-        var service = new PublicDomainLookupService();
+        var service = new PublicDomainLookupService(new InMemoryBrowserScanResultRepository());
 
         var result = await service.LookupDomainAsync("zerotoherobudgeting.com", CancellationToken.None);
 
@@ -181,7 +181,7 @@ public sealed class PublicLookupServiceTests
     [Test]
     public void TrustBadgeService_rejects_invalid_domain_input()
     {
-        var service = new TrustBadgeService(new PublicDomainLookupService());
+        var service = new TrustBadgeService(new PublicDomainLookupService(new InMemoryBrowserScanResultRepository()));
 
         Assert.ThrowsAsync<ArgumentException>(() => service.GetDomainBadgeAsync("bad domain with spaces", CancellationToken.None));
     }

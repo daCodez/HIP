@@ -31,7 +31,13 @@ public sealed class RuntimeDataSourceTests
             "IScanResultCache, InMemoryScanResultCache",
             "IScanIngestionQueue, InMemoryScanIngestionQueue",
             "IScanResultDedupeService, InMemoryScanResultDedupeService",
-            "IDashboardScanAggregateStore, InMemoryDashboardScanAggregateStore"
+            "IDashboardScanAggregateStore, InMemoryDashboardScanAggregateStore",
+            "IDuplicateSubmissionGuard, InMemoryDuplicateSubmissionGuard",
+            "ISetupCodeLicenseService, InMemorySetupCodeLicenseService",
+            "IExternalSiteEvidenceCache, InMemoryExternalSiteEvidenceCache",
+            "IExternalSiteEvidenceSettingsStore, InMemoryExternalSiteEvidenceSettingsStore",
+            "IExternalProviderResiliencePolicy, InMemoryExternalProviderResiliencePolicy",
+            "ISandboxLinkScanQueue, InMemorySandboxLinkScanQueue"
         };
 
         Assert.Multiple(() =>

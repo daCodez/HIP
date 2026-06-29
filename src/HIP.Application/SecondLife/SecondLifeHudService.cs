@@ -37,15 +37,6 @@ public sealed class SecondLifeHudService : ISecondLifeHudService
     };
 
     /// <summary>
-    /// Creates the HUD service with an in-memory license manager for direct unit tests and development wiring.
-    /// </summary>
-    /// <param name="ingestionService">Privacy-safe finding ingestion service.</param>
-    public SecondLifeHudService(IRiskFindingIngestionService ingestionService)
-        : this(ingestionService, new InMemorySetupCodeLicenseService())
-    {
-    }
-
-    /// <summary>
     /// Creates the HUD service with the configured license manager.
     /// </summary>
     /// <param name="ingestionService">Privacy-safe finding ingestion service.</param>

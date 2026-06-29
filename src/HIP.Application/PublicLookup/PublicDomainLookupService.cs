@@ -34,14 +34,6 @@ public sealed class PublicDomainLookupService(
     };
 
     /// <summary>
-    /// Creates a lookup service with in-memory scan storage for isolated tests and simple development usage.
-    /// </summary>
-    public PublicDomainLookupService()
-        : this(new InMemoryBrowserScanResultRepository())
-    {
-    }
-
-    /// <summary>
     /// Looks up a domain using stored browser scan data when available and avoids exposing private scan payloads.
     /// </summary>
     /// <param name="domain">Domain requested by the public lookup API or page.</param>

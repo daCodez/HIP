@@ -103,18 +103,11 @@ public sealed class HipRecordStore(HipDbContext dbContext, IHipRecordEncryptor? 
             return Array.Empty<T>();
         }
 
-        var query = dbContext.Records.AsNoTracking()
-            .Where(item => item.Partition == partition);
-
-        var records = dbContext.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true
-            ? (await query.ToArrayAsync(cancellationToken))
-                .OrderByDescending(record => record.UpdatedAtUtc)
-                .Take(boundedMax)
-                .ToArray()
-            : await query
-                .OrderByDescending(record => record.UpdatedAtUtc)
-                .Take(boundedMax)
-                .ToArrayAsync(cancellationToken);
+        var records = await dbContext.Records.AsNoTracking()
+            .Where(item => item.Partition == partition)
+            .OrderByDescending(record => record.UpdatedAtUtc)
+            .Take(boundedMax)
+            .ToArrayAsync(cancellationToken);
 
         return records
             .Select(record => HipJsonSerializer.Deserialize<T>(recordEncryptor.Unprotect(record.Json)))

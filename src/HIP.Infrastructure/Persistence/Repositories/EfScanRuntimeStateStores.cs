@@ -304,8 +304,8 @@ public sealed class EfDashboardScanAggregateStore(HipDbContext dbContext, HipRec
             : 0;
 
     /// <summary>
-    /// Detects duplicate aggregate insert races through the shared classifier so runtime code stays PostgreSQL-focused
-    /// while SQLite-backed tests can still exercise the retry path.
+    /// Detects duplicate aggregate insert races through the shared PostgreSQL classifier so concurrent dashboard
+    /// projection writes can retry without losing scan counters.
     /// </summary>
     /// <param name="exception">EF update exception raised while saving the aggregate.</param>
     /// <returns>True when the exception is a duplicate primary key violation.</returns>

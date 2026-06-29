@@ -198,7 +198,7 @@ public sealed class SecondLifeHudServiceTests
             new PatternDetectionService(),
             new Sha256PrivacyHashingService());
 
-        return new SecondLifeHudService(ingestion);
+        return new SecondLifeHudService(ingestion, new InMemorySetupCodeLicenseService());
     }
 
     private static SecondLifeHudFindingReport Report(RiskStatus riskStatus = RiskStatus.HighRisk) =>

@@ -6,6 +6,8 @@ using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Rules;
 using HIP.Application.Scalability;
+using HIP.Application.Security;
+using HIP.Application.SecondLife;
 using HIP.Application.SelfHealing;
 using HIP.Application.SiteSafety;
 using HIP.Application.Simulation;
@@ -36,7 +38,7 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException("HIP requires ConnectionStrings:HipDatabase. Run HIP.AppHost to use Aspire-managed PostgreSQL, or set ConnectionStrings__HipDatabase explicitly for direct project runs.");
         var databaseProvider = configuration["HipInfrastructure:DatabaseProvider"];
 
-        services.AddDbContext<HipDbContext>(options => ConfigureDatabaseProvider(options, connectionString, databaseProvider, isLocalDevelopment));
+        services.AddDbContext<HipDbContext>(options => ConfigureDatabaseProvider(options, connectionString, databaseProvider));
         services.AddSingleton(BindRecordEncryptionOptions(configuration, isLocalDevelopment));
         services.AddSingleton(BindPrivacyHashingOptions(configuration, isLocalDevelopment));
         services.AddSingleton<IHipRecordEncryptor, DevelopmentHipRecordEncryptor>();
@@ -48,6 +50,8 @@ public static class DependencyInjection
         services.AddSingleton<IDnsTxtRecordResolver, DnsClientTxtRecordResolver>();
 
         services.AddScoped<IHipIdentityRepository, EfHipIdentityRepository>();
+        services.AddScoped<IDomainVerificationRequestRepository, EfDomainVerificationRequestRepository>();
+        services.AddScoped<IWebsiteIdentityRepository, EfWebsiteIdentityRepository>();
         services.AddScoped<IReputationProfileRepository, EfReputationProfileRepository>();
         services.AddScoped<IReputationEventRepository, EfReputationEventRepository>();
         services.AddScoped<IRuleRepository, EfRuleRepository>();
@@ -64,6 +68,11 @@ public static class DependencyInjection
         services.AddScoped<IAdminReviewQueueRepository, EfAdminReviewQueueRepository>();
         services.AddScoped<IOutboxEventRepository, EfOutboxEventRepository>();
         services.AddScoped<IInboxEventRepository, EfInboxEventRepository>();
+        services.AddScoped<IDuplicateSubmissionGuard, EfDuplicateSubmissionGuard>();
+        services.AddScoped<ISetupCodeLicenseService, EfSetupCodeLicenseService>();
+        services.AddScoped<IExternalSiteEvidenceCache, EfExternalSiteEvidenceCache>();
+        services.AddScoped<IExternalSiteEvidenceSettingsStore, EfExternalSiteEvidenceSettingsStore>();
+        services.AddScoped<IExternalProviderResiliencePolicy, EfExternalProviderResiliencePolicy>();
         services.AddScoped<IScanResultCache, EfScanResultCache>();
         services.AddScoped<IScanIngestionQueue, EfScanIngestionQueue>();
         services.AddScoped<ISandboxLinkScanQueue, EfSandboxLinkScanQueue>();
@@ -75,45 +84,25 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Selects the EF Core provider from configuration. HIP runtime persistence is PostgreSQL-only, while
-    /// local test hosts may opt into EF Core's in-memory provider so integration tests do not require Docker.
+    /// Selects the EF Core provider from configuration. HIP runtime persistence is PostgreSQL-only so scan,
+    /// identity, and verification data cannot disappear when the process restarts.
     /// </summary>
     /// <param name="options">EF Core options builder being configured for HIP persistence.</param>
     /// <param name="connectionString">Database connection string supplied by configuration or Aspire service discovery.</param>
-    /// <param name="databaseProvider">Optional provider name, such as PostgreSQL or InMemory.</param>
-    /// <param name="isLocalDevelopment">Whether non-production-only test providers may be used.</param>
+    /// <param name="databaseProvider">Optional provider name, such as PostgreSQL.</param>
     private static void ConfigureDatabaseProvider(
         DbContextOptionsBuilder options,
         string connectionString,
-        string? databaseProvider,
-        bool isLocalDevelopment)
+        string? databaseProvider)
     {
-        if (ShouldUseInMemory(databaseProvider, isLocalDevelopment))
-        {
-            // The in-memory provider is intentionally restricted to local Development/Test hosts. It keeps
-            // WebApplicationFactory tests lightweight without reintroducing SQLite as a runtime fallback.
-            options.UseInMemoryDatabase(connectionString);
-            return;
-        }
-
         if (!ShouldUsePostgreSql(connectionString, databaseProvider))
         {
             throw new InvalidOperationException(
-                "HIP runtime persistence requires PostgreSQL. Run HIP.AppHost to use Aspire-managed PostgreSQL, or set ConnectionStrings__HipDatabase to a PostgreSQL connection string. Lightweight in-memory persistence is supported only for local test hosts.");
+                "HIP runtime persistence requires PostgreSQL. Run HIP.AppHost to use Aspire-managed PostgreSQL, or set ConnectionStrings__HipDatabase to a PostgreSQL connection string.");
         }
 
         options.UseNpgsql(connectionString);
     }
-
-    /// <summary>
-    /// Allows the EF Core in-memory provider only for local test hosts that explicitly request it.
-    /// </summary>
-    /// <param name="databaseProvider">Configured provider name.</param>
-    /// <param name="isLocalDevelopment">Whether the current host is a local Development/Test process.</param>
-    /// <returns>True when the test-only in-memory provider may be selected.</returns>
-    private static bool ShouldUseInMemory(string? databaseProvider, bool isLocalDevelopment) =>
-        isLocalDevelopment
-        && string.Equals(databaseProvider, "InMemory", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Detects PostgreSQL configuration without treating every arbitrary connection string as safe for Npgsql.

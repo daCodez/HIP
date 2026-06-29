@@ -82,7 +82,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IProviderSubmissionPolicy, DefaultProviderSubmissionPolicy>();
         services.TryAddSingleton<IFeedbackWeightingPolicy, DefaultFeedbackWeightingPolicy>();
         services.AddSingleton<IPrivacyHashingService, Sha256PrivacyHashingService>();
-        services.AddSingleton<IDuplicateSubmissionGuard, InMemoryDuplicateSubmissionGuard>();
+        // Runtime duplicate detection is supplied by HIP.Infrastructure so public submissions are deduped through durable storage.
         services.AddSingleton<ISubmissionRateLimiter, DevelopmentSubmissionRateLimiter>();
         services.AddScoped<IOutboxEventWriter, OutboxEventWriter>();
         services.AddSingleton<IReportRetentionPolicyService, ReportRetentionPolicyService>();
@@ -92,8 +92,8 @@ public static class DependencyInjection
         services.AddScoped<IHipSignatureService, HipSignatureService>();
         services.AddScoped<IWebsiteIdentityService, WebsiteIdentityService>();
         services.TryAddSingleton<IDnsTxtRecordResolver, NoOpDnsTxtRecordResolver>();
-        services.AddSingleton<IDomainVerificationService, DnsDomainVerificationService>();
-        services.AddSingleton<ISetupCodeLicenseService, InMemorySetupCodeLicenseService>();
+        services.AddScoped<IDomainVerificationService, DnsDomainVerificationService>();
+        // Runtime setup-code licenses are supplied by HIP.Infrastructure so HUD activation state survives restarts.
         services.AddScoped<ISecondLifeHudService, SecondLifeHudService>();
         services.AddScoped<ISecondLifeHudSimulationService, SecondLifeHudSimulationService>();
         services.AddScoped<IBrowserPluginService, BrowserPluginService>();
@@ -103,7 +103,7 @@ public static class DependencyInjection
         services.AddScoped<IAdminScanDetailService, AdminScanDetailService>();
         services.AddScoped<ISiteSafetyScanner, SiteSafetyScanner>();
         services.AddScoped<ISandboxLinkScanService, SandboxLinkScanService>();
-        services.TryAddSingleton<ISandboxLinkScanQueue, InMemorySandboxLinkScanQueue>();
+        // Sandbox scan queue persistence is supplied by HIP.Infrastructure so local and production behavior use durable state.
         services.AddSingleton(new SandboxLinkScanOptions());
         services.AddScoped<IExternalSiteEvidenceCollector, ExternalSiteEvidenceCollector>();
         services.AddScoped<ISiteSafetyScanResultStorageService, SiteSafetyScanResultStorageService>();
@@ -114,10 +114,8 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<AdminReviewQueueItem>, AdminReviewQueueItemValidator>();
         services.AddSingleton(new SiteSafetyRuleOptions());
         services.AddSingleton(_ => new HttpClient());
-        services.AddSingleton<IExternalSiteEvidenceCache, InMemoryExternalSiteEvidenceCache>();
+        // Runtime provider cache/settings/resilience are supplied by HIP.Infrastructure so provider work is not process-local.
         services.AddSingleton(new ExternalSiteEvidenceOptions());
-        services.AddSingleton<IExternalSiteEvidenceSettingsStore, InMemoryExternalSiteEvidenceSettingsStore>();
-        services.AddSingleton<IExternalProviderResiliencePolicy, InMemoryExternalProviderResiliencePolicy>();
         services.AddScoped<ISiteSafetyEvidenceProvider, BrowserObservedSignalProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, WeightedFeedbackSiteSafetyEvidenceProvider>();
         services.AddScoped<ISiteSafetyEvidenceProvider, AdminReviewEvidenceProvider>();

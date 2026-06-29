@@ -136,7 +136,51 @@ public sealed class DnsDomainVerificationServiceTests
     private static DnsDomainVerificationService Service(
         Func<string, Task<IReadOnlyCollection<string>>> resolve,
         CapturingLogger<DnsDomainVerificationService>? logger = null) =>
-        new(new StubDnsTxtRecordResolver(resolve), logger ?? new CapturingLogger<DnsDomainVerificationService>());
+        new(
+            new StubDnsTxtRecordResolver(resolve),
+            new TestDomainVerificationRequestRepository(),
+            logger ?? new CapturingLogger<DnsDomainVerificationService>());
+
+    /// <summary>
+    /// Test-only repository that records verification challenges without using the production database.
+    /// </summary>
+    private sealed class TestDomainVerificationRequestRepository : IDomainVerificationRequestRepository
+    {
+        private readonly Dictionary<string, DomainVerificationRequest> requests = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Saves a verification challenge for later assertions.
+        /// </summary>
+        /// <param name="request">Challenge to save.</param>
+        /// <param name="cancellationToken">Unused test cancellation token.</param>
+        /// <returns>The saved challenge.</returns>
+        public Task<DomainVerificationRequest> SaveAsync(DomainVerificationRequest request, CancellationToken cancellationToken)
+        {
+            requests[Key(request.Domain, request.Method)] = request;
+            return Task.FromResult(request);
+        }
+
+        /// <summary>
+        /// Gets a saved verification challenge by domain and method.
+        /// </summary>
+        /// <param name="domain">Domain under test.</param>
+        /// <param name="method">Verification method under test.</param>
+        /// <param name="cancellationToken">Unused test cancellation token.</param>
+        /// <returns>The saved challenge, or null when none exists.</returns>
+        public Task<DomainVerificationRequest?> GetAsync(string domain, VerificationMethod method, CancellationToken cancellationToken)
+        {
+            requests.TryGetValue(Key(domain, method), out var request);
+            return Task.FromResult(request);
+        }
+
+        /// <summary>
+        /// Creates the same stable key shape used by the production repository.
+        /// </summary>
+        /// <param name="domain">Domain under test.</param>
+        /// <param name="method">Verification method under test.</param>
+        /// <returns>Test storage key.</returns>
+        private static string Key(string domain, VerificationMethod method) => $"{method}:{domain}";
+    }
 
     /// <summary>
     /// Fake DNS resolver used to isolate verification logic from live DNS.

@@ -1,7 +1,7 @@
 namespace HIP.Application.Browser;
 
 /// <summary>
-/// Stores privacy-safe browser plugin scan results behind an abstraction so HIP can move from SQLite to production storage later.
+/// Stores privacy-safe browser plugin scan results behind an abstraction so HIP can use durable production storage.
 /// </summary>
 public interface IBrowserScanResultRepository
 {

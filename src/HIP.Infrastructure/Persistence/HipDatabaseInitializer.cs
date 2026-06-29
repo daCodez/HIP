@@ -42,7 +42,7 @@ public static class HipDatabaseInitializer
     /// <param name="cancellationToken">Token used to cancel schema initialization.</param>
     /// <remarks>
     /// EF Core <c>EnsureCreated</c> does not evolve an already-created database. HIP uses this additive development
-    /// initializer until formal migrations are introduced, so local Postgres/SQLite databases receive both the generic
+    /// initializer until formal migrations are introduced, so local PostgreSQL databases receive both the generic
     /// encrypted record table and typed scan tables without wiping existing local data.
     /// </remarks>
     private static async Task EnsureDevelopmentTablesAsync(HipDbContext dbContext, CancellationToken cancellationToken)
@@ -54,10 +54,7 @@ public static class HipDatabaseInitializer
             return;
         }
 
-        if (providerName.Contains("Sqlite", StringComparison.OrdinalIgnoreCase))
-        {
-            await EnsureSqliteDevelopmentTablesAsync(dbContext, cancellationToken);
-        }
+        throw new InvalidOperationException("HIP development schema initialization requires PostgreSQL.");
     }
 
     /// <summary>
@@ -122,73 +119,6 @@ public static class HipDatabaseInitializer
                 "Dangerous" integer NOT NULL,
                 "UpdatedAtUtc" timestamp with time zone NOT NULL,
                 CONSTRAINT "PK_hip_dashboard_scan_aggregates" PRIMARY KEY ("Id")
-            );
-            """,
-            cancellationToken);
-
-        await CreateIndexesAsync(dbContext, cancellationToken);
-    }
-
-    /// <summary>
-    /// Creates SQLite development tables and indexes when missing.
-    /// </summary>
-    /// <param name="dbContext">HIP database context.</param>
-    /// <param name="cancellationToken">Token used to cancel schema initialization.</param>
-    private static async Task EnsureSqliteDevelopmentTablesAsync(HipDbContext dbContext, CancellationToken cancellationToken)
-    {
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """
-            CREATE TABLE IF NOT EXISTS hip_records (
-                "Partition" TEXT NOT NULL,
-                "Id" TEXT NOT NULL,
-                "Json" TEXT NOT NULL,
-                "CreatedAtUtc" TEXT NOT NULL,
-                "UpdatedAtUtc" TEXT NOT NULL,
-                CONSTRAINT "PK_hip_records" PRIMARY KEY ("Partition", "Id")
-            );
-            """,
-            cancellationToken);
-
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """
-            CREATE TABLE IF NOT EXISTS hip_browser_scan_results (
-                "ScanResultId" TEXT NOT NULL CONSTRAINT "PK_hip_browser_scan_results" PRIMARY KEY,
-                "Domain" TEXT NOT NULL,
-                "PageUrlHash" TEXT NOT NULL,
-                "StoredPageUrl" TEXT NULL,
-                "ScanSource" TEXT NOT NULL,
-                "Score" INTEGER NOT NULL,
-                "RiskLevel" TEXT NOT NULL,
-                "Status" TEXT NOT NULL,
-                "ReasonsJson" TEXT NOT NULL,
-                "LinksScanned" INTEGER NOT NULL,
-                "RiskyLinksFound" INTEGER NOT NULL,
-                "SuspiciousLinksFound" INTEGER NOT NULL,
-                "DangerousLinksFound" INTEGER NOT NULL,
-                "LastCheckedUtc" TEXT NOT NULL,
-                "RecommendedAction" TEXT NOT NULL,
-                "PrivacySafeMetadataJson" TEXT NOT NULL,
-                "PluginVersion" TEXT NULL,
-                "CreatedAtUtc" TEXT NOT NULL,
-                "UpdatedAtUtc" TEXT NOT NULL
-            );
-            """,
-            cancellationToken);
-
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """
-            CREATE TABLE IF NOT EXISTS hip_dashboard_scan_aggregates (
-                "Id" TEXT NOT NULL CONSTRAINT "PK_hip_dashboard_scan_aggregates" PRIMARY KEY,
-                "TotalScans" INTEGER NOT NULL,
-                "ScansToday" INTEGER NOT NULL,
-                "Trusted" INTEGER NOT NULL,
-                "MostlyTrusted" INTEGER NOT NULL,
-                "LimitedTrustData" INTEGER NOT NULL,
-                "Unknown" INTEGER NOT NULL,
-                "Suspicious" INTEGER NOT NULL,
-                "HighRisk" INTEGER NOT NULL,
-                "Dangerous" INTEGER NOT NULL,
-                "UpdatedAtUtc" TEXT NOT NULL
             );
             """,
             cancellationToken);

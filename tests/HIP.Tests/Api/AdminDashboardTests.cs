@@ -952,7 +952,7 @@ public sealed class AdminDashboardTests
     }
 
     /// <summary>
-    /// Dashboard service used to verify the no-data UI without depending on the developer SQLite database state.
+    /// Dashboard service used to verify the no-data UI without depending on a developer database state.
     /// </summary>
     private sealed class EmptyDashboardService : IAdminDashboardService
     {

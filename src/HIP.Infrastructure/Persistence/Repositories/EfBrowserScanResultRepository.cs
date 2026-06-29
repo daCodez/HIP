@@ -44,16 +44,10 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
     public async Task<BrowserScanResultRecord?> GetLatestByDomainAsync(string domain, CancellationToken cancellationToken)
     {
         var normalizedDomain = domain.Trim().ToLowerInvariant();
-        var entity = IsSqlite()
-            ? (await dbContext.BrowserScanResults.AsNoTracking()
-                .Where(result => result.Domain == normalizedDomain)
-                .ToArrayAsync(cancellationToken))
-                .OrderByDescending(result => result.LastCheckedUtc)
-                .FirstOrDefault()
-            : await dbContext.BrowserScanResults.AsNoTracking()
-                .Where(result => result.Domain == normalizedDomain)
-                .OrderByDescending(result => result.LastCheckedUtc)
-                .FirstOrDefaultAsync(cancellationToken);
+        var entity = await dbContext.BrowserScanResults.AsNoTracking()
+            .Where(result => result.Domain == normalizedDomain)
+            .OrderByDescending(result => result.LastCheckedUtc)
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (entity is not null)
         {
@@ -73,14 +67,9 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
     /// <returns>Stored scan results, newest first.</returns>
     public async Task<IReadOnlyCollection<BrowserScanResultRecord>> ListAsync(CancellationToken cancellationToken)
     {
-        var typedResults = IsSqlite()
-            ? (await dbContext.BrowserScanResults.AsNoTracking()
-                .ToArrayAsync(cancellationToken))
-                .OrderByDescending(result => result.LastCheckedUtc)
-                .ToArray()
-            : await dbContext.BrowserScanResults.AsNoTracking()
-                .OrderByDescending(result => result.LastCheckedUtc)
-                .ToArrayAsync(cancellationToken);
+        var typedResults = await dbContext.BrowserScanResults.AsNoTracking()
+            .OrderByDescending(result => result.LastCheckedUtc)
+            .ToArrayAsync(cancellationToken);
         if (typedResults.Length > 0)
         {
             return typedResults.Select(FromEntity).ToArray();
@@ -105,16 +94,10 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
             return Array.Empty<BrowserScanResultRecord>();
         }
 
-        var typedResults = IsSqlite()
-            ? (await dbContext.BrowserScanResults.AsNoTracking()
-                .ToArrayAsync(cancellationToken))
-                .OrderByDescending(result => result.LastCheckedUtc)
-                .Take(boundedMax)
-                .ToArray()
-            : await dbContext.BrowserScanResults.AsNoTracking()
-                .OrderByDescending(result => result.LastCheckedUtc)
-                .Take(boundedMax)
-                .ToArrayAsync(cancellationToken);
+        var typedResults = await dbContext.BrowserScanResults.AsNoTracking()
+            .OrderByDescending(result => result.LastCheckedUtc)
+            .Take(boundedMax)
+            .ToArrayAsync(cancellationToken);
         if (typedResults.Length > 0)
         {
             return typedResults.Select(FromEntity).ToArray();
@@ -242,10 +225,4 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
             ? pluginVersion
             : null;
 
-    /// <summary>
-    /// Detects SQLite so tests can avoid provider translation gaps for <see cref="DateTimeOffset" /> ordering.
-    /// </summary>
-    /// <returns>True when the active EF provider is SQLite.</returns>
-    private bool IsSqlite() =>
-        dbContext.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
 }

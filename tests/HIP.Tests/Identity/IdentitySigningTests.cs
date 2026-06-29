@@ -213,11 +213,49 @@ public sealed class IdentitySigningTests
         return new HipIdentityService(crypto, new InMemoryHipIdentityRepository());
     }
 
-    private static WebsiteIdentityService WebsiteService() =>
-        new(new DevelopmentHipCryptoProvider(), new InMemoryHipIdentityRepository(), new InMemoryDomainVerificationService());
+    private static WebsiteIdentityService WebsiteService()
+    {
+        return new(
+            new DevelopmentHipCryptoProvider(),
+            new InMemoryHipIdentityRepository(),
+            new InMemoryDomainVerificationService(),
+            new TestWebsiteIdentityRepository());
+    }
 
     private static HipSignatureService SignatureService(DevelopmentHipCryptoProvider crypto) =>
         new(crypto, new InMemoryHipIdentityRepository());
+
+    /// <summary>
+    /// Test-only website identity repository used to verify service behavior without static process state.
+    /// </summary>
+    private sealed class TestWebsiteIdentityRepository : IWebsiteIdentityRepository
+    {
+        private readonly Dictionary<string, WebsiteIdentity> identities = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Saves a website identity for later test lookup.
+        /// </summary>
+        /// <param name="websiteIdentity">Website identity to save.</param>
+        /// <param name="cancellationToken">Unused test cancellation token.</param>
+        /// <returns>The saved website identity.</returns>
+        public Task<WebsiteIdentity> SaveAsync(WebsiteIdentity websiteIdentity, CancellationToken cancellationToken)
+        {
+            identities[websiteIdentity.Domain] = websiteIdentity;
+            return Task.FromResult(websiteIdentity);
+        }
+
+        /// <summary>
+        /// Gets a saved website identity by domain.
+        /// </summary>
+        /// <param name="domain">Domain under test.</param>
+        /// <param name="cancellationToken">Unused test cancellation token.</param>
+        /// <returns>The saved identity, or null when none exists.</returns>
+        public Task<WebsiteIdentity?> GetAsync(string domain, CancellationToken cancellationToken)
+        {
+            identities.TryGetValue(domain, out var identity);
+            return Task.FromResult(identity);
+        }
+    }
 
     /// <summary>
     /// Seeds a privacy-safe browser scan so signed identity lookup tests exercise the real scan-data path.

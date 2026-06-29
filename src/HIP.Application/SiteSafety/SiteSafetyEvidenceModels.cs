@@ -767,10 +767,10 @@ public sealed class BrowserObservedSignalProvider : ISiteSafetyEvidenceProvider
 public abstract class ExternalSiteEvidenceProviderBase(
     IExternalSiteEvidenceCache cache,
     ExternalSiteEvidenceOptions options,
-    IExternalProviderResiliencePolicy? resiliencePolicy = null,
+    IExternalProviderResiliencePolicy resiliencePolicy,
     IProviderSubmissionPolicy? submissionPolicy = null) : IExternalSiteEvidenceProvider
 {
-    private readonly IExternalProviderResiliencePolicy resiliencePolicy = resiliencePolicy ?? new InMemoryExternalProviderResiliencePolicy();
+    private readonly IExternalProviderResiliencePolicy resiliencePolicy = resiliencePolicy ?? throw new ArgumentNullException(nameof(resiliencePolicy));
     private readonly IProviderSubmissionPolicy submissionPolicy = submissionPolicy ?? new DefaultProviderSubmissionPolicy();
 
     /// <summary>
@@ -865,8 +865,8 @@ public sealed class SslLabsSiteEvidenceProvider : ExternalSiteEvidenceProviderBa
     public SslLabsSiteEvidenceProvider(
         IExternalSiteEvidenceCache cache,
         ExternalSiteEvidenceOptions options,
+        IExternalProviderResiliencePolicy resiliencePolicy,
         HttpClient? httpClient = null,
-        IExternalProviderResiliencePolicy? resiliencePolicy = null,
         IProviderSubmissionPolicy? submissionPolicy = null)
         : base(cache, options, resiliencePolicy, submissionPolicy)
     {
@@ -1118,7 +1118,7 @@ public sealed class SslLabsSiteEvidenceProvider : ExternalSiteEvidenceProviderBa
 public sealed class GoogleWebRiskSiteEvidenceProvider(
     IExternalSiteEvidenceCache cache,
     ExternalSiteEvidenceOptions options,
-    IExternalProviderResiliencePolicy? resiliencePolicy = null,
+    IExternalProviderResiliencePolicy resiliencePolicy,
     IProviderSubmissionPolicy? submissionPolicy = null) : ExternalSiteEvidenceProviderBase(cache, options, resiliencePolicy, submissionPolicy)
 {
     /// <inheritdoc />
@@ -1164,7 +1164,7 @@ public sealed class GoogleWebRiskSiteEvidenceProvider(
 public sealed class VirusTotalSiteEvidenceProvider(
     IExternalSiteEvidenceCache cache,
     ExternalSiteEvidenceOptions options,
-    IExternalProviderResiliencePolicy? resiliencePolicy = null,
+    IExternalProviderResiliencePolicy resiliencePolicy,
     IProviderSubmissionPolicy? submissionPolicy = null) : ExternalSiteEvidenceProviderBase(cache, options, resiliencePolicy, submissionPolicy)
 {
     /// <inheritdoc />

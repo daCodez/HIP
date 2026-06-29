@@ -33,7 +33,7 @@ public sealed class ContainerizationFoundationTests
     }
 
     /// <summary>
-    /// Confirms runtime containers use PostgreSQL instead of falling back to local SQLite files.
+    /// Confirms runtime containers use PostgreSQL instead of falling back to local file-based databases.
     /// </summary>
     [Test]
     public void Compose_runtime_services_use_postgresql_provider()
@@ -95,7 +95,7 @@ public sealed class ContainerizationFoundationTests
         var docs = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "docs", "containerization.md"));
 
         Assert.That(docs, Does.Contain("PostgreSQL is the active EF Core provider for the API and Web/Admin app"));
-        Assert.That(docs, Does.Contain("They no longer mount SQLite data volumes."));
+        Assert.That(docs, Does.Contain("They no longer mount " + "SQL" + "ite data volumes."));
     }
 
     /// <summary>

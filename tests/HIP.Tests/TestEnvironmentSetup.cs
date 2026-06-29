@@ -4,9 +4,8 @@ namespace HIP.Tests;
 /// Configures process-level test settings before any WebApplicationFactory host starts.
 /// </summary>
 /// <remarks>
-/// HIP runtime hosts now require an explicit database connection so they do not silently fall back to SQLite.
-/// API and Web integration tests still need isolated persistence without requiring Aspire containers, so this setup
-/// fixture requests HIP's test-only EF Core in-memory provider when the developer has not already provided one.
+/// HIP runtime hosts now require an explicit PostgreSQL connection so tests cannot silently fall back to disposable
+/// process-local storage.
 /// </remarks>
 [SetUpFixture]
 public sealed class TestEnvironmentSetup
@@ -17,14 +16,9 @@ public sealed class TestEnvironmentSetup
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__HipDatabase")))
-        {
-            Environment.SetEnvironmentVariable("ConnectionStrings__HipDatabase", $"hip-tests-{Environment.ProcessId}");
-        }
-
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("HipInfrastructure__DatabaseProvider")))
         {
-            Environment.SetEnvironmentVariable("HipInfrastructure__DatabaseProvider", "InMemory");
+            Environment.SetEnvironmentVariable("HipInfrastructure__DatabaseProvider", "PostgreSQL");
         }
     }
 }
