@@ -404,7 +404,7 @@ public sealed class EfExternalProviderResiliencePolicy(HipRecordStore store) : I
         catch
         {
             var failureCount = state.CircuitOpenUntilUtc <= now ? 1 : state.FailureCount + 1;
-            var openUntil = failureCount >= FailureThreshold ? now.Add(BreakDuration) : null;
+            DateTimeOffset? openUntil = failureCount >= FailureThreshold ? now.Add(BreakDuration) : null;
             await SaveStateAsync(normalizedProvider, new ProviderCircuitRecord(failureCount, openUntil), cancellationToken);
             throw;
         }
