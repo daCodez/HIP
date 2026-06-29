@@ -13,7 +13,7 @@ public sealed class BrowserPluginApiTests
     [Test]
     public async Task Score_site_endpoint_returns_score_status_and_reasons()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/score-site", new BrowserScoreSiteRequest(
@@ -35,7 +35,7 @@ public sealed class BrowserPluginApiTests
     [Test]
     public async Task Scan_links_endpoint_returns_risk_results()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(
@@ -50,7 +50,7 @@ public sealed class BrowserPluginApiTests
     [Test]
     public async Task Safe_links_do_not_require_icons()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(
@@ -66,7 +66,7 @@ public sealed class BrowserPluginApiTests
     [Test]
     public async Task Unknown_external_links_do_not_force_icons()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(
@@ -87,7 +87,7 @@ public sealed class BrowserPluginApiTests
     [Test]
     public async Task Suspicious_links_require_labels_or_icons()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(
@@ -104,7 +104,7 @@ public sealed class BrowserPluginApiTests
     [Test]
     public async Task Shortened_links_are_marked_suspicious_or_caution()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(
@@ -124,7 +124,7 @@ public sealed class BrowserPluginApiTests
     [Test]
     public async Task Safe_link_has_no_safety_page_url()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(
@@ -140,7 +140,7 @@ public sealed class BrowserPluginApiTests
     [Test]
     public async Task Safety_page_url_encodes_original_url()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(

@@ -105,7 +105,7 @@ public sealed class AdminScanDetailsTests
     [Test]
     public async Task Admin_scan_details_api_returns_score_breakdown()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         var scan = await SeedScanAsync(factory);
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");
@@ -132,7 +132,7 @@ public sealed class AdminScanDetailsTests
     [Test]
     public async Task Admin_scan_details_api_returns_not_found_for_unknown_scan()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");
 
@@ -147,7 +147,7 @@ public sealed class AdminScanDetailsTests
     [Test]
     public async Task Admin_scan_details_page_loads()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         var scan = await SeedScanAsync(factory);
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");

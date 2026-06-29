@@ -19,7 +19,7 @@ public sealed class BrowserScanResultApiTests
     [Test]
     public async Task Scan_result_endpoint_saves_result()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-results", ValidRequest());
@@ -40,7 +40,7 @@ public sealed class BrowserScanResultApiTests
     [Test]
     public async Task Scan_result_endpoint_returns_latest_result_by_domain()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         await client.PostAsJsonAsync("/api/v1/browser/scan-results", ValidRequest());
@@ -64,7 +64,7 @@ public sealed class BrowserScanResultApiTests
     [Test]
     public async Task Scan_result_endpoint_accepts_client_url_hash_and_plugin_version()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         var domain = $"hashed-scan-{Guid.NewGuid():N}.com";
 
@@ -114,7 +114,7 @@ public sealed class BrowserScanResultApiTests
     [Test]
     public async Task Scan_result_endpoint_rejects_invalid_url_hash()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-results", ValidRequest() with
@@ -132,7 +132,7 @@ public sealed class BrowserScanResultApiTests
     [Test]
     public async Task Scan_result_endpoint_does_not_expose_private_fields()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         await client.PostAsJsonAsync("/api/v1/browser/scan-results", ValidRequest());
@@ -156,7 +156,7 @@ public sealed class BrowserScanResultApiTests
     [Test]
     public async Task Scan_result_endpoint_rejects_invalid_domain()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-results", ValidRequest() with { Domain = "bad domain" });
@@ -170,7 +170,7 @@ public sealed class BrowserScanResultApiTests
     [Test]
     public async Task Scan_result_endpoint_rejects_invalid_score()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-results", ValidRequest() with { Score = -1 });
@@ -184,7 +184,7 @@ public sealed class BrowserScanResultApiTests
     [Test]
     public async Task Scan_result_endpoint_rejects_duplicate_submission()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         var timestamp = DateTimeOffset.UtcNow;
         var request = ValidRequest() with
@@ -212,7 +212,7 @@ public sealed class BrowserScanResultApiTests
     [Test]
     public async Task Public_lookup_uses_stored_browser_scan_result_when_available()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         var domain = $"stored-scan-{Guid.NewGuid():N}.com";
 
@@ -244,7 +244,7 @@ public sealed class BrowserScanResultApiTests
     [Test]
     public async Task Public_lookup_returns_unknown_when_no_stored_scan_exists()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         var domain = $"no-scan-{Guid.NewGuid():N}.com";
 
@@ -268,7 +268,7 @@ public sealed class BrowserScanResultApiTests
     [Test]
     public async Task Public_lookup_does_not_expose_private_scan_fields()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         var domain = $"privacy-scan-{Guid.NewGuid():N}.com";
 

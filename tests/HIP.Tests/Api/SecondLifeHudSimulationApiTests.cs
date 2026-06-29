@@ -16,7 +16,7 @@ public sealed class SecondLifeHudSimulationApiTests
     [Test]
     public async Task Sl_hud_simulation_route_returns_payload_preview()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/sl-hud/simulate", new
@@ -43,7 +43,7 @@ public sealed class SecondLifeHudSimulationApiTests
     [Test]
     public async Task Sl_hud_simulation_route_rejects_invalid_scan_mode()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/sl-hud/simulate", new

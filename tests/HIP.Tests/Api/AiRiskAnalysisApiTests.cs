@@ -11,7 +11,7 @@ public sealed class AiRiskAnalysisApiTests
     [Test]
     public async Task Ai_analysis_requires_admin_authorization()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/ai/analyze-url", new
@@ -28,7 +28,7 @@ public sealed class AiRiskAnalysisApiTests
     [Test]
     public async Task Ai_url_analysis_v1_route_returns_privacy_safe_result()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = AdminClient(factory);
 
         var response = await client.PostAsJsonAsync("/api/v1/ai/analyze-url", new
@@ -54,7 +54,7 @@ public sealed class AiRiskAnalysisApiTests
     [Test]
     public async Task Ai_content_analysis_rejects_private_content()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = AdminClient(factory);
 
         var response = await client.PostAsJsonAsync("/api/v1/ai/analyze-content", new
@@ -70,7 +70,7 @@ public sealed class AiRiskAnalysisApiTests
     [Test]
     public async Task Ai_suggest_rule_route_returns_rule_that_requires_simulation()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = AdminClient(factory);
 
         var response = await client.PostAsJsonAsync("/api/v1/ai/suggest-rule", new

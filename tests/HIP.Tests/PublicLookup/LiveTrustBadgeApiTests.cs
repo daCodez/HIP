@@ -9,7 +9,7 @@ public sealed class LiveTrustBadgeApiTests
     [Test]
     public async Task Badge_endpoint_returns_score_status_and_domain()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/badge/example.com");
@@ -24,7 +24,7 @@ public sealed class LiveTrustBadgeApiTests
     [Test]
     public async Task Badge_always_includes_score_or_status_and_lookup_link()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/badge/verified-example.com");
@@ -40,7 +40,7 @@ public sealed class LiveTrustBadgeApiTests
     [Test]
     public async Task Badge_rejects_invalid_domain()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/badge/bad%20domain");
@@ -51,7 +51,7 @@ public sealed class LiveTrustBadgeApiTests
     [Test]
     public async Task Badge_does_not_expose_private_data()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/badge/example.com");
@@ -66,7 +66,7 @@ public sealed class LiveTrustBadgeApiTests
     [Test]
     public async Task Low_score_badge_still_shows_low_score()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/badge/danger-example.com");
@@ -79,7 +79,7 @@ public sealed class LiveTrustBadgeApiTests
     [Test]
     public async Task Badge_script_returns_renderable_content()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/badge/example.com/script");

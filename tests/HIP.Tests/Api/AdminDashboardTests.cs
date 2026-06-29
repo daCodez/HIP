@@ -31,7 +31,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Dashboard_summary_returns_counts()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "Owner");
 
@@ -611,7 +611,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Dashboard_route_shows_recent_threat_section()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");
 
@@ -625,7 +625,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Dashboard_route_shows_refresh_button_and_last_updated_status()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");
 
@@ -644,7 +644,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Dashboard_route_shows_empty_data_state_when_no_scans_exist()
     {
-        await using var factory = new WebApplicationFactory<Program>()
+        await using var factory = new HipWebApplicationFactory<Program>()
             .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IAdminDashboardService>();
@@ -667,7 +667,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Dashboard_route_shows_safe_refresh_error_when_summary_service_fails()
     {
-        await using var factory = new WebApplicationFactory<Program>()
+        await using var factory = new HipWebApplicationFactory<Program>()
             .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IAdminDashboardService>();
@@ -745,7 +745,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Dashboard_summary_does_not_expose_private_content()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var privateToken = "private-token-should-not-appear";
@@ -785,7 +785,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Unauthorized_users_cannot_access_admin_dashboard_api()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/admin/dashboard/summary");
@@ -796,7 +796,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Readonly_can_view_summary()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");
 
@@ -808,7 +808,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Dashboard_route_exists()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");
 
@@ -820,7 +820,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Dashboard_risky_domains_api_is_protected()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/admin/dashboard/risky-domains");
@@ -831,7 +831,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Dashboard_recent_scans_api_is_protected()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/admin/dashboard/recent-scans");
@@ -842,7 +842,7 @@ public sealed class AdminDashboardTests
     [Test]
     public async Task Recent_activity_uses_privacy_safe_summaries()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         await client.PostAsJsonAsync("/api/v1/public/risk-findings", new RiskFindingReport(
             "",

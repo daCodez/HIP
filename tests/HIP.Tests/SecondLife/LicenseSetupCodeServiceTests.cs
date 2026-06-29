@@ -162,7 +162,7 @@ public sealed class LicenseSetupCodeServiceTests
         Assert.Multiple(() =>
         {
             Assert.That(listed.MaskedSetupCode, Is.Not.EqualTo(code.SetupCode));
-            Assert.That(listed.MaskedSetupCode, Does.Contain("••••"));
+            Assert.That(listed.MaskedSetupCode, Does.Contain("****"));
         });
     }
 

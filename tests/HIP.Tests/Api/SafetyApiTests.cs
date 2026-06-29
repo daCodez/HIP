@@ -10,7 +10,7 @@ public sealed class SafetyApiTests
     [Test]
     public async Task Safety_page_loads_with_valid_url()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/safety?url=https%3A%2F%2Fbit.ly%2Fexample&source=browser");
@@ -23,7 +23,7 @@ public sealed class SafetyApiTests
     [Test]
     public async Task Safety_evaluate_rejects_invalid_url()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/safety/evaluate", new { Url = "javascript:alert(1)", Source = "browser" });
@@ -34,7 +34,7 @@ public sealed class SafetyApiTests
     [Test]
     public async Task Suspicious_url_routes_to_warning()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/safety/evaluate", new { Url = "https://bit.ly/example", Source = "browser" });
@@ -49,7 +49,7 @@ public sealed class SafetyApiTests
     [Test]
     public async Task Critical_url_blocks_continue()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/safety/evaluate", new { Url = "https://critical-example.com/pay", Source = "sl-hud" });
@@ -63,7 +63,7 @@ public sealed class SafetyApiTests
     [Test]
     public async Task Safety_evaluation_response_does_not_expose_private_data()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/safety/evaluate", new { Url = "https://bit.ly/example", Source = "browser" });
@@ -81,7 +81,7 @@ public sealed class SafetyApiTests
     [Test]
     public async Task Safety_evaluation_strips_query_and_fragment_from_response_url()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/safety/evaluate", new { Url = "https://bit.ly/example?token=secret#private", Source = "browser" });
@@ -96,7 +96,7 @@ public sealed class SafetyApiTests
     [Test]
     public async Task Safety_url_handling_avoids_open_redirect()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         var response = await client.GetAsync("/safety?url=https%3A%2F%2Fdanger-example.com%2Fpay&source=browser");

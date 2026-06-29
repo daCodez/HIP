@@ -16,7 +16,7 @@ public sealed class LicenseApiTests
     [Test]
     public async Task Admin_license_routes_are_protected()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/licenses/");
@@ -30,7 +30,7 @@ public sealed class LicenseApiTests
     [Test]
     public async Task Support_can_create_setup_code()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "Support");
 
@@ -52,7 +52,7 @@ public sealed class LicenseApiTests
     [Test]
     public async Task License_list_masks_setup_codes()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "Support");
 
@@ -67,7 +67,7 @@ public sealed class LicenseApiTests
         var listed = list!.Single(license => license.LicenseId == created!.LicenseId);
 
         Assert.That(listed.MaskedSetupCode, Is.Not.EqualTo(created!.SetupCode));
-        Assert.That(listed.MaskedSetupCode, Does.Contain("••••"));
+        Assert.That(listed.MaskedSetupCode, Does.Contain("****"));
     }
 
     /// <summary>

@@ -53,7 +53,13 @@ public sealed class PersistenceRepositoryTests
             })
             .Build();
 
-        var exception = Assert.Throws<InvalidOperationException>(() => services.AddHipInfrastructure(configuration));
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+        {
+            services.AddHipInfrastructure(configuration);
+
+            using var provider = services.BuildServiceProvider();
+            _ = provider.GetRequiredService<HipDbContext>();
+        });
 
         Assert.That(exception!.Message, Does.Contain("requires PostgreSQL"));
     }

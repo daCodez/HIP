@@ -12,7 +12,7 @@ public sealed class ReviewAppealsMvpTests
     [Test]
     public async Task Review_list_returns_privacy_safe_items()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = AdminClient(factory);
         var created = await CreateReviewAsync(client);
 
@@ -27,7 +27,7 @@ public sealed class ReviewAppealsMvpTests
     [Test]
     public async Task Review_decision_updates_status()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = AdminClient(factory);
         var created = await CreateReviewAsync(client);
 
@@ -47,7 +47,7 @@ public sealed class ReviewAppealsMvpTests
     [Test]
     public async Task Appeal_can_be_submitted_and_viewed_by_consumer()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = ConsumerClient(factory);
 
         var response = await client.PostAsJsonAsync("/api/v1/consumer/appeals", new ConsumerAppealSubmissionRequest(
@@ -66,7 +66,7 @@ public sealed class ReviewAppealsMvpTests
     [Test]
     public async Task Appeal_decision_updates_status()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var consumer = ConsumerClient(factory);
         var submitted = await SubmitAppealAsync(consumer);
         using var admin = AdminClient(factory);
@@ -86,7 +86,7 @@ public sealed class ReviewAppealsMvpTests
     [Test]
     public async Task Admin_review_routes_are_protected()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/admin/review");
@@ -97,7 +97,7 @@ public sealed class ReviewAppealsMvpTests
     [Test]
     public async Task Generated_review_queue_route_is_protected()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/admin/review-queue");
@@ -108,7 +108,7 @@ public sealed class ReviewAppealsMvpTests
     [Test]
     public async Task Authorized_admin_can_list_generated_review_queue()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = AdminClient(factory);
 
         var response = await client.GetAsync("/api/v1/admin/review-queue");
@@ -119,7 +119,7 @@ public sealed class ReviewAppealsMvpTests
     [Test]
     public async Task Consumer_appeal_response_does_not_expose_private_reviewer_data()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var consumer = ConsumerClient(factory);
         var submitted = await SubmitAppealAsync(consumer);
         using var admin = AdminClient(factory);

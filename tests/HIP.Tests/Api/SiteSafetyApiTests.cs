@@ -19,7 +19,7 @@ public sealed class SiteSafetyApiTests
     [Test]
     public async Task Site_safety_scan_v1_route_returns_scan_result()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/site-safety/scan", new SiteSafetyScanRequest("https://example.com"));
@@ -41,7 +41,7 @@ public sealed class SiteSafetyApiTests
     [Test]
     public async Task Site_safety_scan_rejects_localhost_url()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/site-safety/scan", new SiteSafetyScanRequest("http://localhost:5123"));
@@ -55,7 +55,7 @@ public sealed class SiteSafetyApiTests
     [Test]
     public async Task Site_safety_scan_saves_privacy_safe_scan_result()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         var domain = $"live-storage-{Guid.NewGuid():N}.com";
 
@@ -90,7 +90,7 @@ public sealed class SiteSafetyApiTests
     [Test]
     public async Task Site_safety_scan_is_available_to_admin_dashboard()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         var domain = $"dashboard-live-{Guid.NewGuid():N}.com";
 
@@ -120,7 +120,7 @@ public sealed class SiteSafetyApiTests
     [Test]
     public async Task Stored_site_safety_scan_does_not_expose_private_url_or_private_fields()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         var domain = $"privacy-live-{Guid.NewGuid():N}.com";
 

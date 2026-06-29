@@ -11,12 +11,24 @@ public sealed class SecondLifeHudApiContractTests
     [Test]
     public async Task Sl_hud_activate_route_accepts_valid_setup_code()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Support");
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-User", "support-sl-hud-test");
+
+        var setupCodeResponse = await client.PostAsJsonAsync("/api/v1/licenses/setup-codes", new
+        {
+            allowedDeviceCount = 1,
+            createdBy = "support-sl-hud-test",
+            initialScanMode = "Normal"
+        });
+        Assert.That(setupCodeResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var setupCodeJson = await JsonDocument.ParseAsync(await setupCodeResponse.Content.ReadAsStreamAsync());
+        var setupCode = setupCodeJson.RootElement.GetProperty("setupCode").GetString();
 
         var response = await client.PostAsJsonAsync("/api/v1/sl-hud/activate", new
         {
-            setupCode = "HIP-DEV-SETUP",
+            setupCode,
             avatarIdHash = "avatar-hash",
             hudVersion = "0.1.0"
         });
@@ -30,7 +42,7 @@ public sealed class SecondLifeHudApiContractTests
     [Test]
     public async Task Sl_hud_scan_route_returns_warning_action_for_broken_up_url()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/sl-hud/scan", new
@@ -55,7 +67,7 @@ public sealed class SecondLifeHudApiContractTests
     [Test]
     public async Task Sl_hud_settings_route_rejects_invalid_mode()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/sl-hud/settings/hud-1", new

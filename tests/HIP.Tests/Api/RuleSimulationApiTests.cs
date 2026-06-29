@@ -11,7 +11,7 @@ public sealed class RuleSimulationApiTests
     [Test]
     public async Task Rule_simulate_route_runs_seed_cases()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/rules/simulate", new { RuleId = "new-domain-shortener-high-risk" });
@@ -27,7 +27,7 @@ public sealed class RuleSimulationApiTests
     [Test]
     public async Task Rule_simulation_can_be_retrieved_by_id()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var simulate = await client.PostAsJsonAsync("/api/v1/rules/simulate", new { RuleId = "new-domain-shortener-high-risk" });
@@ -44,7 +44,7 @@ public sealed class RuleSimulationApiTests
     [Test]
     public async Task Failed_simulation_response_includes_failed_cases()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var rule = RuleWithFalsePositive();

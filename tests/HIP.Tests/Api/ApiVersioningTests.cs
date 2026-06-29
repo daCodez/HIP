@@ -21,7 +21,7 @@ public sealed class ApiVersioningTests
     [Test]
     public async Task Public_lookup_v1_route_works()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/public/lookup/example.com");
@@ -40,7 +40,7 @@ public sealed class ApiVersioningTests
     [Test]
     public async Task Public_lookup_post_v1_route_works()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/public/lookup", new { Domain = "example.com" });
@@ -54,7 +54,7 @@ public sealed class ApiVersioningTests
     [Test]
     public async Task Public_lookup_rejects_invalid_domain()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/public/lookup/https:%2F%2Fexample.com%2Fpath");
@@ -65,7 +65,7 @@ public sealed class ApiVersioningTests
     [Test]
     public async Task Badge_v1_route_works()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/badge/example.com");
@@ -81,7 +81,7 @@ public sealed class ApiVersioningTests
     [Test]
     public async Task Risk_finding_v1_route_works()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/public/risk-findings", RiskFinding());
@@ -95,7 +95,7 @@ public sealed class ApiVersioningTests
     [Test]
     public async Task Admin_simulation_v1_route_works()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Admin");
 
@@ -111,7 +111,7 @@ public sealed class ApiVersioningTests
     [Test]
     public async Task Identity_v1_route_works()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/identity/register", new IdentityRegistrationRequest(
@@ -125,7 +125,7 @@ public sealed class ApiVersioningTests
     [Test]
     public async Task Old_unversioned_routes_are_removed()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         Assert.That((await client.GetAsync("/api/public/lookup/domain/example.com")).StatusCode, Is.EqualTo(HttpStatusCode.NotFound));

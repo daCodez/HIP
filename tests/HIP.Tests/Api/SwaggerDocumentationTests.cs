@@ -19,7 +19,7 @@ public sealed class SwaggerDocumentationTests
     [Test]
     public async Task Swagger_document_includes_api_purpose_privacy_guidance_and_endpoint_groups()
     {
-        await using var factory = new WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
+        await using var factory = new HipWebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/swagger/v1/swagger.json");

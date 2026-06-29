@@ -12,7 +12,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Admin_api_requires_auth()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/admin/audit-logs");
@@ -23,7 +23,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Public_lookup_does_not_require_auth()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/public/lookup/domain/example.com");
@@ -34,7 +34,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Public_badge_does_not_require_auth()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/public/badge/domain/example.com");
@@ -45,7 +45,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Owner_can_access_protected_admin_route()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "Owner");
 
@@ -57,7 +57,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Readonly_cannot_approve_override()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");
 
@@ -73,7 +73,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Moderator_can_review_reports()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "Moderator");
 
@@ -85,7 +85,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Support_cannot_manage_rules()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "Support");
 
@@ -101,7 +101,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Unauthorized_request_is_rejected()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/admin/review");
@@ -112,7 +112,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Readonly_can_view_external_provider_settings_enabled_for_dev_tls_by_default()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");
 
@@ -136,7 +136,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Development_admin_login_sets_browser_cookie()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
@@ -159,7 +159,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Admin_dashboard_navigation_redirects_to_development_login()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
@@ -180,7 +180,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Development_admin_login_rejects_external_return_url()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
@@ -201,7 +201,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Development_admin_login_is_blocked_for_non_local_host()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
@@ -220,7 +220,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Development_header_auth_is_blocked_for_non_local_host()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/admin/audit-logs");
         request.Headers.Host = "hip.example.com";
@@ -235,7 +235,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Admin_can_enable_external_provider_settings()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "Admin");
 
@@ -264,7 +264,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Admin_external_provider_settings_are_scoped_per_user_and_instance()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var firstClient = factory.CreateClient();
         using var secondClient = factory.CreateClient();
         AddRole(firstClient, "Admin");
@@ -307,7 +307,7 @@ public sealed class AdminAuthorizationTests
     [Test]
     public async Task Readonly_cannot_update_external_provider_settings()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");
 

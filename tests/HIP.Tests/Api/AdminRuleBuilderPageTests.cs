@@ -8,7 +8,7 @@ public sealed class AdminRuleBuilderPageTests
     [Test]
     public async Task Rule_builder_page_loads_for_admin()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddAdmin(client);
 
@@ -24,7 +24,7 @@ public sealed class AdminRuleBuilderPageTests
     [Test]
     public async Task Rule_builder_new_route_loads_for_admin()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddAdmin(client);
 
@@ -36,7 +36,7 @@ public sealed class AdminRuleBuilderPageTests
     [Test]
     public async Task Rule_builder_id_route_loads_for_admin()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddAdmin(client);
 
@@ -48,7 +48,7 @@ public sealed class AdminRuleBuilderPageTests
     [Test]
     public async Task Admin_rule_builder_route_is_protected()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
@@ -62,7 +62,7 @@ public sealed class AdminRuleBuilderPageTests
     [Test]
     public async Task Admin_settings_page_loads_external_provider_controls()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddAdmin(client);
 
@@ -79,7 +79,7 @@ public sealed class AdminRuleBuilderPageTests
     [Test]
     public async Task Admin_website_registration_page_loads_for_admin()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddAdmin(client);
 
@@ -95,7 +95,7 @@ public sealed class AdminRuleBuilderPageTests
     [Test]
     public async Task Admin_website_registration_page_is_protected()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false

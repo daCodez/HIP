@@ -480,10 +480,10 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
     {
         if (setupCode.Length <= 8)
         {
-            return "••••";
+            return "****";
         }
 
-        return $"{setupCode[..4]}••••••{setupCode[^4..]}";
+        return $"{setupCode[..4]}******{setupCode[^4..]}";
     }
 
     /// <summary>

@@ -12,7 +12,7 @@ public sealed class PrivacySafeReportsApiTests
     [Test]
     public async Task Reports_api_accepts_privacy_safe_report()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/reports", PrivacySafeReportingTests.Report());
@@ -26,7 +26,7 @@ public sealed class PrivacySafeReportsApiTests
     [Test]
     public async Task Reports_api_rejects_invalid_report_type()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/reports", PrivacySafeReportingTests.Report() with { ReportType = (ReportType)999 });
@@ -37,7 +37,7 @@ public sealed class PrivacySafeReportsApiTests
     [Test]
     public async Task Consumer_report_list_only_shows_safe_fields()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         await client.PostAsJsonAsync("/api/v1/public/risk-findings", RiskFinding("private-path", "sender-private"));
         client.DefaultRequestHeaders.Add("X-HIP-Consumer-Id", "consumer-report-safe");
@@ -52,7 +52,7 @@ public sealed class PrivacySafeReportsApiTests
     [Test]
     public async Task Admin_report_list_does_not_expose_private_content_by_default()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         await client.PostAsJsonAsync("/api/v1/reports", PrivacySafeReportingTests.Report() with
         {
@@ -72,7 +72,7 @@ public sealed class PrivacySafeReportsApiTests
     [Test]
     public async Task Admin_reports_route_is_protected()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/admin/reports");

@@ -100,7 +100,7 @@ public sealed class AdminRolesAuditTests
     [Test]
     public async Task Admin_audit_routes_are_protected()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var audit = await client.GetAsync("/api/v1/admin/audit");
@@ -113,7 +113,7 @@ public sealed class AdminRolesAuditTests
     [Test]
     public async Task Roles_api_returns_permission_model_for_admin()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Owner");
         client.DefaultRequestHeaders.Add("X-HIP-Admin-User", "owner-test");

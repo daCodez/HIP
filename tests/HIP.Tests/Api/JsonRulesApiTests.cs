@@ -11,7 +11,7 @@ public sealed class JsonRulesApiTests
     [Test]
     public async Task Rules_list_route_returns_sample_json_rule()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/rules");
@@ -25,7 +25,7 @@ public sealed class JsonRulesApiTests
     [Test]
     public async Task Rule_by_id_route_returns_rule()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/rules/new-domain-shortener-high-risk");
@@ -38,7 +38,7 @@ public sealed class JsonRulesApiTests
     [Test]
     public async Task Rule_evaluate_route_returns_watch_mode_results()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/rules/evaluate", new RuleEvaluationApiRequest(

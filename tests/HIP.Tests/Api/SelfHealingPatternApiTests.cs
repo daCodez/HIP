@@ -12,7 +12,7 @@ public sealed class SelfHealingPatternApiTests
     [Test]
     public async Task Self_healing_pattern_routes_require_admin_authorization()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/self-healing/detect-patterns", Findings());
@@ -23,7 +23,7 @@ public sealed class SelfHealingPatternApiTests
     [Test]
     public async Task Self_healing_detect_patterns_v1_route_returns_suggestions()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = AdminClient(factory);
 
         var response = await client.PostAsJsonAsync("/api/v1/self-healing/detect-patterns", Findings());

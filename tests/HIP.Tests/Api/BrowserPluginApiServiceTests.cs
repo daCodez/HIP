@@ -24,7 +24,7 @@ public sealed class BrowserPluginApiServiceTests
     [Test]
     public async Task Api_service_score_site_endpoint_returns_score_status_and_reasons()
     {
-        await using var factory = new WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
+        await using var factory = new HipWebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/score-site", new BrowserScoreSiteRequest(
@@ -44,7 +44,7 @@ public sealed class BrowserPluginApiServiceTests
     [Test]
     public async Task Api_service_scan_links_endpoint_returns_link_risk_results()
     {
-        await using var factory = new WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
+        await using var factory = new HipWebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/browser/scan-links", new BrowserScanLinksRequest(
@@ -66,7 +66,7 @@ public sealed class BrowserPluginApiServiceTests
     [Test]
     public async Task Api_service_site_safety_scan_endpoint_returns_public_safe_scan_result()
     {
-        await using var factory = new WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
+        await using var factory = new HipWebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/site-safety/scan", new SiteSafetyScanRequest(
@@ -92,7 +92,7 @@ public sealed class BrowserPluginApiServiceTests
     [Test]
     public async Task Api_service_site_safety_scan_persists_live_scan_summary()
     {
-        await using var factory = new WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
+        await using var factory = new HipWebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
         using var client = factory.CreateClient();
         var domain = $"api-live-scan-{Guid.NewGuid():N}.com";
 
@@ -144,7 +144,7 @@ public sealed class BrowserPluginApiServiceTests
     [Test]
     public async Task Api_service_provider_preferences_reject_public_writes_by_default()
     {
-        await using var factory = new WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
+        await using var factory = new HipWebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-HIP-Instance-Id", "api-first-instance");
 
@@ -159,7 +159,7 @@ public sealed class BrowserPluginApiServiceTests
     [Test]
     public async Task Api_service_provider_preferences_are_scoped_per_browser_instance_when_enabled()
     {
-        await using var factory = new WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>()
+        await using var factory = new HipWebApplicationFactory<ApiServiceAlias::ApiServiceProgram>()
             .WithWebHostBuilder(builder =>
             {
                 builder.ConfigureAppConfiguration((_, configuration) =>

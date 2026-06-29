@@ -16,7 +16,7 @@ public sealed class PublicLookupPageTests
     [Test]
     public async Task Lookup_page_renders_no_data_state()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         var domain = $"lookup-page-{Guid.NewGuid():N}.com";
 

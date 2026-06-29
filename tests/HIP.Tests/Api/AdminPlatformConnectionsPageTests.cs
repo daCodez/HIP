@@ -17,7 +17,7 @@ public sealed class AdminPlatformConnectionsPageTests
     [Test]
     public async Task Platform_connections_page_loads_for_admin()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddAdmin(client);
 
@@ -38,7 +38,7 @@ public sealed class AdminPlatformConnectionsPageTests
     [Test]
     public async Task Platform_connections_page_shows_truthful_discord_state()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddAdmin(client);
 
@@ -63,7 +63,7 @@ public sealed class AdminPlatformConnectionsPageTests
     [Test]
     public async Task Platform_connections_page_shows_discord_privacy_safe_capabilities()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddAdmin(client);
 
@@ -89,7 +89,7 @@ public sealed class AdminPlatformConnectionsPageTests
     [Test]
     public async Task Platform_connections_page_presents_discord_bot_oauth_as_primary_flow()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddAdmin(client);
 
@@ -112,7 +112,7 @@ public sealed class AdminPlatformConnectionsPageTests
     [Test]
     public async Task Platform_connections_page_explains_discord_private_chat_limit()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddAdmin(client);
 
@@ -146,7 +146,7 @@ public sealed class AdminPlatformConnectionsPageTests
     [Test]
     public async Task Discord_platform_api_connects_without_returning_raw_secrets()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         AddAdmin(client);
         var request = new ConnectDiscordPlatformRequest(
@@ -177,7 +177,7 @@ public sealed class AdminPlatformConnectionsPageTests
     [Test]
     public async Task Discord_platform_api_rejects_readonly_connect()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "ReadOnly");
         client.DefaultRequestHeaders.Add("X-HIP-Admin-User", "readonly-platform-test");

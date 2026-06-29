@@ -54,6 +54,13 @@ public static class HipDatabaseInitializer
             return;
         }
 
+        if (providerName.Contains("InMemory", StringComparison.OrdinalIgnoreCase))
+        {
+            // Test hosts use EF's in-memory provider after production startup validation has already required an explicit
+            // PostgreSQL connection string. There is no relational schema to patch in that provider, so initialization ends here.
+            return;
+        }
+
         throw new InvalidOperationException("HIP development schema initialization requires PostgreSQL.");
     }
 

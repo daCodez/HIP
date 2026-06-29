@@ -11,7 +11,7 @@ public sealed class SignedWebsiteIdentityApiTests
     [Test]
     public async Task Website_register_api_requires_admin()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/v1/identity/websites/register", new WebsiteIdentityRegistrationRequest(
@@ -25,7 +25,7 @@ public sealed class SignedWebsiteIdentityApiTests
     [Test]
     public async Task Website_identity_can_be_registered_and_read_by_domain()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = AdminClient(factory);
 
         var response = await client.PostAsJsonAsync("/api/v1/identity/websites/register", new WebsiteIdentityRegistrationRequest(
@@ -43,13 +43,13 @@ public sealed class SignedWebsiteIdentityApiTests
     [Test]
     public async Task Website_verification_api_verifies_with_token()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = AdminClient(factory);
-        var registered = await RegisterAsync(client, "verify-api.example", VerificationMethod.DnsTxt);
+        var registered = await RegisterAsync(client, "verify-api.example", VerificationMethod.WellKnownHipJson);
 
         var response = await client.PostAsJsonAsync("/api/v1/identity/websites/verify", new WebsiteVerificationRequest(
             "verify-api.example",
-            VerificationMethod.DnsTxt,
+            VerificationMethod.WellKnownHipJson,
             registered.VerificationRequest.Token));
         var verified = await response.Content.ReadFromJsonAsync<WebsiteIdentity>();
 
@@ -60,7 +60,7 @@ public sealed class SignedWebsiteIdentityApiTests
     [Test]
     public async Task Signature_verify_api_returns_public_safe_result()
     {
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
         var admin = AdminClient(factory);
         var registered = await RegisterAsync(admin, "signature-api.example", VerificationMethod.WellKnownHipJson);
