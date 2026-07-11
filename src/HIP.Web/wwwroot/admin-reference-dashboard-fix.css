@@ -1,0 +1,16 @@
+/* Reference dashboard: four primary metrics, full-width, before detailed investigations. */
+.hip-dashboard .hip-card-row.dashboard-grid {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.hip-dashboard .hip-card-row.dashboard-grid .score-card {
+    min-width: 0;
+    min-block-size: 9.75rem;
+}
+
+@media (max-width: 900px) {
+    .hip-dashboard .hip-card-row.dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

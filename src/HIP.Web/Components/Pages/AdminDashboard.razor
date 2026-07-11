@@ -59,8 +59,8 @@
             </section>
         }
 
-        <section class="score-grid dashboard-grid">
-            @foreach (var card in _summary.Cards)
+        <section class="hip-card-row dashboard-grid" aria-label="Primary dashboard metrics">
+            @foreach (var card in _summary.Cards.Take(4))
             {
                 <article class="score-card">
                     <span>@card.Status</span>
