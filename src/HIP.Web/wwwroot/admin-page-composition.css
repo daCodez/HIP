@@ -1,0 +1,147 @@
+/* Shared composition for every non-dashboard admin route. */
+main.admin-rule-page:not(.hip-dashboard) {
+    display: grid;
+    gap: 1.5rem;
+}
+
+main.admin-rule-page:not(.hip-dashboard) .admin-rule-header {
+    display: flex;
+    gap: 1.5rem;
+    align-items: end;
+    justify-content: space-between;
+    margin: 0;
+    padding: 1.5rem 0 1.75rem;
+    border-bottom: 1px solid var(--hip-line);
+    background: transparent;
+}
+
+main.admin-rule-page:not(.hip-dashboard) .admin-rule-header::before {
+    content: "HIP // OPERATIONS";
+    position: absolute;
+    align-self: flex-start;
+    color: var(--hip-accent);
+    font-size: .67rem;
+    font-weight: 800;
+    letter-spacing: .17em;
+}
+
+main.admin-rule-page:not(.hip-dashboard) .admin-rule-header > div:first-child {
+    padding-top: 1.4rem;
+}
+
+main.admin-rule-page:not(.hip-dashboard) .admin-rule-header .eyebrow {
+    margin: 0 0 .35rem;
+    color: var(--hip-muted);
+    font-size: .75rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+
+main.admin-rule-page:not(.hip-dashboard) .admin-rule-header h1 {
+    margin: 0;
+    color: var(--hip-ink);
+    font-size: clamp(2.35rem, 4.5vw, 4.5rem);
+    font-weight: 850;
+    line-height: .9;
+    letter-spacing: -.065em;
+}
+
+main.admin-rule-page:not(.hip-dashboard) .admin-rule-header p:not(.eyebrow) {
+    max-width: 48rem;
+    margin: .8rem 0 0;
+    color: var(--hip-muted);
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(.lookup-result, .hip-panel, .rule-card, .rule-editor, .form-section, .settings-section, .admin-card) {
+    border: 1px solid var(--hip-line);
+    border-radius: .875rem;
+    background: var(--hip-surface);
+    box-shadow: none;
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(.lookup-result, .hip-panel, .rule-card, .rule-editor, .form-section, .settings-section, .admin-card):hover {
+    border-color: color-mix(in srgb, var(--hip-accent) 65%, var(--hip-line));
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(.lookup-result, .hip-panel, .rule-card, .rule-editor, .form-section, .settings-section, .admin-card) h2 {
+    color: var(--hip-ink);
+    font-size: clamp(1.25rem, 2vw, 1.85rem);
+    letter-spacing: -.04em;
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(.filters, .filter-row, .toolbar, .action-row, .button-row) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .65rem;
+    align-items: center;
+    padding: .75rem;
+    border: 1px solid var(--hip-line);
+    border-radius: .75rem;
+    background: var(--hip-surface-muted);
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(input, select, textarea) {
+    min-height: 2.6rem;
+    border: 1px solid var(--hip-line);
+    border-radius: .5rem;
+    color: var(--hip-ink);
+    background: var(--hip-surface-muted);
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(input, select, textarea):focus {
+    outline: 2px solid color-mix(in srgb, var(--hip-accent) 45%, transparent);
+    outline-offset: 1px;
+    border-color: var(--hip-accent);
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(button, .primary-button, .secondary-button, .action-button) {
+    border-radius: .55rem;
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(.primary-button, .action-button.primary, button[type="submit"]) {
+    border: 1px solid var(--hip-accent);
+    color: #05201b;
+    background: var(--hip-accent);
+    font-weight: 800;
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(table, .hip-data-table) {
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    border: 1px solid var(--hip-line);
+    border-radius: .75rem;
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(table th, .hip-data-table th) {
+    padding: .8rem .9rem;
+    color: var(--hip-muted);
+    background: var(--hip-surface-muted);
+    font-size: .67rem;
+    font-weight: 800;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(table td, .hip-data-table td) {
+    padding: .85rem .9rem;
+    border-top: 1px solid var(--hip-line);
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(table tbody tr, .hip-data-table tbody tr):hover {
+    background: var(--hip-surface-hover);
+}
+
+main.admin-rule-page:not(.hip-dashboard) :is(.empty-state, .dashboard-loading-state, .hip-threat-empty) {
+    padding: 2.5rem 1.25rem;
+    border: 1px dashed var(--hip-line);
+    border-radius: .75rem;
+    color: var(--hip-muted);
+    text-align: center;
+}
+
+@media (max-width: 720px) {
+    main.admin-rule-page:not(.hip-dashboard) .admin-rule-header { display: grid; align-items: start; }
+    main.admin-rule-page:not(.hip-dashboard) .admin-rule-header h1 { font-size: clamp(2.6rem, 13vw, 4rem); }
+    main.admin-rule-page:not(.hip-dashboard) :is(.filters, .filter-row, .toolbar, .action-row, .button-row) { align-items: stretch; }
+}
