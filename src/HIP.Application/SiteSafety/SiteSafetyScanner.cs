@@ -21,7 +21,9 @@ public sealed class SiteSafetyScanner(
     IAdminSiteSafetyRuleRepository? adminRuleRepository = null,
     ISandboxLinkScanService? sandboxLinkScanService = null) : ISiteSafetyScanner
 {
+    private const int MaxRecentScans = 1024;
     private static readonly ConcurrentDictionary<string, CachedSiteSafetyScan> RecentScans = new();
+    private static readonly object RecentScanGate = new();
 
     private static readonly HashSet<string> ExecutableExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -122,7 +124,7 @@ public sealed class SiteSafetyScanner(
                 matchedRules);
             if (canUseCache)
             {
-                RecentScans[cacheKey] = new CachedSiteSafetyScan(result, DateTimeOffset.UtcNow.Add(options.ScanCacheDuration));
+                StoreRecentScan(cacheKey, new CachedSiteSafetyScan(result, DateTimeOffset.UtcNow.Add(options.ScanCacheDuration)));
             }
 
             await QueueSandboxScanIfNeededAsync(request, result, cancellationToken);
@@ -432,29 +434,35 @@ public sealed class SiteSafetyScanner(
             signals,
             checkedAt);
 
-        var evidence = new List<SiteSafetyEvidence>();
-        foreach (var provider in providers)
-        {
-            try
-            {
-                evidence.Add(await provider.CollectEvidenceAsync(context, cancellationToken));
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                evidence.Add(FailedProviderEvidence(provider, context, "Provider timed out."));
-            }
-            catch (TimeoutException)
-            {
-                evidence.Add(FailedProviderEvidence(provider, context, "Provider timed out."));
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "HIP Site Safety evidence provider {ProviderName} failed safely.", provider.ProviderName);
-                evidence.Add(FailedProviderEvidence(provider, context, "Provider failed safely."));
-            }
-        }
+        var collectionTasks = providers
+            .Select(provider => CollectProviderEvidenceAsync(provider, context, cancellationToken))
+            .ToArray();
+        return await Task.WhenAll(collectionTasks);
+    }
 
-        return evidence;
+    /// <summary>Collects one provider independently so registered providers do not serialize network latency.</summary>
+    private async Task<SiteSafetyEvidence> CollectProviderEvidenceAsync(
+        ISiteSafetyEvidenceProvider provider,
+        SiteSafetyEvidenceContext context,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await provider.CollectEvidenceAsync(context, cancellationToken);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return FailedProviderEvidence(provider, context, "Provider timed out.");
+        }
+        catch (TimeoutException)
+        {
+            return FailedProviderEvidence(provider, context, "Provider timed out.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "HIP Site Safety evidence provider {ProviderName} failed safely.", provider.ProviderName);
+            return FailedProviderEvidence(provider, context, "Provider failed safely.");
+        }
     }
 
     /// <summary>
@@ -683,6 +691,38 @@ public sealed class SiteSafetyScanner(
     }
 
     /// <summary>
+    /// <summary>Stores a recent scan while enforcing a process-wide size bound.</summary>
+    private static void StoreRecentScan(string cacheKey, CachedSiteSafetyScan cachedScan)
+    {
+        lock (RecentScanGate)
+        {
+            var now = DateTimeOffset.UtcNow;
+            TrimRecentScans(now);
+            while (RecentScans.Count >= MaxRecentScans)
+            {
+                var oldest = RecentScans.MinBy(entry => entry.Value.ExpiresAtUtc);
+                if (string.IsNullOrEmpty(oldest.Key) || !RecentScans.TryRemove(oldest.Key, out _))
+                {
+                    break;
+                }
+            }
+
+            RecentScans[cacheKey] = cachedScan;
+        }
+    }
+
+    /// <summary>Removes expired entries during writes so one-off attacker keys cannot remain resident.</summary>
+    private static void TrimRecentScans(DateTimeOffset now)
+    {
+        foreach (var entry in RecentScans)
+        {
+            if (entry.Value.ExpiresAtUtc <= now)
+            {
+                RecentScans.TryRemove(entry.Key, out _);
+            }
+        }
+    }
+
     /// Gets a recent scan result if it has not expired.
     /// </summary>
     /// <param name="cacheKey">Hashed cache key.</param>

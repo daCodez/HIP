@@ -13,6 +13,7 @@
 string HIP_API_BASE_URL = "https://your-hip-host.example.com";
 string HIP_SETUP_CODE = "HIP-DEV-SETUP";
 string HIP_HUD_DEVICE_ID = "";
+string gDeviceCredential = "";
 string HIP_HUD_VERSION = "0.1.0";
 string HIP_MODE = "Normal"; // Quiet, Normal, Strict, Paranoid.
 integer HIP_POPUP_ALERTS_ENABLED = TRUE;
@@ -90,7 +91,7 @@ default
     {
         if (HIP_DEBUG)
         {
-            llOwnerSay("HIP HTTP " + (string)status + ": " + llGetSubString(body, 0, 220));
+            llOwnerSay("HIP HTTP status " + (string)status + ". Response body redacted.");
         }
 
         if (requestId == gActivateRequest)
@@ -140,7 +141,7 @@ ActivateHud()
 LoadSettings()
 {
     gSettingsGetRequest = llHTTPRequest(HIP_API_BASE_URL + "/api/v1/sl-hud/settings/" + llEscapeURL(HIP_HUD_DEVICE_ID),
-        [HTTP_METHOD, "GET"],
+        [HTTP_METHOD, "GET", HTTP_CUSTOM_HEADER, "X-HIP-HUD-Credential", gDeviceCredential],
         "");
 }
 
@@ -162,7 +163,8 @@ SaveSettings()
         "}";
 
     gSettingsSaveRequest = llHTTPRequest(HIP_API_BASE_URL + "/api/v1/sl-hud/settings/" + llEscapeURL(HIP_HUD_DEVICE_ID),
-        [HTTP_METHOD, "POST", HTTP_MIMETYPE, "application/json"],
+        [HTTP_METHOD, "POST", HTTP_MIMETYPE, "application/json",
+         HTTP_CUSTOM_HEADER, "X-HIP-HUD-Credential", gDeviceCredential],
         payload);
 }
 
@@ -194,7 +196,8 @@ ScanLocalChat(string senderName, key senderId, string message)
 
     gPendingRiskReason = HipRiskReason(message);
     gScanRequest = llHTTPRequest(HIP_API_BASE_URL + "/api/v1/sl-hud/scan",
-        [HTTP_METHOD, "POST", HTTP_MIMETYPE, "application/json"],
+        [HTTP_METHOD, "POST", HTTP_MIMETYPE, "application/json",
+         HTTP_CUSTOM_HEADER, "X-HIP-HUD-Credential", gDeviceCredential],
         payload);
 }
 
@@ -216,7 +219,8 @@ ReportFinding(string senderHash, string risk, string reason, string url)
         "}";
 
     gReportRequest = llHTTPRequest(HIP_API_BASE_URL + "/api/v1/sl-hud/report",
-        [HTTP_METHOD, "POST", HTTP_MIMETYPE, "application/json"],
+        [HTTP_METHOD, "POST", HTTP_MIMETYPE, "application/json",
+         HTTP_CUSTOM_HEADER, "X-HIP-HUD-Credential", gDeviceCredential],
         payload);
 }
 
@@ -225,6 +229,12 @@ HandleActivationResponse(integer status, string body)
 {
     if (status >= 200 && status < 300 && ~llSubStringIndex(body, "\"activated\":true"))
     {
+        gDeviceCredential = llJsonGetValue(body, ["deviceCredential"]);
+        if (gDeviceCredential == JSON_INVALID || gDeviceCredential == "")
+        {
+            llOwnerSay("HIP Shield activation did not return a device credential.");
+            return;
+        }
         gActivated = TRUE;
         gLicenseStatus = JsonValue(body, "licenseStatus", "DevelopmentActive");
         llOwnerSay("HIP Shield: Active. License: " + gLicenseStatus + ".");

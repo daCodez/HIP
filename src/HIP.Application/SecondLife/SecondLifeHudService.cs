@@ -16,6 +16,7 @@ public sealed class SecondLifeHudService : ISecondLifeHudService
 {
     private readonly IRiskFindingIngestionService ingestionService;
     private readonly ISetupCodeLicenseService licenseService;
+    private readonly IHudDeviceCredentialService credentialService;
     private static readonly ConcurrentDictionary<string, SecondLifeHudSettings> Settings = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> ValidModes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -41,10 +42,12 @@ public sealed class SecondLifeHudService : ISecondLifeHudService
     /// </summary>
     /// <param name="ingestionService">Privacy-safe finding ingestion service.</param>
     /// <param name="licenseService">Setup code license service used for HUD activation and settings.</param>
-    public SecondLifeHudService(IRiskFindingIngestionService ingestionService, ISetupCodeLicenseService licenseService)
+    /// <param name="credentialService">Issues device-bound credentials after successful activation.</param>
+    public SecondLifeHudService(IRiskFindingIngestionService ingestionService, ISetupCodeLicenseService licenseService, IHudDeviceCredentialService credentialService)
     {
         this.ingestionService = ingestionService;
         this.licenseService = licenseService;
+        this.credentialService = credentialService;
     }
 
     /// <inheritdoc />
@@ -60,7 +63,8 @@ public sealed class SecondLifeHudService : ISecondLifeHudService
             config,
             activation.DeviceId,
             activation.ActivatedAtUtc,
-            request.HudVersion);
+            request.HudVersion,
+            activation.Activated && activation.DeviceId is not null ? credentialService.Issue(activation.DeviceId) : null);
     }
 
     /// <inheritdoc />

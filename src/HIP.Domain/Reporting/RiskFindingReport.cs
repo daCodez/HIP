@@ -18,4 +18,5 @@ public sealed record RiskFindingReport(
     DateTimeOffset DetectedAtUtc,
     ReporterTrustLevel ReporterTrustLevel,
     PrivacySafeEvidence PrivacySafeEvidence,
-    string HipSignature);
+    string HipSignature,
+    string? ConsumerScopeHash = null);

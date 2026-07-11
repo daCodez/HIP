@@ -229,6 +229,6 @@ public sealed class LicenseSetupCodeServiceTests
             new PatternDetectionService(),
             new Sha256PrivacyHashingService());
 
-        return new SecondLifeHudService(ingestion, licenses);
+        return new SecondLifeHudService(ingestion, licenses, new HudDeviceCredentialService(new PrivacyHashingOptions()));
     }
 }

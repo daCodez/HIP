@@ -33,8 +33,8 @@ public sealed class ConsumerPortalTests
         var secretPath = "private-secret-path";
         var senderHash = "sender-hash-private";
 
-        await client.PostAsJsonAsync("/api/v1/public/risk-findings", Report(secretPath, senderHash));
         AddConsumer(client);
+        await client.PostAsJsonAsync("/api/v1/public/risk-findings", Report(secretPath, senderHash));
 
         var body = await client.GetStringAsync("/api/v1/consumer/scans");
 
@@ -50,8 +50,8 @@ public sealed class ConsumerPortalTests
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
-        await client.PostAsJsonAsync("/api/v1/public/risk-findings", Report("path", "sender-hash"));
         AddConsumer(client);
+        await client.PostAsJsonAsync("/api/v1/public/risk-findings", Report("path", "sender-hash"));
 
         var reports = await client.GetFromJsonAsync<IReadOnlyCollection<ConsumerReportHistoryItem>>("/api/v1/consumer/reports");
 

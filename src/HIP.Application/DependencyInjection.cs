@@ -82,6 +82,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IProviderSubmissionPolicy, DefaultProviderSubmissionPolicy>();
         services.TryAddSingleton<IFeedbackWeightingPolicy, DefaultFeedbackWeightingPolicy>();
         services.AddSingleton<IPrivacyHashingService, Sha256PrivacyHashingService>();
+        services.AddSingleton<IHudDeviceCredentialService, HudDeviceCredentialService>();
         // Runtime duplicate detection is supplied by HIP.Infrastructure so public submissions are deduped through durable storage.
         services.AddSingleton<ISubmissionRateLimiter, DevelopmentSubmissionRateLimiter>();
         services.AddScoped<IOutboxEventWriter, OutboxEventWriter>();

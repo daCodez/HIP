@@ -8,7 +8,8 @@ namespace HIP.Application.Consumer;
 
 public sealed class ConsumerPortalService(
     IRiskFindingReportRepository riskFindingRepository,
-    IAppealService appealService) : IConsumerPortalService
+    IAppealService appealService,
+    IPrivacyHashingService privacyHashingService) : IConsumerPortalService
 {
     private static readonly ConcurrentDictionary<string, ConsumerSettings> SettingsByConsumer = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> SupportedScanModes = new(StringComparer.OrdinalIgnoreCase)
@@ -28,8 +29,10 @@ public sealed class ConsumerPortalService(
 
     public async Task<IReadOnlyCollection<ConsumerScanHistoryItem>> GetScansAsync(string consumerId, CancellationToken cancellationToken)
     {
+        var consumerScopeHash = ConsumerScopeHash(consumerId);
         var findings = await riskFindingRepository.ListAsync(cancellationToken);
         return findings
+            .Where(finding => string.Equals(finding.ConsumerScopeHash, consumerScopeHash, StringComparison.Ordinal))
             .OrderByDescending(finding => finding.DetectedAtUtc)
             .Select(finding => new ConsumerScanHistoryItem(
                 finding.DetectedAtUtc,
@@ -42,8 +45,10 @@ public sealed class ConsumerPortalService(
 
     public async Task<IReadOnlyCollection<ConsumerReportHistoryItem>> GetReportsAsync(string consumerId, CancellationToken cancellationToken)
     {
+        var consumerScopeHash = ConsumerScopeHash(consumerId);
         var findings = await riskFindingRepository.ListAsync(cancellationToken);
         return findings
+            .Where(finding => string.Equals(finding.ConsumerScopeHash, consumerScopeHash, StringComparison.Ordinal))
             .OrderByDescending(finding => finding.DetectedAtUtc)
             .Select(finding => new ConsumerReportHistoryItem(
                 string.IsNullOrWhiteSpace(finding.ReportId) ? "pending-report-id" : finding.ReportId,
@@ -57,7 +62,9 @@ public sealed class ConsumerPortalService(
 
     public Task<IReadOnlyCollection<ConsumerAppealItem>> GetAppealsAsync(string consumerId, CancellationToken cancellationToken)
     {
+        var consumerScopeHash = ConsumerScopeHash(consumerId);
         var appeals = appealService.List()
+            .Where(appeal => string.Equals(appeal.SubmittedByHash, consumerScopeHash, StringComparison.Ordinal))
             .OrderByDescending(appeal => appeal.UpdatedAtUtc)
             .Select(appeal => new ConsumerAppealItem(
                 appeal.AppealId,
@@ -82,7 +89,7 @@ public sealed class ConsumerPortalService(
             "",
             request.TargetType,
             request.TargetId.Trim(),
-            NormalizeConsumerId(consumerId),
+            ConsumerScopeHash(consumerId),
             request.Reason.Trim(),
             AppealStatus.Submitted,
             DateTimeOffset.UtcNow,
@@ -130,4 +137,7 @@ public sealed class ConsumerPortalService(
 
     private static string NormalizeScanMode(string scanMode) =>
         SupportedScanModes.Single(mode => string.Equals(mode, scanMode, StringComparison.OrdinalIgnoreCase));
+
+    private string ConsumerScopeHash(string consumerId) =>
+        privacyHashingService.Hash(NormalizeConsumerId(consumerId));
 }

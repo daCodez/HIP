@@ -39,8 +39,8 @@ public sealed class PrivacySafeReportsApiTests
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
-        await client.PostAsJsonAsync("/api/v1/public/risk-findings", RiskFinding("private-path", "sender-private"));
         client.DefaultRequestHeaders.Add("X-HIP-Consumer-Id", "consumer-report-safe");
+        await client.PostAsJsonAsync("/api/v1/public/risk-findings", RiskFinding("private-path", "sender-private"));
 
         var body = await client.GetStringAsync("/api/v1/consumer/reports");
 

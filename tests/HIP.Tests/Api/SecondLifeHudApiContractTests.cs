@@ -44,10 +44,12 @@ public sealed class SecondLifeHudApiContractTests
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
+        var activation = await ActivateHudAsync(client);
+        client.DefaultRequestHeaders.Add("X-HIP-HUD-Credential", activation.DeviceCredential);
 
         var response = await client.PostAsJsonAsync("/api/v1/sl-hud/scan", new
         {
-            deviceId = "hud-1",
+            deviceId = activation.DeviceId,
             source = "GroupChat",
             messageText = "limited suspicious snippet",
             detectedUrls = new[] { "hxxps://scam-prize dot example" },
@@ -69,10 +71,12 @@ public sealed class SecondLifeHudApiContractTests
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
+        var activation = await ActivateHudAsync(client);
+        client.DefaultRequestHeaders.Add("X-HIP-HUD-Credential", activation.DeviceCredential);
 
-        var response = await client.PostAsJsonAsync("/api/v1/sl-hud/settings/hud-1", new
+        var response = await client.PostAsJsonAsync($"/api/v1/sl-hud/settings/{activation.DeviceId}", new
         {
-            deviceId = "hud-1",
+            deviceId = activation.DeviceId,
             mode = "Aggressive",
             popupAlertsEnabled = true,
             privateWarningsEnabled = true,
@@ -81,4 +85,33 @@ public sealed class SecondLifeHudApiContractTests
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
+
+    private static async Task<HudActivation> ActivateHudAsync(HttpClient client)
+    {
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-HIP-Admin-Role", "Support");
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-HIP-Admin-User", "hud-contract-test");
+        var setupCodeResponse = await client.PostAsJsonAsync("/api/v1/licenses/setup-codes", new
+        {
+            allowedDeviceCount = 1,
+            createdBy = "hud-contract-test",
+            initialScanMode = "Normal"
+        });
+        setupCodeResponse.EnsureSuccessStatusCode();
+        using var setupCodeJson = await JsonDocument.ParseAsync(await setupCodeResponse.Content.ReadAsStreamAsync());
+
+        var activationResponse = await client.PostAsJsonAsync("/api/v1/sl-hud/activate", new
+        {
+            setupCode = setupCodeJson.RootElement.GetProperty("setupCode").GetString(),
+            avatarIdHash = $"avatar-{Guid.NewGuid():N}",
+            hudVersion = "contract-test"
+        });
+        activationResponse.EnsureSuccessStatusCode();
+        using var activationJson = await JsonDocument.ParseAsync(await activationResponse.Content.ReadAsStreamAsync());
+
+        return new HudActivation(
+            activationJson.RootElement.GetProperty("deviceId").GetString()!,
+            activationJson.RootElement.GetProperty("deviceCredential").GetString()!);
+    }
+
+    private sealed record HudActivation(string DeviceId, string DeviceCredential);
 }

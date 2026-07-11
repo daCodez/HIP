@@ -21,7 +21,8 @@ public sealed record SecondLifeHudActivationResponse(
     SecondLifeHudClientConfig ClientConfig,
     string? DeviceId = null,
     DateTimeOffset? ActivatedAtUtc = null,
-    string? HudVersion = null)
+    string? HudVersion = null,
+    string? DeviceCredential = null)
 {
     /// <summary>
     /// Provides the same HUD settings under the property name expected by simple LSL and marketplace activation clients.

@@ -469,8 +469,18 @@ public interface IExternalSiteEvidenceSettingsStore
 /// </summary>
 public sealed class InMemoryExternalSiteEvidenceSettingsStore : IExternalSiteEvidenceSettingsStore
 {
+    /// <summary>Maximum number of attacker-influenced browser scopes retained by the development store.</summary>
+    public const int MaxScopes = 256;
+
     private readonly Dictionary<string, ExternalSiteEvidenceOptions> scopedOptions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Queue<string> insertionOrder = new();
     private readonly object gate = new();
+
+    /// <summary>Gets the current bounded entry count for diagnostics and tests.</summary>
+    public int Count
+    {
+        get { lock (gate) { return scopedOptions.Count; } }
+    }
 
     /// <inheritdoc />
     public Task<ExternalSiteEvidenceOptions?> GetAsync(string scopeKey, CancellationToken cancellationToken)
@@ -489,6 +499,16 @@ public sealed class InMemoryExternalSiteEvidenceSettingsStore : IExternalSiteEvi
         var detached = options.Clone();
         lock (gate)
         {
+            if (!scopedOptions.ContainsKey(scopeKey))
+            {
+                while (scopedOptions.Count >= MaxScopes && insertionOrder.TryDequeue(out var oldestScope))
+                {
+                    scopedOptions.Remove(oldestScope);
+                }
+
+                insertionOrder.Enqueue(scopeKey);
+            }
+
             scopedOptions[scopeKey] = detached;
         }
 

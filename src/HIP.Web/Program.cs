@@ -156,7 +156,7 @@ MapDashboardApis(app.MapGroup($"{ApiRoutes.Admin}/dashboard").RequireAuthorizati
 MapAdminScanApis(app.MapGroup($"{ApiRoutes.Admin}/scans").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapPlatformConnectionApis(app.MapGroup($"{ApiRoutes.Admin}/platforms").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapConsumerApis(app.MapGroup(ApiRoutes.Consumer).RequireAuthorization(ConsumerPolicies.CanUseConsumerPortal));
-MapIdentityApis(app.MapGroup(ApiRoutes.Identity));
+MapIdentityApis(app.MapGroup(ApiRoutes.Identity).RequireRateLimiting(RateLimitPolicies.IdentityDevPolicy));
 app.MapGet($"{ApiRoutes.Admin}/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()))
     .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
 app.MapGet($"{ApiRoutes.Admin}/audit", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()))
@@ -786,16 +786,24 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
 
     publicApi.MapPost("/risk-findings", async (
         RiskFindingReport report,
+        HttpContext httpContext,
         IDuplicateSubmissionGuard duplicateGuard,
         IRiskFindingIngestionService ingestionService,
+        IPrivacyHashingService privacyHashingService,
         CancellationToken cancellationToken) =>
     {
-        if (IsDuplicateRiskFinding(report, duplicateGuard))
+        var consumerId = httpContext.User.FindFirst("hip_consumer_id")?.Value;
+        var ownedReport = report with
+        {
+            ConsumerScopeHash = string.IsNullOrWhiteSpace(consumerId) ? null : privacyHashingService.Hash(consumerId)
+        };
+
+        if (IsDuplicateRiskFinding(ownedReport, duplicateGuard))
         {
             return Results.Conflict(new { error = "Duplicate risk finding ignored." });
         }
 
-        var response = await ingestionService.IngestAsync(report, cancellationToken);
+        var response = await ingestionService.IngestAsync(ownedReport, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
     })
         .RequireCors(HipCorsPolicies.ClientWrite)
@@ -1443,6 +1451,8 @@ static string ResolveAdminActor(HttpContext httpContext) =>
 
 static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
 {
+    const string hudCredentialHeader = "X-HIP-HUD-Credential";
+
     slHudApi.MapPost("/activate", (
         SecondLifeHudActivationRequest request,
         ISecondLifeHudService hudService) =>
@@ -1453,10 +1463,17 @@ static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
 
     slHudApi.MapPost("/scan", (
         SecondLifeHudScanRequest request,
-        ISecondLifeHudService hudService) =>
+        HttpContext httpContext,
+        ISecondLifeHudService hudService,
+        IHudDeviceCredentialService credentialService) =>
     {
         try
         {
+            if (!credentialService.IsValid(request.DeviceId, httpContext.Request.Headers[hudCredentialHeader].FirstOrDefault()))
+            {
+                return Results.Unauthorized();
+            }
+
             return Results.Ok(hudService.Scan(request));
         }
         catch (ArgumentException ex)
@@ -1481,10 +1498,17 @@ static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
 
     slHudApi.MapGet("/settings/{deviceId}", (
         string deviceId,
-        ISecondLifeHudService hudService) =>
+        HttpContext httpContext,
+        ISecondLifeHudService hudService,
+        IHudDeviceCredentialService credentialService) =>
     {
         try
         {
+            if (!credentialService.IsValid(deviceId, httpContext.Request.Headers[hudCredentialHeader].FirstOrDefault()))
+            {
+                return Results.Unauthorized();
+            }
+
             return Results.Ok(hudService.GetSettings(deviceId));
         }
         catch (ArgumentException ex)
@@ -1496,10 +1520,17 @@ static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
     slHudApi.MapPost("/settings/{deviceId}", (
         string deviceId,
         SecondLifeHudSettings settings,
-        ISecondLifeHudService hudService) =>
+        HttpContext httpContext,
+        ISecondLifeHudService hudService,
+        IHudDeviceCredentialService credentialService) =>
     {
         try
         {
+            if (!credentialService.IsValid(deviceId, httpContext.Request.Headers[hudCredentialHeader].FirstOrDefault()))
+            {
+                return Results.Unauthorized();
+            }
+
             var response = hudService.SaveSettings(deviceId, settings);
             return response.Saved ? Results.Ok(response) : Results.BadRequest(response);
         }
@@ -1511,18 +1542,32 @@ static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
 
     slHudApi.MapPost("/report", async (
         SecondLifeHudFindingReport report,
+        HttpContext httpContext,
         ISecondLifeHudService hudService,
+        IHudDeviceCredentialService credentialService,
         CancellationToken cancellationToken) =>
     {
+        if (!credentialService.IsValid(report.HudDeviceId, httpContext.Request.Headers[hudCredentialHeader].FirstOrDefault()))
+        {
+            return Results.Unauthorized();
+        }
+
         var response = await hudService.ReportFindingAsync(report, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
     });
 
     slHudApi.MapPost("/report-finding", async (
         SecondLifeHudFindingReport report,
+        HttpContext httpContext,
         ISecondLifeHudService hudService,
+        IHudDeviceCredentialService credentialService,
         CancellationToken cancellationToken) =>
     {
+        if (!credentialService.IsValid(report.HudDeviceId, httpContext.Request.Headers[hudCredentialHeader].FirstOrDefault()))
+        {
+            return Results.Unauthorized();
+        }
+
         var response = await hudService.ReportFindingAsync(report, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
     });

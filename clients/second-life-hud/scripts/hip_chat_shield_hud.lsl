@@ -7,6 +7,7 @@
 string HIP_API_BASE_URL = "https://your-hip-host.example.com";
 string HIP_SETUP_CODE = "HIP-DEV-SETUP";
 string HIP_HUD_DEVICE_ID = "hip-sl-hud-dev-device";
+string gDeviceCredential = "";
 string HIP_MODE = "Normal"; // Quiet, Normal, Strict, Paranoid
 integer HIP_POPUP_ALERTS = TRUE;
 integer HIP_DEBUG = FALSE;
@@ -48,13 +49,19 @@ default
     {
         if (HIP_DEBUG)
         {
-            llOwnerSay("HIP HTTP " + (string)status + ": " + llGetSubString(body, 0, 180));
+            llOwnerSay("HIP HTTP status " + (string)status + ". Response body redacted.");
         }
 
         if (status >= 200 && status < 300)
         {
             if (~llSubStringIndex(body, "\"activated\":true"))
             {
+                gDeviceCredential = llJsonGetValue(body, ["deviceCredential"]);
+                if (gDeviceCredential == JSON_INVALID || gDeviceCredential == "")
+                {
+                    llOwnerSay("HIP activation did not return a device credential.");
+                    return;
+                }
                 gActivated = TRUE;
                 gLicenseStatus = "DevelopmentActive";
                 UpdateStatus("Safe", "Low");
@@ -154,7 +161,8 @@ ReportFinding(string senderHash, string risk, string reason, string url)
         "}";
 
     llHTTPRequest(HIP_API_BASE_URL + "/api/v1/sl-hud/report-finding",
-        [HTTP_METHOD, "POST", HTTP_MIMETYPE, "application/json"],
+        [HTTP_METHOD, "POST", HTTP_MIMETYPE, "application/json",
+         HTTP_CUSTOM_HEADER, "X-HIP-HUD-Credential", gDeviceCredential],
         payload);
 }
 
