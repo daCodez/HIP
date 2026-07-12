@@ -1,0 +1,24 @@
+/* HIP application-wide brand kit compliance layer. */
+:root{color-scheme:light;--brand-primary:#1f6feb;--brand-secondary:#14b8a6;--brand-accent:#7c3aed;--bg:#f8fafc;--bg-elev:#f1f5f9;--surface:#fff;--surface-2:#f1f5f9;--surface-hover:#eaf2ff;--border:#e5e7eb;--border-strong:#d7e2f0;--border-soft:#e5e7eb;--text:#0f172a;--text-muted:#64748b;--text-dim:#64748b;--text-faint:#6b7a90;--accent:#1f6feb;--accent-strong:#1959bc;--accent-soft:rgb(31 111 235/10%);--accent-glow:rgb(31 111 235/16%);--safe:#16a34a;--safe-bg:rgb(22 163 74/10%);--safe-border:rgb(22 163 74/28%);--caution:#d97706;--caution-bg:rgb(217 119 6/10%);--caution-border:rgb(217 119 6/28%);--suspicious:#dc2626;--suspicious-bg:rgb(220 38 38/10%);--suspicious-border:rgb(220 38 38/28%);--danger:#dc2626;--critical:#991b1b;--danger-bg:rgb(220 38 38/10%);--danger-border:rgb(220 38 38/28%);--info:#1f6feb;--info-bg:rgb(31 111 235/10%);--shadow-sm:0 1px 2px rgb(15 23 42/8%);--shadow-md:0 8px 24px rgb(15 23 42/9%);--shadow-lg:0 20px 48px rgb(15 23 42/12%);--space-unit:8px;--radius-sm:8px;--radius:12px;--radius-lg:16px;--font-sans:'Satoshi','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;--font-mono:'JetBrains Mono','SFMono-Regular',Consolas,monospace}
+[data-theme=dark]{color-scheme:dark;--bg:#0b1220;--bg-elev:#161e2e;--surface:#111827;--surface-2:#161e2e;--surface-hover:#1b2940;--border:#243146;--border-strong:#33435c;--border-soft:#243146;--text:#f9fafb;--text-muted:#9ca3af;--text-dim:#7c8ca3;--text-faint:#7c8ca3;--accent:#1f6feb;--accent-strong:#3b82f6;--safe:#22c55e;--caution:#f59e0b;--suspicious:#ef4444;--danger:#ef4444;--critical:#b91c1c;--shadow-sm:0 1px 2px rgb(0 0 0/28%);--shadow-md:0 8px 24px rgb(0 0 0/28%);--shadow-lg:0 20px 48px rgb(0 0 0/38%)}
+html,body{color:var(--text);background-color:var(--bg);font-family:var(--font-sans)}
+body::before{opacity:0}
+[data-theme=dark] body::before{opacity:1;background-image:radial-gradient(circle at 1px 1px,rgb(124 140 163/12%) 1px,transparent 0);background-size:24px 24px}
+h1,h2,h3,h4,h5,h6,button,input,textarea,select{font-family:var(--font-sans)}
+code,pre,kbd,samp,.eyebrow,.hip-build-version,.hip-pill{font-family:var(--font-mono)}
+a,.btn-link{color:var(--brand-primary)}
+a:hover{color:var(--accent-strong)}
+button,.primary-button,.hip-primary-action,.hip-login-button,.lookup-form button{border-radius:var(--radius-sm)}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid rgb(31 111 235/30%);outline-offset:2px}
+input,textarea,select{color:var(--text);border-color:var(--border-strong);background:var(--surface)}
+.hip-safety-page,.hip-lookup-page,.hip-login-page{color:var(--text);background:var(--bg)}
+.hip-safety-panel,.hip-lookup-panel,.hip-login-form,.hip-panel,.rule-builder-panel,.lookup-result,.score-card,.breakdown-card{color:var(--text);border-color:var(--border);background:var(--surface);box-shadow:var(--shadow-sm)}
+.hip-safety-panel h1,.hip-lookup-panel h1,.hip-login-form h2,.hip-login-form label,.hip-safety-panel dd{color:var(--text)}
+.hip-safety-panel dt,.hip-login-form p,.hip-login-form small,.hip-page-heading p,.admin-rule-header p{color:var(--text-muted)}
+.eyebrow,.hip-safety-panel .eyebrow,.hip-lookup-panel .eyebrow{color:var(--brand-secondary);letter-spacing:.12em}
+.quick-link-grid a{color:var(--text);border-color:var(--border);background:var(--surface-2)}
+.quick-link-grid a:hover{color:var(--brand-primary);border-color:var(--brand-primary);background:var(--surface-hover)}
+.valid.modified:not([type=checkbox]){outline-color:var(--safe)}
+.invalid{outline-color:var(--danger)}
+.validation-message,.text-danger{color:var(--danger)}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
