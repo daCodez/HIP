@@ -36,6 +36,8 @@ public sealed class AdminDesignSystemTests
             Assert.That(app, Does.Contain("admin-shell.js"));
             Assert.That(script, Does.Contain("hip-admin-theme"));
             Assert.That(script, Does.Contain("prefers-color-scheme"));
+            Assert.That(script, Does.Contain("enhancedload"));
+            Assert.That(script, Does.Contain("applySavedTheme"));
             Assert.That(script, Does.Contain("aria-label"));
         });
     }

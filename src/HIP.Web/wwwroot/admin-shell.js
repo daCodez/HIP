@@ -37,7 +37,11 @@
     }
   }
 
-  applyTheme(readSavedTheme() ?? preferredTheme);
+  function applySavedTheme() {
+    applyTheme(readSavedTheme() ?? preferredTheme);
+  }
+
+  applySavedTheme();
 
   document.addEventListener("click", (event) => {
     if (event.target.closest("[data-hip-theme-toggle]")) {
@@ -52,5 +56,17 @@
     }
   });
 
-  document.addEventListener("DOMContentLoaded", () => updateThemeControls(root.dataset.theme));
+  function initializeThemeControls() {
+    updateThemeControls(root.dataset.theme);
+
+    // Blazor enhanced navigation replaces server-rendered document attributes.
+    // Restore the user's saved theme after each internal page transition.
+    window.Blazor?.addEventListener("enhancedload", applySavedTheme);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeThemeControls, { once: true });
+  } else {
+    initializeThemeControls();
+  }
 })();
