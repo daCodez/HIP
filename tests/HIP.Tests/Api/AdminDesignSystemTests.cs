@@ -96,10 +96,10 @@ public sealed class AdminDesignSystemTests
         {
             Assert.That(dashboard, Does.Contain("Recent Threats"));
             Assert.That(dashboard, Does.Not.Contain("Quick Links"));
-            Assert.That(navigation, Does.Contain("class=\"mark-ring\""));
-            Assert.That(navigation, Does.Contain("class=\"mark-core\""));
-            Assert.That(designCss, Does.Contain(".brand .mark-ring"));
-            Assert.That(designCss, Does.Contain(".brand .mark-core"));
+            Assert.That(navigation, Does.Contain("src=\"/hip-shield.svg\""));
+            Assert.That(navigation, Does.Contain("alt=\"HIP\""));
+            Assert.That(designCss, Does.Contain(".brand .mark{width:35px;height:35px"));
+            Assert.That(designCss, Does.Not.Contain(".brand .mark-ring"));
             Assert.That(appCss, Does.Not.Contain(".hip-threat-table tr"));
             Assert.That(appCss, Does.Not.Contain(".hip-threat-table tbody tr:hover"));
             Assert.That(appCss, Does.Not.Contain("background: #122943"));
@@ -110,16 +110,21 @@ public sealed class AdminDesignSystemTests
     public void Brand_kit_updates_ui_without_replacing_original_logo_or_icons()
     {
         var navigation = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Layout", "ControlCenterNav.razor"));
+        var logo = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "hip-shield.svg"));
 
         Assert.Multiple(() =>
         {
-            Assert.That(navigation, Does.Contain("class=\"mark-ring\""));
-            Assert.That(navigation, Does.Contain("class=\"mark-core\""));
+            Assert.That(navigation, Does.Contain("alt=\"HIP\""));
+            Assert.That(navigation, Does.Not.Contain("mark-ring"));
+            Assert.That(navigation, Does.Contain("src=\"/hip-shield.svg\""));
             Assert.That(navigation, Does.Contain("private static RenderFragment Icon"));
             Assert.That(navigation, Does.Contain("\"shield\" => Svg"));
             Assert.That(navigation, Does.Contain("\"eye\" => Svg"));
             Assert.That(navigation, Does.Contain("\"bolt\" => Svg"));
             Assert.That(navigation, Does.Contain("\"settings\" => Svg"));
+            Assert.That(logo, Does.Contain("fill=\"#0f766e\""));
+            Assert.That(logo, Does.Contain("M64 8 20 24v33.6"));
+            Assert.That(logo, Does.Contain("m57.6 86.4-20-20"));
             Assert.That(navigation, Does.Not.Contain("brand_kit"));
             Assert.That(navigation, Does.Not.Contain("hip_brand_kit"));
         });
