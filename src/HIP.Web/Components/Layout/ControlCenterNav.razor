@@ -1,0 +1,76 @@
+<div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <div>
+        <b>HIP CONTROL</b>
+        <small>TRUST OPERATIONS</small>
+    </div>
+</div>
+
+<nav class="nav" aria-label="HIP admin navigation">
+    <p class="group-title">Command</p>
+    <NavLink class="nav-item" href="admin" Match="NavLinkMatch.All">@Icon("grid")<span>Overview</span></NavLink>
+
+    <p class="group-title">Trust operations</p>
+    <NavLink class="nav-item" href="admin/alerts">@Icon("bell")<span>Alert Center</span><b class="count">5</b></NavLink>
+    <NavLink class="nav-item" href="admin/message-shield">@Icon("shield")<span>Message Shield</span></NavLink>
+    <NavLink class="nav-item" href="admin/review">@Icon("search")<span>Review Queue</span><b class="count">12</b></NavLink>
+    <NavLink class="nav-item" href="admin/review-queue">@Icon("eye")<span>Safety Signals</span></NavLink>
+    <NavLink class="nav-item" href="admin/appeals">@Icon("file")<span>Appeals</span></NavLink>
+
+    <p class="group-title">Intelligence</p>
+    <NavLink class="nav-item" href="admin/reputation">@Icon("grid")<span>Score Overview</span></NavLink>
+    <NavLink class="nav-item" href="admin/reputation/signals">@Icon("bolt")<span>Trust Signals</span></NavLink>
+    <NavLink class="nav-item" href="admin/reputation/senders">@Icon("file")<span>Sender Profiles</span></NavLink>
+    <NavLink class="nav-item" href="admin/reports">@Icon("file")<span>Reports</span></NavLink>
+    <NavLink class="nav-item" href="admin/feedback">@Icon("eye")<span>Feedback Loop</span></NavLink>
+
+    <p class="group-title">Identity &amp; clients</p>
+    <NavLink class="nav-item" href="admin/identity/websites">@Icon("shield")<span>Website Identity</span></NavLink>
+    <NavLink class="nav-item" href="admin/platforms">@Icon("settings")<span>Platform Connections</span></NavLink>
+    <NavLink class="nav-item" href="consumer/devices">@Icon("grid")<span>Devices</span></NavLink>
+    <NavLink class="nav-item" href="admin/licenses">@Icon("file")<span>Licenses</span></NavLink>
+    <NavLink class="nav-item" href="admin/sl-hud-simulator">@Icon("eye")<span>HUD Simulator</span></NavLink>
+
+    <p class="group-title">Automation</p>
+    <NavLink class="nav-item" href="admin/rules">@Icon("bolt")<span>Rule Builder</span></NavLink>
+    <NavLink class="nav-item" href="admin/self-healing">@Icon("settings")<span>Self-Healing</span></NavLink>
+    <NavLink class="nav-item" href="admin/reputation-overrides">@Icon("file")<span>Reputation Overrides</span></NavLink>
+
+    <p class="group-title">System</p>
+    <NavLink class="nav-item" href="admin/audit">@Icon("file")<span>Audit Trail</span></NavLink>
+    <NavLink class="nav-item" href="admin/api">@Icon("grid")<span>API &amp; Developer</span></NavLink>
+    <NavLink class="nav-item" href="admin/privacy">@Icon("shield")<span>Privacy &amp; Safety</span></NavLink>
+    <NavLink class="nav-item" href="admin/roles">@Icon("eye")<span>Roles &amp; Permissions</span></NavLink>
+    <NavLink class="nav-item" href="admin/settings">@Icon("settings")<span>Settings</span></NavLink>
+</nav>
+
+<div class="operator">
+    <span class="avatar">DC</span>
+    <div>
+        <b>daCodez</b>
+        <small>Platform owner</small>
+    </div>
+</div>
+
+@code {
+    private static RenderFragment Icon(string name) => name switch
+    {
+        "search" => Svg("<circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m16 16 4 4\"/>"),
+        "shield" => Svg("<path d=\"M12 3 20 6v5c0 5-3.3 8.5-8 10-4.7-1.5-8-5-8-10V6z\"/><path d=\"m9 12 2 2 4-5\"/>"),
+        "eye" => Svg("<path d=\"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>"),
+        "bolt" => Svg("<path d=\"m13 2-9 12h7l-1 8 9-12h-7z\"/>"),
+        "settings" => Svg("<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19 12a7 7 0 0 0-.1-1l2-1.6-2-3.4-2.5 1A8 8 0 0 0 15 6l-.4-2.7h-4L10 6a8 8 0 0 0-1.5 1L6 6 4 9.4 6.1 11a7 7 0 0 0 0 2L4 14.6 6 18l2.5-1a8 8 0 0 0 1.5 1l.5 2.7h4L15 18a8 8 0 0 0 1.5-1l2.5 1 2-3.4-2.1-1.6a7 7 0 0 0 .1-1Z\"/>"),
+        "file" => Svg("<path d=\"M6 2h8l4 4v16H6zM14 2v5h5\"/>"),
+        "bell" => Svg("<path d=\"M5 17h14l-2-3V9a5 5 0 0 0-10 0v5zM10 20h4\"/>"),
+        _ => Svg("<path d=\"M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z\"/>")
+    };
+
+    private static RenderFragment Svg(string body) => builder =>
+    {
+        builder.OpenElement(0, "svg");
+        builder.AddAttribute(1, "viewBox", "0 0 24 24");
+        builder.AddAttribute(2, "aria-hidden", "true");
+        builder.AddMarkupContent(3, body);
+        builder.CloseElement();
+    };
+}

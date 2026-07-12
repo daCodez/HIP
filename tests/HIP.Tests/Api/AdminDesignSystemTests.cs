@@ -8,24 +8,24 @@ public sealed class AdminDesignSystemTests
     [Test]
     public void Admin_styles_define_low_glare_light_and_dark_theme_tokens()
     {
-        var css = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "admin-control-center.css"));
+        var css = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "control-center.css"));
 
         Assert.Multiple(() =>
         {
-            Assert.That(css, Does.Contain("--cc-bg: #d9dfe1"));
-            Assert.That(css, Does.Contain("--cc-panel: #edf0f1"));
-            Assert.That(css, Does.Contain("[data-theme=\"dark\"]"));
+            Assert.That(css, Does.Contain("--bg:#d9dfe1"));
+            Assert.That(css, Does.Contain("--panel:#edf0f1"));
+            Assert.That(css, Does.Contain("[data-theme=dark]"));
             Assert.That(css, Does.Contain(".hip-panel"));
             Assert.That(css, Does.Contain(".hip-metric-card"));
             Assert.That(css, Does.Contain(".hip-data-table"));
-            Assert.That(css, Does.Contain(".hip-toggle"));
+            Assert.That(css, Does.Contain(".hip-two-column"));
         });
     }
 
     [Test]
     public void Admin_shell_uses_accessible_theme_control_and_persisted_theme_script()
     {
-        var layout = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Layout", "MainLayout.razor"));
+        var layout = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Layout", "ControlCenterLayout.razor"));
         var app = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "App.razor"));
         var script = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "admin-shell.js"));
 
@@ -43,14 +43,14 @@ public sealed class AdminDesignSystemTests
     [Test]
     public void Admin_icon_rules_prevent_browser_default_svg_sizing()
     {
-        var css = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "admin-control-center.css"));
+        var css = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "control-center.css"));
 
         Assert.Multiple(() =>
         {
-            Assert.That(css, Does.Contain(".hip-nav-icon svg"));
-            Assert.That(css, Does.Contain(".hip-mark"));
-            Assert.That(css, Does.Contain("width: 16px"));
-            Assert.That(css, Does.Contain("height: 16px"));
+            Assert.That(css, Does.Contain(".nav-item svg"));
+            Assert.That(css, Does.Contain(".mark"));
+            Assert.That(css, Does.Contain("width:16px"));
+            Assert.That(css, Does.Contain("height:16px"));
         });
     }
 
@@ -61,8 +61,8 @@ public sealed class AdminDesignSystemTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(app, Does.Contain("admin-control-center.css"));
-            Assert.That(app, Does.Contain("admin-control-center-layout.css"));
+            Assert.That(app, Does.Contain("control-center.css"));
+            Assert.That(app, Does.Not.Contain("admin-control-center.css"));
             Assert.That(app, Does.Not.Contain("admin-design.css"));
             Assert.That(app, Does.Not.Contain("admin-nav-design.css"));
             Assert.That(app, Does.Not.Contain("admin-prototype.css"));

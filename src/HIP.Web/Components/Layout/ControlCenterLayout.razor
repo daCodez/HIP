@@ -1,0 +1,38 @@
+@inherits LayoutComponentBase
+
+<div class="app">
+    <aside class="sidebar">
+        <ControlCenterNav />
+    </aside>
+
+    <main class="main">
+        <header class="topbar">
+            <label class="search" aria-label="Search HIP">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg>
+                <input type="search" placeholder="Search pages, domains, scans..." />
+                <span class="key">Ctrl K</span>
+            </label>
+
+            <div class="top-actions">
+                <button class="iconbtn" type="button" aria-label="Switch to light mode" data-hip-theme-toggle>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15A8 8 0 0 1 9 4a8 8 0 1 0 11 11Z" /></svg>
+                </button>
+                <button class="iconbtn" type="button" aria-label="Notifications">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17h14l-2-3V9a5 5 0 0 0-10 0v5zM10 20h4" /></svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="stage">
+                @Body
+            </div>
+        </div>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">x</span>
+</div>
