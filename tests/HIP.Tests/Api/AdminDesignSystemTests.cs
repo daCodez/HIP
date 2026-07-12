@@ -12,8 +12,18 @@ public sealed class AdminDesignSystemTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(css, Does.Contain("--bg:#d9dfe1"));
-            Assert.That(css, Does.Contain("--panel:#edf0f1"));
+            Assert.That(css, Does.Contain("--bg:#f8fafc"));
+            Assert.That(css, Does.Contain("--panel:#fff"));
+            Assert.That(css, Does.Contain("--elevated:#f1f5f9"));
+            Assert.That(css, Does.Contain("--primary:#1f6feb"));
+            Assert.That(css, Does.Contain("--accent:#14b8a6"));
+            Assert.That(css, Does.Contain("--quantum:#7c3aed"));
+            Assert.That(css, Does.Contain("--bg:#0b1220"));
+            Assert.That(css, Does.Contain("--panel:#111827"));
+            Assert.That(css, Does.Contain("--elevated:#161e2e"));
+            Assert.That(css, Does.Contain("'Satoshi'"));
+            Assert.That(css, Does.Contain("'JetBrains Mono'"));
+            Assert.That(css, Does.Not.Contain("linear-gradient"));
             Assert.That(css, Does.Contain("[data-theme=dark]"));
             Assert.That(css, Does.Contain(".hip-panel"));
             Assert.That(css, Does.Contain(".hip-metric-card"));
@@ -93,6 +103,25 @@ public sealed class AdminDesignSystemTests
             Assert.That(appCss, Does.Not.Contain(".hip-threat-table tr"));
             Assert.That(appCss, Does.Not.Contain(".hip-threat-table tbody tr:hover"));
             Assert.That(appCss, Does.Not.Contain("background: #122943"));
+        });
+    }
+
+    [Test]
+    public void Brand_kit_updates_ui_without_replacing_original_logo_or_icons()
+    {
+        var navigation = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Layout", "ControlCenterNav.razor"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(navigation, Does.Contain("class=\"mark-ring\""));
+            Assert.That(navigation, Does.Contain("class=\"mark-core\""));
+            Assert.That(navigation, Does.Contain("private static RenderFragment Icon"));
+            Assert.That(navigation, Does.Contain("\"shield\" => Svg"));
+            Assert.That(navigation, Does.Contain("\"eye\" => Svg"));
+            Assert.That(navigation, Does.Contain("\"bolt\" => Svg"));
+            Assert.That(navigation, Does.Contain("\"settings\" => Svg"));
+            Assert.That(navigation, Does.Not.Contain("brand_kit"));
+            Assert.That(navigation, Does.Not.Contain("hip_brand_kit"));
         });
     }
 
