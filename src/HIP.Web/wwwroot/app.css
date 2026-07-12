@@ -1086,14 +1086,6 @@ h1:focus {
     font-size: 1rem;
 }
 
-.hip-threat-table tr {
-    background: rgba(14, 32, 54, 0.86);
-}
-
-.hip-threat-table tbody tr:hover {
-    background: #122943;
-}
-
 .hip-threat-time {
     min-width: 176px;
     color: #6f829e;

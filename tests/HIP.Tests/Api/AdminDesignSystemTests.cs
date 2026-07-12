@@ -70,6 +70,29 @@ public sealed class AdminDesignSystemTests
         });
     }
 
+    [Test]
+    public void Dashboard_uses_reference_logo_neutral_threat_rows_and_no_footer_quick_links()
+    {
+        var dashboard = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Pages", "AdminDashboard.razor"));
+        var navigation = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Layout", "ControlCenterNav.razor"));
+        var appCss = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "app.css"));
+        var designCss = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "control-center.css"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(dashboard, Does.Contain("Recent Threats"));
+            Assert.That(dashboard, Does.Not.Contain("Quick Links"));
+            Assert.That(navigation, Does.Contain("class=\"mark-ring\""));
+            Assert.That(navigation, Does.Contain("class=\"mark-core\""));
+            Assert.That(designCss, Does.Contain(".brand .mark-ring"));
+            Assert.That(designCss, Does.Contain(".brand .mark-core"));
+            Assert.That(appCss, Does.Not.Contain(".hip-threat-table tr"));
+            Assert.That(appCss, Does.Not.Contain(".hip-threat-table tbody tr:hover"));
+            Assert.That(appCss, Does.Not.Contain("background: #122943"));
+        });
+    }
+
+
     private static string WorkspaceFile(params string[] segments)
     {
         var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
