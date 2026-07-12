@@ -18,6 +18,8 @@ public sealed class AdminDesignSystemTests
             Assert.That(css, Does.Contain(".hip-panel"));
             Assert.That(css, Does.Contain(".hip-metric-card"));
             Assert.That(css, Does.Contain(".hip-data-table"));
+            Assert.That(css, Does.Contain("background-image:radial-gradient(var(--line) .65px,transparent .65px)"));
+            Assert.That(css, Does.Not.Contain("data:image/svg+xml"));
             Assert.That(css, Does.Contain(".hip-two-column"));
         });
     }
