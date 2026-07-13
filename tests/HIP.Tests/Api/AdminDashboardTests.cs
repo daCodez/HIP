@@ -626,21 +626,24 @@ public sealed class AdminDashboardTests
             Assert.That(body, Does.Contain("Monitor identity signals, investigate risk, and keep HIP healthy."));
             Assert.That(body, Does.Not.Contain("Privacy-safe operational overview"));
             Assert.That(body, Does.Not.Contain("HIP Local Launcher"));
-            Assert.That(body, Does.Not.Contain("Recent Threats"));
+            Assert.That(body, Does.Contain("Recent threats"));
         });
     }
 
     [Test]
-    public void Dashboard_source_contains_only_the_new_starting_content()
+    public void Dashboard_source_contains_visual_command_centre_sections()
     {
         var source = ReadDashboardSource();
 
         Assert.Multiple(() =>
         {
             Assert.That(source, Does.Contain("<h1>Overview</h1>"));
-            Assert.That(source, Does.Not.Contain("IAdminDashboardService"));
-            Assert.That(source, Does.Not.Contain("dashboard-refresh-button"));
-            Assert.That(source, Does.Not.Contain("Recent Threats"));
+            Assert.That(source, Does.Contain("IAdminDashboardService"));
+            Assert.That(source, Does.Contain("Overall HIP protection"));
+            Assert.That(source, Does.Contain("Scan activity"));
+            Assert.That(source, Does.Contain("Risk breakdown"));
+            Assert.That(source, Does.Contain("Provider health"));
+            Assert.That(source, Does.Contain("System activity"));
         });
     }
 
