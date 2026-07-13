@@ -609,21 +609,7 @@ public sealed class AdminDashboardTests
     }
 
     [Test]
-    public async Task Dashboard_route_shows_recent_threat_section()
-    {
-        await using var factory = new HipWebApplicationFactory<Program>();
-        using var client = factory.CreateClient();
-        AddRole(client, "ReadOnly");
-
-        var response = await client.GetAsync("/admin");
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.That(body, Does.Contain("Recent Threats"));
-        Assert.That(body, Does.Contain("hip-threat-panel"));
-    }
-
-    [Test]
-    public async Task Dashboard_route_shows_refresh_button_and_last_updated_status()
+    public async Task Dashboard_route_starts_with_the_overview_heading()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
@@ -635,72 +621,25 @@ public sealed class AdminDashboardTests
         Assert.Multiple(() =>
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(body, Does.Contain("dashboard-refresh-button"));
-            Assert.That(body, Does.Contain("Refresh"));
-            Assert.That(body, Does.Contain("Last updated:"));
+            Assert.That(body, Does.Contain("HIP Admin · dashboard"));
+            Assert.That(body, Does.Contain("Overview"));
+            Assert.That(body, Does.Contain("Monitor identity signals, investigate risk, and keep HIP healthy."));
+            Assert.That(body, Does.Not.Contain("Privacy-safe operational overview"));
+            Assert.That(body, Does.Not.Contain("Recent Threats"));
         });
     }
 
     [Test]
-    public async Task Dashboard_route_shows_empty_data_state_when_no_scans_exist()
-    {
-        await using var factory = new HipWebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
-            {
-                services.RemoveAll<IAdminDashboardService>();
-                services.AddScoped<IAdminDashboardService, EmptyDashboardService>();
-            }));
-        using var client = factory.CreateClient();
-        AddRole(client, "ReadOnly");
-
-        var response = await client.GetAsync("/admin");
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(body, Does.Contain("No scan data yet."));
-            Assert.That(body, Does.Contain("No fake scan counts are generated").Or.Contain("do not use fake scan counts"));
-        });
-    }
-
-    [Test]
-    public async Task Dashboard_route_shows_safe_refresh_error_when_summary_service_fails()
-    {
-        await using var factory = new HipWebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
-            {
-                services.RemoveAll<IAdminDashboardService>();
-                services.AddScoped<IAdminDashboardService, FailingDashboardService>();
-            }));
-        using var client = factory.CreateClient();
-        AddRole(client, "ReadOnly");
-
-        var response = await client.GetAsync("/admin");
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(body, Does.Contain("Dashboard refresh failed."));
-            Assert.That(body, Does.Contain("HIP could not load dashboard data right now."));
-            Assert.That(body, Does.Not.Contain("database-password"));
-            Assert.That(body, Does.Not.Contain("private stack trace"));
-        });
-    }
-
-    [Test]
-    public void Dashboard_refresh_markup_includes_loading_state_and_duplicate_request_guard()
+    public void Dashboard_source_contains_only_the_new_starting_content()
     {
         var source = ReadDashboardSource();
 
         Assert.Multiple(() =>
         {
-            Assert.That(source, Does.Contain("dashboard-loading-state"));
-            Assert.That(source, Does.Contain("Loading dashboard..."));
-            Assert.That(source, Does.Contain("disabled=\"@_isRefreshing\""));
-            Assert.That(source, Does.Contain("if (_isRefreshing)"));
-            Assert.That(source, Does.Contain("return;"));
+            Assert.That(source, Does.Contain("<h1>Overview</h1>"));
+            Assert.That(source, Does.Not.Contain("IAdminDashboardService"));
+            Assert.That(source, Does.Not.Contain("dashboard-refresh-button"));
+            Assert.That(source, Does.Not.Contain("Recent Threats"));
         });
     }
 

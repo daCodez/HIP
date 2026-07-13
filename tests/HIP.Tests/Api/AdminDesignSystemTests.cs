@@ -94,7 +94,9 @@ public sealed class AdminDesignSystemTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(dashboard, Does.Contain("Recent Threats"));
+            Assert.That(dashboard, Does.Contain("HIP Admin · dashboard"));
+            Assert.That(dashboard, Does.Contain("<h1>Overview</h1>"));
+            Assert.That(dashboard, Does.Not.Contain("Recent Threats"));
             Assert.That(dashboard, Does.Not.Contain("Quick Links"));
             Assert.That(navigation, Does.Contain("src=\"/hip-logo-original.png\""));
             Assert.That(navigation, Does.Contain("alt=\"HIP\""));
