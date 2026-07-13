@@ -615,7 +615,7 @@ public sealed class AdminDashboardTests
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");
 
-        var response = await client.GetAsync("/admin");
+        var response = await client.GetAsync("/");
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.Multiple(() =>
@@ -625,6 +625,7 @@ public sealed class AdminDashboardTests
             Assert.That(body, Does.Contain("Overview"));
             Assert.That(body, Does.Contain("Monitor identity signals, investigate risk, and keep HIP healthy."));
             Assert.That(body, Does.Not.Contain("Privacy-safe operational overview"));
+            Assert.That(body, Does.Not.Contain("HIP Local Launcher"));
             Assert.That(body, Does.Not.Contain("Recent Threats"));
         });
     }

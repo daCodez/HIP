@@ -1,0 +1,28 @@
+@page "/dev/launcher"
+@rendermode InteractiveServer
+
+<PageTitle>HIP Local Launcher</PageTitle>
+
+<section class="hip-page-heading">
+    <div>
+        <h1>HIP Local Launcher</h1>
+        <p>Human Identity Protocol verifies trust above TCP and TLS. TCP connects. TLS encrypts. HIP verifies origin, reputation, and risk.</p>
+    </div>
+    <span class="live-status"><i></i> Local dev</span>
+</section>
+
+<section class="hip-metric-grid">
+    <article class="hip-metric-card good"><span>Admin Dashboard</span><strong>Live</strong><small>Requires dev login</small></article>
+    <article class="hip-metric-card"><span>Public Lookup</span><strong>Ready</strong><small>Domain trust summaries</small></article>
+    <article class="hip-metric-card hot"><span>Browser Plugin</span><strong>Client</strong><small>Privacy-safe scans</small></article>
+</section>
+
+<section class="hip-panel">
+    <div class="hip-panel-heading"><div><h2>Local Development Entry Points</h2><p>This is a startup-safe launcher, not the live dashboard.</p></div></div>
+    <div class="quick-link-grid">
+        <a href="/login">Admin Login</a><a href="/dev/admin-login/Admin">Dev Admin Sign In</a><a href="/admin">Admin Dashboard</a>
+        <a href="/admin/identity/websites">Register Website</a><a href="/lookup">Public Lookup</a><a href="/safety">Safety Page</a><a href="/admin/settings">Provider Settings</a>
+    </div>
+</section>
+
+<section class="hip-panel"><div class="hip-panel-heading"><div><h2>Current Build</h2><p>@HipWebBuildInfo.DashboardDisplayVersion</p></div></div></section>
