@@ -40,7 +40,7 @@
  protected override Task OnInitializedAsync()=>LoadAsync();
  async Task LoadAsync(){if(_loading)return;_loading=true;_error=null;try{_summary=await DashboardService.GetSummaryAsync(CancellationToken.None);}catch{_error="HIP could not load the privacy-safe dashboard summary. Try again.";}finally{_loading=false;}}
  AdminDashboardCard? Card(string key)=>_summary?.Cards.FirstOrDefault(c=>c.Key==key);
- RenderFragment Metric(string key,string label,string icon)=>b=>{var c=Card(key);b.OpenElement(0,"article");b.AddAttribute(1,"class","metric-tile");b.AddMarkupContent(2,$"<span aria-hidden='true'>{icon}</span><strong>{c?.Value??0}</strong><b>{label}</b><small>{(c?.IsPlaceholder==true?"No connected data":c?.Status)}</small>");b.CloseElement();};
+ RenderFragment Metric(string key,string label,string icon)=>b=>{var c=Card(key);var formattedValue=(c?.Value??0).ToString("N0",System.Globalization.CultureInfo.InvariantCulture);b.OpenElement(0,"article");b.AddAttribute(1,"class","metric-tile");b.AddMarkupContent(2,$"<span aria-hidden='true'>{icon}</span><strong>{formattedValue}</strong><b>{label}</b><small>{(c?.IsPlaceholder==true?"No connected data":c?.Status)}</small>");b.CloseElement();};
  RenderFragment Empty(string title,string text)=>b=>b.AddMarkupContent(0,$"<div class='visual-empty'><b>{title}</b><span>{text}</span></div>");
  RenderFragment QueueRow(string label,string key)=>b=>b.AddMarkupContent(0,$"<a class='queue-row' href='/admin/review'><span>{label}</span><b>{Card(key)?.Value??0}</b></a>");
  RenderFragment RiskBar(string label,string key)=>b=>{var v=Card(key)?.Value??0;b.AddMarkupContent(0,$"<div class='risk-bar'><span>{label}<b>{v}</b></span><i style='--w:{Math.Min(100,v*10)}'></i></div>");};
@@ -51,7 +51,7 @@
  int SafeCount=>Count("Trusted","Safe"); int CautionCount=>Count("Limited","Unknown","Caution"); int HighRiskCount=>Count("Suspicious","HighRisk"); int CriticalCount=>Count("Dangerous","Critical");
  int Percent(int n)=>RangeScans.Count==0?0:Math.Max(8,n*100/RangeScans.Count); int SafePercent=>Percent(SafeCount);int CautionPercent=>Percent(CautionCount);int RiskPercent=>Percent(HighRiskCount);
  int ProtectionScore=>Math.Clamp(Card("averageHipScore")?.Value??0,0,100); string ProtectionLabel=>ProtectionScore>=85?"Protected":ProtectionScore>=60?"Caution":ProtectionScore>=30?"High Risk":"Critical";
- string ProtectionExplanation=>_summary?.HasScanData==true?$"Based on {_summary.RecentScans.Count} recent privacy-safe scan summaries.":"HIP needs stored scan evidence before it can calculate protection.";
+ string ProtectionExplanation=>_summary?.HasScanData==true?$"Average HIP score across stored scan data. Activity panels show {_summary.RecentScans.Count} recent privacy-safe summaries.":"HIP needs stored scan evidence before it can calculate protection.";
  static string Relative(DateTimeOffset value){var age=DateTimeOffset.UtcNow-value;return age.TotalMinutes<60?$"{Math.Max(1,(int)age.TotalMinutes)}m ago":age.TotalHours<24?$"{(int)age.TotalHours}h ago":$"{(int)age.TotalDays}d ago";}
  static string ThreatLink(AdminRecentThreatItem t)=>string.IsNullOrWhiteSpace(t.RelatedScanId)?"/admin/review":$"/admin/scans/{Uri.EscapeDataString(t.RelatedScanId)}";
 }
