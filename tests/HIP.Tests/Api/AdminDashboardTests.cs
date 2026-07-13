@@ -78,6 +78,23 @@ public sealed class AdminDashboardTests
     }
 
     [Test]
+    public async Task Dashboard_domains_scanned_counts_all_distinct_domains_beyond_recent_window()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        var now = DateTimeOffset.UtcNow;
+
+        for (var index = 0; index < 120; index++)
+        {
+            await repository.SaveAsync(Scan($"domain-{index}.example", 80, "Trusted", 1, 0, 0, now.AddMinutes(-index), "Trusted scan."), CancellationToken.None);
+        }
+
+        var service = Dashboard(repository);
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.That(Card(summary, "domainsScanned").Value, Is.EqualTo(120));
+    }
+
+    [Test]
     public async Task Dashboard_status_cards_count_real_scan_results()
     {
         var repository = new InMemoryBrowserScanResultRepository();

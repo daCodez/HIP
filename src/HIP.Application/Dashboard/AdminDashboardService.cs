@@ -76,7 +76,7 @@ public sealed class AdminDashboardService(
         var scansToday = useAggregateCounts
             ? aggregate.ScansToday
             : browserScans.Count(scan => scan.LastCheckedUtc.UtcDateTime.Date == now.UtcDateTime.Date);
-        var domainsScanned = browserScans.Select(scan => scan.Domain).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        var domainsScanned = await browserScanResultRepository.CountDistinctDomainsAsync(cancellationToken);
         var linksScanned = browserScans.Sum(scan => scan.LinksScanned);
         var riskyLinksFound = browserScans.Sum(scan => scan.RiskyLinksFound);
         var suspiciousLinksFound = browserScans.Sum(scan => scan.SuspiciousLinksFound);

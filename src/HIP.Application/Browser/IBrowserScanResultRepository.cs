@@ -35,4 +35,11 @@ public interface IBrowserScanResultRepository
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
     /// <returns>Recent scan results, newest first.</returns>
     Task<IReadOnlyCollection<BrowserScanResultRecord>> ListRecentAsync(int maxCount, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Counts distinct normalized domains across all stored browser scan results.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>The number of distinct stored scan domains.</returns>
+    Task<int> CountDistinctDomainsAsync(CancellationToken cancellationToken);
 }

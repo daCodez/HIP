@@ -67,4 +67,19 @@ public sealed class InMemoryBrowserScanResultRepository : IBrowserScanResultRepo
 
         return Task.FromResult<IReadOnlyCollection<BrowserScanResultRecord>>(results);
     }
+
+    /// <summary>
+    /// Counts distinct normalized domains across every in-memory scan record.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>The number of distinct stored scan domains.</returns>
+    public Task<int> CountDistinctDomainsAsync(CancellationToken cancellationToken)
+    {
+        var count = resultsById.Values
+            .Select(result => result.Domain)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        return Task.FromResult(count);
+    }
 }

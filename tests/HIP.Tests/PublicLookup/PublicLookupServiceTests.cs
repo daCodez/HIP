@@ -255,6 +255,14 @@ public sealed class PublicLookupServiceTests
         /// <returns>An empty recent scan result collection.</returns>
         public Task<IReadOnlyCollection<BrowserScanResultRecord>> ListRecentAsync(int maxCount, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyCollection<BrowserScanResultRecord>>(Array.Empty<BrowserScanResultRecord>());
+
+        /// <summary>
+        /// Distinct-domain counting is not used by the lookup timeout regression test.
+        /// </summary>
+        /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+        /// <returns>Zero because this test double stores no scans.</returns>
+        public Task<int> CountDistinctDomainsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(0);
     }
 }
 

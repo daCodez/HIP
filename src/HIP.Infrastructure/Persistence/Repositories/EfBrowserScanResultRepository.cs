@@ -81,6 +81,28 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
     }
 
     /// <summary>
+    /// Counts distinct normalized domains across the full stored browser scan history.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>The number of distinct stored scan domains.</returns>
+    public async Task<int> CountDistinctDomainsAsync(CancellationToken cancellationToken)
+    {
+        var typedCount = await dbContext.BrowserScanResults.AsNoTracking()
+            .Select(result => result.Domain)
+            .Distinct()
+            .CountAsync(cancellationToken);
+        if (typedCount > 0)
+        {
+            return typedCount;
+        }
+
+        return (await ListLegacyAsync(cancellationToken))
+            .Select(result => result.Domain)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+    }
+
+    /// <summary>
     /// Lists recent browser scan results for dashboard read models without requiring dashboard code to process every scan.
     /// </summary>
     /// <param name="maxCount">Maximum number of recent scans to return.</param>
