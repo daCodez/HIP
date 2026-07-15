@@ -2,85 +2,212 @@
 @attribute [Authorize(Policy = AdminPolicies.CanReviewReports)]
 @rendermode InteractiveServer
 @inject IAdminDashboardService DashboardService
+@inject ILogger<AdminAlerts> Logger
 
 <PageTitle>HIP Alert Center</PageTitle>
 
-<section class="hip-page-heading compact">
-    <div>
-        <h1>Alert Center</h1>
-        <p>Unified inbox of live HIP security signals requiring attention.</p>
-    </div>
-    <span class="hip-pill @(_alerts.Count == 0 ? "good" : "danger")">@_alerts.Count active</span>
-</section>
+<main class="alert-center-page">
+    <section class="hip-page-heading compact alert-center-heading">
+        <div>
+            <p class="eyebrow">Trust operations</p>
+            <h1>Alert Center</h1>
+            <p>Investigate live, privacy-safe HIP security signals from connected sources.</p>
+        </div>
+        <div class="alert-heading-status">
+            <span class="hip-pill @(_alerts.Count == 0 ? "good" : "danger")">@_alerts.Count active</span>
+            @if (_lastUpdatedAtUtc is not null)
+            {
+                <small>Updated @_lastUpdatedAtUtc.Value.UtcDateTime.ToString("HH:mm:ss 'UTC'")</small>
+            }
+        </div>
+    </section>
 
-<section class="hip-tabs">
-    <button class="active">All <span>@_alerts.Count</span></button>
-    <button>High Risk <span>@_alerts.Count(alert => alert.Severity is "High" or "Critical")</span></button>
-    <button>Provider <span>@_alerts.Count(alert => alert.Source.Contains("Provider", StringComparison.OrdinalIgnoreCase))</span></button>
-    <button>Feedback <span>@_alerts.Count(alert => alert.Source.Contains("Feedback", StringComparison.OrdinalIgnoreCase))</span></button>
-</section>
-
-<section class="hip-list-panel">
-    @if (_isLoading)
-    {
-        <article class="hip-alert-row">
-            <span class="hip-alert-icon info">i</span>
-            <div>
-                <h2>Loading live alerts</h2>
-                <p>HIP is reading stored scan, review, feedback, and provider signals.</p>
-            </div>
-        </article>
-    }
-    else if (_alerts.Count == 0)
-    {
-        <article class="hip-alert-row">
-            <span class="hip-alert-icon good">i</span>
-            <div>
-                <h2>No live alerts</h2>
-                <p>HIP has no current high-risk or uncertain security signals in the connected data sources.</p>
-                <small>No artificial alert rows are generated.</small>
-            </div>
-        </article>
-    }
-    else
-    {
-        @foreach (var alert in _alerts)
+    <section class="hip-tabs alert-tabs" role="tablist" aria-label="Alert categories">
+        @foreach (var tab in AlertTabs)
         {
-            <article class="hip-alert-row">
-                <span class="hip-alert-icon @Tone(alert.Severity)">!</span>
+            <button type="button"
+                    role="tab"
+                    class="@(_activeFilter == tab.Key ? "active" : null)"
+                    aria-selected="@(_activeFilter == tab.Key)"
+                    @onclick="() => SetFilter(tab.Key)">
+                @tab.Label <span>@TabCount(tab.Key)</span>
+            </button>
+        }
+    </section>
+
+    <section class="alert-toolbar" aria-label="Alert controls">
+        <label>
+            <span>Search alerts</span>
+            <input type="search" @bind="_searchText" @bind:event="oninput" placeholder="Domain, source, status, or reason" autocomplete="off" />
+        </label>
+        <p>@FilteredAlerts.Count result@(FilteredAlerts.Count == 1 ? string.Empty : "s")</p>
+        <button type="button" @onclick="LoadAlertsAsync" disabled="@_isLoading">Refresh alerts</button>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <p class="admin-error" role="alert">@_loadError</p>
+    }
+
+    <section class="hip-list-panel alert-center-list" aria-live="polite" aria-busy="@_isLoading">
+        @if (_isLoading)
+        {
+            <article class="hip-alert-row alert-center-row alert-empty-state">
+                <span class="hip-alert-icon info" aria-hidden="true">i</span>
                 <div>
-                    <h2>@alert.Domain <span class="hip-pill @Tone(alert.Severity)">@alert.Severity</span> <span class="hip-pill info">@alert.SiteSafetyStatus</span></h2>
-                    <p>@alert.ReasonSummary</p>
-                    <small>@alert.Source · @alert.TargetType · @alert.CreatedAtUtc.UtcDateTime.ToString("u")</small>
+                    <h2>Loading live alerts</h2>
+                    <p>HIP is reading stored scan, review, feedback, and provider signals.</p>
                 </div>
-                @if (!string.IsNullOrWhiteSpace(alert.RelatedScanId))
-                {
-                    <a class="hip-source-pill" href="@($"/admin/scans/{Uri.EscapeDataString(alert.RelatedScanId)}")">Details</a>
-                }
             </article>
         }
-    }
-</section>
+        else if (FilteredAlerts.Count == 0)
+        {
+            <article class="hip-alert-row alert-center-row alert-empty-state">
+                <span class="hip-alert-icon good" aria-hidden="true">✓</span>
+                <div>
+                    <h2>@(_alerts.Count == 0 ? "No live alerts" : "No alerts match these filters")</h2>
+                    <p>@(_alerts.Count == 0
+                        ? "HIP has no current high-risk or uncertain security signals in the connected data sources."
+                        : "Try another category or clear the alert search.")</p>
+                    <small>No artificial alert rows are generated.</small>
+                </div>
+            </article>
+        }
+        else
+        {
+            @foreach (var alert in FilteredAlerts)
+            {
+                <article class="hip-alert-row alert-center-row">
+                    <span class="hip-alert-icon @Tone(alert.Severity)" aria-hidden="true">!</span>
+                    <div class="alert-content">
+                        <h2>
+                            @alert.Domain
+                            <span class="hip-pill @Tone(alert.Severity)">@alert.Severity</span>
+                            <span class="hip-pill info">@alert.SiteSafetyStatus</span>
+                        </h2>
+                        <p>@alert.ReasonSummary</p>
+                        @if (!string.IsNullOrWhiteSpace(alert.WarningSummary))
+                        {
+                            <p class="alert-warning">@alert.WarningSummary</p>
+                        }
+                        <div class="alert-metadata">
+                            <span>@alert.Source</span>
+                            <span>@alert.TargetType</span>
+                            <span>@alert.ConfidenceLevel confidence</span>
+                            <time datetime="@alert.CreatedAtUtc.ToString("O")">@alert.CreatedAtUtc.UtcDateTime.ToString("u")</time>
+                        </div>
+                    </div>
+                    <div class="alert-row-actions">
+                        @if (alert.FinalHipScore is not null)
+                        {
+                            <span class="alert-score"><strong>@alert.FinalHipScore</strong><small>HIP score</small></span>
+                        }
+                        <a class="hip-source-pill alert-detail-link"
+                           href="@DetailHref(alert)"
+                           aria-label="@($"Investigate alert for {alert.Domain}")">Investigate</a>
+                    </div>
+                </article>
+            }
+        }
+    </section>
+</main>
 
 @code {
-    private IReadOnlyCollection<AdminRecentThreatItem> _alerts = [];
-    private bool _isLoading = true;
+    private static readonly (string Key, string Label)[] AlertTabs =
+    [
+        ("all", "All"),
+        ("high-risk", "High Risk"),
+        ("provider", "Provider"),
+        ("feedback", "Feedback")
+    ];
 
-    /// <summary>
-    /// Loads live dashboard threat signals for the alert center.
-    /// </summary>
-    protected override async Task OnInitializedAsync()
+    private IReadOnlyCollection<AdminRecentThreatItem> _alerts = [];
+    private string _activeFilter = "all";
+    private string _searchText = string.Empty;
+    private bool _isLoading = true;
+    private string _loadError = string.Empty;
+    private DateTimeOffset? _lastUpdatedAtUtc;
+
+    private IReadOnlyList<AdminRecentThreatItem> FilteredAlerts => _alerts
+        .Where(MatchesActiveFilter)
+        .Where(MatchesSearch)
+        .OrderByDescending(alert => SeverityRank(alert.Severity))
+        .ThenByDescending(alert => alert.CreatedAtUtc)
+        .ToArray();
+
+    protected override Task OnInitializedAsync() => LoadAlertsAsync();
+
+    private async Task LoadAlertsAsync()
     {
-        var summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
-        _alerts = summary.RecentThreats;
-        _isLoading = false;
+        _isLoading = true;
+        _loadError = string.Empty;
+        try
+        {
+            var summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+            _alerts = summary.RecentThreats;
+            _lastUpdatedAtUtc = summary.GeneratedAtUtc;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Alert Center refresh failed; retaining the existing privacy-safe alert projection.");
+            _loadError = "HIP could not refresh alerts. Existing results remain available; try again.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
 
-    /// <summary>
-    /// Maps live severity labels to existing HIP visual tones.
-    /// </summary>
-    /// <param name="severity">Threat severity label.</param>
-    /// <returns>CSS tone name.</returns>
+    private void SetFilter(string filter) => _activeFilter = filter;
+
+    private int TabCount(string filter) => _alerts.Count(alert => MatchesFilter(alert, filter));
+
+    private bool MatchesActiveFilter(AdminRecentThreatItem alert) => MatchesFilter(alert, _activeFilter);
+
+    private static bool MatchesFilter(AdminRecentThreatItem alert, string filter) => filter switch
+    {
+        "high-risk" => IsHighRisk(alert.Severity),
+        "provider" => alert.Source.Contains("Provider", StringComparison.OrdinalIgnoreCase),
+        "feedback" => alert.Source.Contains("Feedback", StringComparison.OrdinalIgnoreCase),
+        _ => true
+    };
+
+    private static bool IsHighRisk(string severity) =>
+        severity.Equals("High", StringComparison.OrdinalIgnoreCase) ||
+        severity.Equals("Critical", StringComparison.OrdinalIgnoreCase);
+
+    private bool MatchesSearch(AdminRecentThreatItem alert)
+    {
+        if (string.IsNullOrWhiteSpace(_searchText))
+        {
+            return true;
+        }
+
+        var search = _searchText.Trim();
+        return alert.Domain.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               alert.Source.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               alert.Severity.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               alert.SiteSafetyStatus.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               alert.ReasonSummary.Contains(search, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string DetailHref(AdminRecentThreatItem alert) =>
+        !string.IsNullOrWhiteSpace(alert.RelatedScanId)
+            ? $"/admin/scans/{Uri.EscapeDataString(alert.RelatedScanId)}"
+            : !string.IsNullOrWhiteSpace(alert.RelatedReviewId)
+                ? $"/admin/review/{Uri.EscapeDataString(alert.RelatedReviewId)}"
+                : !string.IsNullOrWhiteSpace(alert.RelatedRuleId)
+                    ? $"/admin/rules/{Uri.EscapeDataString(alert.RelatedRuleId)}"
+                    : "/admin/review-queue";
+
+    private static int SeverityRank(string severity) => severity.ToUpperInvariant() switch
+    {
+        "CRITICAL" => 4,
+        "HIGH" => 3,
+        "MEDIUM" => 2,
+        _ => 1
+    };
+
     private static string Tone(string severity) =>
         severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
         severity.Equals("High", StringComparison.OrdinalIgnoreCase)

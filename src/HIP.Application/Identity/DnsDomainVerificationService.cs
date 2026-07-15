@@ -56,6 +56,10 @@ public sealed class DnsDomainVerificationService(
         {
             throw new ArgumentException("Domain verification request was not found.", nameof(domain));
         }
+        if (request.Status == VerificationStatus.Revoked)
+        {
+            throw new InvalidOperationException("Revoked domain verification cannot be retried or reactivated.");
+        }
 
         var status = method switch
         {
@@ -70,6 +74,53 @@ public sealed class DnsDomainVerificationService(
             VerifiedAtUtc = status == VerificationStatus.Verified ? DateTimeOffset.UtcNow : null
         };
         return await verificationRepository.SaveAsync(updated, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retries a persisted DNS challenge using its stored token internally.
+    /// </summary>
+    public async Task<DomainVerificationRetryResult> RetryAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken)
+    {
+        if (method != VerificationMethod.DnsTxt)
+        {
+            throw new InvalidOperationException("Automated retry is available only for production DNS TXT verification.");
+        }
+
+        var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+        var request = await verificationRepository.GetAsync(normalized, method, cancellationToken) ??
+            throw new ArgumentException("Domain verification request was not found.", nameof(domain));
+        if (request.Status == VerificationStatus.Revoked)
+        {
+            throw new InvalidOperationException("Revoked domain verification cannot be retried.");
+        }
+
+        var check = await CheckDnsTxtAsync(normalized, request.Token, cancellationToken);
+        var status = MapDnsCheckStatus(check.Status);
+        var updated = request with
+        {
+            Status = status,
+            VerifiedAtUtc = status == VerificationStatus.Verified ? DateTimeOffset.UtcNow : null
+        };
+        await verificationRepository.SaveAsync(updated, cancellationToken);
+        return new DomainVerificationRetryResult(updated, check);
+    }
+
+    /// <summary>
+    /// Revokes a persisted challenge and removes its verified timestamp.
+    /// </summary>
+    public async Task<DomainVerificationRequest> RevokeAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken)
+    {
+        var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+        var request = await verificationRepository.GetAsync(normalized, method, cancellationToken) ??
+            throw new ArgumentException("Domain verification request was not found.", nameof(domain));
+        var revoked = request with { Status = VerificationStatus.Revoked, VerifiedAtUtc = null };
+        return await verificationRepository.SaveAsync(revoked, cancellationToken);
     }
 
     /// <summary>

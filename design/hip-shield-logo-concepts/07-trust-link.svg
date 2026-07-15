@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">HIP Trust Link shield logo</title>
+  <path d="M128 20 216 53v65c0 55-34 97-88 117-54-20-88-62-88-117V53z" fill="#0d1918"/>
+  <path d="m111 145-14 14c-14 14-37-8-23-22l31-31c12-12 31-9 40 2M145 111l14-14c14-14 37 8 23 22l-31 31c-12 12-31 9-40-2" fill="none" stroke="#5ad7bb" stroke-width="13" stroke-linecap="round"/>
+  <path d="m105 128 46 0" stroke="#eff8f6" stroke-width="9" stroke-linecap="round"/>
+</svg>

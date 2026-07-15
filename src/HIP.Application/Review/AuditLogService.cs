@@ -40,9 +40,15 @@ public sealed class AuditLogService(IAuditLogRepository repository) : IAuditLogS
     }
 
     public IReadOnlyCollection<AuditLogEntry> List() =>
-        Run(repository.ListAsync(CancellationToken.None))
+        Run(ListAsync(CancellationToken.None));
+
+    public async Task<IReadOnlyCollection<AuditLogEntry>> ListAsync(CancellationToken cancellationToken)
+    {
+        var entries = await repository.ListAsync(cancellationToken).ConfigureAwait(false);
+        return entries
             .OrderByDescending(entry => entry.CreatedAtUtc)
             .ToArray();
+    }
 
     private static IReadOnlyDictionary<string, string> Sanitize(IReadOnlyDictionary<string, string>? metadata)
     {

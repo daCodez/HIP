@@ -119,6 +119,33 @@ public sealed class DnsDomainVerificationServiceTests
         Assert.That(result.Status, Is.EqualTo(VerificationStatus.Verified));
     }
 
+    [Test]
+    public async Task RetryAsync_uses_the_stored_challenge_without_admin_token_input()
+    {
+        string? storedToken = null;
+        var service = Service(_ => Task.FromResult<IReadOnlyCollection<string>>(
+            [$"hip-site-verification={storedToken}"]));
+        var started = await service.StartAsync("retry.test", VerificationMethod.DnsTxt, CancellationToken.None);
+        storedToken = started.Token;
+
+        var result = await service.RetryAsync("retry.test", VerificationMethod.DnsTxt, CancellationToken.None);
+
+        Assert.That(result.Request.Status, Is.EqualTo(VerificationStatus.Verified));
+        Assert.That(result.Check.Status, Is.EqualTo(DomainVerificationCheckStatus.Verified));
+    }
+
+    [Test]
+    public async Task RevokeAsync_marks_the_stored_challenge_revoked()
+    {
+        var service = Service([]);
+        await service.StartAsync("revoke.test", VerificationMethod.DnsTxt, CancellationToken.None);
+
+        var result = await service.RevokeAsync("revoke.test", VerificationMethod.DnsTxt, CancellationToken.None);
+
+        Assert.That(result.Status, Is.EqualTo(VerificationStatus.Revoked));
+        Assert.That(result.VerifiedAtUtc, Is.Null);
+    }
+
     /// <summary>
     /// Creates a DNS verification service backed by static TXT records.
     /// </summary>

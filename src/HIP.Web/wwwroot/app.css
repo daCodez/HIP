@@ -1826,117 +1826,6 @@ h1:focus {
     background: #07111f;
 }
 
-.hip-login-page {
-    min-height: calc(100vh - 132px);
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
-    gap: 80px;
-    align-items: center;
-    max-width: 1450px;
-}
-
-.hip-brand.inline {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 60px;
-}
-
-.hip-brand.inline .hip-mark {
-    width: 48px;
-    height: 48px;
-}
-
-.hip-brand.inline strong,
-.hip-brand.inline span {
-    display: block;
-}
-
-.hip-login-brand h1 {
-    max-width: 520px;
-    color: #fff;
-    font-size: 2.2rem;
-}
-
-.hip-login-brand p {
-    max-width: 560px;
-    color: #9db0c8;
-    font-size: 1.05rem;
-}
-
-.hip-login-feature {
-    max-width: 900px;
-    margin-top: 16px;
-    border-radius: 8px;
-    padding: 18px 20px;
-    font-weight: 800;
-    background: #0e2036;
-}
-
-.hip-login-feature.cyan { color: #08d7ec; }
-.hip-login-feature.green { color: #12d895; }
-.hip-login-feature.yellow { color: #ffd044; }
-.hip-login-feature.orange { color: #ff944d; }
-
-.hip-login-form {
-    display: grid;
-    gap: 18px;
-    max-width: 470px;
-}
-
-.hip-login-form h2 {
-    margin: 0;
-    color: #fff;
-}
-
-.hip-login-form p,
-.hip-login-form small {
-    color: #6f829e;
-}
-
-.hip-login-form label {
-    display: grid;
-    gap: 8px;
-    color: #d8e4f7;
-    font-weight: 700;
-}
-
-.hip-login-form input {
-    border: 1px solid #1c3555;
-    border-radius: 8px;
-    padding: 14px;
-    color: #d8e4f7;
-    background: #0c1a2e;
-}
-
-.hip-login-form .remember {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: #9db0c8;
-}
-
-.hip-login-form button,
-.hip-login-button {
-    border: 0;
-    border-radius: 8px;
-    padding: 14px;
-    color: #06101d;
-    background: #04c7df;
-    font-weight: 900;
-    text-align: center;
-    text-decoration: none;
-}
-
-.hip-login-form small {
-    display: block;
-    border: 1px solid #172b45;
-    border-radius: 8px;
-    padding: 16px;
-    text-align: center;
-    background: #0c1a2e;
-}
-
 .hip-tour-backdrop {
     min-height: calc(100vh - 132px);
     display: grid;
@@ -1991,8 +1880,7 @@ h1:focus {
     .hip-card-row.four,
     .hip-card-row.three,
     .hip-two-column,
-    .hip-profile-layout,
-    .hip-login-page {
+    .hip-profile-layout {
         grid-template-columns: 1fr;
     }
 

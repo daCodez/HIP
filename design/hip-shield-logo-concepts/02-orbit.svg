@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">HIP Orbit shield logo</title>
+  <path d="M128 18 216 50v67c0 56-34 98-88 119-54-21-88-63-88-119V50z" fill="none" stroke="#0d1918" stroke-width="12" stroke-linejoin="round"/>
+  <circle cx="128" cy="121" r="50" fill="none" stroke="#5ad7bb" stroke-width="10"/>
+  <ellipse cx="128" cy="121" rx="74" ry="25" fill="none" stroke="#0d1918" stroke-width="8" transform="rotate(-24 128 121)"/>
+  <circle cx="128" cy="121" r="12" fill="#5ad7bb"/>
+</svg>

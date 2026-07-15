@@ -9,4 +9,6 @@ public static class AdminPolicies
     public const string CanManageLicenses = nameof(CanManageLicenses);
     public const string CanManagePlatforms = nameof(CanManagePlatforms);
     public const string CanViewAdminDashboard = nameof(CanViewAdminDashboard);
+    public const string CanManageDomainVerifications = nameof(CanManageDomainVerifications);
+    public const string CanRevokeDomainVerifications = nameof(CanRevokeDomainVerifications);
 }

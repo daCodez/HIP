@@ -52,6 +52,10 @@ public sealed class InMemoryDomainVerificationService : IDomainVerificationServi
         {
             throw new ArgumentException("Domain verification request was not found.", nameof(domain));
         }
+        if (request.Status == VerificationStatus.Revoked)
+        {
+            throw new InvalidOperationException("Revoked domain verification cannot be retried or reactivated.");
+        }
 
         var status = string.Equals(request.Token, token, StringComparison.Ordinal)
             ? VerificationStatus.Verified
@@ -63,6 +67,58 @@ public sealed class InMemoryDomainVerificationService : IDomainVerificationServi
         };
         _requests[Key(normalized, method)] = updated;
         return Task.FromResult(updated);
+    }
+
+    /// <summary>
+    /// Retries a stored in-memory challenge without accepting token input.
+    /// </summary>
+    public async Task<DomainVerificationRetryResult> RetryAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken)
+    {
+        if (method != VerificationMethod.DnsTxt)
+        {
+            throw new InvalidOperationException("Automated retry is available only for production DNS TXT verification.");
+        }
+
+        var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+        if (!_requests.TryGetValue(Key(normalized, method), out var request))
+        {
+            throw new ArgumentException("Domain verification request was not found.", nameof(domain));
+        }
+        if (request.Status == VerificationStatus.Revoked)
+        {
+            throw new InvalidOperationException("Revoked domain verification cannot be retried.");
+        }
+
+        var updated = await VerifyAsync(normalized, method, request.Token, cancellationToken);
+        var check = new DomainVerificationCheckResult(
+            normalized,
+            $"_hip.{normalized}",
+            DomainVerificationCheckStatus.Verified,
+            DateTimeOffset.UtcNow,
+            "HIP found the expected DNS TXT record for this domain.");
+        return new DomainVerificationRetryResult(updated, check);
+    }
+
+    /// <summary>
+    /// Revokes a stored in-memory challenge.
+    /// </summary>
+    public Task<DomainVerificationRequest> RevokeAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken)
+    {
+        var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+        if (!_requests.TryGetValue(Key(normalized, method), out var request))
+        {
+            throw new ArgumentException("Domain verification request was not found.", nameof(domain));
+        }
+
+        var revoked = request with { Status = VerificationStatus.Revoked, VerifiedAtUtc = null };
+        _requests[Key(normalized, method)] = revoked;
+        return Task.FromResult(revoked);
     }
 
     /// <summary>

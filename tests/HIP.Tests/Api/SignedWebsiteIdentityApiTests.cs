@@ -58,6 +58,41 @@ public sealed class SignedWebsiteIdentityApiTests
     }
 
     [Test]
+    public async Task Website_retry_api_uses_stored_challenge()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = AdminClient(factory);
+        await RegisterAsync(client, "retry-api.example", VerificationMethod.DnsTxt);
+
+        var response = await client.PostAsync(
+            "/api/v1/identity/websites/retry-api.example/retry", null);
+        var retried = await response.Content.ReadFromJsonAsync<WebsiteIdentity>();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(retried!.LastCheckedAtUtc, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task Website_revoke_api_is_owner_only_and_revokes_domain_verification()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var admin = AdminClient(factory);
+        using var owner = OwnerClient(factory);
+        await RegisterAsync(admin, "revoke-api.example", VerificationMethod.DnsTxt);
+        var request = new DomainVerificationRevokeRequest("Domain ownership changed");
+
+        var forbidden = await admin.PostAsJsonAsync(
+            "/api/v1/identity/websites/revoke-api.example/revoke", request);
+        var response = await owner.PostAsJsonAsync(
+            "/api/v1/identity/websites/revoke-api.example/revoke", request);
+        var revoked = await response.Content.ReadFromJsonAsync<WebsiteIdentity>();
+
+        Assert.That(forbidden.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(revoked!.VerificationStatus, Is.EqualTo(VerificationStatus.Revoked));
+    }
+
+    [Test]
     public async Task Signature_verify_api_returns_public_safe_result()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
@@ -92,6 +127,14 @@ public sealed class SignedWebsiteIdentityApiTests
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Admin");
         client.DefaultRequestHeaders.Add("X-HIP-Admin-User", "signed-website-test");
+        return client;
+    }
+
+    private static HttpClient OwnerClient(WebApplicationFactory<Program> factory)
+    {
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Owner");
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-User", "signed-website-owner-test");
         return client;
     }
 }

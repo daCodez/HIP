@@ -18,5 +18,10 @@ public interface IAuditLogService
         IReadOnlyDictionary<string, string>? afterMetadata = null,
         string? correlationId = null);
 
+    /// <summary>
+    /// Lists audit entries without blocking the caller's synchronization context.
+    /// </summary>
+    Task<IReadOnlyCollection<AuditLogEntry>> ListAsync(CancellationToken cancellationToken);
+
     IReadOnlyCollection<AuditLogEntry> List();
 }

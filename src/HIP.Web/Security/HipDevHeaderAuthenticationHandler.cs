@@ -58,7 +58,7 @@ public sealed class HipDevHeaderAuthenticationHandler(
     }
 
     /// <summary>
-    /// Redirects local development browser requests for protected admin pages through the dev login helper.
+    /// Redirects local development browser requests for protected admin pages to the credential form.
     /// </summary>
     /// <param name="properties">Authentication challenge properties supplied by ASP.NET Core authorization.</param>
     /// <returns>A completed task after the response challenge is written.</returns>
@@ -73,7 +73,7 @@ public sealed class HipDevHeaderAuthenticationHandler(
             Request.Path.StartsWithSegments("/admin"))
         {
             var returnUrl = Uri.EscapeDataString($"{Request.PathBase}{Request.Path}{Request.QueryString}");
-            Response.Redirect($"/dev/admin-login/{AdminRoles.Owner}?returnUrl={returnUrl}");
+            Response.Redirect($"/login?returnUrl={returnUrl}");
             return Task.CompletedTask;
         }
 

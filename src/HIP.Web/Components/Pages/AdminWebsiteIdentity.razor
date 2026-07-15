@@ -1,22 +1,24 @@
 @page "/admin/identity/websites"
-@attribute [Authorize(Policy = AdminPolicies.CanManageRules)]
+@using System.Security.Claims
+@attribute [Authorize(Policy = AdminPolicies.CanManageDomainVerifications)]
 @rendermode InteractiveServer
 @inject IWebsiteIdentityService WebsiteIdentityService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
-<PageTitle>HIP Website Identity</PageTitle>
+<PageTitle>HIP Domain Verification</PageTitle>
 
 <main class="admin-rule-page">
     <section class="admin-rule-header">
         <div>
-            <p class="eyebrow">Website Identity</p>
-            <h1>Register A Website</h1>
-            <p>Register a domain, add the HIP DNS TXT record, then verify domain control. Verification proves control of the domain, not that the website is automatically safe.</p>
+            <p class="eyebrow">Identity &amp; clients</p>
+            <h1>Domain Verification</h1>
+            <p>Search and review registered domains, then start or complete domain-control verification. Verification proves control of the domain, not that the website is automatically safe.</p>
         </div>
     </section>
 
     <section class="hip-card-row two">
         <article class="rule-builder-panel">
-            <h2>Domain Registration</h2>
+            <h2>Start Verification</h2>
             <label>
                 Domain
                 <input @bind="_domain" placeholder="example.com" autocomplete="off" />
@@ -25,13 +27,10 @@
                 Display name
                 <input @bind="_displayName" placeholder="Example Website" autocomplete="off" />
             </label>
-            <label>
-                Verification method
-                <select @bind="_verificationMethod">
-                    <option value="@VerificationMethod.DnsTxt">DNS TXT</option>
-                    <option value="@VerificationMethod.WellKnownHipJson">.well-known/hip.json</option>
-                </select>
-            </label>
+            <div class="verification-method-summary">
+                <span>DNS TXT verification</span>
+                <small>HIP checks the published domain-control record without exposing stored verification credentials.</small>
+            </div>
             <div class="rule-button-row">
                 <button class="primary-button" type="button" @onclick="RegisterWebsiteAsync" disabled="@_isBusy">Register Website</button>
                 <button type="button" @onclick="ClearForm" disabled="@_isBusy">Clear</button>
@@ -104,12 +103,134 @@
         </section>
     }
 
+    <section class="rule-builder-panel verification-inventory">
+        <div class="verification-inventory-heading">
+            <div>
+                <h2>Registered Domains</h2>
+                <p>@FilteredIdentities.Count domain@(FilteredIdentities.Count == 1 ? string.Empty : "s") shown</p>
+            </div>
+            <button type="button" @onclick="LoadIdentitiesAsync" disabled="@_isBusy">Refresh</button>
+        </div>
+        <div class="verification-filters">
+            <label>
+                Search domains
+                <input @bind="_searchText" @bind:event="oninput" placeholder="Domain or HIP identity" autocomplete="off" />
+            </label>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_operationMessage))
+        {
+            <p class="admin-message">@_operationMessage</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(_operationError))
+        {
+            <p class="admin-error">@_operationError</p>
+        }
+        @if (_identities.Count == 0)
+        {
+            <p class="verification-empty">No domains have started verification yet.</p>
+        }
+        else if (FilteredIdentities.Count == 0)
+        {
+            <p class="verification-empty">No domains match this search.</p>
+        }
+        <div class="hip-table-wrap">
+                <table class="hip-data-table">
+                    <thead>
+                        <tr>
+                            <th aria-sort="@SortAria("domain")">
+                                <button class="verification-sort-button" type="button" @onclick='() => SetSortColumn("domain")'>
+                                    Domain <span aria-hidden="true">@SortIndicator("domain")</span>
+                                </button>
+                            </th>
+                            <th aria-sort="@SortAria("status")">
+                                <button class="verification-sort-button" type="button" @onclick='() => SetSortColumn("status")'>
+                                    Status <span aria-hidden="true">@SortIndicator("status")</span>
+                                </button>
+                            </th>
+                            <th aria-sort="@SortAria("method")">
+                                <button class="verification-sort-button" type="button" @onclick='() => SetSortColumn("method")'>
+                                    Method <span aria-hidden="true">@SortIndicator("method")</span>
+                                </button>
+                            </th>
+                            <th aria-sort="@SortAria("created")">
+                                <button class="verification-sort-button" type="button" @onclick='() => SetSortColumn("created")'>
+                                    Registered UTC <span aria-hidden="true">@SortIndicator("created")</span>
+                                </button>
+                            </th>
+                            <th aria-sort="@SortAria("lastChecked")">
+                                <button class="verification-sort-button" type="button" @onclick='() => SetSortColumn("lastChecked")'>
+                                    Last checked UTC <span aria-hidden="true">@SortIndicator("lastChecked")</span>
+                                </button>
+                            </th>
+                            <th aria-sort="@SortAria("verified")">
+                                <button class="verification-sort-button" type="button" @onclick='() => SetSortColumn("verified")'>
+                                    Verified UTC <span aria-hidden="true">@SortIndicator("verified")</span>
+                                </button>
+                            </th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var identity in FilteredIdentities)
+                        {
+                            <tr>
+                                <td><strong>@identity.Domain</strong></td>
+                                <td>
+                                    <span class="hip-pill @StatusClass(identity.VerificationStatus)">@identity.VerificationStatus</span>
+                                    <small class="verification-status-detail">@StatusDescription(identity)</small>
+                                </td>
+                                <td>@MethodLabel(identity.PreferredVerificationMethod)</td>
+                                <td>@identity.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@(identity.LastCheckedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Not checked")</td>
+                                <td>@(identity.VerifiedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                <td>
+                                    <div class="verification-actions">
+                                        <button type="button"
+                                                @onclick="() => RetryVerificationAsync(identity)"
+                                                disabled="@(IsOperationBusy(identity.Domain) || !CanRetry(identity))">
+                                            Retry
+                                        </button>
+                                        @if (_canRevoke && identity.VerificationStatus != VerificationStatus.Revoked)
+                                        {
+                                            <button type="button" class="danger-button"
+                                                    @onclick="() => BeginRevoke(identity.Domain)"
+                                                    disabled="@IsOperationBusy(identity.Domain)">
+                                                Revoke
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                            @if (string.Equals(_pendingRevokeDomain, identity.Domain, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <tr class="verification-revoke-row">
+                                    <td colspan="7">
+                                        <div class="verification-revoke-confirmation">
+                                            <label>
+                                                Revocation reason
+                                                <input @bind="_revokeReason" maxlength="500" placeholder="Explain why domain verification must be revoked" />
+                                            </label>
+                                            <p>This immediately removes verified status from the domain and its HIP identity. The action is recorded as Critical.</p>
+                                            <div class="verification-actions">
+                                                <button type="button" class="danger-button" @onclick="ConfirmRevokeAsync" disabled="@IsOperationBusy(identity.Domain)">Confirm revoke</button>
+                                                <button type="button" @onclick="CancelRevoke" disabled="@IsOperationBusy(identity.Domain)">Cancel</button>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+        </div>
+    </section>
+
     <section class="rule-builder-panel">
         <h2>MVP Notes</h2>
         <ul class="hip-x-list">
             <li>DNS verification proves domain control only.</li>
             <li>HIP still scores website safety, reputation, and content risk separately.</li>
-            <li>Do not paste private keys, passwords, or unrelated website content into this form.</li>
+            <li>Stored verification tokens are never displayed in this operations table.</li>
         </ul>
     </section>
 </main>
@@ -117,12 +238,58 @@
 @code {
     private string _domain = string.Empty;
     private string _displayName = string.Empty;
-    private VerificationMethod _verificationMethod = VerificationMethod.DnsTxt;
     private WebsiteIdentityRegistrationResponse? _registered;
     private WebsiteIdentity? _verified;
     private bool _isBusy;
     private string _message = string.Empty;
     private string _error = string.Empty;
+    private IReadOnlyCollection<WebsiteIdentity> _identities = [];
+    private string _searchText = string.Empty;
+    private string _sortColumn = "created";
+    private bool _sortDescending = true;
+    private string _actorId = "unknown-admin";
+    private string _actorRole = "Unknown";
+    private bool _canRevoke;
+    private string? _activeOperationDomain;
+    private string? _pendingRevokeDomain;
+    private string _revokeReason = string.Empty;
+    private string _operationMessage = string.Empty;
+    private string _operationError = string.Empty;
+
+    private IReadOnlyList<WebsiteIdentity> FilteredIdentities
+    {
+        get
+        {
+            IEnumerable<WebsiteIdentity> identities = _identities;
+            if (!string.IsNullOrWhiteSpace(_searchText))
+            {
+                var search = _searchText.Trim();
+                identities = identities.Where(identity =>
+                    identity.Domain.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    identity.HipIdentityId.Contains(search, StringComparison.OrdinalIgnoreCase));
+            }
+
+            identities = _sortColumn switch
+            {
+                "domain" => _sortDescending
+                    ? identities.OrderByDescending(identity => identity.Domain, StringComparer.OrdinalIgnoreCase)
+                    : identities.OrderBy(identity => identity.Domain, StringComparer.OrdinalIgnoreCase),
+                "status" => Order(identities, identity => identity.VerificationStatus.ToString()),
+                "method" => Order(identities, identity => identity.PreferredVerificationMethod.ToString()),
+                "verified" => _sortDescending
+                    ? identities.OrderByDescending(identity => identity.VerifiedAtUtc)
+                    : identities.OrderBy(identity => identity.VerifiedAtUtc),
+                "lastChecked" => _sortDescending
+                    ? identities.OrderByDescending(identity => identity.LastCheckedAtUtc)
+                    : identities.OrderBy(identity => identity.LastCheckedAtUtc),
+                _ => _sortDescending
+                    ? identities.OrderByDescending(identity => identity.CreatedAtUtc)
+                    : identities.OrderBy(identity => identity.CreatedAtUtc)
+            };
+
+            return identities.ToArray();
+        }
+    }
 
     private string DnsRecordText =>
         _registered is null
@@ -134,6 +301,149 @@
             ? "/lookup"
             : $"/lookup/domain/{Uri.EscapeDataString(_registered.WebsiteIdentity.Domain)}";
 
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _actorId = authenticationState.User.Identity?.Name ?? "unknown-admin";
+        _actorRole = authenticationState.User.FindFirst(ClaimTypes.Role)?.Value ?? "Unknown";
+        _canRevoke = authenticationState.User.IsInRole(HIP.Web.Security.AdminRoles.Owner);
+        await LoadIdentitiesAsync();
+    }
+
+    private async Task LoadIdentitiesAsync()
+    {
+        _identities = await WebsiteIdentityService.ListAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Selects a table column for sorting, or reverses the active column's direction.
+    /// </summary>
+    private void SetSortColumn(string column)
+    {
+        if (string.Equals(_sortColumn, column, StringComparison.Ordinal))
+        {
+            _sortDescending = !_sortDescending;
+            return;
+        }
+
+        _sortColumn = column;
+        _sortDescending = column is "created" or "lastChecked" or "verified";
+    }
+
+    private string? SortAria(string column) =>
+        string.Equals(_sortColumn, column, StringComparison.Ordinal)
+            ? (_sortDescending ? "descending" : "ascending")
+            : null;
+
+    private string SortIndicator(string column) =>
+        string.Equals(_sortColumn, column, StringComparison.Ordinal)
+            ? (_sortDescending ? "↓" : "↑")
+            : "↕";
+
+    private IOrderedEnumerable<WebsiteIdentity> Order(
+        IEnumerable<WebsiteIdentity> identities,
+        Func<WebsiteIdentity, string> selector) =>
+        _sortDescending
+            ? identities.OrderByDescending(selector, StringComparer.OrdinalIgnoreCase)
+            : identities.OrderBy(selector, StringComparer.OrdinalIgnoreCase);
+
+    private static string StatusClass(VerificationStatus status) => status switch
+    {
+        VerificationStatus.Verified => "good",
+        VerificationStatus.Unverified or VerificationStatus.Revoked => "danger",
+        _ => "caution"
+    };
+
+    private static string StatusDescription(WebsiteIdentity identity) =>
+        string.IsNullOrWhiteSpace(identity.LastCheckMessage)
+            ? identity.VerificationStatus switch
+            {
+                VerificationStatus.Verified => "Domain control confirmed.",
+                VerificationStatus.Revoked => "Verification revoked.",
+                VerificationStatus.Unverified => "Verification evidence did not match.",
+                _ => "Awaiting successful verification."
+            }
+            : identity.LastCheckMessage;
+
+    private static string MethodLabel(VerificationMethod method) => method switch
+    {
+        VerificationMethod.DnsTxt => "DNS TXT",
+        VerificationMethod.WellKnownHipJson => "Legacy verification",
+        _ => method.ToString()
+    };
+
+    private bool CanRetry(WebsiteIdentity identity) =>
+        identity.VerificationStatus != VerificationStatus.Revoked &&
+        identity.PreferredVerificationMethod == VerificationMethod.DnsTxt;
+
+    private bool IsOperationBusy(string domain) =>
+        string.Equals(_activeOperationDomain, domain, StringComparison.OrdinalIgnoreCase);
+
+    private async Task RetryVerificationAsync(WebsiteIdentity identity)
+    {
+        await RunOperationAsync(identity.Domain, async () =>
+        {
+            var updated = await WebsiteIdentityService.RetryVerificationAsync(
+                identity.Domain, _actorId, _actorRole, CancellationToken.None);
+            _operationMessage = $"{identity.Domain}: {StatusDescription(updated)}";
+        });
+    }
+
+    private void BeginRevoke(string domain)
+    {
+        _pendingRevokeDomain = domain;
+        _revokeReason = string.Empty;
+        _operationMessage = string.Empty;
+        _operationError = string.Empty;
+    }
+
+    private void CancelRevoke()
+    {
+        _pendingRevokeDomain = null;
+        _revokeReason = string.Empty;
+    }
+
+    private async Task ConfirmRevokeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_pendingRevokeDomain))
+        {
+            return;
+        }
+
+        var domain = _pendingRevokeDomain;
+        await RunOperationAsync(domain, async () =>
+        {
+            await WebsiteIdentityService.RevokeVerificationAsync(
+                domain, _revokeReason, _actorId, _actorRole, CancellationToken.None);
+            _operationMessage = $"{domain} verification was revoked.";
+            CancelRevoke();
+        });
+    }
+
+    private async Task RunOperationAsync(string domain, Func<Task> action)
+    {
+        _activeOperationDomain = domain;
+        _operationMessage = string.Empty;
+        _operationError = string.Empty;
+        try
+        {
+            await action();
+            await LoadIdentitiesAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            _operationError = ex.Message;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _operationError = ex.Message;
+        }
+        finally
+        {
+            _activeOperationDomain = null;
+        }
+    }
+
     /// <summary>
     /// Registers a website identity and creates the verification challenge that the admin must publish.
     /// </summary>
@@ -142,10 +452,11 @@
         await RunSafelyAsync(async () =>
         {
             _registered = await WebsiteIdentityService.RegisterAsync(
-                new WebsiteIdentityRegistrationRequest(_domain, _displayName, _verificationMethod),
+                new WebsiteIdentityRegistrationRequest(_domain, _displayName, VerificationMethod.DnsTxt),
                 CancellationToken.None);
             _verified = null;
             _message = "Website registered. Add the verification record before verifying the domain.";
+            await LoadIdentitiesAsync();
         });
     }
 
@@ -171,6 +482,7 @@
             _message = _verified.VerificationStatus == VerificationStatus.Verified
                 ? "Domain verified. HIP can now associate identity signals with this domain."
                 : "Domain is not verified yet. Check that the DNS TXT record has propagated.";
+            await LoadIdentitiesAsync();
         });
     }
 
@@ -181,7 +493,6 @@
     {
         _domain = string.Empty;
         _displayName = string.Empty;
-        _verificationMethod = VerificationMethod.DnsTxt;
         _registered = null;
         _verified = null;
         _message = string.Empty;

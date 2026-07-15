@@ -3,45 +3,246 @@
 @attribute [Authorize(Policy = AdminPolicies.CanViewAuditLogs)]
 @rendermode InteractiveServer
 @inject IAuditLogService AuditLogService
+@inject ILogger<AdminAuditLogs> Logger
 
-<PageTitle>HIP Audit Logs</PageTitle>
+<PageTitle>HIP Audit Trail</PageTitle>
 
-<main class="hip-admin-page">
-    <section class="hip-page-heading compact">
+<main class="audit-trail-page">
+    <section class="hip-page-heading compact audit-trail-heading">
         <div>
-        <h1>Audit Logs</h1>
-            <p>Full history of system and user actions.</p>
+            <p class="eyebrow">System operations</p>
+            <h1>Audit Trail</h1>
+            <p>Review privacy-safe records of administrative and security-sensitive actions.</p>
+        </div>
+        <div class="audit-heading-status">
+            <span class="hip-pill info">@_entries.Count event@(_entries.Count == 1 ? string.Empty : "s")</span>
+            <small>Newest events first</small>
         </div>
     </section>
 
-    <section class="hip-panel padded narrow">
-        <h2>Recent Activity</h2>
-        <p>All security events and configuration changes.</p>
-        <table class="hip-data-table">
-            <thead>
-                <tr><th>Time</th><th>Action</th><th>User</th><th>Detail</th><th>Severity</th></tr>
-            </thead>
-            <tbody>
-                @if (!AuditLogService.List().Any())
+    <section class="audit-toolbar" aria-label="Audit trail controls">
+        <label class="audit-search">
+            <span>Search audit trail</span>
+            <input type="search"
+                   @bind="_searchText"
+                   @bind:event="oninput"
+                   placeholder="Action, actor, target, summary, or event ID"
+                   autocomplete="off" />
+        </label>
+        <label>
+            <span>Filter by severity</span>
+            <select @bind="_severityFilter">
+                <option value="all">All severities</option>
+                @foreach (var severity in Enum.GetValues<AuditSeverity>())
                 {
-                    <tr>
-                        <td colspan="5">No audit log entries yet. HIP is not showing artificial activity.</td>
-                    </tr>
+                    <option value="@severity.ToString()">@severity</option>
                 }
-                else
+            </select>
+        </label>
+        <label>
+            <span>Filter by target</span>
+            <select @bind="_targetFilter">
+                <option value="all">All target types</option>
+                @foreach (var targetType in Enum.GetValues<TargetType>())
                 {
-                    @foreach (var entry in AuditLogService.List())
-                    {
+                    <option value="@targetType.ToString()">@TargetTypeLabel(targetType)</option>
+                }
+            </select>
+        </label>
+        <button type="button" @onclick="LoadEntriesAsync">Refresh audit trail</button>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <p class="admin-error" role="alert">@_loadError</p>
+    }
+
+    <section class="audit-results" aria-live="polite">
+        <div class="audit-results-heading">
+            <div>
+                <h2>Recorded events</h2>
+                <p>Entries show only the bounded metadata retained by HIP's audit service.</p>
+            </div>
+            <p role="status">@FilteredEntries.Count result@(FilteredEntries.Count == 1 ? string.Empty : "s")</p>
+        </div>
+
+        @if (FilteredEntries.Count == 0)
+        {
+            <div class="audit-empty-state">
+                <span class="hip-alert-icon info" aria-hidden="true">i</span>
+                <div>
+                    <h3>@(_entries.Count == 0 ? "No audit events recorded" : "No events match these filters")</h3>
+                    <p>@(_entries.Count == 0
+                        ? "Administrative and security-sensitive actions will appear here when HIP records them."
+                        : "Change the search text or filters to broaden the results.")</p>
+                    <small>No artificial audit events are generated.</small>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="audit-table-scroll">
+                <table class="hip-data-table audit-trail-table">
+                    <caption>Privacy-safe HIP audit events, newest first</caption>
+                    <thead>
                         <tr>
-                            <td>@entry.CreatedAtUtc.UtcDateTime.ToString("u")</td>
-                            <td>@entry.Action</td>
-                            <td><span class="hip-pill info">@entry.ActorId</span></td>
-                            <td>@entry.Summary</td>
-                            <td>@entry.Severity</td>
+                            <th scope="col">Time</th>
+                            <th scope="col">Action</th>
+                            <th scope="col">Actor</th>
+                            <th scope="col">Target</th>
+                            <th scope="col">Summary</th>
+                            <th scope="col">Severity</th>
+                            <th scope="col"><span class="visually-hidden">Event details</span></th>
                         </tr>
-                    }
-                }
-            </tbody>
-        </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in FilteredEntries)
+                        {
+                            <tr>
+                                <td class="audit-time">
+                                    <time datetime="@entry.CreatedAtUtc.ToString("O")">@entry.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss")</time>
+                                    <small>UTC</small>
+                                </td>
+                                <td><strong>@entry.Action</strong></td>
+                                <td>
+                                    <span class="audit-primary-value">@entry.ActorId</span>
+                                    <small>@entry.ActorRole</small>
+                                </td>
+                                <td>
+                                    <span class="audit-primary-value">@TargetTypeLabel(entry.TargetType)</span>
+                                    <small>@entry.TargetId</small>
+                                </td>
+                                <td class="audit-summary">@entry.Summary</td>
+                                <td><span class="hip-pill @SeverityTone(entry.Severity)">@entry.Severity</span></td>
+                                <td>
+                                    <details class="audit-details">
+                                        <summary aria-label="@($"View details for audit event {entry.AuditLogId}")">Details</summary>
+                                        <div class="audit-detail-card">
+                                            <dl>
+                                                <div><dt>Audit ID</dt><dd>@entry.AuditLogId</dd></div>
+                                                @if (!string.IsNullOrWhiteSpace(entry.CorrelationId))
+                                                {
+                                                    <div><dt>Correlation ID</dt><dd>@entry.CorrelationId</dd></div>
+                                                }
+                                            </dl>
+                                            @if (entry.Metadata.Count > 0)
+                                            {
+                                                <h3>Event metadata</h3>
+                                                @MetadataList(entry.Metadata)
+                                            }
+                                            @if (entry.BeforeMetadata.Count > 0)
+                                            {
+                                                <h3>Before</h3>
+                                                @MetadataList(entry.BeforeMetadata)
+                                            }
+                                            @if (entry.AfterMetadata.Count > 0)
+                                            {
+                                                <h3>After</h3>
+                                                @MetadataList(entry.AfterMetadata)
+                                            }
+                                        </div>
+                                    </details>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     </section>
 </main>
+
+@code {
+    private IReadOnlyCollection<AuditLogEntry> _entries = [];
+    private string _searchText = string.Empty;
+    private string _severityFilter = "all";
+    private string _targetFilter = "all";
+    private string _loadError = string.Empty;
+
+    private IReadOnlyList<AuditLogEntry> FilteredEntries => _entries
+        .Where(MatchesSeverity)
+        .Where(MatchesTarget)
+        .Where(MatchesSearch)
+        .OrderByDescending(entry => entry.CreatedAtUtc)
+        .ToArray();
+
+    protected override Task OnInitializedAsync() => LoadEntriesAsync();
+
+    /// <summary>
+    /// Reloads the privacy-safe audit projection while retaining the last successful result on failure.
+    /// </summary>
+    private async Task LoadEntriesAsync()
+    {
+        _loadError = string.Empty;
+        try
+        {
+            _entries = await AuditLogService.ListAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Audit Trail refresh failed; retaining the existing privacy-safe audit projection.");
+            _loadError = "HIP could not refresh the audit trail. Existing results remain available; try again.";
+        }
+    }
+
+    private bool MatchesSeverity(AuditLogEntry entry) =>
+        _severityFilter.Equals("all", StringComparison.OrdinalIgnoreCase) ||
+        entry.Severity.ToString().Equals(_severityFilter, StringComparison.OrdinalIgnoreCase);
+
+    private bool MatchesTarget(AuditLogEntry entry) =>
+        _targetFilter.Equals("all", StringComparison.OrdinalIgnoreCase) ||
+        entry.TargetType.ToString().Equals(_targetFilter, StringComparison.OrdinalIgnoreCase);
+
+    private bool MatchesSearch(AuditLogEntry entry)
+    {
+        if (string.IsNullOrWhiteSpace(_searchText))
+        {
+            return true;
+        }
+
+        var search = _searchText.Trim();
+        return entry.AuditLogId.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               entry.ActorId.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               entry.ActorRole.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               entry.Action.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               entry.TargetType.ToString().Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               entry.TargetId.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               entry.Summary.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               entry.Metadata.Any(pair => pair.Key.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                                          pair.Value.Contains(search, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string TargetTypeLabel(TargetType targetType) => targetType switch
+    {
+        TargetType.DeviceKey => "Device key",
+        TargetType.ContentPattern => "Content pattern",
+        _ => targetType.ToString()
+    };
+
+    private static string SeverityTone(AuditSeverity severity) => severity switch
+    {
+        AuditSeverity.Critical => "danger",
+        AuditSeverity.High => "suspicious",
+        AuditSeverity.Medium => "caution",
+        _ => "info"
+    };
+
+    private static RenderFragment MetadataList(IReadOnlyDictionary<string, string> metadata) => builder =>
+    {
+        builder.OpenElement(0, "dl");
+        var sequence = 1;
+        foreach (var pair in metadata.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            builder.OpenElement(sequence++, "div");
+            builder.OpenElement(sequence++, "dt");
+            builder.AddContent(sequence++, pair.Key);
+            builder.CloseElement();
+            builder.OpenElement(sequence++, "dd");
+            builder.AddContent(sequence++, pair.Value);
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+
+        builder.CloseElement();
+    };
+}

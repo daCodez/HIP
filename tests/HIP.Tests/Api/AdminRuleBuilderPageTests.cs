@@ -1,5 +1,7 @@
 using System.Net;
+using HIP.Application.SecondLife;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace HIP.Tests.Api;
 
@@ -77,7 +79,68 @@ public sealed class AdminRuleBuilderPageTests
     }
 
     [Test]
-    public async Task Admin_website_registration_page_loads_for_admin()
+    public async Task Alert_center_loads_operational_filter_and_refresh_controls()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddAdmin(client);
+
+        var response = await client.GetAsync("/admin/alerts");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(html, Does.Contain("Alert Center"));
+        Assert.That(html, Does.Contain("Search alerts"));
+        Assert.That(html, Does.Contain("Refresh alerts"));
+        Assert.That(html, Does.Contain("role=\"tablist\""));
+        Assert.That(html, Does.Contain("aria-live=\"polite\""));
+        Assert.That(html, Does.Contain("alert-center-list"));
+    }
+
+    [Test]
+    public async Task License_pages_use_plain_English_management_workflows()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var scope = factory.Services.CreateScope();
+        var licenseService = scope.ServiceProvider.GetRequiredService<ISetupCodeLicenseService>();
+        var license = licenseService.CreateSetupCode(new CreateSetupCodeRequest(1, "page-test", "Normal"));
+        using var client = factory.CreateClient();
+        AddAdmin(client);
+
+        var listHtml = await client.GetStringAsync("/admin/licenses");
+        var detailHtml = await client.GetStringAsync($"/admin/licenses/{license.LicenseId}");
+        var createHtml = await client.GetStringAsync("/admin/licenses/new");
+
+        Assert.That(listHtml, Does.Contain("Find a license"));
+        Assert.That(listHtml, Does.Contain("license-sort-button"));
+        Assert.That(listHtml, Does.Contain("Manage"));
+        Assert.That(listHtml, Does.Not.Contain("MVP"));
+        Assert.That(detailHtml, Does.Contain("Manage license"));
+        Assert.That(detailHtml, Does.Contain("Allow a new device"));
+        Assert.That(detailHtml, Does.Contain("Cancel this license"));
+        Assert.That(createHtml, Does.Contain("Create a license"));
+        Assert.That(createHtml, Does.Contain("Copy this code before leaving this page"));
+        Assert.That(createHtml, Does.Not.Contain("raw setup code"));
+    }
+
+    [Test]
+    public async Task License_navigation_uses_a_direct_full_page_link()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddAdmin(client);
+
+        var html = await client.GetStringAsync("/admin");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(html, Does.Contain("href=\"/admin/licenses\""));
+            Assert.That(html, Does.Contain("data-enhance-nav=\"false\""));
+        });
+    }
+
+    [Test]
+    public async Task Admin_domain_verification_page_loads_for_admin()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
@@ -87,9 +150,24 @@ public sealed class AdminRuleBuilderPageTests
         var html = await response.Content.ReadAsStringAsync();
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That(html, Does.Contain("Register A Website"));
+        Assert.That(html, Does.Contain("Domain Verification"));
+        Assert.That(html, Does.Contain("Registered Domains"));
+        Assert.That(html, Does.Contain("Search domains"));
+        Assert.That(html, Does.Contain("Start Verification"));
         Assert.That(html, Does.Contain("DNS TXT"));
+        Assert.That(html, Does.Contain("Last checked UTC"));
+        Assert.That(html, Does.Contain("Actions"));
+        Assert.That(html, Does.Contain("verification-sort-button"));
+        Assert.That(html.Split("verification-sort-button", StringSplitOptions.None).Length - 1, Is.EqualTo(6));
+        Assert.That(html, Does.Contain("aria-sort=\"descending\""));
+        Assert.That(html, Does.Not.Contain("Order by"));
+        Assert.That(html, Does.Not.Contain("verification-order-button"));
+        Assert.That(html, Does.Not.Contain("CoreDNS"));
+        Assert.That(html, Does.Not.Contain(".well-known/hip.json"));
+        Assert.That(html, Does.Not.Contain("Verification method"));
         Assert.That(html, Does.Contain("Verification proves control of the domain"));
+        Assert.That(html.IndexOf("Start Verification", StringComparison.Ordinal),
+            Is.LessThan(html.IndexOf("Registered Domains", StringComparison.Ordinal)));
     }
 
     [Test]

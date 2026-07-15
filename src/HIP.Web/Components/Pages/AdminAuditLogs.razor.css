@@ -1,0 +1,227 @@
+.audit-trail-page {
+    display: grid;
+    gap: 1.25rem;
+    min-width: 0;
+}
+
+.audit-trail-heading,
+.audit-results {
+    width: 100%;
+    max-width: none;
+}
+
+.audit-heading-status {
+    display: grid;
+    justify-items: end;
+    gap: 0.5rem;
+}
+
+.audit-heading-status small,
+.audit-results-heading p,
+.audit-time small,
+.audit-trail-table td small,
+.audit-empty-state small {
+    color: var(--muted);
+}
+
+.audit-toolbar {
+    display: grid;
+    grid-template-columns: minmax(16rem, 1fr) minmax(10rem, 0.4fr) minmax(10rem, 0.4fr) auto;
+    align-items: end;
+    gap: 0.75rem;
+}
+
+.audit-toolbar label {
+    display: grid;
+    gap: 0.4rem;
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+.audit-toolbar input,
+.audit-toolbar select,
+.audit-toolbar button {
+    min-height: 2.75rem;
+}
+
+.audit-results {
+    overflow: visible;
+    border: 1px solid var(--line);
+    border-radius: 0.75rem;
+    background: var(--panel);
+}
+
+.audit-results-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--line);
+}
+
+.audit-results-heading h2,
+.audit-results-heading p,
+.audit-empty-state h3,
+.audit-empty-state p {
+    margin: 0;
+}
+
+.audit-results-heading > div {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.audit-results-heading > p {
+    white-space: nowrap;
+}
+
+.audit-table-scroll {
+    overflow-x: auto;
+}
+
+.audit-trail-table {
+    min-width: 72rem;
+    margin: 0;
+}
+
+.audit-trail-table caption,
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.audit-trail-table th,
+.audit-trail-table td {
+    vertical-align: top;
+}
+
+.audit-trail-table td {
+    max-width: 22rem;
+}
+
+.audit-time,
+.audit-trail-table td:nth-child(3),
+.audit-trail-table td:nth-child(4) {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.audit-time,
+.audit-primary-value {
+    white-space: nowrap;
+}
+
+.audit-summary {
+    overflow-wrap: anywhere;
+    color: var(--text-secondary);
+}
+
+.audit-details {
+    position: relative;
+}
+
+.audit-details summary {
+    color: var(--primary);
+    cursor: pointer;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.audit-details summary:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.audit-detail-card {
+    position: absolute;
+    z-index: 4;
+    right: 0;
+    width: min(32rem, 75vw);
+    max-height: 28rem;
+    margin-top: 0.5rem;
+    padding: 1rem;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--panel);
+    box-shadow: var(--shadow-md);
+}
+
+.audit-detail-card h3 {
+    margin: 1rem 0 0.5rem;
+    font-size: 0.85rem;
+}
+
+.audit-detail-card dl {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.audit-detail-card dl div {
+    display: grid;
+    grid-template-columns: minmax(7rem, 0.35fr) minmax(0, 1fr);
+    gap: 0.75rem;
+}
+
+.audit-detail-card dt {
+    color: var(--muted);
+}
+
+.audit-detail-card dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.audit-empty-state {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+    padding: 1.5rem;
+}
+
+.audit-empty-state > div {
+    display: grid;
+    gap: 0.45rem;
+}
+
+@media (max-width: 980px) {
+    .audit-toolbar {
+        grid-template-columns: minmax(0, 1fr) minmax(10rem, 0.5fr);
+    }
+
+    .audit-toolbar button {
+        justify-self: start;
+    }
+}
+
+@media (max-width: 640px) {
+    .audit-trail-heading,
+    .audit-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .audit-heading-status {
+        justify-items: start;
+    }
+
+    .audit-results-heading {
+        align-items: start;
+        flex-direction: column;
+        padding: 1rem;
+    }
+
+    .audit-empty-state {
+        grid-template-columns: 2rem minmax(0, 1fr);
+        padding: 1rem;
+    }
+}

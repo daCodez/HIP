@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">HIP Signal shield logo</title>
+  <path d="M128 21 216 52v65c0 56-34 98-88 118-54-20-88-62-88-118V52z" fill="#edf0f1" stroke="#0d1918" stroke-width="11" stroke-linejoin="round"/>
+  <path d="M61 128h35l16-39 29 79 18-40h37" fill="none" stroke="#08725f" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="128" cy="52" r="7" fill="#5ad7bb"/>
+</svg>

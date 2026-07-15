@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">HIP Faceted shield logo</title>
+  <path d="m128 18 88 35v65c0 55-34 97-88 117-54-20-88-62-88-117V53z" fill="#0d1918"/>
+  <path d="m128 38 68 27-68 55-68-55z" fill="#153b34"/>
+  <path d="m60 65 68 55v94c-43-19-68-53-68-96z" fill="#08725f"/>
+  <path d="m196 65-68 55v94c43-19 68-53 68-96z" fill="#5ad7bb"/>
+  <path d="m60 65 68 55 68-55M128 120v94" fill="none" stroke="#eff8f6" stroke-width="5" stroke-linejoin="round"/>
+</svg>

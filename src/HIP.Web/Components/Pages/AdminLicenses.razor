@@ -1,81 +1,74 @@
 @page "/admin/licenses"
+@rendermode InteractiveServer
 @attribute [Authorize(Policy = AdminPolicies.CanManageLicenses)]
 @inject ISetupCodeLicenseService LicenseService
 
-<PageTitle>HIP Licenses</PageTitle>
+<PageTitle>Licenses | HIP Admin</PageTitle>
 
-<section class="hip-page-heading compact">
-    <div>
-        <h1>License / Setup Codes <span class="hip-pill">MVP</span></h1>
-        <p>Support setup-code activation for Second Life HUD marketplace buyers without requiring web login.</p>
-    </div>
-    <a class="hip-primary-action" href="admin/licenses/new">+ Create Setup Code</a>
-</section>
-
-<section class="dashboard-grid">
-    <article class="score-card">
-        <span>Active Licenses</span>
-        <strong>@Licenses.Count(license => license.Status == LicenseStatus.Active)</strong>
-        <h3>HUD access</h3>
-        <p>Activated setup codes linked to one or more HUD devices.</p>
-    </article>
-    <article class="score-card">
-        <span>Pending Codes</span>
-        <strong>@Licenses.Count(license => license.Status == LicenseStatus.Pending)</strong>
-        <h3>Ready to activate</h3>
-        <p>Codes created for delivery but not yet linked to a HUD.</p>
-    </article>
-    <article class="score-card">
-        <span>Suspended / Revoked</span>
-        <strong>@Licenses.Count(license => license.Status is LicenseStatus.Suspended or LicenseStatus.Revoked)</strong>
-        <h3>Support action</h3>
-        <p>Codes that cannot activate until reviewed or reactivated.</p>
-    </article>
-</section>
-
-<section class="hip-panel padded narrow">
-    <h2>Setup Code List</h2>
-    <p>Setup codes are masked in list views. Show the raw setup code only immediately after creation.</p>
-
-    <div class="hip-table">
-        <div class="hip-table-row header">
-            <span>Setup Code</span>
-            <span>Status</span>
-            <span>Devices</span>
-            <span>HUD Version</span>
-            <span>Last Seen</span>
-            <span>Actions</span>
+<main class="license-page">
+    <section class="hip-page-heading license-heading">
+        <div><span class="hip-eyebrow">HIP Admin · licenses</span><h1>Licenses</h1><p>Manage access to the HIP HUD in Second Life.</p></div>
+        <a class="hip-primary-action" href="/admin/licenses/new">Create a license</a>
+    </section>
+    <section class="license-summary-grid" aria-label="License summary">
+        <article class="license-summary-card in-use"><span>In use</span><strong>@Licenses.Count(x => x.Status == LicenseStatus.Active)</strong><p>Licenses connected to at least one HUD.</p></article>
+        <article class="license-summary-card ready"><span>Ready to use</span><strong>@Licenses.Count(x => x.Status == LicenseStatus.Pending)</strong><p>Created, but not connected yet.</p></article>
+        <article class="license-summary-card attention"><span>Needs attention</span><strong>@Licenses.Count(x => x.Status is LicenseStatus.Suspended or LicenseStatus.Revoked or LicenseStatus.Expired)</strong><p>Paused, cancelled, or expired.</p></article>
+        <article class="license-summary-card total"><span>All licenses</span><strong>@Licenses.Count</strong><p>Every license HIP has issued.</p></article>
+    </section>
+    <section class="hip-panel padded license-inventory">
+        <div class="license-inventory-heading">
+            <div><h2>All licenses</h2><p>Find a license by its code, status, version, or ID.</p></div>
+            <label class="license-search"><span>Find a license</span><input type="search" @bind="_searchText" @bind:event="oninput" placeholder="Search licenses" autocomplete="off" /></label>
         </div>
-        @foreach (var license in Licenses)
-        {
-            <div class="hip-table-row">
-                <span><code>@license.MaskedSetupCode</code></span>
-                <span><span class="hip-pill">@license.Status</span></span>
-                <span>@license.ActivationCount / @license.AllowedDeviceCount</span>
-                <span>@(license.HudVersion ?? "not activated")</span>
-                <span>@FormatDate(license.LastSeenAtUtc)</span>
-                <span><a href="@($"admin/licenses/{license.LicenseId}")">View</a></span>
-            </div>
-        }
-    </div>
-</section>
+        <div class="license-table-wrap"><table class="hip-data-table license-table">
+                <thead><tr>
+                    <th aria-sort="@SortDirectionFor("code")"><button class="license-sort-button" @onclick='() => SetSort("code")'>License code <span>@SortMark("code")</span></button></th>
+                    <th aria-sort="@SortDirectionFor("status")"><button class="license-sort-button" @onclick='() => SetSort("status")'>Status <span>@SortMark("status")</span></button></th>
+                    <th aria-sort="@SortDirectionFor("devices")"><button class="license-sort-button" @onclick='() => SetSort("devices")'>Devices <span>@SortMark("devices")</span></button></th>
+                    <th aria-sort="@SortDirectionFor("version")"><button class="license-sort-button" @onclick='() => SetSort("version")'>HUD version <span>@SortMark("version")</span></button></th>
+                    <th aria-sort="@SortDirectionFor("activity")"><button class="license-sort-button" @onclick='() => SetSort("activity")'>Last used <span>@SortMark("activity")</span></button></th>
+                    <th>Manage</th>
+                </tr></thead>
+                <tbody>
+                @if (VisibleLicenses.Count == 0)
+                {
+                    <tr><td colspan="6"><div class="license-empty"><h3>No licenses found</h3><p>Try a different search, or create a new license.</p></div></td></tr>
+                }
+                else
+                {
+                    @foreach (var license in VisibleLicenses)
+                    {
+                        <tr><td><div class="license-code"><code>@license.MaskedSetupCode</code><small>@license.LicenseId</small></div></td><td><span class="license-status @StatusTone(license.Status)">@StatusLabel(license.Status)</span></td><td>@license.ActivationCount of @license.AllowedDeviceCount</td><td>@(license.HudVersion ?? "Not connected")</td><td>@FormatDate(license.LastSeenAtUtc)</td><td><a class="license-manage-link" href="@($"/admin/licenses/{license.LicenseId}")">Manage</a></td></tr>
+                    }
+                }
+                </tbody>
+            </table></div>
+    </section>
+</main>
 
 @code {
     private IReadOnlyCollection<LicenseSummary> Licenses { get; set; } = [];
-
-    /// <summary>
-    /// Loads masked license summaries for the admin list.
-    /// </summary>
-    protected override void OnInitialized()
+    private string _searchText = string.Empty;
+    private string _sortColumn = "activity";
+    private bool _sortAscending;
+    private IReadOnlyList<LicenseSummary> VisibleLicenses
     {
-        Licenses = LicenseService.ListLicenses();
+        get
+        {
+            var search = _searchText.Trim();
+            IEnumerable<LicenseSummary> licenses = Licenses;
+            if (!string.IsNullOrWhiteSpace(search)) licenses = licenses.Where(x => x.MaskedSetupCode.Contains(search, StringComparison.OrdinalIgnoreCase) || x.LicenseId.Contains(search, StringComparison.OrdinalIgnoreCase) || StatusLabel(x.Status).Contains(search, StringComparison.OrdinalIgnoreCase) || (x.HudVersion?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+            licenses = _sortColumn switch { "code" => Order(licenses, x => x.MaskedSetupCode), "status" => Order(licenses, x => StatusLabel(x.Status)), "devices" => Order(licenses, x => x.ActivationCount), "version" => Order(licenses, x => x.HudVersion ?? string.Empty), _ => Order(licenses, x => x.LastSeenAtUtc ?? DateTimeOffset.MinValue) };
+            return licenses.ToList();
+        }
     }
-
-    /// <summary>
-    /// Formats nullable license dates without exposing private device details.
-    /// </summary>
-    /// <param name="value">Date to format.</param>
-    /// <returns>Formatted UTC date or a safe placeholder.</returns>
-    private static string FormatDate(DateTimeOffset? value) =>
-        value is null ? "never" : value.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'");
+    protected override void OnInitialized() => Licenses = LicenseService.ListLicenses();
+    private IOrderedEnumerable<LicenseSummary> Order<TKey>(IEnumerable<LicenseSummary> items, Func<LicenseSummary, TKey> selector) => _sortAscending ? items.OrderBy(selector) : items.OrderByDescending(selector);
+    private void SetSort(string column) { if (_sortColumn == column) _sortAscending = !_sortAscending; else { _sortColumn = column; _sortAscending = column is not "activity"; } }
+    private string SortDirectionFor(string column) => _sortColumn != column ? "none" : _sortAscending ? "ascending" : "descending";
+    private string SortMark(string column) => _sortColumn != column ? "↕" : _sortAscending ? "↑" : "↓";
+    private static string StatusLabel(LicenseStatus status) => status switch { LicenseStatus.Pending => "Ready to use", LicenseStatus.Active => "In use", LicenseStatus.Suspended => "Paused", LicenseStatus.Revoked => "Cancelled", LicenseStatus.Expired => "Expired", _ => "Unknown" };
+    private static string StatusTone(LicenseStatus status) => status switch { LicenseStatus.Active => "safe", LicenseStatus.Pending => "ready", LicenseStatus.Suspended => "warning", _ => "danger" };
+    private static string FormatDate(DateTimeOffset? value) => value is null ? "Never" : value.Value.UtcDateTime.ToString("MMM d, yyyy · HH:mm 'UTC'");
 }

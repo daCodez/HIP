@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using System.Globalization;
+using System.Security.Claims;
 using HIP.Application;
 using HIP.Application.Ai;
 using HIP.Application.Browser;
@@ -39,6 +40,7 @@ using HIP.Web.Security;
 using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -71,6 +73,9 @@ builder.Services.AddResponseCompression(options =>
 builder.Services.Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
 builder.Services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
 builder.Services.AddHipAdminAuthorization();
+builder.Services.Configure<HipAdminLoginOptions>(builder.Configuration.GetSection(HipAdminLoginOptions.SectionName));
+builder.Services.AddSingleton<IPasswordHasher<string>, PasswordHasher<string>>();
+builder.Services.AddHipAdminAuthenticationProvider<LocalPasswordAdminAuthenticationProvider>();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddCors(options =>
 {
@@ -94,8 +99,24 @@ builder.Services.AddRateLimiter(options =>
         CreateFixedWindowPartition(httpContext, "feedback", performance.PublicFeedbackRequestsPerMinute));
     options.AddPolicy(RateLimitPolicies.IdentityDevPolicy, httpContext =>
         CreateFixedWindowPartition(httpContext, "identity", performance.IdentityRequestsPerMinute));
+    options.AddPolicy(RateLimitPolicies.AdminLoginPolicy, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            $"admin-login:{httpContext.Connection.RemoteIpAddress}",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(10),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
     options.OnRejected = async (context, cancellationToken) =>
     {
+        if (context.HttpContext.Request.Path.Equals("/auth/login", StringComparison.OrdinalIgnoreCase))
+        {
+            context.HttpContext.Response.Redirect("/login?error=too-many");
+            return;
+        }
+
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         await context.HttpContext.Response.WriteAsJsonAsync(new { error = "Too many HIP requests. Try again shortly." }, cancellationToken);
     };
@@ -131,7 +152,7 @@ app.UseAuthorization();
 
 app.UseAntiforgery();
 
-MapDevelopmentAuthEndpoints(app);
+app.MapHipDevelopmentLogin();
 
 MapPublicApis(app.MapGroup(ApiRoutes.Public));
 MapReportApis(app.MapGroup($"{ApiRoutes.V1}/reports"));
@@ -578,74 +599,6 @@ static ExternalSiteEvidenceOptions BindExternalSiteEvidenceOptions(IConfiguratio
 /// Maps development-only browser login helpers for manually testing protected admin pages.
 /// </summary>
 /// <param name="app">Web application route builder.</param>
-static void MapDevelopmentAuthEndpoints(WebApplication app)
-{
-    if (!app.Environment.IsDevelopment())
-    {
-        return;
-    }
-
-    app.MapGet("/dev/admin-login/{role}", (string role, string? returnUrl, HttpContext httpContext) =>
-    {
-        if (!LocalDevelopmentRequestGuard.IsLocalDevelopmentRequest(httpContext.Request, app.Environment))
-        {
-            app.Logger.LogWarning("Blocked non-local HIP dev admin login attempt for host {Host}.", httpContext.Request.Host.Value);
-            return Results.NotFound();
-        }
-
-        if (!AdminRoles.All.Contains(role))
-        {
-            return Results.BadRequest("Unsupported HIP admin role.");
-        }
-
-        var options = new CookieOptions
-        {
-            HttpOnly = true,
-            SameSite = SameSiteMode.Lax,
-            Secure = httpContext.Request.IsHttps,
-            Expires = DateTimeOffset.UtcNow.AddHours(8)
-        };
-
-        httpContext.Response.Cookies.Append(HipDevHeaderAuthenticationHandler.DevAdminRoleCookieName, role, options);
-        httpContext.Response.Cookies.Append(HipDevHeaderAuthenticationHandler.DevAdminUserCookieName, "hip-dev-browser-admin", options);
-
-        return Results.Redirect(GetSafeLocalReturnUrl(returnUrl, "/admin"));
-    }).AllowAnonymous()
-        .RequireRateLimiting(RateLimitPolicies.IdentityDevPolicy);
-
-    app.MapGet("/dev/logout", (HttpContext httpContext) =>
-    {
-        httpContext.Response.Cookies.Delete(HipDevHeaderAuthenticationHandler.DevAdminRoleCookieName);
-        httpContext.Response.Cookies.Delete(HipDevHeaderAuthenticationHandler.DevAdminUserCookieName);
-        return Results.Redirect("/login");
-    }).AllowAnonymous();
-}
-
-/// <summary>
-/// Sanitizes a development login return URL so the local helper cannot become an open redirect.
-/// </summary>
-/// <param name="returnUrl">Requested return path from the login link or authentication challenge.</param>
-/// <param name="fallback">Local fallback path used when the request is missing or unsafe.</param>
-/// <returns>A local-only relative path that is safe to pass to <see cref="Results.Redirect(string)"/>.</returns>
-static string GetSafeLocalReturnUrl(string? returnUrl, string fallback)
-{
-    if (string.IsNullOrWhiteSpace(returnUrl))
-    {
-        return fallback;
-    }
-
-    var trimmed = returnUrl.Trim();
-    if (!trimmed.StartsWith("/", StringComparison.Ordinal) ||
-        trimmed.StartsWith("//", StringComparison.Ordinal) ||
-        trimmed.StartsWith("/\\", StringComparison.Ordinal) ||
-        Uri.TryCreate(trimmed, UriKind.Absolute, out _))
-    {
-        return fallback;
-    }
-
-    return trimmed;
-}
-
 /// <summary>
 /// Applies admin-managed external evidence provider settings to the runtime options object.
 /// </summary>
@@ -1989,7 +1942,7 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
-        .RequireAuthorization(AdminPolicies.CanManageRules);
+        .RequireAuthorization(AdminPolicies.CanManageDomainVerifications);
 
     identityApi.MapPost("/websites/verify", async (
         WebsiteVerificationRequest request,
@@ -2005,7 +1958,55 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
-        .RequireAuthorization(AdminPolicies.CanManageRules);
+        .RequireAuthorization(AdminPolicies.CanManageDomainVerifications);
+
+    identityApi.MapPost("/websites/{domain}/retry", async (
+        string domain,
+        HttpContext httpContext,
+        IWebsiteIdentityService websiteIdentityService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await websiteIdentityService.RetryVerificationAsync(
+                domain,
+                httpContext.User.Identity?.Name ?? "unknown-admin",
+                httpContext.User.FindFirstValue(ClaimTypes.Role) ?? "Unknown",
+                cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
+    })
+        .RequireAuthorization(AdminPolicies.CanManageDomainVerifications);
+
+    identityApi.MapPost("/websites/{domain}/revoke", async (
+        string domain,
+        DomainVerificationRevokeRequest request,
+        HttpContext httpContext,
+        IWebsiteIdentityService websiteIdentityService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await websiteIdentityService.RevokeVerificationAsync(
+                domain,
+                request.Reason,
+                httpContext.User.Identity?.Name ?? "unknown-owner",
+                httpContext.User.FindFirstValue(ClaimTypes.Role) ?? "Unknown",
+                cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    })
+        .RequireAuthorization(AdminPolicies.CanRevokeDomainVerifications);
 
     identityApi.MapGet("/websites/{domain}", async (
         string domain,

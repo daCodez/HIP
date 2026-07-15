@@ -1,7 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using HIP.Web.Security;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 
 namespace HIP.Tests.Api;
@@ -131,25 +135,89 @@ public sealed class AdminAuthorizationTests
     }
 
     /// <summary>
-    /// Confirms local development browser login issues a dev-only admin cookie and redirects to the dashboard.
+    /// Confirms the login page contains a real credential form without placing a password in the page.
     /// </summary>
     [Test]
-    public async Task Development_admin_login_sets_browser_cookie()
+    public async Task Login_page_collects_credentials_without_prefilling_password()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
-        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            AllowAutoRedirect = false
-        });
+        using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/dev/admin-login/Admin");
+        var html = await client.GetStringAsync("/login");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(html, Does.Contain("name=\"email\""));
+            Assert.That(html, Does.Contain("name=\"password\""));
+            Assert.That(html, Does.Contain("type=\"submit\""));
+            Assert.That(html, Does.Contain("__RequestVerificationToken"));
+            Assert.That(Regex.IsMatch(html, "name=\"password\"[^>]*value=", RegexOptions.CultureInvariant), Is.False);
+        });
+    }
+
+    /// <summary>
+    /// Confirms correct local development credentials issue an admin cookie and preserve a safe return path.
+    /// </summary>
+    [Test]
+    public async Task Valid_admin_credentials_set_browser_cookie()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await SubmitLoginAsync(client, HipWebApplicationFactory<Program>.TestAdminEmail,
+            HipWebApplicationFactory<Program>.TestAdminPassword, "/admin/licenses");
+        var adminHtml = await client.GetStringAsync("/admin");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
+            Assert.That(response.Headers.Location?.ToString(), Is.EqualTo("/admin/licenses"));
+            Assert.That(response.Headers.TryGetValues("Set-Cookie", out var cookies), Is.True);
+            Assert.That(cookies!, Has.Some.Contains("HIP_DEV_ADMIN_ROLE"));
+            Assert.That(adminHtml, Does.Contain("action=\"/auth/logout\""));
+        });
+    }
+
+    /// <summary>
+    /// Confirms a different provider can own credential verification without changing the HTTP login contract.
+    /// </summary>
+    [Test]
+    public async Task Authentication_provider_can_be_replaced_without_changing_login_endpoint()
+    {
+        await using var baseFactory = new HipWebApplicationFactory<Program>();
+        await using var factory = baseFactory.WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+                services.AddHipAdminAuthenticationProvider<ReplacementAuthenticationProvider>()));
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await SubmitLoginAsync(client, "replacement@hip.test", "replacement-test-secret", "/admin");
 
         Assert.Multiple(() =>
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
             Assert.That(response.Headers.Location?.ToString(), Is.EqualTo("/admin"));
             Assert.That(response.Headers.TryGetValues("Set-Cookie", out var cookies), Is.True);
-            Assert.That(cookies!, Has.Some.Contains("HIP_DEV_ADMIN_ROLE"));
+            Assert.That(cookies!, Has.Some.Contains("replacement-subject"));
+        });
+    }
+
+    /// <summary>
+    /// Confirms failed sign-in attempts use a generic response and do not create a session.
+    /// </summary>
+    [Test]
+    public async Task Invalid_admin_credentials_do_not_set_browser_cookie()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await SubmitLoginAsync(client, HipWebApplicationFactory<Program>.TestAdminEmail,
+            "wrong-password", "/admin");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
+            Assert.That(response.Headers.Location?.ToString(), Does.StartWith("/login?error=invalid"));
+            Assert.That(response.Headers.TryGetValues("Set-Cookie", out _), Is.False);
         });
     }
 
@@ -157,7 +225,7 @@ public sealed class AdminAuthorizationTests
     /// Confirms direct local browser navigation to the protected dashboard starts the dev login flow.
     /// </summary>
     [Test]
-    public async Task Admin_dashboard_navigation_redirects_to_development_login()
+    public async Task Admin_dashboard_navigation_redirects_to_login()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -170,7 +238,7 @@ public sealed class AdminAuthorizationTests
         Assert.Multiple(() =>
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
-            Assert.That(response.Headers.Location?.ToString(), Is.EqualTo("/dev/admin-login/Owner?returnUrl=%2Fadmin"));
+            Assert.That(response.Headers.Location?.ToString(), Is.EqualTo("/login?returnUrl=%2Fadmin"));
         });
     }
 
@@ -186,7 +254,8 @@ public sealed class AdminAuthorizationTests
             AllowAutoRedirect = false
         });
 
-        var response = await client.GetAsync("/dev/admin-login/Admin?returnUrl=https%3A%2F%2Fevil.example");
+        var response = await SubmitLoginAsync(client, HipWebApplicationFactory<Program>.TestAdminEmail,
+            HipWebApplicationFactory<Program>.TestAdminPassword, "https://evil.example");
 
         Assert.Multiple(() =>
         {
@@ -196,20 +265,17 @@ public sealed class AdminAuthorizationTests
     }
 
     /// <summary>
-    /// Verifies the development login helper is invisible to non-local hosts so it cannot become a remote backdoor.
+    /// Verifies the old one-click administrator bypass is no longer available, even during local development.
     /// </summary>
     [Test]
-    public async Task Development_admin_login_is_blocked_for_non_local_host()
+    public async Task Development_admin_login_bypass_is_removed()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
         });
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/dev/admin-login/Admin");
-        request.Headers.Host = "hip.example.com";
-
-        var response = await client.SendAsync(request);
+        var response = await client.GetAsync("/dev/admin-login/Admin");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
@@ -327,5 +393,45 @@ public sealed class AdminAuthorizationTests
     {
         client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", role);
         client.DefaultRequestHeaders.Add("X-HIP-Admin-User", $"{role.ToLowerInvariant()}-test-admin");
+    }
+
+    /// <summary>
+    /// Loads a fresh anti-forgery token and submits the local development login form.
+    /// </summary>
+    private static async Task<HttpResponseMessage> SubmitLoginAsync(HttpClient client, string email, string password, string returnUrl)
+    {
+        var html = await client.GetStringAsync($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
+        var tokenMatch = Regex.Match(html, "name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"", RegexOptions.CultureInvariant);
+        Assert.That(tokenMatch.Success, Is.True, "The login form must include an anti-forgery token.");
+
+        return await client.PostAsync("/auth/login", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["email"] = email,
+            ["password"] = password,
+            ["returnUrl"] = returnUrl,
+            ["__RequestVerificationToken"] = tokenMatch.Groups[1].Value
+        }));
+    }
+
+    private sealed class ReplacementAuthenticationProvider : IHipAdminAuthenticationProvider
+    {
+        public ValueTask<HipAdminAuthenticationResult> AuthenticateAsync(
+            HipAdminAuthenticationRequest request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var accepted =
+                request.Email == "replacement@hip.test" &&
+                request.Password == "replacement-test-secret";
+            var result = accepted
+                ? HipAdminAuthenticationResult.Success(
+                    new HipAdminIdentity(
+                        "replacement-subject",
+                        request.Email,
+                        "Replacement Admin",
+                        AdminRoles.Owner))
+                : HipAdminAuthenticationResult.Failed;
+            return ValueTask.FromResult(result);
+        }
     }
 }

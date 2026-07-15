@@ -27,6 +27,16 @@ public interface IDomainVerificationService
     Task<DomainVerificationRequest> VerifyAsync(string domain, VerificationMethod method, string token, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Retries a stored DNS challenge without accepting or returning raw token input.
+    /// </summary>
+    Task<DomainVerificationRetryResult> RetryAsync(string domain, VerificationMethod method, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Revokes the stored challenge so later retries cannot reactivate it.
+    /// </summary>
+    Task<DomainVerificationRequest> RevokeAsync(string domain, VerificationMethod method, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Checks the live DNS TXT verification status for a domain.
     /// </summary>
     /// <param name="domain">Domain whose _hip TXT record should be checked.</param>

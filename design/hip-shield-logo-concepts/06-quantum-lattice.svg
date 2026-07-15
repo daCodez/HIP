@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">HIP Quantum Lattice shield logo</title>
+  <path d="m128 18 88 34v66c0 56-34 98-88 118-54-20-88-62-88-118V52z" fill="none" stroke="#0d1918" stroke-width="12"/>
+  <path d="m128 70 43 25v50l-43 25-43-25V95zM85 95l86 50M171 95l-86 50M128 70v100" fill="none" stroke="#08725f" stroke-width="7" stroke-linejoin="round"/>
+  <circle cx="128" cy="70" r="9" fill="#5ad7bb"/><circle cx="85" cy="95" r="9" fill="#5ad7bb"/><circle cx="171" cy="95" r="9" fill="#5ad7bb"/><circle cx="128" cy="170" r="9" fill="#5ad7bb"/>
+</svg>

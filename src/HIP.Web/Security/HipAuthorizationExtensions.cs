@@ -31,6 +31,10 @@ public static class HipAuthorizationExtensions
                 policy.RequireRole(AdminRoles.Owner, AdminRoles.Admin));
             options.AddPolicy(AdminPolicies.CanViewAdminDashboard, policy =>
                 policy.RequireRole(AdminRoles.Owner, AdminRoles.Admin, AdminRoles.Moderator, AdminRoles.Support, AdminRoles.ReadOnly));
+            options.AddPolicy(AdminPolicies.CanManageDomainVerifications, policy =>
+                policy.RequireRole(AdminRoles.Owner, AdminRoles.Admin));
+            options.AddPolicy(AdminPolicies.CanRevokeDomainVerifications, policy =>
+                policy.RequireRole(AdminRoles.Owner));
             options.AddPolicy(ConsumerPolicies.CanUseConsumerPortal, policy =>
                 policy.RequireAuthenticatedUser());
         });

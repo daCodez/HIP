@@ -7,4 +7,7 @@ public sealed record WebsiteIdentity(
     VerificationStatus VerificationStatus,
     VerificationMethod PreferredVerificationMethod,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset? VerifiedAtUtc);
+    DateTimeOffset? VerifiedAtUtc,
+    DateTimeOffset? LastCheckedAtUtc = null,
+    string? LastCheckMessage = null,
+    DateTimeOffset? RevokedAtUtc = null);

@@ -39,6 +39,18 @@ public sealed record WebsiteVerificationRequest(
     VerificationMethod Method,
     string Token);
 
+/// <summary>
+/// Result of retrying a stored domain-verification challenge without exposing its token.
+/// </summary>
+public sealed record DomainVerificationRetryResult(
+    DomainVerificationRequest Request,
+    DomainVerificationCheckResult Check);
+
+/// <summary>
+/// Reason supplied by an authorized owner when revoking domain verification.
+/// </summary>
+public sealed record DomainVerificationRevokeRequest(string Reason);
+
 public sealed record HipSignatureRequest(
     string IdentityId,
     string ContentHash,

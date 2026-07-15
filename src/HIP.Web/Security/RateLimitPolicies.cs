@@ -19,4 +19,9 @@ public static class RateLimitPolicies
     /// Limits development-only identity and admin-login helpers so local testing cannot accidentally flood key creation.
     /// </summary>
     public const string IdentityDevPolicy = "IdentityDevPolicy";
+
+    /// <summary>
+    /// Limits local administrator password attempts independently from other development tools.
+    /// </summary>
+    public const string AdminLoginPolicy = "AdminLoginPolicy";
 }

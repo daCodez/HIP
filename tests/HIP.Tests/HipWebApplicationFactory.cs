@@ -1,6 +1,7 @@
 using HIP.Application.Security;
 using HIP.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -22,6 +23,9 @@ namespace HIP.Tests;
 public sealed class HipWebApplicationFactory<TProgram> : WebApplicationFactory<TProgram>
     where TProgram : class
 {
+    public const string TestAdminEmail = "owner@hip.test";
+    public const string TestAdminPassword = "test-password-only";
+
     private readonly string databaseName = $"hip-tests-{Guid.NewGuid():N}";
 
     /// <summary>
@@ -30,6 +34,7 @@ public sealed class HipWebApplicationFactory<TProgram> : WebApplicationFactory<T
     /// <param name="builder">The web host builder used by WebApplicationFactory.</param>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        var passwordHasher = new PasswordHasher<string>();
         builder.UseEnvironment("Development");
         builder.ConfigureAppConfiguration((_, configurationBuilder) =>
         {
@@ -40,7 +45,9 @@ public sealed class HipWebApplicationFactory<TProgram> : WebApplicationFactory<T
                 ["HipSecurity:RecordEncryptionKey"] = "hip-test-record-key-32bytes-local",
                 ["HipSecurity:PrivacyHashingKey"] = "hip-test-privacy-key-32bytes-local",
                 ["HipSecurity:ClientWriteCorsOrigins:0"] = "http://localhost",
-                ["HipSecurity:ClientWriteCorsOrigins:1"] = "https://localhost"
+                ["HipSecurity:ClientWriteCorsOrigins:1"] = "https://localhost",
+                ["HipAdminLogin:Email"] = TestAdminEmail,
+                ["HipAdminLogin:PasswordHash"] = passwordHasher.HashPassword(TestAdminEmail, TestAdminPassword)
             });
         });
         builder.ConfigureServices(services =>

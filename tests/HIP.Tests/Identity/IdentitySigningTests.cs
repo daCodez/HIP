@@ -2,6 +2,7 @@ using HIP.Application.Browser;
 using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
+using HIP.Application.Review;
 using HIP.Application.Scalability;
 using HIP.Domain.Identity;
 
@@ -219,7 +220,70 @@ public sealed class IdentitySigningTests
             new DevelopmentHipCryptoProvider(),
             new InMemoryHipIdentityRepository(),
             new InMemoryDomainVerificationService(),
-            new TestWebsiteIdentityRepository());
+            new TestWebsiteIdentityRepository(),
+            new AuditLogService(new InMemoryAuditLogRepository()));
+    }
+
+    [Test]
+    public async Task Website_identity_retry_uses_stored_challenge_and_records_complete_status()
+    {
+        var service = WebsiteService();
+        await service.RegisterAsync(
+            new WebsiteIdentityRegistrationRequest("retry.example", "Retry", VerificationMethod.DnsTxt),
+            CancellationToken.None);
+
+        var retried = await service.RetryVerificationAsync(
+            "retry.example", "owner-1", "Owner", CancellationToken.None);
+
+        Assert.That(retried.VerificationStatus, Is.EqualTo(VerificationStatus.Verified));
+        Assert.That(retried.LastCheckedAtUtc, Is.Not.Null);
+        Assert.That(retried.LastCheckMessage, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task Website_identity_revoke_updates_identity_and_writes_critical_audit_entry()
+    {
+        var identityRepository = new InMemoryHipIdentityRepository();
+        var audit = new AuditLogService(new InMemoryAuditLogRepository());
+        var service = new WebsiteIdentityService(
+            new DevelopmentHipCryptoProvider(), identityRepository,
+            new InMemoryDomainVerificationService(), new TestWebsiteIdentityRepository(), audit);
+        var registered = await service.RegisterAsync(
+            new WebsiteIdentityRegistrationRequest("revoke.example", "Revoke", VerificationMethod.DnsTxt),
+            CancellationToken.None);
+
+        var revoked = await service.RevokeVerificationAsync(
+            "revoke.example", "Ownership changed", "owner-1", "Owner", CancellationToken.None);
+        var hipIdentity = await identityRepository.GetAsync(registered.WebsiteIdentity.HipIdentityId, CancellationToken.None);
+        var auditEntry = audit.List().Single(entry => entry.Action == "domain-verification.revoked");
+
+        Assert.That(revoked.VerificationStatus, Is.EqualTo(VerificationStatus.Revoked));
+        Assert.That(revoked.RevokedAtUtc, Is.Not.Null);
+        Assert.That(hipIdentity!.VerificationStatus, Is.EqualTo(VerificationStatus.Revoked));
+        Assert.That(auditEntry.ActorId, Is.EqualTo("owner-1"));
+        Assert.That(auditEntry.Severity, Is.EqualTo(HIP.Domain.Audit.AuditSeverity.Critical));
+        Assert.That(auditEntry.Metadata.Values, Has.None.Contains(registered.VerificationRequest.Token));
+    }
+
+    [Test]
+    public async Task Website_identity_list_returns_registered_domains_newest_first()
+    {
+        var repository = new TestWebsiteIdentityRepository();
+        await repository.SaveAsync(new WebsiteIdentity(
+            "older.example", "hip:web:older.example", [], VerificationStatus.Pending,
+            VerificationMethod.DnsTxt, new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero), null), CancellationToken.None);
+        await repository.SaveAsync(new WebsiteIdentity(
+            "newer.example", "hip:web:newer.example", [], VerificationStatus.Verified,
+            VerificationMethod.DnsTxt, new DateTimeOffset(2026, 7, 13, 10, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 7, 13, 10, 5, 0, TimeSpan.Zero)), CancellationToken.None);
+        var service = new WebsiteIdentityService(
+            new DevelopmentHipCryptoProvider(), new InMemoryHipIdentityRepository(),
+            new InMemoryDomainVerificationService(), repository,
+            new AuditLogService(new InMemoryAuditLogRepository()));
+
+        var identities = await service.ListAsync(CancellationToken.None);
+
+        Assert.That(identities.Select(identity => identity.Domain), Is.EqualTo(new[] { "newer.example", "older.example" }));
     }
 
     private static HipSignatureService SignatureService(DevelopmentHipCryptoProvider crypto) =>
@@ -255,6 +319,9 @@ public sealed class IdentitySigningTests
             identities.TryGetValue(domain, out var identity);
             return Task.FromResult(identity);
         }
+
+        public Task<IReadOnlyCollection<WebsiteIdentity>> ListAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyCollection<WebsiteIdentity>>(identities.Values.ToArray());
     }
 
     /// <summary>

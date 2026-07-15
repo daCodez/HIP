@@ -1,61 +1,30 @@
 @page "/admin/licenses/new"
+@rendermode InteractiveServer
 @attribute [Authorize(Policy = AdminPolicies.CanManageLicenses)]
 @inject ISetupCodeLicenseService LicenseService
-
-<PageTitle>Create HIP Setup Code</PageTitle>
-
-<section class="hip-page-heading compact">
-    <div>
-        <h1>Create Setup Code</h1>
-        <p>Generate a hard-to-guess setup code for a Second Life HUD buyer.</p>
-    </div>
-    <a class="hip-primary-action" href="admin/licenses">Back to Licenses</a>
-</section>
-
-<section class="hip-two-column">
-    <article class="hip-panel padded">
-        <h2>Setup Code Options</h2>
-        <label>
-            Allowed device count
-            <InputNumber @bind-Value="AllowedDeviceCount" />
-        </label>
-        <label>
-            Initial scan mode
-            <InputSelect @bind-Value="InitialScanMode">
-                <option>Quiet</option>
-                <option>Normal</option>
-                <option>Strict</option>
-                <option>Paranoid</option>
-            </InputSelect>
-        </label>
-        <button class="hip-primary-action" type="button" @onclick="CreateCode">Create Setup Code</button>
-    </article>
-
-    <article class="hip-panel padded">
-        <h2>Created Code</h2>
-        @if (CreatedCode is null)
-        {
-            <p>The raw setup code will appear here once. Store it outside HIP before leaving this page.</p>
-        }
-        else
-        {
-            <p>Give this setup code to the HUD owner:</p>
-            <code>@CreatedCode.SetupCode</code>
-            <p>Masked list value: @CreatedCode.MaskedSetupCode</p>
-        }
-    </article>
-</section>
-
+<PageTitle>Create a License | HIP Admin</PageTitle>
+<main class="license-create-page">
+    <section class="hip-page-heading license-heading"><div><span class="hip-eyebrow">HIP Admin · licenses</span><h1>Create a license</h1><p>Give a Second Life HUD owner access to HIP.</p></div><a class="hip-secondary-action" href="/admin/licenses">Back to licenses</a></section>
+    <section class="license-create-grid">
+        <article class="hip-panel padded license-form-panel">
+            <div><span class="license-step">Step 1</span><h2>Choose access</h2><p>You can change or cancel access later.</p></div>
+            <label class="license-field"><span>How many devices can use it?</span><small>Choose from 1 to 25 devices.</small><InputNumber @bind-Value="AllowedDeviceCount" min="1" max="25" /></label>
+            <fieldset class="protection-options"><legend>Starting protection level</legend><InputRadioGroup @bind-Value="InitialScanMode"><label><InputRadio Value='@("Quiet")' /><span><strong>Quiet</strong><small>Only urgent warnings</small></span></label><label><InputRadio Value='@("Normal")' /><span><strong>Standard <em>Recommended</em></strong><small>Balanced protection for everyday use</small></span></label><label><InputRadio Value='@("Strict")' /><span><strong>Strict</strong><small>More cautious about uncertain activity</small></span></label><label><InputRadio Value='@("Paranoid")' /><span><strong>Maximum</strong><small>Warn about anything HIP cannot confirm</small></span></label></InputRadioGroup></fieldset>
+            @if (!string.IsNullOrWhiteSpace(_error)) { <p class="license-form-error" role="alert">@_error</p> }
+            <button class="hip-primary-action" type="button" @onclick="CreateCode" disabled="@(CreatedCode is not null)">@(CreatedCode is null ? "Create license" : "License created")</button>
+        </article>
+        <article class="hip-panel padded license-result-panel">
+            <div><span class="license-step">Step 2</span><h2>Share the license code</h2></div>
+            @if (CreatedCode is null) { <div class="license-result-placeholder"><div aria-hidden="true">•••• •••• ••••</div><p>The code will appear here after you create the license.</p></div> }
+            else { <div class="license-code-result" role="status"><span>New license code</span><code>@CreatedCode.SetupCode</code></div><a class="hip-secondary-action" href="@($"/admin/licenses/{CreatedCode.LicenseId}")">Manage this license</a> }
+            <div class="license-copy-warning"><strong>Copy this code before leaving this page</strong><p>For safety, HIP will hide most of the code after you leave. Give it only to the HUD owner.</p></div>
+        </article>
+    </section>
+</main>
 @code {
     private int AllowedDeviceCount { get; set; } = 1;
     private string InitialScanMode { get; set; } = "Normal";
     private CreateSetupCodeResponse? CreatedCode { get; set; }
-
-    /// <summary>
-    /// Creates a setup code and intentionally displays the raw value only on this creation screen.
-    /// </summary>
-    private void CreateCode()
-    {
-        CreatedCode = LicenseService.CreateSetupCode(new CreateSetupCodeRequest(AllowedDeviceCount, "admin-ui", InitialScanMode));
-    }
+    private string? _error;
+    private void CreateCode() { _error = null; if (AllowedDeviceCount is < 1 or > 25) { _error = "Choose a number between 1 and 25."; return; } CreatedCode = LicenseService.CreateSetupCode(new CreateSetupCodeRequest(AllowedDeviceCount, "admin-ui", InitialScanMode)); }
 }

@@ -36,4 +36,10 @@ public sealed class EfWebsiteIdentityRepository(HipRecordStore store) : IWebsite
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
         return store.GetAsync<WebsiteIdentity>(Partition, normalized, cancellationToken);
     }
+
+    /// <summary>
+    /// Lists all persisted website identities without exposing verification challenge tokens.
+    /// </summary>
+    public Task<IReadOnlyCollection<WebsiteIdentity>> ListAsync(CancellationToken cancellationToken) =>
+        store.ListAsync<WebsiteIdentity>(Partition, cancellationToken);
 }

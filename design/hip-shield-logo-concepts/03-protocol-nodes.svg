@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">HIP Protocol Nodes shield logo</title>
+  <path d="m128 18 82 38v66c0 51-31 91-82 113-51-22-82-62-82-113V56z" fill="#0d1918"/>
+  <path d="M81 92h34l26 28h34M81 160h34l26-28h34" fill="none" stroke="#5ad7bb" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="75" cy="92" r="12" fill="#eff8f6"/><circle cx="181" cy="120" r="12" fill="#5ad7bb"/><circle cx="75" cy="160" r="12" fill="#5ad7bb"/><circle cx="181" cy="132" r="12" fill="#eff8f6"/>
+</svg>

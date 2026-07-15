@@ -10,5 +10,20 @@ public interface IWebsiteIdentityService
 
     Task<WebsiteIdentity?> GetAsync(string domain, CancellationToken cancellationToken);
 
+    Task<IReadOnlyCollection<WebsiteIdentity>> ListAsync(CancellationToken cancellationToken);
+
+    Task<WebsiteIdentity> RetryVerificationAsync(
+        string domain,
+        string actorId,
+        string actorRole,
+        CancellationToken cancellationToken);
+
+    Task<WebsiteIdentity> RevokeVerificationAsync(
+        string domain,
+        string reason,
+        string actorId,
+        string actorRole,
+        CancellationToken cancellationToken);
+
     Task<HipWellKnownDocument> BuildWellKnownDocumentAsync(string domain, CancellationToken cancellationToken);
 }

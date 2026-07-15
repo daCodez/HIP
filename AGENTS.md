@@ -1,87 +1,51 @@
-# HIP Agent Safety Protocol
+# HIP Repository Agent Guide
 
-This repository is the foundation for HIP, the Human Identity Protocol. HIP is not a throwaway prototype; treat changes as production-oriented protocol and platform work.
+HIP is the Human Identity Protocol. Treat changes as production-oriented protocol and platform work, not as throwaway prototype work.
 
-## Required Safety Steps
+## Before Making Changes
 
-Before making changes:
+1. Inspect the repository status and read the relevant documentation, source files, and tests.
+2. Preserve existing and uncommitted user work. Do not discard, stage, commit, or rewrite unrelated changes.
+3. Make the smallest coherent change that satisfies the request, and keep it testable.
+4. Get user approval before destructive or difficult-to-reverse actions, including:
+   - deleting substantial files or data;
+   - resetting or rewriting Git history;
+   - overwriting user work;
+   - applying migrations that may lose data; or
+   - changing external or production systems.
+5. Explain material security, privacy, compatibility, or data-migration risk before taking the risky action.
 
-1. Create a Git repository if one does not exist.
-2. Create an initial checkpoint commit after the first clean project setup.
-3. Do not delete, overwrite, reset, regenerate, or replace files without a clear reason.
-4. Make small, testable changes.
-5. After each major step, summarize:
-   - files changed
-   - why each file changed
-   - tests run
-   - remaining risks
+## Working and Handoff Expectations
 
-If a risky change is needed, explain it first.
+- For substantial work, provide concise progress updates at meaningful milestones.
+- Run the most relevant tests and checks for the changed behavior. If a relevant check cannot be run, say why.
+- Review the final diff for accidental or unrelated changes.
+- In the final handoff, summarize:
+  - files changed and why;
+  - tests and checks run;
+  - known limitations or remaining risks.
 
 ## Engineering Direction
 
-- HIP sits above TCP and TLS: TCP connects, TLS encrypts, HIP verifies trust.
-- HIP is the main product. Browser extensions, Second Life HUDs, and other integrations are clients.
+- HIP is an application-layer trust protocol and platform. TCP provides connectivity, TLS protects transport, and HIP adds identity, origin, integrity, reputation, and risk evidence.
+- HIP is the main product. Browser extensions, Second Life HUDs, and other integrations are HIP clients.
 - Keep architecture clean, security-first, privacy-first, and testable.
-- Prefer small domain concepts with clear explanations over opaque scoring logic.
-- A valid signature proves origin and integrity; it does not automatically prove safety.
-- Quantum-resistant signing is a first-class design requirement from day one.
+- Prefer small domain concepts and explainable decisions over opaque scoring logic.
+- A valid signature proves origin and integrity; it does not by itself prove safety or trustworthiness.
+- Preserve cryptographic agility so HIP can migrate to audited post-quantum algorithms and providers.
+- Do not describe the current development signing provider as production-safe or post-quantum-ready unless the implementation and evidence support that claim.
+- Treat all client, network, provider, scan, and user-supplied data as untrusted.
+- Collect and retain only the minimum privacy-safe data required for the feature.
+- Keep secrets, credentials, private page contents, raw user content, and sensitive identifiers out of logs, public APIs, and test fixtures.
 
-## Current Build Priority
+## Architecture and Compatibility
 
-1. Solution foundation
-2. Core domain models
-3. Scoring model
-4. Reputation model
-5. JSON rules engine
-6. Rule simulation engine
-7. Public lookup API
-8. Live trust badge API
-9. Safety page
-10. Browser plugin MVP
-11. Admin rule builder
-12. Second Life HUD
+- Keep domain rules independent from UI, persistence, hosting, and third-party provider details.
+- Preserve versioned public API and client contracts unless the task explicitly includes a migration or breaking change.
+- Keep providers as evidence sources; providers must not directly decide the final HIP score.
+- Keep browser extensions, Second Life HUDs, and other clients thin. Shared trust and scoring behavior belongs in HIP services and domain logic.
+- Use **browser extension** for the client name. Retain existing `BrowserPlugin` identifiers only where changing them would break a public or compatibility-sensitive contract.
 
+## Current Priorities
 
-<!-- headroom:rtk-instructions -->
-# RTK (Rust Token Killer) - Token-Optimized Commands
-
-When running shell commands, **always prefix with `rtk`**. This reduces context
-usage by 60-90% with zero behavior change. If rtk has no filter for a command,
-it passes through unchanged — so it is always safe to use.
-
-## Key Commands
-```bash
-# Git (59-80% savings)
-rtk git status          rtk git diff            rtk git log
-
-# Files & Search (60-75% savings)
-rtk ls <path>           rtk read <file>         rtk grep <pattern>
-rtk find <pattern>      rtk diff <file>
-
-# Test (90-99% savings) — shows failures only
-rtk pytest tests/       rtk cargo test          rtk test <cmd>
-
-# Build & Lint (80-90% savings) — shows errors only
-rtk tsc                 rtk lint                rtk cargo build
-rtk prettier --check    rtk mypy                rtk ruff check
-
-# Analysis (70-90% savings)
-rtk err <cmd>           rtk log <file>          rtk json <file>
-rtk summary <cmd>       rtk deps                rtk env
-
-# GitHub (26-87% savings)
-rtk gh pr view <n>      rtk gh run list         rtk gh issue list
-
-# Infrastructure (85% savings)
-rtk docker ps           rtk kubectl get         rtk docker logs <c>
-
-# Package managers (70-90% savings)
-rtk pip list            rtk pnpm install        rtk npm run <script>
-```
-
-## Rules
-- In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
-- For debugging, use raw command without rtk prefix
-- `rtk proxy <cmd>` runs command without filtering but tracks usage
-<!-- /headroom:rtk-instructions -->
+Do not copy a changing roadmap into this file. Determine current scope from the user's request, the current implementation, and the maintained project reference documents under `docs/project-reference/`. Verify that a referenced plan still matches the code before treating it as current.

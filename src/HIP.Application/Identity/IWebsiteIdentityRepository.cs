@@ -22,4 +22,9 @@ public interface IWebsiteIdentityRepository
     /// <param name="cancellationToken">Token used to cancel database work.</param>
     /// <returns>The website identity, or null when the domain has not been registered.</returns>
     Task<WebsiteIdentity?> GetAsync(string domain, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists all registered website identities for administrative verification operations.
+    /// </summary>
+    Task<IReadOnlyCollection<WebsiteIdentity>> ListAsync(CancellationToken cancellationToken);
 }
