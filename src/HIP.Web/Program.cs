@@ -1537,8 +1537,10 @@ static void MapLicenseApis(RouteGroupBuilder licenseApi)
         ISetupCodeLicenseService licenseService) =>
         Results.Ok(licenseService.CreateSetupCode(request)));
 
-    licenseApi.MapGet("/", (ISetupCodeLicenseService licenseService) =>
-        Results.Ok(licenseService.ListLicenses()));
+    licenseApi.MapGet("/", async (
+        ISetupCodeLicenseService licenseService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await licenseService.ListLicensesAsync(cancellationToken)));
 
     licenseApi.MapGet("/{licenseId}", (
         string licenseId,

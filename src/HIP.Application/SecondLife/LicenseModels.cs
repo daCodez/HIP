@@ -160,6 +160,13 @@ public interface ISetupCodeLicenseService
     IReadOnlyCollection<LicenseSummary> ListLicenses();
 
     /// <summary>
+    /// Lists licenses asynchronously so persistent providers never block a Blazor rendering context.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the storage query.</param>
+    /// <returns>All current setup code licenses as safe summaries.</returns>
+    Task<IReadOnlyCollection<LicenseSummary>> ListLicensesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets one license by ID with masked setup code data.
     /// </summary>
     /// <param name="licenseId">License identifier.</param>
@@ -262,6 +269,13 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
         {
             return LicensesById.Values.Select(ToSummary).OrderBy(summary => summary.MaskedSetupCode, StringComparer.OrdinalIgnoreCase).ToArray();
         }
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyCollection<LicenseSummary>> ListLicensesAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(ListLicenses());
     }
 
     /// <inheritdoc />

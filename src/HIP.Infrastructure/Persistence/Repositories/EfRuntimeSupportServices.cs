@@ -101,6 +101,16 @@ public sealed class EfSetupCodeLicenseService(HipRecordStore store) : ISetupCode
         List().Select(ToSummary).OrderBy(summary => summary.MaskedSetupCode, StringComparer.OrdinalIgnoreCase).ToArray();
 
     /// <inheritdoc />
+    public async Task<IReadOnlyCollection<LicenseSummary>> ListLicensesAsync(CancellationToken cancellationToken = default)
+    {
+        var licenses = await store.ListAsync<SetupCodeLicense>(Partition, cancellationToken);
+        return licenses
+            .Select(ToSummary)
+            .OrderBy(summary => summary.MaskedSetupCode, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    /// <inheritdoc />
     public LicenseSummary? GetLicense(string licenseId) =>
         GetById(licenseId) is { } license ? ToSummary(license) : null;
 

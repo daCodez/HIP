@@ -63,7 +63,8 @@
             return licenses.ToList();
         }
     }
-    protected override void OnInitialized() => Licenses = LicenseService.ListLicenses();
+    protected override async Task OnInitializedAsync() =>
+        Licenses = await LicenseService.ListLicensesAsync();
     private IOrderedEnumerable<LicenseSummary> Order<TKey>(IEnumerable<LicenseSummary> items, Func<LicenseSummary, TKey> selector) => _sortAscending ? items.OrderBy(selector) : items.OrderByDescending(selector);
     private void SetSort(string column) { if (_sortColumn == column) _sortAscending = !_sortAscending; else { _sortColumn = column; _sortAscending = column is not "activity"; } }
     private string SortDirectionFor(string column) => _sortColumn != column ? "none" : _sortAscending ? "ascending" : "descending";

@@ -2,6 +2,7 @@ using System.Net;
 using HIP.Application.SecondLife;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace HIP.Tests.Api;
 
@@ -140,6 +141,24 @@ public sealed class AdminRuleBuilderPageTests
     }
 
     [Test]
+    public async Task License_page_uses_async_storage_operation()
+    {
+        await using var baseFactory = new HipWebApplicationFactory<Program>();
+        await using var factory = baseFactory.WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<ISetupCodeLicenseService>();
+                services.AddScoped<ISetupCodeLicenseService, AsyncOnlyLicenseService>();
+            }));
+        using var client = factory.CreateClient();
+        AddAdmin(client);
+
+        var response = await client.GetAsync("/admin/licenses");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [Test]
     public async Task Admin_domain_verification_page_loads_for_admin()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
@@ -188,5 +207,38 @@ public sealed class AdminRuleBuilderPageTests
     {
         client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Admin");
         client.DefaultRequestHeaders.Add("X-HIP-Admin-User", "admin-rule-builder-test");
+    }
+
+    private sealed class AsyncOnlyLicenseService : ISetupCodeLicenseService
+    {
+        private readonly InMemorySetupCodeLicenseService inner = new();
+
+        public CreateSetupCodeResponse CreateSetupCode(CreateSetupCodeRequest request) => inner.CreateSetupCode(request);
+
+        public IReadOnlyCollection<LicenseSummary> ListLicenses() =>
+            throw new InvalidOperationException("The Licenses page must not block on synchronous persistent storage.");
+
+        public Task<IReadOnlyCollection<LicenseSummary>> ListLicensesAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyCollection<LicenseSummary>>([]);
+
+        public LicenseSummary? GetLicense(string licenseId) => inner.GetLicense(licenseId);
+
+        public LicenseActivationResult ActivateHud(
+            string setupCode,
+            string? hudDeviceId,
+            string? avatarIdHash,
+            string? hudVersion) =>
+            inner.ActivateHud(setupCode, hudDeviceId, avatarIdHash, hudVersion);
+
+        public LicenseSummary? ResetActivation(string licenseId) => inner.ResetActivation(licenseId);
+
+        public LicenseSummary? SetStatus(string licenseId, LicenseStatus status) => inner.SetStatus(licenseId, status);
+
+        public LicenseHudSettings GetSettingsForDevice(string deviceId) => inner.GetSettingsForDevice(deviceId);
+
+        public (bool Saved, string Message, LicenseHudSettings Settings) SaveSettingsForDevice(
+            string deviceId,
+            LicenseHudSettings settings) =>
+            inner.SaveSettingsForDevice(deviceId, settings);
     }
 }
