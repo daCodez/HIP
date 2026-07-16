@@ -103,7 +103,10 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-await HipDatabaseInitializer.EnsureCreatedAsync(app.Services, app.Environment.IsDevelopment());
+var databaseInitializationMode = app.Environment.IsDevelopment()
+    ? HipDatabaseInitializationMode.CreateDevelopmentSchema
+    : HipDatabaseInitializationMode.ValidateMigrations;
+await HipDatabaseInitializer.InitializeAsync(app.Services, databaseInitializationMode);
 
 if (app.Environment.IsDevelopment())
 {

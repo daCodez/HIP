@@ -66,20 +66,45 @@ Existing plaintext development rows remain readable so local data created before
 
 The dev app uses safe create behavior for the initial PostgreSQL table. It creates missing storage but does not delete existing data.
 
-Outside local Development, HIP no longer uses `EnsureCreated`. If EF migrations are present, startup applies them with `MigrateAsync`. If no migrations exist, startup fails closed with a clear error so production-like environments cannot silently create unmanaged schemas.
+Outside local Development, HIP never calls `EnsureCreated` or
+`MigrateAsync`. Application startup is validation-only: it requires compiled
+migrations, checks the EF migration history, and fails with an actionable error
+when any migration is pending. Schema changes are a separate operator action.
 
 ## Migrations
 
-No EF migration files are added yet. The initial development foundation uses safe table creation so the schema can stabilize before migration history is introduced. Production deployments must add and review migrations before running outside Development.
+The initial `InitialHipSchema` migration creates the generic encrypted-record
+table, typed browser-scan table, dashboard aggregate table, and their indexes.
+Every future model change must include a reviewed migration.
 
-When migrations are added:
+Provide the target PostgreSQL connection string only to the migration command:
 
 ```powershell
-dotnet ef migrations add InitialPersistence --project src/HIP.Infrastructure --startup-project src/HIP.Web
+$env:HIP_DATABASE_CONNECTION_STRING = "Host=<host>;Port=5432;Database=<database>;Username=<operator>;Password=<secret>"
 dotnet ef database update --project src/HIP.Infrastructure --startup-project src/HIP.Web
+Remove-Item Env:HIP_DATABASE_CONNECTION_STRING
 ```
 
-Review generated migrations before applying them. Stop before any migration that drops tables, columns, or data.
+Generate a future migration with the same explicit environment variable:
+
+```powershell
+$env:HIP_DATABASE_CONNECTION_STRING = "Host=localhost;Port=5432;Database=hip_design;Username=<operator>;Password=<secret>"
+dotnet ef migrations add <MigrationName> --project src/HIP.Infrastructure --startup-project src/HIP.Web --output-dir Persistence/Migrations
+Remove-Item Env:HIP_DATABASE_CONNECTION_STRING
+```
+
+The design-time factory refuses to run without
+`HIP_DATABASE_CONNECTION_STRING`; migration tooling does not start the HIP
+application or fall back to a source-controlled credential.
+
+Review the generated `Up` and `Down` operations before applying them. Stop
+before any unapproved operation that drops or rewrites tables, columns, or data.
+Back up the target database and test rollback before a production migration.
+
+Databases previously created through the Development-only `EnsureCreated`
+path do not have EF migration history. Do not point a production deployment at
+one and apply the initial migration blindly: back it up and use a reviewed
+baseline/adoption procedure because its tables already exist.
 
 ## Production Database Plan
 

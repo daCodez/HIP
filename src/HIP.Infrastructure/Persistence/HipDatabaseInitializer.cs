@@ -4,35 +4,101 @@ using Microsoft.EntityFrameworkCore;
 namespace HIP.Infrastructure.Persistence;
 
 /// <summary>
+/// Selects the only two supported database startup behaviors.
+/// </summary>
+public enum HipDatabaseInitializationMode
+{
+    /// <summary>
+    /// Creates and additively patches an explicitly local Development schema.
+    /// </summary>
+    CreateDevelopmentSchema,
+
+    /// <summary>
+    /// Validates that every compiled migration was applied by a separate operator action.
+    /// </summary>
+    ValidateMigrations
+}
+
+/// <summary>
 /// Initializes HIP's database without silently creating production schema.
 /// </summary>
 public static class HipDatabaseInitializer
 {
     /// <summary>
-    /// Creates a local development database or applies migrations when running outside Development.
+    /// Initializes local Development storage or validates a production-like schema without mutating it.
     /// </summary>
     /// <param name="services">Application service provider.</param>
-    /// <param name="isLocalDevelopment">Whether local Development schema creation is allowed.</param>
+    /// <param name="mode">Explicit database initialization behavior.</param>
     /// <param name="cancellationToken">Token used to cancel initialization.</param>
-    /// <exception cref="InvalidOperationException">Thrown outside Development when no EF migrations are configured.</exception>
-    public static async Task EnsureCreatedAsync(IServiceProvider services, bool isLocalDevelopment = true, CancellationToken cancellationToken = default)
+    /// <exception cref="InvalidOperationException">Thrown when migration state is missing, pending, or cannot be validated.</exception>
+    public static async Task InitializeAsync(
+        IServiceProvider services,
+        HipDatabaseInitializationMode mode,
+        CancellationToken cancellationToken = default)
     {
         using var scope = services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<HipDbContext>();
-        if (isLocalDevelopment)
+
+        switch (mode)
         {
-            await dbContext.Database.EnsureCreatedAsync(cancellationToken);
-            await EnsureDevelopmentTablesAsync(dbContext, cancellationToken);
-            return;
+            case HipDatabaseInitializationMode.CreateDevelopmentSchema:
+                await dbContext.Database.EnsureCreatedAsync(cancellationToken);
+                await EnsureDevelopmentTablesAsync(dbContext, cancellationToken);
+                return;
+            case HipDatabaseInitializationMode.ValidateMigrations:
+                await ValidateMigrationsAsync(dbContext, cancellationToken);
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported HIP database initialization mode.");
+        }
+    }
+
+    /// <summary>
+    /// Compatibility wrapper for callers that have not yet adopted the explicit initialization mode.
+    /// </summary>
+    [Obsolete("Use InitializeAsync with an explicit HipDatabaseInitializationMode.")]
+    public static Task EnsureCreatedAsync(
+        IServiceProvider services,
+        bool isLocalDevelopment,
+        CancellationToken cancellationToken = default) =>
+        InitializeAsync(
+            services,
+            isLocalDevelopment
+                ? HipDatabaseInitializationMode.CreateDevelopmentSchema
+                : HipDatabaseInitializationMode.ValidateMigrations,
+            cancellationToken);
+
+    private static async Task ValidateMigrationsAsync(HipDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var migrations = dbContext.Database.GetMigrations().ToArray();
+        if (migrations.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "HIP database migrations are required outside local Development; no compiled migrations were found.");
         }
 
-        var migrations = dbContext.Database.GetMigrations();
-        if (!migrations.Any())
+        string[] pendingMigrations;
+        try
         {
-            throw new InvalidOperationException("HIP database migrations are required outside local Development; refusing EnsureCreated.");
+            pendingMigrations = (await dbContext.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException(
+                "HIP could not validate the database migration state. Verify database connectivity and migration-history access.",
+                exception);
         }
 
-        await dbContext.Database.MigrateAsync(cancellationToken);
+        if (pendingMigrations.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"HIP database migrations must be applied before application startup. Pending: {string.Join(", ", pendingMigrations)}. " +
+                "Apply them through the reviewed EF migration command documented in docs/persistence.md.");
+        }
     }
 
     /// <summary>

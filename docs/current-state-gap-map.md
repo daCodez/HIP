@@ -288,7 +288,7 @@ reconciliation in the owning work package.
 | HIP-0001 Repository truth and gap map | Complete with this document |
 | HIP-0002 Source-controlled local keys | Complete |
 | HIP-0003 Development authentication isolation | Complete |
-| HIP-0004 Database migration safety | Missing |
+| HIP-0004 Database migration safety | Complete |
 | HIP-0005 Distributed duplicate and replay foundation | Missing |
 | HIP-0006 Aspire patch upgrade | Missing verification |
 | HIP-0007 CI security baseline | Missing |
@@ -328,19 +328,19 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-HIP-0004: make database startup migration-safe.
+HIP-0005: add distributed duplicate and replay protection.
 
 Acceptance criteria:
 
-- Production startup never creates or mutates the schema through
-  `EnsureCreated`.
-- Database migrations are explicit, reviewable, and can be applied through a
-  controlled operator action.
-- Application startup validates schema compatibility and fails with an
-  actionable error when required migrations are missing.
-- Test hosts keep an explicit, isolated database-initialization path.
-- Focused persistence and startup tests prove production fail-closed behavior
-  and test initialization behavior.
+- Runtime duplicate-submission and nonce state uses Redis-backed adapters with
+  atomic create-if-absent and expiry semantics.
+- In-memory adapters remain available only for explicit isolated tests.
+- API and Web hosts fail closed or degrade through a documented safe policy
+  when distributed state is unavailable.
+- Concurrency tests prove duplicate and replay decisions are consistent across
+  service instances.
+- Expiry tests prove keys become reusable only after the configured safety
+  window.
 
-Rollback is a normal Git revert of the isolated HIP-0004 commit. Any generated
-migration must be reviewed for data-loss operations before it is applied.
+Rollback is a normal Git revert of the isolated HIP-0005 commit. The runtime
+must not silently fall back to process-local security state.

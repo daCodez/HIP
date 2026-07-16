@@ -127,7 +127,10 @@ builder.Services.AddRazorComponents()
 
 var app = builder.Build();
 
-await HipDatabaseInitializer.EnsureCreatedAsync(app.Services, app.Environment.IsDevelopment());
+var databaseInitializationMode = app.Environment.IsDevelopment()
+    ? HipDatabaseInitializationMode.CreateDevelopmentSchema
+    : HipDatabaseInitializationMode.ValidateMigrations;
+await HipDatabaseInitializer.InitializeAsync(app.Services, databaseInitializationMode);
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
