@@ -299,6 +299,35 @@ public sealed class AdminAuthorizationTests
     }
 
     [Test]
+    public async Task Development_header_auth_is_blocked_for_non_local_peer()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>(IPAddress.Parse("203.0.113.10"));
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/admin/audit-logs");
+        request.Headers.Host = "localhost";
+        request.Headers.Add("X-Forwarded-For", "127.0.0.1");
+        request.Headers.Add("X-HIP-Admin-Role", "Owner");
+        request.Headers.Add("X-HIP-Admin-User", "remote-attacker");
+
+        var response = await client.SendAsync(request);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
+    [Test]
+    public async Task Development_logout_is_hidden_from_non_local_peer()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>(IPAddress.Parse("203.0.113.10"));
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/auth/logout");
+        request.Headers.Host = "localhost";
+
+        var response = await client.SendAsync(request);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
     public async Task Admin_can_enable_external_provider_settings()
     {
         await using var factory = new HipWebApplicationFactory<Program>();

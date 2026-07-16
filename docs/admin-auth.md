@@ -11,7 +11,7 @@ The current implementation uses a development-only header authentication scheme:
 
 This scheme only authenticates in the Development environment. It is not production-safe and must be replaced with production authentication before deployment.
 
-The development scheme is also local-only. HIP rejects development admin cookies, `X-HIP-Admin-Role`, and `/dev/admin-login/{role}` attempts when the request host is not loopback (`localhost`, `127.0.0.1`, or `::1`). This keeps the MVP convenience path from becoming a remote administrative backdoor during local tunneling or accidental exposure.
+The development scheme is also direct-loopback-only. HIP requires the request host and the network peer address to be loopback (`localhost`, `127.0.0.1`, or `::1`) and rejects requests containing `Forwarded`, `X-Forwarded-For`, or `X-Real-IP`. The same boundary protects development admin cookies, `X-HIP-Admin-Role`, sign-in, and sign-out. This keeps the MVP convenience path from becoming a remote administrative backdoor through local tunneling, reverse proxies, spoofed host values, or accidental exposure.
 
 Example development API request:
 

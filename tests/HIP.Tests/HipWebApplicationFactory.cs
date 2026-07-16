@@ -1,5 +1,7 @@
+using System.Net;
 using HIP.Application.Security;
 using HIP.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -27,6 +29,12 @@ public sealed class HipWebApplicationFactory<TProgram> : WebApplicationFactory<T
     public const string TestAdminPassword = "test-password-only";
 
     private readonly string databaseName = $"hip-tests-{Guid.NewGuid():N}";
+    private readonly IPAddress remoteIpAddress;
+
+    public HipWebApplicationFactory(IPAddress? remoteIpAddress = null)
+    {
+        this.remoteIpAddress = remoteIpAddress ?? IPAddress.Loopback;
+    }
 
     /// <summary>
     /// Configures a test host that keeps runtime safety checks active while avoiding local PostgreSQL requirements.
@@ -52,11 +60,25 @@ public sealed class HipWebApplicationFactory<TProgram> : WebApplicationFactory<T
         });
         builder.ConfigureServices(services =>
         {
+            services.AddSingleton<IStartupFilter>(new RemoteIpAddressStartupFilter(remoteIpAddress));
             services.RemoveAll<IDbContextOptionsConfiguration<HipDbContext>>();
             services.RemoveAll<DbContextOptions<HipDbContext>>();
             services.RemoveAll<DbContextOptions>();
             services.RemoveAll<HipDbContext>();
             services.AddDbContext<HipDbContext>(options => options.UseInMemoryDatabase(databaseName));
         });
+    }
+
+    private sealed class RemoteIpAddressStartupFilter(IPAddress remoteIpAddress) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => application =>
+        {
+            application.Use((context, nextRequest) =>
+            {
+                context.Connection.RemoteIpAddress = remoteIpAddress;
+                return nextRequest();
+            });
+            next(application);
+        };
     }
 }

@@ -89,8 +89,16 @@ public static class HipDevelopmentLoginEndpoints
         return Results.Redirect(safeReturnUrl);
     }
 
-    private static async Task<IResult> SignOutAsync(HttpContext httpContext, IAntiforgery antiforgery)
+    private static async Task<IResult> SignOutAsync(
+        HttpContext httpContext,
+        IAntiforgery antiforgery,
+        IWebHostEnvironment environment)
     {
+        if (!LocalDevelopmentRequestGuard.IsLocalDevelopmentRequest(httpContext.Request, environment))
+        {
+            return Results.NotFound();
+        }
+
         try
         {
             await antiforgery.ValidateRequestAsync(httpContext);

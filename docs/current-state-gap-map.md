@@ -287,7 +287,7 @@ reconciliation in the owning work package.
 |---|---|
 | HIP-0001 Repository truth and gap map | Complete with this document |
 | HIP-0002 Source-controlled local keys | Complete |
-| HIP-0003 Development authentication isolation | Partial; Needs security review/tests |
+| HIP-0003 Development authentication isolation | Complete |
 | HIP-0004 Database migration safety | Missing |
 | HIP-0005 Distributed duplicate and replay foundation | Missing |
 | HIP-0006 Aspire patch upgrade | Missing verification |
@@ -328,20 +328,19 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-HIP-0003: lock down development authentication.
+HIP-0004: make database startup migration-safe.
 
 Acceptance criteria:
 
-- Development authentication can activate only when the host environment is
-  Development and the request is loopback.
-- Forwarded headers or spoofed host values cannot turn a remote request into a
-  trusted local request.
-- Every development-login and development-header entry point fails closed when
-  either condition is absent.
-- Focused authorization regression tests cover API, Blazor, and privileged
-  route behavior.
-- Documentation clearly distinguishes development access from production
-  authentication.
+- Production startup never creates or mutates the schema through
+  `EnsureCreated`.
+- Database migrations are explicit, reviewable, and can be applied through a
+  controlled operator action.
+- Application startup validates schema compatibility and fails with an
+  actionable error when required migrations are missing.
+- Test hosts keep an explicit, isolated database-initialization path.
+- Focused persistence and startup tests prove production fail-closed behavior
+  and test initialization behavior.
 
-Rollback is a normal Git revert of the isolated HIP-0003 commit. Production
-configuration must never depend on development authentication.
+Rollback is a normal Git revert of the isolated HIP-0004 commit. Any generated
+migration must be reviewed for data-loss operations before it is applied.

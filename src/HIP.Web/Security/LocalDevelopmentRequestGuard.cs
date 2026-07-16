@@ -7,18 +7,36 @@ namespace HIP.Web.Security;
 /// </summary>
 public static class LocalDevelopmentRequestGuard
 {
+    private static readonly string[] ForwardingHeaderNames =
+    [
+        "Forwarded",
+        "X-Forwarded-For",
+        "X-Real-IP"
+    ];
+
     /// <summary>
-    /// Determines whether a request is both running under Development and addressed to a local host.
+    /// Determines whether a request is running under Development and originated entirely on loopback.
     /// </summary>
     /// <param name="request">Current HTTP request.</param>
     /// <param name="environment">Hosting environment.</param>
-    /// <returns>True only for local Development requests.</returns>
+    /// <returns>True only for direct loopback Development requests.</returns>
     /// <remarks>
     /// Dev headers and dev cookies are intentionally powerful during local testing. They must never work for
-    /// a non-local host, even if a deployment is accidentally started with ASPNETCORE_ENVIRONMENT=Development.
+    /// a non-local peer, a non-local host, or a forwarded request, even if a deployment is accidentally started
+    /// with ASPNETCORE_ENVIRONMENT=Development.
     /// </remarks>
-    public static bool IsLocalDevelopmentRequest(HttpRequest request, IWebHostEnvironment environment) =>
-        environment.IsDevelopment() && IsLocalHost(request.Host.Host);
+    public static bool IsLocalDevelopmentRequest(HttpRequest request, IWebHostEnvironment environment)
+    {
+        if (!environment.IsDevelopment() ||
+            !IsLocalHost(request.Host.Host) ||
+            HasForwardingHeaders(request))
+        {
+            return false;
+        }
+
+        var remoteAddress = request.HttpContext.Connection.RemoteIpAddress;
+        return remoteAddress is not null && IPAddress.IsLoopback(remoteAddress);
+    }
 
     /// <summary>
     /// Checks whether the supplied host value is a loopback hostname or loopback IP address.
@@ -42,4 +60,7 @@ public static class LocalDevelopmentRequestGuard
 
         return IPAddress.TryParse(normalized, out var address) && IPAddress.IsLoopback(address);
     }
+
+    private static bool HasForwardingHeaders(HttpRequest request) =>
+        ForwardingHeaderNames.Any(request.Headers.ContainsKey);
 }
