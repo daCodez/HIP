@@ -8,63 +8,6 @@ using HIP.Infrastructure.Persistence;
 namespace HIP.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// Stores duplicate-submission fingerprints in PostgreSQL-backed HIP records so dedupe state survives process restarts.
-/// </summary>
-/// <param name="store">Encrypted generic HIP record store.</param>
-public sealed class EfDuplicateSubmissionGuard(HipRecordStore store) : IDuplicateSubmissionGuard
-{
-    private const string Partition = "duplicate-submission-guards";
-
-    /// <inheritdoc />
-    public bool TryAccept(string scope, IEnumerable<string?> parts, TimeSpan window)
-    {
-        var now = DateTimeOffset.UtcNow;
-        var id = Fingerprint(scope, parts);
-        var existing = Run(() => store.GetAsync<DuplicateSubmissionRecord>(Partition, id, CancellationToken.None));
-        if (existing is not null && existing.AcceptedUntilUtc > now)
-        {
-            return false;
-        }
-
-        Run(() => store.SaveAsync(Partition, id, new DuplicateSubmissionRecord(id, now.Add(window)), CancellationToken.None));
-        return true;
-    }
-
-    /// <summary>
-    /// Runs an async persistence operation from the current synchronous interface without hiding exceptions.
-    /// </summary>
-    /// <typeparam name="T">Operation result type.</typeparam>
-    /// <param name="operation">Persistence operation to execute.</param>
-    /// <returns>Operation result.</returns>
-    private static T Run<T>(Func<Task<T>> operation) => operation().GetAwaiter().GetResult();
-
-    /// <summary>
-    /// Runs an async persistence operation from the current synchronous interface without hiding exceptions.
-    /// </summary>
-    /// <param name="operation">Persistence operation to execute.</param>
-    private static void Run(Func<Task> operation) => operation().GetAwaiter().GetResult();
-
-    /// <summary>
-    /// Builds a stable duplicate fingerprint without storing raw submitted values.
-    /// </summary>
-    /// <param name="scope">Submission scope, such as browser-scan or feedback.</param>
-    /// <param name="parts">Privacy-safe values used for dedupe.</param>
-    /// <returns>Hex SHA-256 fingerprint.</returns>
-    private static string Fingerprint(string scope, IEnumerable<string?> parts)
-    {
-        var joined = string.Join("|", parts.Select(part => (part ?? string.Empty).Trim().ToLowerInvariant()));
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{scope}|{joined}"))).ToLowerInvariant();
-    }
-
-    /// <summary>
-    /// Durable duplicate-submission state.
-    /// </summary>
-    /// <param name="Fingerprint">Privacy-safe fingerprint.</param>
-    /// <param name="AcceptedUntilUtc">UTC time until the same fingerprint should be rejected.</param>
-    private sealed record DuplicateSubmissionRecord(string Fingerprint, DateTimeOffset AcceptedUntilUtc);
-}
-
-/// <summary>
 /// Stores Second Life setup-code licenses in encrypted PostgreSQL-backed HIP records instead of process memory.
 /// </summary>
 /// <param name="store">Encrypted generic HIP record store.</param>

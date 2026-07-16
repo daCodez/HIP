@@ -226,7 +226,7 @@ publicApi.MapPost("/feedback", async (
 {
     try
     {
-        if (IsDuplicateFeedback(feedback, duplicateGuard))
+        if (await IsDuplicateFeedbackAsync(feedback, duplicateGuard, cancellationToken))
         {
             // Duplicate suppression is an abuse-control decision, not a user-facing failure.
             // Returning OK keeps the browser plugin UX stable when a user double-clicks or retries a submitted signal.
@@ -473,10 +473,10 @@ static async Task StoreWeightedFeedbackIfDomainAsync(
 /// Detects repeated public feedback submissions without storing raw feedback bodies as throttling keys.
 /// </summary>
 /// <param name="feedback">Submitted reputation feedback.</param>
-/// <param name="duplicateGuard">In-memory duplicate guard that hashes fingerprint parts internally.</param>
+/// <param name="duplicateGuard">Distributed duplicate guard that hashes fingerprint parts internally.</param>
 /// <returns>True when the same feedback was already accepted recently.</returns>
-static bool IsDuplicateFeedback(ReputationFeedbackRequest feedback, IDuplicateSubmissionGuard duplicateGuard) =>
-    !duplicateGuard.TryAccept(
+static async ValueTask<bool> IsDuplicateFeedbackAsync(ReputationFeedbackRequest feedback, IDuplicateSubmissionGuard duplicateGuard, CancellationToken cancellationToken) =>
+    !await duplicateGuard.TryAcceptAsync(
         "api-public-feedback",
         [
             feedback.TargetType.ToString(),
@@ -488,16 +488,16 @@ static bool IsDuplicateFeedback(ReputationFeedbackRequest feedback, IDuplicateSu
             feedback.UrlHash,
             feedback.Reason
         ],
-        TimeSpan.FromMinutes(5));
+        TimeSpan.FromMinutes(5), cancellationToken);
 
 /// <summary>
 /// Detects replayed browser scan summaries while allowing fresh scans with new timestamps or URL hashes.
 /// </summary>
 /// <param name="request">Browser plugin scan result request.</param>
-/// <param name="duplicateGuard">In-memory duplicate guard that hashes fingerprint parts internally.</param>
+/// <param name="duplicateGuard">Distributed duplicate guard that hashes fingerprint parts internally.</param>
 /// <returns>True when an equivalent scan result was already accepted recently.</returns>
-static bool IsDuplicateBrowserScanResult(BrowserScanResultSaveRequest request, IDuplicateSubmissionGuard duplicateGuard) =>
-    !duplicateGuard.TryAccept(
+static async ValueTask<bool> IsDuplicateBrowserScanResultAsync(BrowserScanResultSaveRequest request, IDuplicateSubmissionGuard duplicateGuard, CancellationToken cancellationToken) =>
+    !await duplicateGuard.TryAcceptAsync(
         "api-browser-scan-result",
         [
             request.Domain,
@@ -513,19 +513,19 @@ static bool IsDuplicateBrowserScanResult(BrowserScanResultSaveRequest request, I
             request.ScannedAtUtc?.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
             request.PrivacySafeMetadata is null ? null : string.Join(';', request.PrivacySafeMetadata.OrderBy(pair => pair.Key).Select(pair => $"{pair.Key}={pair.Value}"))
         ],
-        TimeSpan.FromSeconds(30));
+        TimeSpan.FromSeconds(30), cancellationToken);
 
 /// <summary>
 /// Detects repeated Site Safety scan requests so public clients cannot rapidly replay the same signal payload.
 /// </summary>
 /// <param name="request">Site Safety scan request.</param>
-/// <param name="duplicateGuard">In-memory duplicate guard that hashes fingerprint parts internally.</param>
+/// <param name="duplicateGuard">Distributed duplicate guard that hashes fingerprint parts internally.</param>
 /// <returns>True when an equivalent scan request was already accepted recently.</returns>
-static bool IsDuplicateSiteSafetyScan(SiteSafetyScanRequest request, IDuplicateSubmissionGuard duplicateGuard) =>
-    !duplicateGuard.TryAccept(
+static async ValueTask<bool> IsDuplicateSiteSafetyScanAsync(SiteSafetyScanRequest request, IDuplicateSubmissionGuard duplicateGuard, CancellationToken cancellationToken) =>
+    !await duplicateGuard.TryAcceptAsync(
         "api-site-safety-scan",
         SiteSafetyFingerprintParts(request),
-        TimeSpan.FromSeconds(20));
+        TimeSpan.FromSeconds(20), cancellationToken);
 
 /// <summary>
 /// Builds a privacy-safe fingerprint from structured scan fields rather than raw page content.
@@ -628,7 +628,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
     {
         try
         {
-            if (IsDuplicateBrowserScanResult(request, duplicateGuard))
+            if (await IsDuplicateBrowserScanResultAsync(request, duplicateGuard, cancellationToken))
             {
                 return Results.Conflict(new BrowserScanResultErrorResponse("Duplicate browser scan result ignored."));
             }
@@ -737,7 +737,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     {
         try
         {
-            if (IsDuplicateSiteSafetyScan(request, duplicateGuard))
+            if (await IsDuplicateSiteSafetyScanAsync(request, duplicateGuard, cancellationToken))
             {
                 return Results.Conflict(new ApiErrorResponse("Duplicate site safety scan ignored."));
             }

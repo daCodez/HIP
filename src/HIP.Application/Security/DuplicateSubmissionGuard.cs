@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -10,69 +9,111 @@ namespace HIP.Application.Security;
 public interface IDuplicateSubmissionGuard
 {
     /// <summary>
-    /// Attempts to accept a submission fingerprint for a short duplicate window.
+    /// Atomically attempts to accept a submission fingerprint for a short duplicate window.
     /// </summary>
     /// <param name="scope">Submission scope, such as browser-scan or public-feedback.</param>
     /// <param name="parts">Privacy-safe values used to build the duplicate fingerprint.</param>
     /// <param name="window">How long identical submissions should be treated as duplicates.</param>
-    /// <returns>True when the submission is new enough to process.</returns>
-    bool TryAccept(string scope, IEnumerable<string?> parts, TimeSpan window);
+    /// <param name="cancellationToken">Token used to cancel distributed state access.</param>
+    /// <returns>True only when this caller atomically reserved the fingerprint.</returns>
+    ValueTask<bool> TryAcceptAsync(
+        string scope,
+        IEnumerable<string?> parts,
+        TimeSpan window,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// In-memory duplicate submission guard for the single-node MVP.
+/// In-memory duplicate submission guard for explicit isolated tests.
 /// </summary>
-/// <remarks>
-/// This is intentionally lightweight and local. It is not a distributed abuse-control system, but it prevents rapid
-/// duplicate browser scans and feedback bursts during development and early testing.
-/// </remarks>
-public sealed class InMemoryDuplicateSubmissionGuard : IDuplicateSubmissionGuard
+public sealed class InMemoryDuplicateSubmissionGuard(TimeProvider? timeProvider = null) : IDuplicateSubmissionGuard
 {
-    private readonly ConcurrentDictionary<string, DateTimeOffset> acceptedUntil = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTimeOffset> acceptedUntil = new(StringComparer.Ordinal);
+    private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
+    private readonly object sync = new();
 
     /// <inheritdoc />
-    public bool TryAccept(string scope, IEnumerable<string?> parts, TimeSpan window)
+    public ValueTask<bool> TryAcceptAsync(
+        string scope,
+        IEnumerable<string?> parts,
+        TimeSpan window,
+        CancellationToken cancellationToken = default)
     {
-        var now = DateTimeOffset.UtcNow;
-        Cleanup(now);
-        var key = Fingerprint(scope, parts);
-        var expiresAt = now.Add(window);
-        if (acceptedUntil.TryAdd(key, expiresAt))
-        {
-            return true;
-        }
+        cancellationToken.ThrowIfCancellationRequested();
+        SecurityStateValidation.Validate(scope, parts, window);
 
-        if (acceptedUntil.TryGetValue(key, out var existing) && existing > now)
+        var now = clock.GetUtcNow();
+        var normalizedParts = parts.Select(part => (part ?? string.Empty).Trim().ToLowerInvariant());
+        var key = SecurityStateKey.Fingerprint("duplicate", scope.Trim().ToLowerInvariant(), normalizedParts);
+        lock (sync)
         {
-            return false;
-        }
+            Cleanup(now);
+            if (acceptedUntil.TryGetValue(key, out var existing) && existing > now)
+            {
+                return ValueTask.FromResult(false);
+            }
 
-        acceptedUntil[key] = expiresAt;
-        return true;
+            acceptedUntil[key] = now.Add(window);
+            return ValueTask.FromResult(true);
+        }
     }
 
-    /// <summary>
-    /// Builds a stable duplicate fingerprint without storing raw submitted content as dictionary keys.
-    /// </summary>
-    /// <param name="scope">Submission scope.</param>
-    /// <param name="parts">Privacy-safe values.</param>
-    /// <returns>Duplicate fingerprint.</returns>
-    private static string Fingerprint(string scope, IEnumerable<string?> parts)
+    private void Cleanup(DateTimeOffset now)
     {
-        var joined = string.Join("|", parts.Select(part => (part ?? string.Empty).Trim().ToLowerInvariant()));
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{scope}|{joined}"));
+        foreach (var key in acceptedUntil
+                     .Where(entry => entry.Value <= now)
+                     .Take(100)
+                     .Select(entry => entry.Key)
+                     .ToArray())
+        {
+            acceptedUntil.Remove(key);
+        }
+    }
+}
+
+/// <summary>
+/// Provides privacy-safe keys and validation shared by security-state adapters.
+/// </summary>
+public static class SecurityStateKey
+{
+    /// <summary>
+    /// Hashes namespaced state parts so raw submissions and nonces never become storage keys.
+    /// </summary>
+    public static string Fingerprint(string category, string scope, IEnumerable<string?> parts)
+    {
+        var canonical = new StringBuilder();
+        AppendPart(canonical, category);
+        AppendPart(canonical, scope);
+        foreach (var part in parts)
+        {
+            AppendPart(canonical, part);
+        }
+
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
-    /// <summary>
-    /// Removes expired duplicate fingerprints to keep local memory bounded.
-    /// </summary>
-    /// <param name="now">Current UTC timestamp.</param>
-    private void Cleanup(DateTimeOffset now)
+    private static void AppendPart(StringBuilder canonical, string? value)
     {
-        foreach (var (key, expiresAt) in acceptedUntil.Where(entry => entry.Value <= now).Take(100))
+        if (value is null)
         {
-            acceptedUntil.TryRemove(key, out _);
+            canonical.Append("-1:");
+            return;
+        }
+
+        canonical.Append(value.Length).Append(':').Append(value);
+    }
+}
+
+internal static class SecurityStateValidation
+{
+    public static void Validate(string scope, IEnumerable<string?> parts, TimeSpan window)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scope);
+        ArgumentNullException.ThrowIfNull(parts);
+        if (window <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(window), window, "Security-state expiry must be positive.");
         }
     }
 }

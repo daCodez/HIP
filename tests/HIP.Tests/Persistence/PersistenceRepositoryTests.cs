@@ -1,4 +1,6 @@
 using HIP.Application.Reporting;
+using HIP.Application.Security;
+using HIP.Infrastructure.Security;
 using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
@@ -50,6 +52,7 @@ public sealed class PersistenceRepositoryTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:HipDatabase"] = "DataSource=hip-local.db",
+                ["ConnectionStrings:redis"] = "localhost:6379,abortConnect=false",
                 ["HipInfrastructure:DatabaseProvider"] = "FileDatabase"
             })
             .Build();
@@ -77,6 +80,7 @@ public sealed class PersistenceRepositoryTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:HipDatabase"] = "Host=localhost;Port=5432;Database=hip_tests;Username=hip;Password=hip",
+                ["ConnectionStrings:redis"] = "localhost:6379,abortConnect=false",
                 ["HipInfrastructure:DatabaseProvider"] = "PostgreSQL"
             })
             .Build();
@@ -84,6 +88,47 @@ public sealed class PersistenceRepositoryTests
         services.AddHipInfrastructure(configuration);
 
         Assert.That(services.Any(descriptor => descriptor.ServiceType == typeof(HipDbContext)), Is.True);
+    }
+
+    [Test]
+    public void Infrastructure_registration_rejects_missing_redis_security_state()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:HipDatabase"] = "Host=localhost;Database=hip_tests;Username=hip",
+                ["HipInfrastructure:DatabaseProvider"] = "PostgreSQL"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddHipInfrastructure(configuration));
+
+        Assert.That(exception!.Message, Does.Contain("ConnectionStrings:redis"));
+    }
+
+    [Test]
+    public void Infrastructure_registration_uses_redis_duplicate_and_nonce_adapters()
+    {
+        var services = new ServiceCollection();
+        var configuration = ProductionConfiguration(new Dictionary<string, string?>
+        {
+            ["HipSecurity:RecordEncryptionKey"] = "test-record-encryption-key-material-32",
+            ["HipSecurity:PrivacyHashingKey"] = "test-privacy-hashing-key-material-32"
+        });
+
+        services.AddHipInfrastructure(configuration, isLocalDevelopment: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                services.Single(descriptor => descriptor.ServiceType == typeof(IDuplicateSubmissionGuard)).ImplementationType,
+                Is.EqualTo(typeof(RedisDuplicateSubmissionGuard)));
+            Assert.That(
+                services.Single(descriptor => descriptor.ServiceType == typeof(IReplayNonceStore)).ImplementationType,
+                Is.EqualTo(typeof(RedisReplayNonceStore)));
+        });
     }
 
     /// <summary>
@@ -242,6 +287,7 @@ public sealed class PersistenceRepositoryTests
         var values = new Dictionary<string, string?>
         {
             ["ConnectionStrings:HipDatabase"] = "Host=localhost;Port=5432;Database=hip_tests;Username=hip;Password=hip",
+            ["ConnectionStrings:redis"] = "localhost:6379,abortConnect=false",
             ["HipInfrastructure:DatabaseProvider"] = "PostgreSQL"
         };
 

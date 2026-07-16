@@ -45,7 +45,7 @@ release.
 |---|---|---|---|
 | `HIP.Domain` | Complete for MVP foundation | Identity, reporting, reputation, review, risk, rules, safety, scoring, and self-healing domain types. | Protocol envelope, trust receipt, nonce, key-lifecycle, and device-registration domain models. |
 | `HIP.Application` | Partial | Services and contracts for all current MVP feature areas. Domain rules generally remain independent from hosting and persistence. | Production protocol, auth-client, durable-job, normalized-provider, and complete approval services. |
-| `HIP.Infrastructure` | Partial; Needs security review | EF repositories, PostgreSQL/SQLite selection, DNS resolver, generic encrypted record storage, scan aggregates, and runtime stores. | Migrations, production key management, Redis adapters, durable queues/outbox dispatch, normalized hot tables, and recovery procedures. |
+| `HIP.Infrastructure` | Partial; Needs security review | EF repositories, PostgreSQL persistence, initial migrations, validation-only startup, DNS resolution, encrypted records, scan aggregates, and Redis atomic duplicate/replay adapters. | Production key management, durable queues/outbox dispatch, normalized hot tables, and recovery procedures. |
 | `HIP.ApiService` | Partial | Versioned public, browser, domain-verification, provider-settings, and site-safety APIs. | Consolidate duplicated Web/API routes and add production protocol/client routes. |
 | `HIP.Web` | Partial; Needs security review | Blazor portals plus public, consumer, admin, identity, rules, review, reporting, reputation, Second Life, and AI APIs. | Production authentication, account isolation, complete approval UX, and removal of remaining MVP state. |
 | `HIP.SandboxWorker` | Partial; Needs security review; Needs tests | Worker project and Aspire registration exist; browser execution is disabled by default. | Durable jobs, leases, retries, dead letters, resource isolation, outbound network policy, and DNS-rebinding-safe SSRF controls. |
@@ -179,7 +179,7 @@ make any retained Web routes thin forwards or documented compatibility paths.
 | Key lifecycle | Missing; Needs security review | Rotation, retirement, expiry, compromise, revocation enforcement, and protected storage are incomplete. |
 | Canonical JSON | Missing | RFC 8785 canonicalization and fixtures are absent. |
 | HIP envelope | Missing | Versioned issuer, subject, claims, digest, signature, and expiry envelope is absent. |
-| Replay defense | Missing; Needs security review | No complete timestamp/nonce/message-ID/replay policy backed by distributed storage. |
+| Replay defense | Partial; Needs security review | Redis-backed atomic nonce storage exists; timestamp tolerance, message-ID policy, envelope integration, and complete failure policy remain HIP-0106 work. |
 | Trust receipts | Missing | No signed score/evidence/policy receipt or verification API. |
 | Device registration | Missing | No generated device identity, signed challenge, trust state, or revocation. |
 | API client credentials | Missing | No scoped service-client registration/authentication. |
@@ -289,7 +289,7 @@ reconciliation in the owning work package.
 | HIP-0002 Source-controlled local keys | Complete |
 | HIP-0003 Development authentication isolation | Complete |
 | HIP-0004 Database migration safety | Complete |
-| HIP-0005 Distributed duplicate and replay foundation | Missing |
+| HIP-0005 Distributed duplicate and replay foundation | Complete |
 | HIP-0006 Aspire patch upgrade | Missing verification |
 | HIP-0007 CI security baseline | Missing |
 | HIP-0101 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
@@ -328,19 +328,17 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-HIP-0005: add distributed duplicate and replay protection.
+HIP-0006: upgrade Aspire packages within the approved 13.4 line.
 
 Acceptance criteria:
 
-- Runtime duplicate-submission and nonce state uses Redis-backed adapters with
-  atomic create-if-absent and expiry semantics.
-- In-memory adapters remain available only for explicit isolated tests.
-- API and Web hosts fail closed or degrade through a documented safe policy
-  when distributed state is unavailable.
-- Concurrency tests prove duplicate and replay decisions are consistent across
-  service instances.
-- Expiry tests prove keys become reusable only after the configured safety
-  window.
+- All Aspire hosting, service-default, and Redis integration packages use the
+  latest approved 13.4 patch without mixed versions.
+- AppHost builds and discovers PostgreSQL, Redis, API, Web, and worker
+  resources with their existing references and waits.
+- Focused orchestration and observability tests pass.
+- The full solution build reports no package downgrade or compatibility
+  warnings introduced by the upgrade.
+- Package changes remain isolated from unrelated feature work.
 
-Rollback is a normal Git revert of the isolated HIP-0005 commit. The runtime
-must not silently fall back to process-local security state.
+Rollback is a normal Git revert of the isolated HIP-0006 dependency commit.

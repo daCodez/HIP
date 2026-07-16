@@ -8,8 +8,8 @@ HIP now has a local container foundation for running the API, Web/Admin UI, and 
 - `HIP.ApiService` and `HIP.Web` already expose `/alive` health endpoints through `MapDefaultEndpoints`.
 - No Dockerfiles or Docker Compose file existed before this foundation pass.
 - No worker service project exists yet, so queue consumption is intentionally documented as a future worker step.
-- `HIP.AppHost` declares Aspire-managed PostgreSQL and Redis resources for Visual Studio local development.
-- API/Web project runs now require a PostgreSQL `HipDatabase` connection string. Aspire injects it automatically; direct project runs must set `ConnectionStrings__HipDatabase`.
+- `HIP.AppHost` declares Aspire-managed PostgreSQL and Redis resources for Visual Studio local development. Redis now provides atomic duplicate-submission and replay-nonce state.
+- API/Web project runs now require PostgreSQL `HipDatabase` and Redis connection strings. Aspire injects both automatically; direct project runs must set `ConnectionStrings__HipDatabase` and `ConnectionStrings__redis`.
 
 ## Aspire Local Resources
 
@@ -28,12 +28,12 @@ PostgreSQL is the active EF Core provider for the API and Web/Admin app when lau
 `docker-compose.yml` defines:
 
 - `hip-postgres`: PostgreSQL container for production-like persistence work.
-- `hip-redis`: Redis container for future cache, dedupe, and distributed rate-limit work.
+- `hip-redis`: Redis container for atomic duplicate/replay state, output caching, and future distributed rate-limit work.
 - `hip-queue`: RabbitMQ container as the queue placeholder for future scan ingestion workers.
 - `hip-api`: HIP API service built from `src/HIP.ApiService/Dockerfile`.
 - `hip-web`: HIP Web/Admin service built from `src/HIP.Web/Dockerfile`.
 
-The Docker Compose API and Web containers use `hip-postgres` through `ConnectionStrings__HipDatabase` and `HipInfrastructure__DatabaseProvider=PostgreSQL`. They no longer mount SQLite data volumes.
+The Docker Compose runtime services use `hip-postgres` through `ConnectionStrings__HipDatabase` and Redis through `ConnectionStrings__redis`. They no longer mount SQLite data volumes. They also do not use process-local duplicate/replay state.
 
 ## Required Environment Variables
 
@@ -57,11 +57,12 @@ Do not commit `.env`. It is ignored by Git.
 
 ## Direct Project Runs
 
-Aspire is the preferred local entry point because it supplies the PostgreSQL connection string and starts dependencies. If you run `HIP.ApiService` or `HIP.Web` directly, set a PostgreSQL connection string first:
+Aspire is the preferred local entry point because it supplies PostgreSQL and Redis connection strings and starts dependencies. If you run `HIP.ApiService` or `HIP.Web` directly, set both connection strings first:
 
 ```powershell
 $env:ConnectionStrings__HipDatabase='Host=localhost;Port=5432;Database=hip;Username=hip;Password=<local-password>'
 $env:HipInfrastructure__DatabaseProvider='PostgreSQL'
+$env:ConnectionStrings__redis='localhost:6379,abortConnect=false'
 ```
 
 Use user secrets, environment variables, or your local shell profile for the password. Do not commit real database credentials.
@@ -135,7 +136,7 @@ The Compose stack does not wipe or replace Aspire configuration.
 
 ## Known MVP Limits
 
-- Redis is available in Aspire and Compose but not yet wired into cache, dedupe, or rate limiting.
+- Redis provides duplicate-submission and replay-nonce state plus optional output caching; distributed rate limiting and the remaining application caches are still pending.
 - RabbitMQ is available as the future queue service but no worker service consumes it yet.
 - Container image hardening is basic. Production should add non-root users, SBOM/provenance, vulnerability scanning, and stricter network policies.
 - API/Web containers currently run in Development mode for local testing.

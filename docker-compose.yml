@@ -58,6 +58,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__HipDatabase: Host=hip-postgres;Port=5432;Database=${HIP_POSTGRES_DB:?Set HIP_POSTGRES_DB in .env};Username=${HIP_POSTGRES_USER:?Set HIP_POSTGRES_USER in .env};Password=${HIP_POSTGRES_PASSWORD:?Set HIP_POSTGRES_PASSWORD in .env}
+      ConnectionStrings__redis: hip-redis:6379,abortConnect=false
       HipInfrastructure__DatabaseProvider: PostgreSQL
       HipSecurity__RecordEncryptionKey: ${HIP_RECORD_ENCRYPTION_KEY:?Set HIP_RECORD_ENCRYPTION_KEY in .env}
       HipSecurity__PrivacyHashingKey: ${HIP_PRIVACY_HASHING_KEY:?Set HIP_PRIVACY_HASHING_KEY in .env}
@@ -84,6 +85,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__HipDatabase: Host=hip-postgres;Port=5432;Database=${HIP_POSTGRES_DB:?Set HIP_POSTGRES_DB in .env};Username=${HIP_POSTGRES_USER:?Set HIP_POSTGRES_USER in .env};Password=${HIP_POSTGRES_PASSWORD:?Set HIP_POSTGRES_PASSWORD in .env}
+      ConnectionStrings__redis: hip-redis:6379,abortConnect=false
       HipInfrastructure__DatabaseProvider: PostgreSQL
       HipSecurity__RecordEncryptionKey: ${HIP_RECORD_ENCRYPTION_KEY:?Set HIP_RECORD_ENCRYPTION_KEY in .env}
       HipSecurity__PrivacyHashingKey: ${HIP_PRIVACY_HASHING_KEY:?Set HIP_PRIVACY_HASHING_KEY in .env}
@@ -106,6 +108,7 @@ services:
     environment:
       DOTNET_ENVIRONMENT: Development
       ConnectionStrings__HipDatabase: Host=hip-postgres;Port=5432;Database=${HIP_POSTGRES_DB:?Set HIP_POSTGRES_DB in .env};Username=${HIP_POSTGRES_USER:?Set HIP_POSTGRES_USER in .env};Password=${HIP_POSTGRES_PASSWORD:?Set HIP_POSTGRES_PASSWORD in .env}
+      ConnectionStrings__redis: hip-redis:6379,abortConnect=false
       HipInfrastructure__DatabaseProvider: PostgreSQL
       HipSecurity__RecordEncryptionKey: ${HIP_RECORD_ENCRYPTION_KEY:?Set HIP_RECORD_ENCRYPTION_KEY in .env}
       HipSecurity__PrivacyHashingKey: ${HIP_PRIVACY_HASHING_KEY:?Set HIP_PRIVACY_HASHING_KEY in .env}

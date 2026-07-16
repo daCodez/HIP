@@ -459,10 +459,10 @@ static async Task StoreWeightedFeedbackIfDomainAsync(
 /// Detects repeated public feedback submissions without storing raw feedback bodies as throttling keys.
 /// </summary>
 /// <param name="feedback">Submitted reputation feedback.</param>
-/// <param name="duplicateGuard">In-memory duplicate guard that hashes fingerprint parts internally.</param>
+/// <param name="duplicateGuard">Distributed duplicate guard that hashes fingerprint parts internally.</param>
 /// <returns>True when the same feedback was already accepted recently.</returns>
-static bool IsDuplicateFeedback(ReputationFeedbackRequest feedback, IDuplicateSubmissionGuard duplicateGuard) =>
-    !duplicateGuard.TryAccept(
+static async ValueTask<bool> IsDuplicateFeedbackAsync(ReputationFeedbackRequest feedback, IDuplicateSubmissionGuard duplicateGuard, CancellationToken cancellationToken) =>
+    !await duplicateGuard.TryAcceptAsync(
         "web-public-feedback",
         [
             feedback.TargetType.ToString(),
@@ -474,16 +474,16 @@ static bool IsDuplicateFeedback(ReputationFeedbackRequest feedback, IDuplicateSu
             feedback.UrlHash,
             feedback.Reason
         ],
-        TimeSpan.FromMinutes(5));
+        TimeSpan.FromMinutes(5), cancellationToken);
 
 /// <summary>
 /// Detects repeated privacy-safe report submissions before they enter the reporting service.
 /// </summary>
 /// <param name="report">Submitted report payload.</param>
-/// <param name="duplicateGuard">In-memory duplicate guard that hashes fingerprint parts internally.</param>
+/// <param name="duplicateGuard">Distributed duplicate guard that hashes fingerprint parts internally.</param>
 /// <returns>True when an equivalent report was already accepted recently.</returns>
-static bool IsDuplicatePrivacySafeReport(PrivacySafeReport report, IDuplicateSubmissionGuard duplicateGuard) =>
-    !duplicateGuard.TryAccept(
+static async ValueTask<bool> IsDuplicatePrivacySafeReportAsync(PrivacySafeReport report, IDuplicateSubmissionGuard duplicateGuard, CancellationToken cancellationToken) =>
+    !await duplicateGuard.TryAcceptAsync(
         "web-privacy-safe-report",
         [
             report.ReportType.ToString(),
@@ -498,16 +498,16 @@ static bool IsDuplicatePrivacySafeReport(PrivacySafeReport report, IDuplicateSub
             report.PrivacySafeEvidence.EvidenceType,
             report.PrivacySafeEvidence.Summary
         ],
-        TimeSpan.FromMinutes(5));
+        TimeSpan.FromMinutes(5), cancellationToken);
 
 /// <summary>
 /// Detects repeated risk finding submissions so public clients cannot spam the review queue with identical signals.
 /// </summary>
 /// <param name="report">Risk finding submitted by a HIP client.</param>
-/// <param name="duplicateGuard">In-memory duplicate guard that hashes fingerprint parts internally.</param>
+/// <param name="duplicateGuard">Distributed duplicate guard that hashes fingerprint parts internally.</param>
 /// <returns>True when an equivalent finding was already accepted recently.</returns>
-static bool IsDuplicateRiskFinding(RiskFindingReport report, IDuplicateSubmissionGuard duplicateGuard) =>
-    !duplicateGuard.TryAccept(
+static async ValueTask<bool> IsDuplicateRiskFindingAsync(RiskFindingReport report, IDuplicateSubmissionGuard duplicateGuard, CancellationToken cancellationToken) =>
+    !await duplicateGuard.TryAcceptAsync(
         "web-risk-finding",
         [
             report.SourceClient.ToString(),
@@ -521,16 +521,16 @@ static bool IsDuplicateRiskFinding(RiskFindingReport report, IDuplicateSubmissio
             report.PrivacySafeEvidence.EvidenceType,
             report.PrivacySafeEvidence.Summary
         ],
-        TimeSpan.FromMinutes(5));
+        TimeSpan.FromMinutes(5), cancellationToken);
 
 /// <summary>
 /// Detects replayed browser scan summaries while allowing fresh scans with new timestamps or URL hashes.
 /// </summary>
 /// <param name="request">Browser plugin scan result request.</param>
-/// <param name="duplicateGuard">In-memory duplicate guard that hashes fingerprint parts internally.</param>
+/// <param name="duplicateGuard">Distributed duplicate guard that hashes fingerprint parts internally.</param>
 /// <returns>True when an equivalent scan result was already accepted recently.</returns>
-static bool IsDuplicateBrowserScanResult(BrowserScanResultSaveRequest request, IDuplicateSubmissionGuard duplicateGuard) =>
-    !duplicateGuard.TryAccept(
+static async ValueTask<bool> IsDuplicateBrowserScanResultAsync(BrowserScanResultSaveRequest request, IDuplicateSubmissionGuard duplicateGuard, CancellationToken cancellationToken) =>
+    !await duplicateGuard.TryAcceptAsync(
         "web-browser-scan-result",
         [
             request.Domain,
@@ -546,19 +546,19 @@ static bool IsDuplicateBrowserScanResult(BrowserScanResultSaveRequest request, I
             request.ScannedAtUtc?.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
             request.PrivacySafeMetadata is null ? null : string.Join(';', request.PrivacySafeMetadata.OrderBy(pair => pair.Key).Select(pair => $"{pair.Key}={pair.Value}"))
         ],
-        TimeSpan.FromSeconds(30));
+        TimeSpan.FromSeconds(30), cancellationToken);
 
 /// <summary>
 /// Detects repeated Site Safety scan requests so public clients cannot rapidly replay the same signal payload.
 /// </summary>
 /// <param name="request">Site Safety scan request.</param>
-/// <param name="duplicateGuard">In-memory duplicate guard that hashes fingerprint parts internally.</param>
+/// <param name="duplicateGuard">Distributed duplicate guard that hashes fingerprint parts internally.</param>
 /// <returns>True when an equivalent scan request was already accepted recently.</returns>
-static bool IsDuplicateSiteSafetyScan(SiteSafetyScanRequest request, IDuplicateSubmissionGuard duplicateGuard) =>
-    !duplicateGuard.TryAccept(
+static async ValueTask<bool> IsDuplicateSiteSafetyScanAsync(SiteSafetyScanRequest request, IDuplicateSubmissionGuard duplicateGuard, CancellationToken cancellationToken) =>
+    !await duplicateGuard.TryAcceptAsync(
         "web-site-safety-scan",
         SiteSafetyFingerprintParts(request),
-        TimeSpan.FromSeconds(20));
+        TimeSpan.FromSeconds(20), cancellationToken);
 
 /// <summary>
 /// Builds a privacy-safe fingerprint from structured scan fields rather than raw page content.
@@ -724,7 +724,7 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
     {
         try
         {
-            if (IsDuplicateFeedback(feedback, duplicateGuard))
+            if (await IsDuplicateFeedbackAsync(feedback, duplicateGuard, cancellationToken))
             {
                 return Results.Conflict(new { error = "Duplicate feedback submission ignored." });
             }
@@ -754,7 +754,7 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
             ConsumerScopeHash = string.IsNullOrWhiteSpace(consumerId) ? null : privacyHashingService.Hash(consumerId)
         };
 
-        if (IsDuplicateRiskFinding(ownedReport, duplicateGuard))
+        if (await IsDuplicateRiskFindingAsync(ownedReport, duplicateGuard, cancellationToken))
         {
             return Results.Conflict(new { error = "Duplicate risk finding ignored." });
         }
@@ -774,7 +774,7 @@ static void MapReportApis(RouteGroupBuilder reportApi)
         IPrivacySafeReportService reportService,
         CancellationToken cancellationToken) =>
     {
-        if (IsDuplicatePrivacySafeReport(report, duplicateGuard))
+        if (await IsDuplicatePrivacySafeReportAsync(report, duplicateGuard, cancellationToken))
         {
             return Results.Conflict(new PrivacySafeReportResponse(false, null, report.Status, null, report.UrlHash, "Duplicate report ignored."));
         }
@@ -987,7 +987,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
     {
         try
         {
-            if (IsDuplicateBrowserScanResult(request, duplicateGuard))
+            if (await IsDuplicateBrowserScanResultAsync(request, duplicateGuard, cancellationToken))
             {
                 return Results.Conflict(new BrowserScanResultErrorResponse("Duplicate browser scan result ignored."));
             }
@@ -1067,7 +1067,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     {
         try
         {
-            if (IsDuplicateSiteSafetyScan(request, duplicateGuard))
+            if (await IsDuplicateSiteSafetyScanAsync(request, duplicateGuard, cancellationToken))
             {
                 return Results.Conflict(new { error = "Duplicate site safety scan ignored." });
             }

@@ -14,6 +14,8 @@ using HIP.Application.Simulation;
 using HIP.Infrastructure.Identity;
 using HIP.Infrastructure.Persistence;
 using HIP.Infrastructure.Persistence.Repositories;
+using HIP.Infrastructure.Security;
+using StackExchange.Redis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +39,8 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("HipDatabase")
             ?? throw new InvalidOperationException("HIP requires ConnectionStrings:HipDatabase. Run HIP.AppHost to use Aspire-managed PostgreSQL, or set ConnectionStrings__HipDatabase explicitly for direct project runs.");
         var databaseProvider = configuration["HipInfrastructure:DatabaseProvider"];
+        var redisConnectionString = configuration.GetConnectionString("redis")
+            ?? throw new InvalidOperationException("HIP requires ConnectionStrings:redis for distributed duplicate and replay protection.");
 
         services.AddDbContext<HipDbContext>(options => ConfigureDatabaseProvider(options, connectionString, databaseProvider));
         var recordEncryptionOptions = BindRecordEncryptionOptions(configuration, isLocalDevelopment);
@@ -71,7 +75,10 @@ public static class DependencyInjection
         services.AddScoped<IAdminReviewQueueRepository, EfAdminReviewQueueRepository>();
         services.AddScoped<IOutboxEventRepository, EfOutboxEventRepository>();
         services.AddScoped<IInboxEventRepository, EfInboxEventRepository>();
-        services.AddScoped<IDuplicateSubmissionGuard, EfDuplicateSubmissionGuard>();
+        services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
+        services.AddSingleton<IAtomicExpiryStore, RedisAtomicExpiryStore>();
+        services.AddSingleton<IDuplicateSubmissionGuard, RedisDuplicateSubmissionGuard>();
+        services.AddSingleton<IReplayNonceStore, RedisReplayNonceStore>();
         services.AddScoped<ISetupCodeLicenseService, EfSetupCodeLicenseService>();
         services.AddScoped<IExternalSiteEvidenceCache, EfExternalSiteEvidenceCache>();
         services.AddScoped<IExternalSiteEvidenceSettingsStore, EfExternalSiteEvidenceSettingsStore>();

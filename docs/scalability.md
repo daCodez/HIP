@@ -64,7 +64,7 @@ The application layer now includes:
 - `IOutboxEventRepository`
 - `IInboxEventRepository`
 
-The current cache, queue, dedupe, and aggregate implementations are in-memory development adapters. Production should replace them with Redis and a durable queue without changing scanner or dashboard callers.
+Duplicate-submission and replay-nonce state now uses Redis atomic create-if-absent keys with expiry. In-memory duplicate and nonce adapters are reserved for explicit isolated tests. Other cache, queue, and aggregate boundaries still need their dedicated production adapters.
 
 Scan writes and dashboard/public lookup reads should stay separated. `IBrowserScanResultWriteService` is the scan ingestion boundary. `IBrowserScanResultQueryService` is the read boundary for public lookup and dashboards, and can later point at Redis, PostgreSQL projections, or materialized views.
 
@@ -88,7 +88,7 @@ HIP now has explicit host-level performance controls for the public hot path:
 - `HipPerformance` options configure public lookup cache duration, badge cache duration, future safety/site-safety cache durations, and public request limits.
 - `HIP.ApiService` and `HIP.Web` both register ASP.NET Core output caching.
 - When Aspire injects a Redis connection string, both hosts use Aspire's Redis-backed output-cache integration.
-- Direct local project runs still work without Redis because the hosts fall back to the normal in-process output-cache store.
+- Output caching can still use the in-process store, but direct host runs require `ConnectionStrings:redis` because duplicate and replay security decisions must never fall back to process-local state.
 - Public domain lookup and live badge endpoints opt into named output-cache policies.
 - Public write-heavy endpoints use partitioned ASP.NET Core rate-limit policies keyed by the best available privacy-safe identifier: API key, HIP signer, HIP instance ID, domain, or client IP.
 - Response compression is enabled for JSON, badge scripts, and web assets to reduce bandwidth without changing stored or returned trust data.
@@ -141,7 +141,7 @@ Allowed scalability keys use hashes:
 
 ## Next Steps
 
-1. Replace in-memory scan cache and dedupe with Redis adapters.
+1. Replace the remaining scan-result and provider-evidence caches with Redis adapters.
 2. Add a durable queue adapter and worker project for slow-path provider checks.
 3. Add an outbox processor that dispatches scan/provider/review events with inbox idempotency.
 4. Persist provider evidence as first-class records for dashboard visibility.

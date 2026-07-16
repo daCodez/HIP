@@ -43,12 +43,14 @@ public sealed class HipWebApplicationFactory<TProgram> : WebApplicationFactory<T
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         var passwordHasher = new PasswordHasher<string>();
+        builder.UseSetting("ConnectionStrings:redis", "localhost:6379,abortConnect=false");
         builder.UseEnvironment("Development");
         builder.ConfigureAppConfiguration((_, configurationBuilder) =>
         {
             configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:HipDatabase"] = "Host=localhost;Port=5432;Database=hip_tests;Username=hip;Password=hip",
+                ["ConnectionStrings:redis"] = "localhost:6379,abortConnect=false",
                 ["HipInfrastructure:DatabaseProvider"] = "PostgreSQL",
                 ["HipSecurity:RecordEncryptionKey"] = "hip-test-record-key-32bytes-local",
                 ["HipSecurity:PrivacyHashingKey"] = "hip-test-privacy-key-32bytes-local",
@@ -61,6 +63,10 @@ public sealed class HipWebApplicationFactory<TProgram> : WebApplicationFactory<T
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<IStartupFilter>(new RemoteIpAddressStartupFilter(remoteIpAddress));
+            services.RemoveAll<IDuplicateSubmissionGuard>();
+            services.RemoveAll<IReplayNonceStore>();
+            services.AddSingleton<IDuplicateSubmissionGuard, InMemoryDuplicateSubmissionGuard>();
+            services.AddSingleton<IReplayNonceStore, InMemoryReplayNonceStore>();
             services.RemoveAll<IDbContextOptionsConfiguration<HipDbContext>>();
             services.RemoveAll<DbContextOptions<HipDbContext>>();
             services.RemoveAll<DbContextOptions>();
