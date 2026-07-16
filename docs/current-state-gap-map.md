@@ -290,7 +290,7 @@ reconciliation in the owning work package.
 | HIP-0003 Development authentication isolation | Complete |
 | HIP-0004 Database migration safety | Complete |
 | HIP-0005 Distributed duplicate and replay foundation | Complete |
-| HIP-0006 Aspire patch upgrade | Missing verification |
+| HIP-0006 Aspire patch upgrade | Complete |
 | HIP-0007 CI security baseline | Missing |
 | HIP-0101 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
 | HIP-0201 through HIP-0205 Identity and authorization | Missing or partial development foundations |
@@ -315,8 +315,8 @@ reconciliation in the owning work package.
    environment and loopback restrictions fail open.
 3. `EnsureCreated`-style production schema initialization can cause unsafe or
    unreviewed schema behavior.
-4. Process-local dedupe, rate limits, cache, and replay state fail under multiple
-   instances.
+4. Process-local rate limits and remaining cache state fail under multiple
+   instances; duplicate and replay state now uses Redis.
 5. Server-side URL/provider/sandbox work is an SSRF and resource-exhaustion
    boundary until resolution, connection, redirects, and egress are constrained.
 6. Development signatures prove only the development provider's origin and
@@ -328,17 +328,17 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-HIP-0006: upgrade Aspire packages within the approved 13.4 line.
+HIP-0007: add the CI security baseline.
 
 Acceptance criteria:
 
-- All Aspire hosting, service-default, and Redis integration packages use the
-  latest approved 13.4 patch without mixed versions.
-- AppHost builds and discovers PostgreSQL, Redis, API, Web, and worker
-  resources with their existing references and waits.
-- Focused orchestration and observability tests pass.
-- The full solution build reports no package downgrade or compatibility
-  warnings introduced by the upgrade.
-- Package changes remain isolated from unrelated feature work.
+- CI runs restore, build, the complete .NET test suite, browser-extension
+  checks, and architecture contract tests on every pull request.
+- Secret scanning covers committed content and blocks newly introduced secrets.
+- Direct and transitive dependency vulnerability checks fail on actionable
+  advisories without silently suppressing results.
+- Workflow permissions are least-privilege and third-party actions are pinned
+  to reviewed immutable versions.
+- The documented local verification commands match the CI quality gates.
 
-Rollback is a normal Git revert of the isolated HIP-0006 dependency commit.
+Rollback is a normal Git revert of the isolated HIP-0007 workflow commit.
