@@ -76,6 +76,21 @@ dotnet run --project src/HIP.Web/HIP.Web.csproj
 
 The Aspire AppHost is the primary local orchestration entry point.
 
+Before the first AppHost run, store independent local protection keys in the
+AppHost user-secrets store. Use values with at least 32 characters; do not copy
+the placeholders below as actual values:
+
+```powershell
+dotnet user-secrets set "Parameters:hip-record-encryption-key" "<generate-a-random-record-key>" --project src/HIP.AppHost/HIP.AppHost.csproj
+dotnet user-secrets set "Parameters:hip-privacy-hashing-key" "<generate-a-different-random-hashing-key>" --project src/HIP.AppHost/HIP.AppHost.csproj
+```
+
+For CI or deployed environments, supply the same Aspire parameter names through
+the environment or an approved secret store. API, Web, and worker processes
+receive them as `HipSecurity__RecordEncryptionKey` and
+`HipSecurity__PrivacyHashingKey`. HIP rejects missing, shared development,
+weak, or obvious placeholder values outside Development.
+
 ## Status
 
 HIP now has a local development runtime centered on Aspire:
