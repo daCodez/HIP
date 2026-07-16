@@ -65,11 +65,12 @@ Aspire starts:
 
 The browser extension should use those same base URLs.
 
-You can still run the API and Web projects separately, but direct project runs must provide PostgreSQL configuration because HIP no longer falls back to a local SQLite file:
+You can still run the API and Web projects separately, but direct project runs must provide PostgreSQL and Redis configuration. HIP no longer falls back to local database files or process-local duplicate/replay state:
 
 ```powershell
 $env:ConnectionStrings__HipDatabase='Host=localhost;Port=5432;Database=hip;Username=hip;Password=<local-password>'
 $env:HipInfrastructure__DatabaseProvider='PostgreSQL'
+$env:ConnectionStrings__redis='localhost:6379,abortConnect=false'
 dotnet run --project src/HIP.ApiService/HIP.ApiService.csproj
 dotnet run --project src/HIP.Web/HIP.Web.csproj
 ```
@@ -100,4 +101,4 @@ HIP now has a local development runtime centered on Aspire:
 - PostgreSQL is the normal runtime database, while SQLite and in-memory stores are reserved for explicit tests;
 - admin/dashboard pages should show live data or clear no-data/not-connected states instead of fake activity.
 
-This is still an MVP foundation, not production-ready. Production auth, durable worker queues, Redis-backed app caches/dedupe/rate-limit adapters, normalized hot tables, and external-provider slow-path workers remain future hardening work.
+This is still an MVP foundation, not production-ready. Production auth, durable worker queues, remaining Redis-backed cache/rate-limit adapters, normalized hot tables, and external-provider slow-path workers remain future hardening work.
