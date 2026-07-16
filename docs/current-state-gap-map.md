@@ -49,7 +49,7 @@ release.
 | `HIP.ApiService` | Partial | Versioned public, browser, domain-verification, provider-settings, and site-safety APIs. | Consolidate duplicated Web/API routes and add production protocol/client routes. |
 | `HIP.Web` | Partial; Needs security review | Blazor portals plus public, consumer, admin, identity, rules, review, reporting, reputation, Second Life, and AI APIs. | Production authentication, account isolation, complete approval UX, and removal of remaining MVP state. |
 | `HIP.SandboxWorker` | Partial; Needs security review; Needs tests | Worker project and Aspire registration exist; browser execution is disabled by default. | Durable jobs, leases, retries, dead letters, resource isolation, outbound network policy, and DNS-rebinding-safe SSRF controls. |
-| `HIP.AppHost` | Partial; Needs security review | Orchestrates API, Web, PostgreSQL, Redis, CoreDNS, and sandbox resources. | Remove source-controlled local keys, validate secrets, and complete approved Aspire patch upgrade. |
+| `HIP.AppHost` | Partial; Needs security review | Orchestrates API, Web, PostgreSQL, Redis, CoreDNS, sandbox resources, and secret persistence-protection parameters. | Production secret-store operations and remaining orchestration hardening. |
 | `HIP.ServiceDefaults` | Partial | Health, resilience, service discovery, OpenTelemetry, and common hosting defaults. | Domain metrics/spans, production export/retention policy, and alert definitions. |
 | `HIP.Tests` | Partial | Broad unit and integration coverage across current feature areas. | Restore full green suite, add complete authorization matrix, migrations, Redis, protocol, sandbox, load, restore, and real-browser coverage. |
 
@@ -237,16 +237,17 @@ Production blockers:
 
 ## Hard-Coded Keys, Secrets, and Unsafe Defaults
 
-Status: `Partial; Needs security review`.
+Status: `Complete for HIP-0002; production secret operations still need deployment review`.
 
-The AppHost and local configuration must be audited and changed so encryption
-and hashing key material comes from user secrets or environment configuration.
-Unsafe development defaults must be rejected outside Development. No production
-secret or private key may be committed, logged, included in test fixtures, or
-returned through an API.
+AppHost now obtains independent record-encryption and privacy-hashing values
+from secret Aspire parameters rather than source-controlled literals.
+Infrastructure registration immediately rejects missing, built-in development,
+weak, placeholder, reused, or unsafe legacy key material outside Development.
+No configured value is logged or returned through an API.
 
-This is the next dependency because persistence, signing, authentication, and
-production deployment cannot be trusted until secret configuration fails safe.
+Production environments still need an approved managed secret store, rotation
+procedure, access policy, and recovery process as part of deployment and key
+lifecycle work.
 
 ## Tests and Major Untested Paths
 
@@ -285,7 +286,7 @@ reconciliation in the owning work package.
 | Backlog package | Status |
 |---|---|
 | HIP-0001 Repository truth and gap map | Complete with this document |
-| HIP-0002 Source-controlled local keys | Missing; next |
+| HIP-0002 Source-controlled local keys | Complete |
 | HIP-0003 Development authentication isolation | Partial; Needs security review/tests |
 | HIP-0004 Database migration safety | Missing |
 | HIP-0005 Distributed duplicate and replay foundation | Missing |
@@ -327,20 +328,20 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-HIP-0002: remove source-controlled local encryption and hashing keys.
+HIP-0003: lock down development authentication.
 
 Acceptance criteria:
 
-- AppHost contains no literal encryption or hashing key material.
-- Development obtains required key material from user secrets or environment
-  configuration using documented names.
-- API and Web receive the values through Aspire without exposing them in logs.
-- Non-Development startup rejects missing, placeholder, or unsafe key material.
-- Tests prove safe Development behavior and fail-closed non-Development
-  behavior.
-- Documentation explains local setup without publishing real secrets.
-- The focused security tests and solution build pass before commit and push.
+- Development authentication can activate only when the host environment is
+  Development and the request is loopback.
+- Forwarded headers or spoofed host values cannot turn a remote request into a
+  trusted local request.
+- Every development-login and development-header entry point fails closed when
+  either condition is absent.
+- Focused authorization regression tests cover API, Blazor, and privileged
+  route behavior.
+- Documentation clearly distinguishes development access from production
+  authentication.
 
-Rollback is a normal Git revert of the isolated HIP-0002 commit. Operators must
-restore the prior secret configuration only in local Development; no production
-environment should depend on repository defaults.
+Rollback is a normal Git revert of the isolated HIP-0003 commit. Production
+configuration must never depend on development authentication.

@@ -41,7 +41,19 @@ The first storage implementation uses a JSON-backed `hip_records` table keyed by
 
 HIP protects generic record payloads before writing them to the `Json` column. The current development implementation stores an encrypted envelope using AES-256-GCM with a configured `HipSecurity:RecordEncryptionKey`.
 
-Development defaults are intentionally marked as development-only. Outside local Development, startup refuses the shared default key so production deployments must provide real secret material through configuration or a secret store.
+Development fallback constants remain inside the low-level services for isolated tests and explicit direct Development runs. The Aspire AppHost does not embed or pass those values. Configure its secret parameters before first use:
+
+```powershell
+dotnet user-secrets set "Parameters:hip-record-encryption-key" "<generate-a-random-record-key>" --project src/HIP.AppHost/HIP.AppHost.csproj
+dotnet user-secrets set "Parameters:hip-privacy-hashing-key" "<generate-a-different-random-hashing-key>" --project src/HIP.AppHost/HIP.AppHost.csproj
+```
+
+The values must be independent and at least 32 characters. Outside local
+Development, infrastructure registration immediately rejects missing values,
+the built-in development values, weak values, and obvious placeholders before
+the host begins handling requests. Deployed hosts should obtain secrets from
+their platform secret store and expose them as
+`HipSecurity__RecordEncryptionKey` and `HipSecurity__PrivacyHashingKey`.
 
 Existing plaintext development rows remain readable so local data created before this hardening patch can still be migrated or inspected. New writes use the encrypted envelope.
 

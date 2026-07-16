@@ -39,8 +39,11 @@ public static class DependencyInjection
         var databaseProvider = configuration["HipInfrastructure:DatabaseProvider"];
 
         services.AddDbContext<HipDbContext>(options => ConfigureDatabaseProvider(options, connectionString, databaseProvider));
-        services.AddSingleton(BindRecordEncryptionOptions(configuration, isLocalDevelopment));
-        services.AddSingleton(BindPrivacyHashingOptions(configuration, isLocalDevelopment));
+        var recordEncryptionOptions = BindRecordEncryptionOptions(configuration, isLocalDevelopment);
+        var privacyHashingOptions = BindPrivacyHashingOptions(configuration, isLocalDevelopment);
+        ValidateSecurityKeySeparation(recordEncryptionOptions, privacyHashingOptions, isLocalDevelopment);
+        services.AddSingleton(recordEncryptionOptions);
+        services.AddSingleton(privacyHashingOptions);
         services.AddSingleton<IHipRecordEncryptor, DevelopmentHipRecordEncryptor>();
         services.AddScoped<HipRecordStore>();
         services.AddOptions<DnsVerificationOptions>()
@@ -123,11 +126,19 @@ public static class DependencyInjection
     /// <param name="configuration">Application configuration.</param>
     /// <param name="isLocalDevelopment">Whether the host is a local Development process.</param>
     /// <returns>Record encryption options.</returns>
-    private static HipRecordEncryptionOptions BindRecordEncryptionOptions(IConfiguration configuration, bool isLocalDevelopment) =>
-        new(
-            configuration["HipSecurity:RecordEncryptionKey"] ?? DevelopmentHipRecordEncryptor.DevelopmentOnlyKey,
+    private static HipRecordEncryptionOptions BindRecordEncryptionOptions(IConfiguration configuration, bool isLocalDevelopment)
+    {
+        var key = ResolveSecurityKey(
+            configuration,
+            "HipSecurity:RecordEncryptionKey",
+            DevelopmentHipRecordEncryptor.DevelopmentOnlyKey,
+            isLocalDevelopment);
+
+        return new(
+            key,
             AllowDevelopmentKey: isLocalDevelopment,
             LegacyKeys: BindLegacyRecordEncryptionKeys(configuration, isLocalDevelopment));
+    }
 
     /// <summary>
     /// Binds legacy record encryption keys that may read older local rows after a development key rotation.
@@ -142,10 +153,22 @@ public static class DependencyInjection
             .Get<string[]>() ?? [];
         if (!isLocalDevelopment)
         {
+            foreach (var legacyKey in configured)
+            {
+                EnsureProductionSecurityKey(
+                    legacyKey,
+                    "HipSecurity:LegacyRecordEncryptionKeys",
+                    DevelopmentHipRecordEncryptor.DevelopmentOnlyKey);
+            }
+
             return configured;
         }
 
-        var currentKey = configuration["HipSecurity:RecordEncryptionKey"] ?? DevelopmentHipRecordEncryptor.DevelopmentOnlyKey;
+        var currentKey = ResolveSecurityKey(
+            configuration,
+            "HipSecurity:RecordEncryptionKey",
+            DevelopmentHipRecordEncryptor.DevelopmentOnlyKey,
+            isLocalDevelopment);
         return configured
             .Append(DevelopmentHipRecordEncryptor.DevelopmentOnlyKey)
             .Where(key => !string.IsNullOrWhiteSpace(key))
@@ -162,8 +185,80 @@ public static class DependencyInjection
     /// <returns>Privacy hashing options.</returns>
     private static PrivacyHashingOptions BindPrivacyHashingOptions(IConfiguration configuration, bool isLocalDevelopment) =>
         new(
-            configuration["HipSecurity:PrivacyHashingKey"] ?? Sha256PrivacyHashingService.DevelopmentOnlyKey,
+            ResolveSecurityKey(
+                configuration,
+                "HipSecurity:PrivacyHashingKey",
+                Sha256PrivacyHashingService.DevelopmentOnlyKey,
+                isLocalDevelopment),
             AllowDevelopmentKey: isLocalDevelopment);
+
+    /// <summary>
+    /// Resolves one security key and rejects missing, shared, weak, or placeholder material outside Development.
+    /// </summary>
+    /// <param name="configuration">Application configuration.</param>
+    /// <param name="settingName">Configuration path used in safe error messages.</param>
+    /// <param name="developmentKey">Built-in key permitted only for explicit local Development.</param>
+    /// <param name="isLocalDevelopment">Whether the host is an explicit local Development process.</param>
+    /// <returns>The configured key, or the built-in fallback only in local Development.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when production key material is unsafe.</exception>
+    private static string ResolveSecurityKey(
+        IConfiguration configuration,
+        string settingName,
+        string developmentKey,
+        bool isLocalDevelopment)
+    {
+        var configuredKey = configuration[settingName];
+        if (isLocalDevelopment)
+        {
+            return configuredKey ?? developmentKey;
+        }
+
+        EnsureProductionSecurityKey(configuredKey, settingName, developmentKey);
+        return configuredKey!;
+    }
+
+    /// <summary>
+    /// Rejects unsafe production secret material without exposing the configured value.
+    /// </summary>
+    /// <param name="configuredKey">Secret value to validate.</param>
+    /// <param name="settingName">Configuration path used in safe error messages.</param>
+    /// <param name="developmentKey">Built-in value that is never valid in production.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the value is missing, weak, shared, or a placeholder.</exception>
+    private static void EnsureProductionSecurityKey(
+        string? configuredKey,
+        string settingName,
+        string developmentKey)
+    {
+        if (string.IsNullOrWhiteSpace(configuredKey)
+            || configuredKey.Length < 32
+            || string.Equals(configuredKey, developmentKey, StringComparison.Ordinal)
+            || configuredKey.Contains("CHANGE-BEFORE-PRODUCTION", StringComparison.OrdinalIgnoreCase)
+            || configuredKey.Contains("placeholder", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"{settingName} must contain at least 32 characters of non-placeholder secret material outside local Development.");
+        }
+    }
+
+    /// <summary>
+    /// Prevents one production secret from being reused across encryption and privacy hashing.
+    /// </summary>
+    /// <param name="recordEncryptionOptions">Validated record-encryption options.</param>
+    /// <param name="privacyHashingOptions">Validated privacy-hashing options.</param>
+    /// <param name="isLocalDevelopment">Whether the host is an explicit local Development process.</param>
+    /// <exception cref="InvalidOperationException">Thrown when production key separation is violated.</exception>
+    private static void ValidateSecurityKeySeparation(
+        HipRecordEncryptionOptions recordEncryptionOptions,
+        PrivacyHashingOptions privacyHashingOptions,
+        bool isLocalDevelopment)
+    {
+        if (!isLocalDevelopment
+            && string.Equals(recordEncryptionOptions.Key, privacyHashingOptions.SecretKey, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "HipSecurity:RecordEncryptionKey and HipSecurity:PrivacyHashingKey must be different outside local Development.");
+        }
+    }
 
     /// <summary>
     /// Validates DNS lookup settings before HIP starts so bad resolver configuration fails clearly.

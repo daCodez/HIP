@@ -41,6 +41,27 @@ public sealed class AspireAppHostFoundationTests
     }
 
     /// <summary>
+    /// Confirms AppHost treats persistence protection material as secret parameters instead of source-controlled values.
+    /// </summary>
+    [Test]
+    public void AppHost_uses_secret_parameters_for_persistence_protection_keys()
+    {
+        var source = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.AppHost", "Program.cs"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("AddParameter(\"hip-record-encryption-key\", secret: true)"));
+            Assert.That(source, Does.Contain("AddParameter(\"hip-privacy-hashing-key\", secret: true)"));
+            Assert.That(source, Does.Contain(".WithEnvironment(\"HipSecurity__RecordEncryptionKey\", recordEncryptionKey)"));
+            Assert.That(source, Does.Contain(".WithEnvironment(\"HipSecurity__PrivacyHashingKey\", privacyHashingKey)"));
+            Assert.That(source, Does.Not.Contain("LocalRecordEncryptionKey"));
+            Assert.That(source, Does.Not.Contain("LocalPrivacyHashingKey"));
+            Assert.That(source, Does.Not.Contain("hip-local-dev-record-key"));
+            Assert.That(source, Does.Not.Contain("hip-local-dev-privacy-key"));
+        });
+    }
+
+    /// <summary>
     /// Confirms HIP runtime services require PostgreSQL and do not keep a file-based database fallback.
     /// </summary>
     [Test]

@@ -4,11 +4,11 @@ var builder = DistributedApplication.CreateBuilder(args);
 // launch profiles keep the dashboard URLs stable for the browser plugin and
 // local manual testing while avoiding HTTPS-port inference noise.
 //
-// These keys are intentionally local-only non-default values. They keep the
-// infrastructure production guard active while allowing Aspire-launched local
-// services, including workers without launch profiles, to start consistently.
-const string LocalRecordEncryptionKey = "hip-local-dev-record-key-32bytes!";
-const string LocalPrivacyHashingKey = "hip-local-dev-privacy-key-32bytes";
+// Secret parameters are resolved from AppHost user secrets, environment variables,
+// or deployment configuration. Aspire marks them secret so their values are not
+// published in the application manifest or written to logs.
+var recordEncryptionKey = builder.AddParameter("hip-record-encryption-key", secret: true);
+var privacyHashingKey = builder.AddParameter("hip-privacy-hashing-key", secret: true);
 var enableCoreDns = !string.Equals(builder.Configuration["HIP_ASPIRE_ENABLE_COREDNS"], "false", StringComparison.OrdinalIgnoreCase);
 var coreDnsDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "eng", "coredns"));
 var coreDns = enableCoreDns
@@ -39,8 +39,8 @@ var apiService = builder.AddProject<Projects.HIP_ApiService>("hip-api", launchPr
     .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
     .WithEnvironment("HipInfrastructure__DatabaseProvider", "PostgreSQL")
-    .WithEnvironment("HipSecurity__RecordEncryptionKey", LocalRecordEncryptionKey)
-    .WithEnvironment("HipSecurity__PrivacyHashingKey", LocalPrivacyHashingKey);
+    .WithEnvironment("HipSecurity__RecordEncryptionKey", recordEncryptionKey)
+    .WithEnvironment("HipSecurity__PrivacyHashingKey", privacyHashingKey);
 
 if (coreDns is not null)
 {
@@ -64,8 +64,8 @@ builder.AddProject<Projects.HIP_Web>("hip-web", launchProfileName: "http")
     .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
     .WithEnvironment("HipInfrastructure__DatabaseProvider", "PostgreSQL")
-    .WithEnvironment("HipSecurity__RecordEncryptionKey", LocalRecordEncryptionKey)
-    .WithEnvironment("HipSecurity__PrivacyHashingKey", LocalPrivacyHashingKey);
+    .WithEnvironment("HipSecurity__RecordEncryptionKey", recordEncryptionKey)
+    .WithEnvironment("HipSecurity__PrivacyHashingKey", privacyHashingKey);
 
 builder.AddProject<Projects.HIP_SandboxWorker>("hip-sandbox-worker")
     .WithReference(hipDatabase)
@@ -74,8 +74,8 @@ builder.AddProject<Projects.HIP_SandboxWorker>("hip-sandbox-worker")
     .WaitFor(redis)
     .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
     .WithEnvironment("HipInfrastructure__DatabaseProvider", "PostgreSQL")
-    .WithEnvironment("HipSecurity__RecordEncryptionKey", LocalRecordEncryptionKey)
-    .WithEnvironment("HipSecurity__PrivacyHashingKey", LocalPrivacyHashingKey)
+    .WithEnvironment("HipSecurity__RecordEncryptionKey", recordEncryptionKey)
+    .WithEnvironment("HipSecurity__PrivacyHashingKey", privacyHashingKey)
     // The worker is registered now so Aspire starts it with the rest of HIP.
     // Browser execution stays disabled until the hardened runner exists.
     .WithEnvironment("SandboxWorker__ExecuteBrowserSandbox", "false");

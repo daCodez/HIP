@@ -1,3 +1,4 @@
+using HIP.Application.Reporting;
 using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
@@ -86,6 +87,117 @@ public sealed class PersistenceRepositoryTests
     }
 
     /// <summary>
+    /// Confirms production registration rejects missing persistence protection keys immediately at startup.
+    /// </summary>
+    [Test]
+    public void Infrastructure_registration_rejects_missing_production_security_keys()
+    {
+        var services = new ServiceCollection();
+        var configuration = ProductionConfiguration();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddHipInfrastructure(configuration, isLocalDevelopment: false));
+
+        Assert.That(exception!.Message, Does.Contain("HipSecurity:RecordEncryptionKey"));
+    }
+
+    /// <summary>
+    /// Confirms production registration rejects built-in development keys before services begin handling requests.
+    /// </summary>
+    [Test]
+    public void Infrastructure_registration_rejects_development_keys_in_production()
+    {
+        var services = new ServiceCollection();
+        var configuration = ProductionConfiguration(new Dictionary<string, string?>
+        {
+            ["HipSecurity:RecordEncryptionKey"] = DevelopmentHipRecordEncryptor.DevelopmentOnlyKey,
+            ["HipSecurity:PrivacyHashingKey"] = Sha256PrivacyHashingService.DevelopmentOnlyKey
+        });
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddHipInfrastructure(configuration, isLocalDevelopment: false));
+
+        Assert.That(exception!.Message, Does.Contain("HipSecurity:RecordEncryptionKey"));
+    }
+
+    /// <summary>
+    /// Confirms production registration rejects weak or obvious placeholder security material.
+    /// </summary>
+    [TestCase("short-key", "valid-privacy-hashing-key-material-32")]
+    [TestCase("CHANGE-BEFORE-PRODUCTION-record-key", "valid-privacy-hashing-key-material-32")]
+    [TestCase("valid-record-encryption-key-material-32", "placeholder-privacy-hashing-key")]
+    public void Infrastructure_registration_rejects_unsafe_production_security_keys(
+        string recordEncryptionKey,
+        string privacyHashingKey)
+    {
+        var services = new ServiceCollection();
+        var configuration = ProductionConfiguration(new Dictionary<string, string?>
+        {
+            ["HipSecurity:RecordEncryptionKey"] = recordEncryptionKey,
+            ["HipSecurity:PrivacyHashingKey"] = privacyHashingKey
+        });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            services.AddHipInfrastructure(configuration, isLocalDevelopment: false));
+    }
+
+    /// <summary>
+    /// Confirms production registration rejects unsafe legacy decryption keys immediately.
+    /// </summary>
+    [Test]
+    public void Infrastructure_registration_rejects_unsafe_legacy_keys_in_production()
+    {
+        var services = new ServiceCollection();
+        var configuration = ProductionConfiguration(new Dictionary<string, string?>
+        {
+            ["HipSecurity:RecordEncryptionKey"] = "test-record-encryption-key-material-32",
+            ["HipSecurity:PrivacyHashingKey"] = "test-privacy-hashing-key-material-32",
+            ["HipSecurity:LegacyRecordEncryptionKeys:0"] = DevelopmentHipRecordEncryptor.DevelopmentOnlyKey
+        });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            services.AddHipInfrastructure(configuration, isLocalDevelopment: false));
+    }
+
+    /// <summary>
+    /// Confirms production registration rejects reuse of one secret across encryption and privacy hashing.
+    /// </summary>
+    [Test]
+    public void Infrastructure_registration_rejects_reused_production_security_keys()
+    {
+        const string reusedKey = "test-reused-security-key-material-32";
+        var services = new ServiceCollection();
+        var configuration = ProductionConfiguration(new Dictionary<string, string?>
+        {
+            ["HipSecurity:RecordEncryptionKey"] = reusedKey,
+            ["HipSecurity:PrivacyHashingKey"] = reusedKey
+        });
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddHipInfrastructure(configuration, isLocalDevelopment: false));
+
+        Assert.That(exception!.Message, Does.Contain("must be different"));
+    }
+
+    /// <summary>
+    /// Confirms production registration accepts independently configured strong key material.
+    /// </summary>
+    [Test]
+    public void Infrastructure_registration_accepts_strong_production_security_keys()
+    {
+        var services = new ServiceCollection();
+        var configuration = ProductionConfiguration(new Dictionary<string, string?>
+        {
+            ["HipSecurity:RecordEncryptionKey"] = "test-record-encryption-key-material-32",
+            ["HipSecurity:PrivacyHashingKey"] = "test-privacy-hashing-key-material-32"
+        });
+
+        services.AddHipInfrastructure(configuration, isLocalDevelopment: false);
+
+        Assert.That(services.Any(descriptor => descriptor.ServiceType == typeof(IHipRecordEncryptor)), Is.True);
+    }
+
+    /// <summary>
     /// Confirms source files no longer contain removed file-based provider runtime paths.
     /// </summary>
     [Test]
@@ -119,6 +231,27 @@ public sealed class PersistenceRepositoryTests
     /// <returns>Removed EF provider package name.</returns>
     private static string RemovedProcessLocalProviderPackage() =>
         "Microsoft.EntityFrameworkCore." + "In" + "Memory";
+
+    /// <summary>
+    /// Creates production-like PostgreSQL configuration with optional security overrides.
+    /// </summary>
+    /// <param name="overrides">Optional security configuration values.</param>
+    /// <returns>Configuration used to exercise fail-closed startup validation.</returns>
+    private static IConfiguration ProductionConfiguration(IReadOnlyDictionary<string, string?>? overrides = null)
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:HipDatabase"] = "Host=localhost;Port=5432;Database=hip_tests;Username=hip;Password=hip",
+            ["HipInfrastructure:DatabaseProvider"] = "PostgreSQL"
+        };
+
+        foreach (var pair in overrides ?? new Dictionary<string, string?>())
+        {
+            values[pair.Key] = pair.Value;
+        }
+
+        return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+    }
 
     /// <summary>
     /// Resolves the repository root from the test output folder.
