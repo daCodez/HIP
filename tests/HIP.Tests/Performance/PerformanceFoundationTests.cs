@@ -105,6 +105,21 @@ public sealed class PerformanceFoundationTests
     }
 
     /// <summary>
+    /// Confirms hosted tests never contact an external Redis cache just because startup validation needs a placeholder connection string.
+    /// </summary>
+    [Test]
+    public void Hosted_test_factory_disables_redis_output_cache()
+    {
+        var factory = File.ReadAllText(Path.Combine(RepositoryRoot(), "tests", "HIP.Tests", "HipWebApplicationFactory.cs"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(factory, Does.Contain("UseSetting(\"HipPerformance:UseRedisOutputCacheWhenAvailable\", \"false\")"));
+            Assert.That(factory, Does.Contain("[\"HipPerformance:UseRedisOutputCacheWhenAvailable\"] = \"false\""));
+        });
+    }
+
+    /// <summary>
     /// Resolves the repository root from the test output folder.
     /// </summary>
     /// <returns>Absolute repository root path.</returns>

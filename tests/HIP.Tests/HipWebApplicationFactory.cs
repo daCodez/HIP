@@ -43,7 +43,9 @@ public sealed class HipWebApplicationFactory<TProgram> : WebApplicationFactory<T
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         var passwordHasher = new PasswordHasher<string>();
+        // The placeholder Redis string satisfies fail-closed startup validation; tests must not contact an external cache.
         builder.UseSetting("ConnectionStrings:redis", "localhost:6379,abortConnect=false");
+        builder.UseSetting("HipPerformance:UseRedisOutputCacheWhenAvailable", "false");
         builder.UseEnvironment("Development");
         builder.ConfigureAppConfiguration((_, configurationBuilder) =>
         {
@@ -51,6 +53,7 @@ public sealed class HipWebApplicationFactory<TProgram> : WebApplicationFactory<T
             {
                 ["ConnectionStrings:HipDatabase"] = "Host=localhost;Port=5432;Database=hip_tests;Username=hip;Password=hip",
                 ["ConnectionStrings:redis"] = "localhost:6379,abortConnect=false",
+                ["HipPerformance:UseRedisOutputCacheWhenAvailable"] = "false",
                 ["HipInfrastructure:DatabaseProvider"] = "PostgreSQL",
                 ["HipSecurity:RecordEncryptionKey"] = "hip-test-record-key-32bytes-local",
                 ["HipSecurity:PrivacyHashingKey"] = "hip-test-privacy-key-32bytes-local",
