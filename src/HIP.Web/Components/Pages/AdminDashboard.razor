@@ -6,7 +6,7 @@
 
 <PageTitle>HIP Admin Overview</PageTitle>
 <main class="admin-rule-page hip-dashboard overview-command">
- <header class="admin-rule-header"><div><p class="eyebrow">HIP Admin · dashboard</p><h1>Overview</h1><p>Monitor identity signals, investigate risk, and keep HIP healthy.</p></div><button class="primary-button" @onclick="LoadAsync" disabled="@_loading">@(_loading?"Refreshing…":"Refresh")</button></header>
+ <header class="admin-rule-header"><div><p class="eyebrow">HIP Admin · dashboard</p><h1>Overview</h1><p>Monitor identity signals, investigate risk, and keep HIP healthy.</p><small>@HipWebBuildInfo.DashboardDisplayVersion</small></div><button class="primary-button" @onclick="LoadAsync" disabled="@_loading">@(_loading?"Refreshing…":"Refresh")</button></header>
  @if(_error is not null){<div class="overview-state danger" role="alert"><b>Overview unavailable</b><span>@_error</span></div>}
  else if(_summary is null){<div class="overview-state" aria-busy="true">Loading HIP security signals…</div>}
  else {
@@ -22,6 +22,18 @@
     else {<div class="spark-bars" role="img" aria-label="Scan risk activity by result"><i class="safe" style="--h:@Percent(SafeCount)"><span>Safe @SafeCount</span></i><i class="caution" style="--h:@Percent(CautionCount)"><span>Caution @CautionCount</span></i><i class="risk" style="--h:@Percent(HighRiskCount)"><span>High risk @HighRiskCount</span></i><i class="critical" style="--h:@Percent(CriticalCount)"><span>Critical @CriticalCount</span></i></div>}
    </article>
    <article class="overview-panel risk-breakdown"><p class="kicker">Current distribution</p><h2>Risk breakdown</h2><div class="donut" style="--safe:@SafePercent;--caution:@CautionPercent;--risk:@RiskPercent"><div><strong>@RangeScans.Count</strong><span>scans</span></div></div><ul><li>Safe <b>@SafeCount</b></li><li>Caution <b>@CautionCount</b></li><li>High risk <b>@HighRiskCount</b></li><li>Critical <b>@CriticalCount</b></li></ul></article>
+  </section>
+  <section class="overview-panel" aria-labelledby="recent-scans-heading">
+   <header><div><p class="kicker">Stored evidence</p><h2 id="recent-scans-heading">Recent Scans</h2></div><a href="/admin/scans">View all</a></header>
+   @if(_summary.RecentScans.Count==0){@Empty("No scans yet.","Scan history not connected yet. Run the browser extension to submit a privacy-safe scan summary.")}
+   else {
+    <div class="hip-table-wrap">
+     <table class="hip-data-table">
+      <thead><tr><th>Domain</th><th>Status</th><th>Domain Trust</th><th>Page Trust</th><th>Content Risk</th><th>Final Score</th><th>Confidence</th><th>Last checked</th></tr></thead>
+      <tbody>@foreach(var scan in _summary.RecentScans.Take(10)){<tr><td><a href="@ScanLink(scan)">@scan.Domain</a></td><td>@scan.Status</td><td>@Score(scan.DomainTrustScore)</td><td>@Score(scan.PageTrustScore)</td><td>@Score(scan.ContentRiskScore)</td><td><strong>@scan.Score</strong></td><td>@scan.ConfidenceLevel</td><td>@Relative(scan.LastCheckedUtc)</td></tr>}</tbody>
+     </table>
+    </div>
+   }
   </section>
   <section class="overview-grid three">
    <article class="overview-panel"><header><div><p class="kicker">Priority response</p><h2>Recent threats</h2></div><a href="/admin/review">Review all</a></header>@if(_summary.RecentThreats.Count==0){@Empty("No active threats","No high-risk evidence is present in connected data.")}else{@foreach(var t in _summary.RecentThreats.Take(4)){<a class="threat-card" href="@ThreatLink(t)"><span class="risk-dot"></span><div><b>@t.Domain</b><small>@t.ReasonSummary</small><em>@t.Severity · @t.Source · @Relative(t.CreatedAtUtc)</em></div><strong>@(t.FinalHipScore?.ToString()??"—")</strong></a>}}</article>
@@ -54,4 +66,6 @@
  string ProtectionExplanation=>_summary?.HasScanData==true?$"Average HIP score across stored scan data. Activity panels show {_summary.RecentScans.Count} recent privacy-safe summaries.":"HIP needs stored scan evidence before it can calculate protection.";
  static string Relative(DateTimeOffset value){var age=DateTimeOffset.UtcNow-value;return age.TotalMinutes<60?$"{Math.Max(1,(int)age.TotalMinutes)}m ago":age.TotalHours<24?$"{(int)age.TotalHours}h ago":$"{(int)age.TotalDays}d ago";}
  static string ThreatLink(AdminRecentThreatItem t)=>string.IsNullOrWhiteSpace(t.RelatedScanId)?"/admin/review":$"/admin/scans/{Uri.EscapeDataString(t.RelatedScanId)}";
+ static string ScanLink(AdminRecentScanItem scan)=>$"/admin/scans/{Uri.EscapeDataString(scan.ScanResultId)}";
+ static string Score(int? value)=>value?.ToString(System.Globalization.CultureInfo.InvariantCulture)??"—";
 }
