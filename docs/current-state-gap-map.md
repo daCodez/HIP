@@ -293,7 +293,8 @@ reconciliation in the owning work package.
 | HIP-0006 Aspire patch upgrade | Complete |
 | HIP-0007 CI security baseline | Complete |
 | HIP-0101 Protocol envelope models | Complete |
-| HIP-0102 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
+| HIP-0102 RFC 8785 canonical JSON | Complete |
+| HIP-0103 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
 | HIP-0201 through HIP-0205 Identity and authorization | Missing or partial development foundations |
 | HIP-0301 through HIP-0306 Scoring/providers | Partial |
 | HIP-0401 through HIP-0406 Rules/review | Partial |
@@ -329,18 +330,19 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-HIP-0102: add the RFC 8785 canonical JSON service.
+HIP-0103: add the signature provider factory and capability model.
 
 Acceptance criteria:
 
-- An application-layer interface accepts JSON and returns canonical UTF-8 bytes
-  without coupling protocol consumers to one serializer implementation.
-- The implementation follows RFC 8785 for property ordering, string escaping,
-  number formatting, and recursive arrays/objects.
-- Malformed JSON, duplicate properties, unsupported numeric values, and inputs
-  outside bounded protocol limits fail closed.
-- Published RFC fixtures plus HIP envelope fixtures produce byte-for-byte stable
-  output across repeated runs and input property orders.
-- Tests keep canonicalization separate from signing-provider and verification logic.
+- Provider capabilities and sign/verify operations are exposed through
+  cryptographically agile application interfaces.
+- A factory selects providers only from explicit algorithm and runtime policy;
+  unknown, unavailable, or disallowed algorithms fail closed without fallback.
+- The development provider is explicitly identified as development-only and
+  cannot be selected by production runtime policy.
+- Provider selection does not imply safety, reputation, or algorithm assurance
+  beyond the provider's declared and tested capabilities.
+- Tests cover selection, capability checks, unavailable-provider behavior,
+  development isolation, and compatibility with the versioned protocol envelope.
 
-Rollback is a normal Git revert of the isolated HIP-0102 canonicalization commit.
+Rollback is a normal Git revert of the isolated HIP-0103 provider-factory commit.

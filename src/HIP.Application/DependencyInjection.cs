@@ -5,6 +5,7 @@ using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
 using HIP.Application.Identity;
 using HIP.Application.Platforms;
+using HIP.Application.Protocol;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
@@ -50,6 +51,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidator<ReputationOverrideRequest>, ReputationOverrideRequestValidator>();
         services.AddSingleton<IValidator<PrivacySafeReport>, PrivacySafeReportValidator>();
         services.AddSingleton<IAiRiskAnalysisService, NoOpAiRiskAnalysisService>();
+        services.AddSingleton<ICanonicalJsonService, Rfc8785CanonicalJsonService>();
         services.AddSingleton<IHipAiRiskAnalyzer, DevelopmentHipAiRiskAnalyzer>();
         services.AddSingleton<IRuleConditionEvaluator, RuleConditionEvaluator>();
         services.AddSingleton<IRuleMatchingEngine, RuleMatchingEngine>();
