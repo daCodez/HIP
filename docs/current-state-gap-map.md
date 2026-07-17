@@ -291,7 +291,7 @@ reconciliation in the owning work package.
 | HIP-0004 Database migration safety | Complete |
 | HIP-0005 Distributed duplicate and replay foundation | Complete |
 | HIP-0006 Aspire patch upgrade | Complete |
-| HIP-0007 CI security baseline | Missing |
+| HIP-0007 CI security baseline | Complete |
 | HIP-0101 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
 | HIP-0201 through HIP-0205 Identity and authorization | Missing or partial development foundations |
 | HIP-0301 through HIP-0306 Scoring/providers | Partial |
@@ -328,17 +328,18 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-HIP-0007: add the CI security baseline.
+HIP-0101: add the versioned protocol envelope domain models.
 
 Acceptance criteria:
 
-- CI runs restore, build, the complete .NET test suite, browser-extension
-  checks, and architecture contract tests on every pull request.
-- Secret scanning covers committed content and blocks newly introduced secrets.
-- Direct and transitive dependency vulnerability checks fail on actionable
-  advisories without silently suppressing results.
-- Workflow permissions are least-privilege and third-party actions are pinned
-  to reviewed immutable versions.
-- The documented local verification commands match the CI quality gates.
+- Domain models cover protocol version, issuer, subject, content digest, claims,
+  signature metadata, issuance time, and expiry without infrastructure dependencies.
+- Construction and deserialization reject missing, oversized, malformed, or
+  unsupported values at the trust boundary.
+- The model distinguishes cryptographic origin/integrity evidence from safety or
+  reputation decisions.
+- Stable serialization contracts and deterministic fixtures protect future client
+  compatibility.
+- Domain and contract tests cover valid envelopes plus boundary and invalid cases.
 
-Rollback is a normal Git revert of the isolated HIP-0007 workflow commit.
+Rollback is a normal Git revert of the isolated HIP-0101 domain-model commit.

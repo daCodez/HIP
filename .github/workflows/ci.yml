@@ -1,0 +1,67 @@
+name: CI security baseline
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+
+  quality:
+    name: Build, test, and dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Restore .NET dependencies
+        run: dotnet restore HIP.slnx
+
+      - name: Reject vulnerable .NET dependencies
+        shell: bash
+        run: |
+          mkdir -p artifacts/ci
+          dotnet package list --project HIP.slnx --vulnerable --include-transitive --format json --output-version 1 > artifacts/ci/nuget-vulnerabilities.json
+          jq -e '[.. | objects | select(has("vulnerabilities")) | .vulnerabilities[]] | length == 0' artifacts/ci/nuget-vulnerabilities.json
+
+      - name: Build solution
+        run: dotnet build HIP.slnx --configuration Release --no-restore --warnaserror
+
+      - name: Run complete .NET test suite
+        run: dotnet test HIP.slnx --configuration Release --no-build --no-restore
+
+      - name: Check browser extension JavaScript syntax
+        shell: bash
+        run: find clients/browser-extension -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+
+      - name: Run browser extension tests
+        working-directory: clients/browser-extension
+        run: npm test
