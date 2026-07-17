@@ -90,6 +90,9 @@ public static class DependencyInjection
         services.AddScoped<IOutboxEventWriter, OutboxEventWriter>();
         services.AddSingleton<IReportRetentionPolicyService, ReportRetentionPolicyService>();
         services.AddSingleton<IPrivacySafeReportService, PrivacySafeReportService>();
+        services.AddSingleton<MlDsa65SignatureProvider>();
+        services.AddSingleton<IHipSignatureProvider>(provider =>
+            provider.GetRequiredService<MlDsa65SignatureProvider>());
         services.AddSingleton<DevelopmentHipCryptoProvider>();
         services.AddSingleton<IHipCryptoProvider>(provider =>
             provider.GetRequiredService<DevelopmentHipCryptoProvider>());

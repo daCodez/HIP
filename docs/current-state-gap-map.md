@@ -295,7 +295,8 @@ reconciliation in the owning work package.
 | HIP-0101 Protocol envelope models | Complete |
 | HIP-0102 RFC 8785 canonical JSON | Complete |
 | HIP-0103 Signature provider factory | Complete |
-| HIP-0104 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
+| HIP-0104 ML-DSA-65 provider | Complete |
+| HIP-0105 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
 | HIP-0201 through HIP-0205 Identity and authorization | Missing or partial development foundations |
 | HIP-0301 through HIP-0306 Scoring/providers | Partial |
 | HIP-0401 through HIP-0406 Rules/review | Partial |
@@ -331,19 +332,19 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-HIP-0104: add the ML-DSA-65 signature provider.
+HIP-0105: add the signing-key lifecycle model and transition service.
 
 Acceptance criteria:
 
-- The provider implements ML-DSA-65 through supported .NET cryptography APIs
-  without custom cryptographic primitives.
-- Capabilities identify the provider as post-quantum and report runtime
-  availability accurately.
-- Key generation, signing, and verification use bounded binary encodings and
-  reject malformed keys, signatures, and unsupported runtime conditions.
-- Production policy can select ML-DSA-65 only when it is available and never
-  falls back to the development placeholder.
-- Focused tests cover sign/verify behavior, tampering, malformed inputs, runtime
-  availability, factory selection, and versioned protocol-envelope metadata.
+- Domain states distinguish active, retiring, retired, and revoked signing keys
+  without coupling lifecycle rules to storage or one algorithm.
+- Validated transitions fail closed, prevent revoked-key reuse, and allow only
+  explicitly active keys to create new signatures.
+- Rotation activates a replacement key while preserving the metadata required
+  to evaluate historical signatures from retired keys.
+- Every lifecycle transition records privacy-safe actor, reason, and timestamp
+  evidence through an application audit boundary.
+- Focused tests cover allowed and rejected transitions, rotation, revocation,
+  historical verification policy, audit evidence, and concurrent stale updates.
 
-Rollback is a normal Git revert of the isolated HIP-0104 ML-DSA-65 commit.
+Rollback is a normal Git revert of the isolated HIP-0105 key-lifecycle commit.
