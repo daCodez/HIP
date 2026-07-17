@@ -292,7 +292,8 @@ reconciliation in the owning work package.
 | HIP-0005 Distributed duplicate and replay foundation | Complete |
 | HIP-0006 Aspire patch upgrade | Complete |
 | HIP-0007 CI security baseline | Complete |
-| HIP-0101 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
+| HIP-0101 Protocol envelope models | Complete |
+| HIP-0102 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
 | HIP-0201 through HIP-0205 Identity and authorization | Missing or partial development foundations |
 | HIP-0301 through HIP-0306 Scoring/providers | Partial |
 | HIP-0401 through HIP-0406 Rules/review | Partial |
@@ -328,18 +329,18 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-HIP-0101: add the versioned protocol envelope domain models.
+HIP-0102: add the RFC 8785 canonical JSON service.
 
 Acceptance criteria:
 
-- Domain models cover protocol version, issuer, subject, content digest, claims,
-  signature metadata, issuance time, and expiry without infrastructure dependencies.
-- Construction and deserialization reject missing, oversized, malformed, or
-  unsupported values at the trust boundary.
-- The model distinguishes cryptographic origin/integrity evidence from safety or
-  reputation decisions.
-- Stable serialization contracts and deterministic fixtures protect future client
-  compatibility.
-- Domain and contract tests cover valid envelopes plus boundary and invalid cases.
+- An application-layer interface accepts JSON and returns canonical UTF-8 bytes
+  without coupling protocol consumers to one serializer implementation.
+- The implementation follows RFC 8785 for property ordering, string escaping,
+  number formatting, and recursive arrays/objects.
+- Malformed JSON, duplicate properties, unsupported numeric values, and inputs
+  outside bounded protocol limits fail closed.
+- Published RFC fixtures plus HIP envelope fixtures produce byte-for-byte stable
+  output across repeated runs and input property orders.
+- Tests keep canonicalization separate from signing-provider and verification logic.
 
-Rollback is a normal Git revert of the isolated HIP-0101 domain-model commit.
+Rollback is a normal Git revert of the isolated HIP-0102 canonicalization commit.
