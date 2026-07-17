@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
+using HIP.Application.Protocol;
+using HIP.Domain.Identity;
 
 namespace HIP.Application.Identity;
 
@@ -16,6 +18,14 @@ public sealed class DevelopmentHipCryptoProvider : IHipCryptoProvider
 {
     public const string Algorithm = "PQ-Placeholder-Development-Only";
     public const bool IsProductionSafe = false;
+
+    /// <inheritdoc />
+    public SignatureProviderCapabilities Capabilities { get; } = new(
+        Algorithm,
+        SignatureAlgorithmFamily.Unknown,
+        SignatureProviderOperations.Sign | SignatureProviderOperations.Verify,
+        IsAvailable: true,
+        IsDevelopmentOnly: true);
 
     /// <summary>
     /// Creates the development-only placeholder crypto provider and refuses host activation when disabled.

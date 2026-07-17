@@ -294,7 +294,8 @@ reconciliation in the owning work package.
 | HIP-0007 CI security baseline | Complete |
 | HIP-0101 Protocol envelope models | Complete |
 | HIP-0102 RFC 8785 canonical JSON | Complete |
-| HIP-0103 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
+| HIP-0103 Signature provider factory | Complete |
+| HIP-0104 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
 | HIP-0201 through HIP-0205 Identity and authorization | Missing or partial development foundations |
 | HIP-0301 through HIP-0306 Scoring/providers | Partial |
 | HIP-0401 through HIP-0406 Rules/review | Partial |
@@ -330,19 +331,19 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-HIP-0103: add the signature provider factory and capability model.
+HIP-0104: add the ML-DSA-65 signature provider.
 
 Acceptance criteria:
 
-- Provider capabilities and sign/verify operations are exposed through
-  cryptographically agile application interfaces.
-- A factory selects providers only from explicit algorithm and runtime policy;
-  unknown, unavailable, or disallowed algorithms fail closed without fallback.
-- The development provider is explicitly identified as development-only and
-  cannot be selected by production runtime policy.
-- Provider selection does not imply safety, reputation, or algorithm assurance
-  beyond the provider's declared and tested capabilities.
-- Tests cover selection, capability checks, unavailable-provider behavior,
-  development isolation, and compatibility with the versioned protocol envelope.
+- The provider implements ML-DSA-65 through supported .NET cryptography APIs
+  without custom cryptographic primitives.
+- Capabilities identify the provider as post-quantum and report runtime
+  availability accurately.
+- Key generation, signing, and verification use bounded binary encodings and
+  reject malformed keys, signatures, and unsupported runtime conditions.
+- Production policy can select ML-DSA-65 only when it is available and never
+  falls back to the development placeholder.
+- Focused tests cover sign/verify behavior, tampering, malformed inputs, runtime
+  availability, factory selection, and versioned protocol-envelope metadata.
 
-Rollback is a normal Git revert of the isolated HIP-0103 provider-factory commit.
+Rollback is a normal Git revert of the isolated HIP-0104 ML-DSA-65 commit.
