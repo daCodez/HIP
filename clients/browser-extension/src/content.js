@@ -193,6 +193,7 @@
     settings = await loadSettings();
     pluginVersion = await loadPluginVersion();
     lastSummary = emptySummary();
+    collectHipBadgeSignals();
     markScanStage("Starting");
     publishSummary();
 
@@ -228,7 +229,6 @@
     publishSummary();
     await scanLoginForms();
     markScanStage("CollectingPageSignals");
-    collectHipBadgeSignals();
     collectScriptSignals();
     publishSummary();
     markScanStage("CheckingSiteSafety");
