@@ -565,6 +565,8 @@ export function buildScanResultPayload({ domain, pageUrl, pageUrlHash = null, lo
       apiStatus: summary.apiStatus || "Unknown",
       scanTimestampUtc: submittedAtUtc,
       isHttps: String(summary.isHttps === true),
+      hipBadgeObserved: String(summary.hipBadgeObserved === true),
+      hipBadgeDomainMatch: String(summary.hipBadgeDomainMatch === true),
       downloadCandidates: String(summary.downloadCandidates ?? 0),
       executableDownloadCandidates: String(summary.executableDownloadCandidates ?? 0),
       formsDetected: String(summary.formsDetected ?? 0),

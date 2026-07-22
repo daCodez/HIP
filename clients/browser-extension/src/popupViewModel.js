@@ -220,6 +220,7 @@ export function buildPopupViewModel(lookup, summary, settings, currentUrl) {
     apiStatus: summary?.apiStatus || "Unknown",
     downloadCandidates: summary?.downloadCandidates ?? 0,
     loginFormsDetected: summary?.loginFormsDetected ?? 0,
+    hipBadgeText: badgeObservationText(summary),
     lastScanText: formatDate(summary?.lastScanUtc || summary?.updatedAt),
     lastSubmittedText: submissionText(summary),
     dataSourceText: assessmentSourceText(lookup, summary),
@@ -239,6 +240,7 @@ export function loadingSummaryViewModel(stage = "Checking") {
     unknownLinks: "Checking...",
     downloadCandidates: "Checking...",
     loginFormsDetected: "Checking...",
+    hipBadgeText: "Checking...",
     lastScanText: "Checking...",
     lastSubmittedText: "Pending",
     dataSourceText: "Pending"
@@ -286,6 +288,21 @@ export function buildSiteSafetyViewModel(result = {}) {
     scriptRiskText: riskLabel(result?.scriptRiskScore),
     externalEvidence: externalEvidenceFor(result)
   };
+}
+
+/**
+ * Describes page-observed badge markup without presenting it as server verification.
+ */
+export function badgeObservationText(summary = {}) {
+  if (summary?.hipBadgeDomainMatch === true) {
+    return "Observed; domain matches";
+  }
+
+  if (summary?.hipBadgeObserved === true) {
+    return "Observed; domain mismatch";
+  }
+
+  return "Not observed";
 }
 
 /**

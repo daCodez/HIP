@@ -50,6 +50,17 @@ test("browser privacy guards filter evidence URL lists to public URLs only", () 
   assert.deepEqual(guards.filterSafePublicUrls(values, settings), ["https://example.com/file.zip"]);
 });
 
+test("browser privacy guards compare badge declarations without retaining page content", () => {
+  const guards = loadGuards();
+
+  assert.equal(guards.badgeDomainMatchesPage("zerotoherobudgeting.com", "www.zerotoherobudgeting.com"), true);
+  assert.equal(guards.badgeDomainMatchesPage("https://zerotoherobudgeting.com", "zerotoherobudgeting.com"), true);
+  assert.equal(guards.badgeDomainMatchesPage("attacker.example", "zerotoherobudgeting.com"), false);
+  assert.equal(guards.normalizeBadgeDomain("https://user:secret@example.com"), null);
+  assert.equal(guards.normalizeBadgeDomain("javascript://example.com"), null);
+  assert.equal(guards.normalizeBadgeDomain("example.com/private"), null);
+});
+
 function loadGuards() {
   const sandbox = { URL };
   sandbox.globalThis = sandbox;
