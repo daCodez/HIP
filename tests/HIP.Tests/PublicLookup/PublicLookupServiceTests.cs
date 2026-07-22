@@ -1,7 +1,9 @@
 using HIP.Application.Browser;
+using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
 using HIP.Application.Scalability;
+using HIP.Domain.Identity;
 using HIP.Domain.Risk;
 
 namespace HIP.Tests.PublicLookup;
@@ -11,14 +13,17 @@ public sealed class PublicLookupServiceTests
     [Test]
     public async Task LookupDomainAsync_returns_privacy_safe_public_domain_output()
     {
-        var service = await CreateServiceWithStoredScanAsync("Verified-Example.com");
+        var identity = VerifiedIdentity("verified-example.com", VerificationMethod.WellKnownHipJson);
+        var service = await CreateServiceWithStoredScanAsync(
+            "Verified-Example.com",
+            websiteIdentities: new StubWebsiteIdentityRepository(identity));
 
         var result = await service.LookupDomainAsync("Verified-Example.com", CancellationToken.None);
 
         Assert.That(result.Domain, Is.EqualTo("verified-example.com"));
         Assert.That(result.FinalHipScore, Is.InRange(0, 100));
         Assert.That(result.Status, Is.Not.EqualTo(RiskStatus.Unknown));
-        Assert.That(result.SignedIdentityStatus, Is.EqualTo("PostQuantumSignaturePresent"));
+        Assert.That(result.SignedIdentityStatus, Is.EqualTo("Verified"));
         Assert.That(result.ScoreBreakdown.Select(item => item.Category), Does.Contain("FinalHipScore"));
         Assert.That(result.DomainTrustScore, Is.InRange(0, 100));
         Assert.That(result.PageTrustScore, Is.InRange(0, 100));
@@ -27,7 +32,7 @@ public sealed class PublicLookupServiceTests
         Assert.That(result.PublicBadgeEligible, Is.True);
         Assert.That(result.PublicLookupUrl, Is.EqualTo("/lookup/verified-example.com"));
         Assert.That(result.RecommendedAction, Is.Not.Empty);
-        Assert.That(result.VerificationMethod, Is.EqualTo("WellKnownHipJsonPlaceholder"));
+        Assert.That(result.VerificationMethod, Is.EqualTo("WellKnownHipJson"));
         Assert.That(result.Explanations.All(explanation => !string.IsNullOrWhiteSpace(explanation)), Is.True);
         Assert.That(result.Reasons.All(reason => !string.IsNullOrWhiteSpace(reason)), Is.True);
         Assert.That(result.DataSource, Is.EqualTo("BrowserPluginScan"));
@@ -101,7 +106,7 @@ public sealed class PublicLookupServiceTests
             Assert.That(result.Status, Is.EqualTo(RiskStatus.LimitedTrustData));
             Assert.That(result.FinalHipScore, Is.InRange(45, 60));
             Assert.That(result.DataSource, Is.EqualTo("NoStoredData"));
-            Assert.That(result.Reasons, Has.Some.Contains("HIP has not scanned this domain yet"));
+            Assert.That(result.Reasons, Has.Some.Contains("no authoritative site-safety assessment"));
             Assert.That(result.RecommendedAction, Is.EqualTo("ShowCaution"));
         });
     }
@@ -118,8 +123,72 @@ public sealed class PublicLookupServiceTests
             Assert.That(result.Domain, Is.EqualTo("example.com"));
             Assert.That(result.Status, Is.EqualTo(RiskStatus.LimitedTrustData));
             Assert.That(result.DataSource, Is.EqualTo("NoStoredData"));
-            Assert.That(result.Reasons, Has.Some.Contains("HIP has not scanned this domain yet"));
+            Assert.That(result.Reasons, Has.Some.Contains("no authoritative site-safety assessment"));
             Assert.That(result.RecommendedAction, Is.EqualTo("ShowCaution"));
+        });
+    }
+
+    [Test]
+    public async Task Lookup_uses_verified_dns_identity_without_claiming_a_signed_identity_or_safety()
+    {
+        var identity = VerifiedIdentity("zerotoherobudgeting.com", VerificationMethod.DnsTxt);
+        var service = new PublicDomainLookupService(
+            new InMemoryBrowserScanResultRepository(),
+            websiteIdentityRepository: new StubWebsiteIdentityRepository(identity));
+
+        var result = await service.LookupDomainAsync(identity.Domain, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.VerificationStatus, Is.EqualTo("Verified"));
+            Assert.That(result.IdentityVerificationStatus, Is.EqualTo("Verified"));
+            Assert.That(result.VerificationMethod, Is.EqualTo("DnsTxt"));
+            Assert.That(result.SignedIdentityStatus, Is.EqualTo("NotConfigured"));
+            Assert.That(result.SignatureValid, Is.Null);
+            Assert.That(result.PublicBadgeEligible, Is.True);
+            Assert.That(result.Status, Is.EqualTo(RiskStatus.LimitedTrustData));
+            Assert.That(result.DataSource, Is.EqualTo("VerifiedIdentityOnly"));
+            Assert.That(result.Reasons, Has.Some.Contains("verified control"));
+            Assert.That(result.Reasons, Has.Some.Contains("does not prove the site is safe"));
+        });
+    }
+
+    [Test]
+    public async Task Lookup_does_not_infer_identity_from_the_domain_name()
+    {
+        var service = await CreateServiceWithStoredScanAsync("verified-looking.example");
+
+        var result = await service.LookupDomainAsync("verified-looking.example", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.VerificationStatus, Is.EqualTo("Unverified"));
+            Assert.That(result.IdentityVerificationStatus, Is.EqualTo("Unverified"));
+            Assert.That(result.PublicBadgeEligible, Is.False);
+            Assert.That(result.SignatureValid, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task Lookup_withholds_verified_identity_and_badge_after_revocation()
+    {
+        var revoked = VerifiedIdentity("revoked.example", VerificationMethod.DnsTxt) with
+        {
+            VerificationStatus = VerificationStatus.Revoked,
+            RevokedAtUtc = DateTimeOffset.UtcNow
+        };
+        var service = new PublicDomainLookupService(
+            new InMemoryBrowserScanResultRepository(),
+            websiteIdentityRepository: new StubWebsiteIdentityRepository(revoked));
+
+        var result = await service.LookupDomainAsync(revoked.Domain, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.VerificationStatus, Is.EqualTo("Revoked"));
+            Assert.That(result.IdentityVerificationStatus, Is.EqualTo("Revoked"));
+            Assert.That(result.PublicBadgeEligible, Is.False);
+            Assert.That(result.SignatureValid, Is.Null);
         });
     }
 
@@ -193,7 +262,11 @@ public sealed class PublicLookupServiceTests
     /// <param name="score">Stored HIP score.</param>
     /// <param name="status">Stored risk status.</param>
     /// <returns>A lookup service that will return stored scan data for the domain.</returns>
-    private static async Task<PublicDomainLookupService> CreateServiceWithStoredScanAsync(string domain, int score = 84, string status = "Trusted")
+    private static async Task<PublicDomainLookupService> CreateServiceWithStoredScanAsync(
+        string domain,
+        int score = 84,
+        string status = "Trusted",
+        IWebsiteIdentityRepository? websiteIdentities = null)
     {
         var repository = new InMemoryBrowserScanResultRepository();
         var scanResultService = new BrowserScanResultService(repository, new Sha256PrivacyHashingService(), new InMemoryScanResultCache(), new InMemoryDashboardScanAggregateStore());
@@ -214,7 +287,50 @@ public sealed class PublicLookupServiceTests
                 ["scanMode"] = "Normal"
             }), CancellationToken.None);
 
-        return new PublicDomainLookupService(repository);
+        return new PublicDomainLookupService(repository, websiteIdentityRepository: websiteIdentities);
+    }
+
+    private static WebsiteIdentity VerifiedIdentity(string domain, VerificationMethod method) =>
+        new(
+            domain,
+            $"hip:web:{domain}",
+            [],
+            VerificationStatus.Verified,
+            method,
+            DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow.AddHours(-1),
+            DateTimeOffset.UtcNow.AddHours(-1));
+
+    private sealed class StubWebsiteIdentityRepository(params WebsiteIdentity[] identities) : IWebsiteIdentityRepository
+    {
+        private readonly Dictionary<string, WebsiteIdentity> records =
+            identities.ToDictionary(identity => identity.Domain, StringComparer.OrdinalIgnoreCase);
+
+        public Task<bool> TryCreateAsync(WebsiteIdentity websiteIdentity, CancellationToken cancellationToken) =>
+            Task.FromResult(records.TryAdd(websiteIdentity.Domain, websiteIdentity));
+
+        public Task<bool> TryUpdateAsync(WebsiteIdentity expected, WebsiteIdentity updated, CancellationToken cancellationToken)
+        {
+            if (!records.TryGetValue(expected.Domain, out var current) || current != expected)
+            {
+                return Task.FromResult(false);
+            }
+
+            records[expected.Domain] = updated;
+            return Task.FromResult(true);
+        }
+
+        public Task<WebsiteIdentity> SaveAsync(WebsiteIdentity websiteIdentity, CancellationToken cancellationToken)
+        {
+            records[websiteIdentity.Domain] = websiteIdentity;
+            return Task.FromResult(websiteIdentity);
+        }
+
+        public Task<WebsiteIdentity?> GetAsync(string domain, CancellationToken cancellationToken) =>
+            Task.FromResult(records.GetValueOrDefault(domain));
+
+        public Task<IReadOnlyCollection<WebsiteIdentity>> ListAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyCollection<WebsiteIdentity>>(records.Values.ToArray());
     }
 
     /// <summary>
@@ -265,4 +381,3 @@ public sealed class PublicLookupServiceTests
             Task.FromResult(0);
     }
 }
-

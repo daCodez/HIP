@@ -27,7 +27,7 @@ public sealed class PublicLookupPageTests
         Assert.Multiple(() =>
         {
             Assert.That(html, Does.Contain("Not Enough Data Yet"));
-            Assert.That(html, Does.Contain("HIP has not scanned this domain yet"));
+            Assert.That(html, Does.Contain("HIP has no authoritative site-safety assessment for this domain yet"));
             Assert.That(html, Does.Contain("Data source"));
         });
     }

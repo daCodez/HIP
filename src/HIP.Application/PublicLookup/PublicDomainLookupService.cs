@@ -1,7 +1,9 @@
 using HIP.Application.Browser;
+using HIP.Application.Identity;
 using HIP.Domain.Risk;
 using HIP.Domain.Scoring;
 using HIP.Application.Explanations;
+using HIP.Domain.Identity;
 using Microsoft.Extensions.Logging;
 
 namespace HIP.Application.PublicLookup;
@@ -14,7 +16,8 @@ namespace HIP.Application.PublicLookup;
 public sealed class PublicDomainLookupService(
     IBrowserScanResultRepository browserScanResultRepository,
     ILogger<PublicDomainLookupService>? logger = null,
-    ITrustExplanationAssistant? explanationAssistant = null) : IPublicDomainLookupService
+    ITrustExplanationAssistant? explanationAssistant = null,
+    IWebsiteIdentityRepository? websiteIdentityRepository = null) : IPublicDomainLookupService
 {
     private static readonly HashSet<string> StrongDomainTrust = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -44,13 +47,14 @@ public sealed class PublicDomainLookupService(
     public async Task<PublicDomainLookupResponse> LookupDomainAsync(string domain, CancellationToken cancellationToken)
     {
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+        var websiteIdentity = await GetWebsiteIdentitySafelyAsync(normalized, cancellationToken);
         var storedScan = await GetLatestStoredScanSafelyAsync(normalized, cancellationToken);
         if (storedScan is null)
         {
-            return BuildNoStoredDataResponse(normalized);
+            return BuildNoStoredDataResponse(normalized, websiteIdentity);
         }
 
-        var response = BuildStoredScanResponse(normalized, storedScan);
+        var response = BuildStoredScanResponse(normalized, storedScan, websiteIdentity);
         if (explanationAssistant is null)
         {
             return response;
@@ -68,6 +72,36 @@ public sealed class PublicDomainLookupService(
         return assistance is null
             ? response
             : response with { AssistedExplanation = assistance.Explanation, ExplanationSource = assistance.ProviderName };
+    }
+
+    /// <summary>
+    /// Reads the registered website identity without allowing identity-storage outages to break public lookup.
+    /// </summary>
+    private async Task<WebsiteIdentity?> GetWebsiteIdentitySafelyAsync(
+        string normalizedDomain,
+        CancellationToken cancellationToken)
+    {
+        if (websiteIdentityRepository is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await websiteIdentityRepository.GetAsync(normalizedDomain, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (IsStorageAvailabilityFailure(exception))
+        {
+            logger?.LogWarning(
+                exception,
+                "HIP public lookup identity read failed for domain {Domain}. Continuing without identity state.",
+                normalizedDomain);
+            return null;
+        }
     }
 
     private static IReadOnlyCollection<string> BuildExplanationSignalCodes(PublicDomainLookupResponse response)
@@ -127,16 +161,22 @@ public sealed class PublicDomainLookupService(
     /// <param name="normalized">Normalized domain.</param>
     /// <param name="storedScan">Stored privacy-safe browser scan result.</param>
     /// <returns>Public lookup response sourced from the browser plugin scan.</returns>
-    private static PublicDomainLookupResponse BuildStoredScanResponse(string normalized, BrowserScanResultRecord storedScan)
+    private static PublicDomainLookupResponse BuildStoredScanResponse(
+        string normalized,
+        BrowserScanResultRecord storedScan,
+        WebsiteIdentity? websiteIdentity)
     {
         var layeredScore = BuildLayeredScore(normalized, storedScan);
         var status = StatusForScore(layeredScore.FinalHipScore);
-        var isVerified = normalized.Contains("verified", StringComparison.OrdinalIgnoreCase);
-        var reasons = storedScan.Reasons.Count > 0
+        var identity = ProjectIdentity(websiteIdentity);
+        var scanReasons = storedScan.Reasons.Count > 0
             ? storedScan.Reasons
             : ["Last browser scan completed without sending page text, form values, or private messages."];
+        var reasons = identity.Reason is null
+            ? scanReasons
+            : scanReasons.Prepend(identity.Reason).ToArray();
         var knownRisks = status is RiskStatus.Suspicious or RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical
-            ? reasons
+            ? scanReasons
             : [];
 
         return new PublicDomainLookupResponse(
@@ -145,19 +185,19 @@ public sealed class PublicDomainLookupService(
             layeredScore.FinalHipScore,
             status,
             status.ToString(),
-            isVerified ? "Verified" : "Unverified",
+            identity.VerificationStatus,
             knownRisks,
             reasons,
             reasons.Append(layeredScore.Explanation).Append("This lookup is based on the latest privacy-safe browser plugin scan summary.").ToArray(),
             RecommendedActionFor(status),
             storedScan.LastCheckedUtc,
-            isVerified ? "PostQuantumSignaturePresent" : "NotConfigured",
-            isVerified ? "WellKnownHipJsonPlaceholder" : "NotConfigured",
-            isVerified ? "Verified Example Organization" : null,
-            isVerified ? "ValidPlaceholder" : "Unknown",
-            isVerified ? "Verified" : "Unverified",
-            isVerified,
-            isVerified,
+            identity.SignedIdentityStatus,
+            identity.VerificationMethod,
+            null,
+            identity.SignatureStatus,
+            identity.VerificationStatus,
+            identity.SignatureValid,
+            identity.PublicBadgeEligible,
             $"/lookup/{normalized}",
             layeredScore.DomainTrustScore,
             layeredScore.PageTrustScore,
@@ -177,33 +217,39 @@ public sealed class PublicDomainLookupService(
     /// </summary>
     /// <param name="normalized">Normalized domain.</param>
     /// <returns>Public lookup response with Unknown status and no private data.</returns>
-    private static PublicDomainLookupResponse BuildNoStoredDataResponse(string normalized)
+    private static PublicDomainLookupResponse BuildNoStoredDataResponse(
+        string normalized,
+        WebsiteIdentity? websiteIdentity)
     {
         if (IsDangerousTestDomain(normalized))
         {
-            return BuildDangerousNoStoredDataResponse(normalized);
+            return BuildDangerousNoStoredDataResponse(normalized, websiteIdentity);
         }
 
-        var message = "HIP has not scanned this domain yet.";
+        var identity = ProjectIdentity(websiteIdentity);
+        var message = "HIP has no authoritative site-safety assessment for this domain yet.";
+        var reasons = identity.Reason is null
+            ? new[] { message, "No private reports, user identities, page URLs, or browsing history are exposed in public lookup." }
+            : new[] { identity.Reason, message, "No private reports, user identities, page URLs, or browsing history are exposed in public lookup." };
         return new PublicDomainLookupResponse(
             normalized,
             56,
             56,
             RiskStatus.LimitedTrustData,
             RiskStatus.LimitedTrustData.ToString(),
-            "Unverified",
+            identity.VerificationStatus,
             [],
-            [message, "No private reports, user identities, page URLs, or browsing history are exposed in public lookup."],
-            [message],
+            reasons,
+            reasons,
             "ShowCaution",
-            DateTimeOffset.UtcNow,
-            "NotConfigured",
-            "NotConfigured",
+            websiteIdentity?.LastCheckedAtUtc ?? websiteIdentity?.VerifiedAtUtc ?? DateTimeOffset.UtcNow,
+            identity.SignedIdentityStatus,
+            identity.VerificationMethod,
             null,
-            "Unknown",
-            "Unverified",
-            null,
-            false,
+            identity.SignatureStatus,
+            identity.VerificationStatus,
+            identity.SignatureValid,
+            identity.PublicBadgeEligible,
             $"/lookup/{normalized}",
             50,
             55,
@@ -219,7 +265,7 @@ public sealed class PublicDomainLookupService(
             null,
             null,
             null,
-            "NoStoredData",
+            identity.PublicBadgeEligible ? "VerifiedIdentityOnly" : "NoStoredData",
             message);
     }
 
@@ -228,8 +274,11 @@ public sealed class PublicDomainLookupService(
     /// </summary>
     /// <param name="normalized">Normalized domain.</param>
     /// <returns>Public lookup response with dangerous test-domain status.</returns>
-    private static PublicDomainLookupResponse BuildDangerousNoStoredDataResponse(string normalized)
+    private static PublicDomainLookupResponse BuildDangerousNoStoredDataResponse(
+        string normalized,
+        WebsiteIdentity? websiteIdentity)
     {
+        var identity = ProjectIdentity(websiteIdentity);
         const string message = "Known suspicious test-domain pattern detected.";
         return new PublicDomainLookupResponse(
             normalized,
@@ -237,19 +286,19 @@ public sealed class PublicDomainLookupService(
             8,
             RiskStatus.Dangerous,
             RiskStatus.Dangerous.ToString(),
-            "Unverified",
+            identity.VerificationStatus,
             [message],
             [message],
             ["HIP classified this domain as dangerous using public-safe MVP test-domain rules."],
             "RouteToSafetyPage",
             DateTimeOffset.UtcNow,
-            "NotConfigured",
-            "NotConfigured",
+            identity.SignedIdentityStatus,
+            identity.VerificationMethod,
             null,
-            "Unknown",
-            "Unverified",
-            null,
-            false,
+            identity.SignatureStatus,
+            identity.VerificationStatus,
+            identity.SignatureValid,
+            identity.PublicBadgeEligible,
             $"/lookup/{normalized}",
             20,
             10,
@@ -267,6 +316,53 @@ public sealed class PublicDomainLookupService(
             null,
             "MvpDangerousTestPattern",
             message);
+    }
+
+    /// <summary>
+    /// Projects durable domain-control state without treating verification as organization vetting or site safety.
+    /// </summary>
+    private static PublicIdentityProjection ProjectIdentity(WebsiteIdentity? identity)
+    {
+        if (identity is null)
+        {
+            return PublicIdentityProjection.Unverified;
+        }
+
+        if (identity.VerificationStatus != VerificationStatus.Verified)
+        {
+            return new PublicIdentityProjection(
+                identity.VerificationStatus.ToString(),
+                "NotConfigured",
+                identity.PreferredVerificationMethod.ToString(),
+                "NotConfigured",
+                null,
+                false,
+                null);
+        }
+
+        var signedWellKnown = identity.PreferredVerificationMethod == VerificationMethod.WellKnownHipJson;
+        var methodLabel = signedWellKnown ? "signed .well-known/hip.json" : "DNS TXT";
+        return new PublicIdentityProjection(
+            "Verified",
+            signedWellKnown ? "Verified" : "NotConfigured",
+            identity.PreferredVerificationMethod.ToString(),
+            signedWellKnown ? "Verified" : "NotConfigured",
+            signedWellKnown ? true : null,
+            true,
+            $"HIP verified control of this domain using {methodLabel}. Domain control does not prove the site is safe.");
+    }
+
+    private sealed record PublicIdentityProjection(
+        string VerificationStatus,
+        string SignedIdentityStatus,
+        string VerificationMethod,
+        string SignatureStatus,
+        bool? SignatureValid,
+        bool PublicBadgeEligible,
+        string? Reason)
+    {
+        public static PublicIdentityProjection Unverified { get; } =
+            new("Unverified", "NotConfigured", "NotConfigured", "NotConfigured", null, false, null);
     }
 
     /// <summary>

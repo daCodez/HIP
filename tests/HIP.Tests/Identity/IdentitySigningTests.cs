@@ -212,9 +212,13 @@ public sealed class IdentitySigningTests
     public async Task Public_lookup_shows_signed_identity_status()
     {
         var repository = await SeedStoredBrowserScanAsync("verified-example.com");
-        var lookup = await new PublicDomainLookupService(repository).LookupDomainAsync("verified-example.com", CancellationToken.None);
+        var identities = new TestWebsiteIdentityRepository();
+        await identities.SaveAsync(VerifiedWebsiteIdentity("verified-example.com"), CancellationToken.None);
+        var lookup = await new PublicDomainLookupService(
+            repository,
+            websiteIdentityRepository: identities).LookupDomainAsync("verified-example.com", CancellationToken.None);
 
-        Assert.That(lookup.SignedIdentityStatus, Is.EqualTo("PostQuantumSignaturePresent"));
+        Assert.That(lookup.SignedIdentityStatus, Is.EqualTo("Verified"));
         Assert.That(lookup.IdentityVerificationStatus, Is.EqualTo("Verified"));
         Assert.That(lookup.SignatureValid, Is.True);
     }
@@ -223,11 +227,26 @@ public sealed class IdentitySigningTests
     public async Task Badge_output_includes_verification_status()
     {
         var repository = await SeedStoredBrowserScanAsync("verified-example.com");
-        var badge = await new TrustBadgeService(new PublicDomainLookupService(repository)).GetDomainBadgeAsync("verified-example.com", CancellationToken.None);
+        var identities = new TestWebsiteIdentityRepository();
+        await identities.SaveAsync(VerifiedWebsiteIdentity("verified-example.com"), CancellationToken.None);
+        var badge = await new TrustBadgeService(new PublicDomainLookupService(
+            repository,
+            websiteIdentityRepository: identities)).GetDomainBadgeAsync("verified-example.com", CancellationToken.None);
 
         Assert.That(badge.IdentityVerificationStatus, Is.EqualTo("Verified"));
         Assert.That(badge.SignatureValid, Is.True);
     }
+
+    private static WebsiteIdentity VerifiedWebsiteIdentity(string domain) =>
+        new(
+            domain,
+            $"hip:web:{domain}",
+            [],
+            VerificationStatus.Verified,
+            VerificationMethod.WellKnownHipJson,
+            DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow.AddHours(-1),
+            DateTimeOffset.UtcNow.AddHours(-1));
 
     [Test]
     public void Placeholder_crypto_is_clearly_marked_non_production()
