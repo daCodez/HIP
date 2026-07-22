@@ -67,7 +67,12 @@
                     }
                     else if (HasClientObservedScore)
                     {
-                        <p class="data-note">Client observations are not included in authoritative Trusted, Caution, or Risk percentages.</p>
+                        <div class="trust-distribution" aria-label="Client-observed score @ClientObservedScore out of 100; not authoritative">
+                            <i class="observed" style="@SegmentStyle(ClientObservedScore)"></i>
+                        </div>
+                        <footer class="trust-legend">
+                            <span><i class="observed"></i><b>@ClientObservedScore/100</b> Client-observed · not authoritative</span>
+                        </footer>
                     }
                 </div>
             </article>
