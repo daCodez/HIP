@@ -8,6 +8,7 @@ import {
   buildPublicLookupUrl,
   feedbackCopy,
   loadingSummaryViewModel,
+  isTerminalScanSummary,
   safeDisplayText,
   statusDescription,
   statusFromScore,
@@ -58,8 +59,47 @@ test("popup view model renders score domain and reasons", () => {
   assert.deepEqual(viewModel.reasons, ["No known scam reports", "No suspicious redirects found"]);
   assert.equal(viewModel.linksScanned, 42);
   assert.equal(viewModel.riskyLinks, 2);
-  assert.equal(viewModel.dataSourceText, "BrowserPluginScan");
-  assert.equal(viewModel.lastSubmittedText, "Success (2026-05-30 10:17 UTC)");
+  assert.equal(viewModel.dataSourceText, "Client-observed evidence; authoritative HIP assessment available");
+  assert.equal(viewModel.lastSubmittedText, "Client telemetry stored (2026-05-30 10:17 UTC)");
+});
+
+test("popup keeps polling after site safety until persistence reaches a terminal state", () => {
+  assert.equal(isTerminalScanSummary({
+    siteSafetyDataSource: "SiteSafetyScan",
+    siteSafety: { status: "LimitedData" },
+    scanStage: "SubmittingSummary",
+    scanResultSubmission: "Pending"
+  }), false);
+
+  assert.equal(isTerminalScanSummary({
+    siteSafetyDataSource: "SiteSafetyScan",
+    siteSafety: { status: "LimitedData" },
+    scanStage: "Complete",
+    scanResultSubmission: "Success"
+  }), true);
+
+  assert.equal(isTerminalScanSummary({
+    scanStage: "Failed",
+    scanResultSubmission: "Failure"
+  }), true);
+});
+
+test("popup distinguishes stored client telemetry from an authoritative HIP assessment", () => {
+  const viewModel = buildPopupViewModel({
+    domain: "example.com",
+    score: 56,
+    status: "LimitedTrustData",
+    dataSource: "NoStoredData"
+  }, {
+    scanResultSubmission: "Success",
+    scanResultDataSource: "BrowserPluginScan",
+    lastSubmittedUtc: "2026-07-22T08:35:29Z"
+  }, {
+    webBaseUrl: "https://hip.local"
+  }, "https://example.com");
+
+  assert.equal(viewModel.lastSubmittedText, "Client telemetry stored (2026-07-22 08:35 UTC)");
+  assert.equal(viewModel.dataSourceText, "Client-observed evidence; no authoritative HIP assessment");
 });
 
 test("popup view model renders layered scores", () => {
