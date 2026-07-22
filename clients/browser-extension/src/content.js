@@ -592,7 +592,6 @@
         lastSummary.scanResultDataSource = "NotStored";
         lastSummary.scanResultError = response?.error || "Submission failed";
         publishSummary();
-        console.warn("HIP scan result was not persisted.", response?.error);
         return;
       }
 
