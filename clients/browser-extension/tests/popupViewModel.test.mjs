@@ -342,7 +342,8 @@ test("loading summary view model shows explicit pending indicators", () => {
 test("popup distinguishes an observed matching badge from verification", () => {
   assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: true }), "Observed; domain matches");
   assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: false }), "Observed; domain mismatch");
-  assert.equal(badgeObservationText({}), "Not observed");
+  assert.equal(badgeObservationText({ hipBadgeObserved: false, hipBadgeDomainMatch: false }), "Not observed");
+  assert.equal(badgeObservationText({}), "Scan unavailable");
 });
 
 test("popup markup contains primary UX fields and feedback controls", () => {

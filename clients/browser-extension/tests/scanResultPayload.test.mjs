@@ -404,6 +404,7 @@ test("content script observes HIP badge markup and submits only boolean badge si
   const contentScript = await readFile(new URL("../src/content.js", import.meta.url), "utf8");
 
   assert.match(contentScript, /querySelectorAll\("\[data-hip-badge\], \.hip-trust-badge\[data-domain\]"\)/);
+  assert.ok(contentScript.indexOf("collectHipBadgeSignals();") < contentScript.indexOf('markScanStage("Starting")'));
   assert.match(contentScript, /hipBadgeObserved: String\(lastSummary\.hipBadgeObserved\)/);
   assert.match(contentScript, /hipBadgeDomainMatch: String\(lastSummary\.hipBadgeDomainMatch\)/);
   assert.doesNotMatch(contentScript, /hipBadgeTextContent|hipBadgeInnerHtml/);

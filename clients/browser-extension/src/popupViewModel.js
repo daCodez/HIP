@@ -302,7 +302,7 @@ export function badgeObservationText(summary = {}) {
     return "Observed; domain mismatch";
   }
 
-  return "Not observed";
+  return summary?.hipBadgeObserved === false ? "Not observed" : "Scan unavailable";
 }
 
 /**

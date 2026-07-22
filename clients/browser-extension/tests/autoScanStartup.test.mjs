@@ -113,6 +113,13 @@ test("popup starts scanner once when no cached page-load summary exists", () => 
   assert.equal(popupSource.includes('"src/content.js"'), true);
 });
 
+test("popup probes badge markup directly when an already-open tab has no content summary", () => {
+  assert.equal(popupSource.includes("function observeHipBadgeInActiveTab"), true);
+  assert.equal(popupSource.includes('querySelectorAll("[data-hip-badge], .hip-trust-badge[data-domain]")'), true);
+  assert.equal(popupSource.includes("hipBadgeObserved: badges.length > 0"), true);
+  assert.equal(popupSource.includes("hipBadgeDomainMatch: matchesPage"), true);
+});
+
 test("popup renders completed content-script Site Safety before duplicate API scan", () => {
   const summaryIndex = popupSource.indexOf("const summarySiteSafety = siteSafetyResultFromSummary(summary);");
   const renderIndex = popupSource.indexOf("return renderSiteSafetyResult(summarySiteSafety);", summaryIndex);

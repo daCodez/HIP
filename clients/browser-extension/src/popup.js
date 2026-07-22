@@ -15,6 +15,7 @@ let activeTabUrl = null;
 let activeLookup = null;
 let activeSiteSafety = null;
 let popupStartedContentScan = false;
+let badgeObservationPromise = null;
 
 const summaryPollAttempts = 24;
 const summaryPollDelayMs = 500;
@@ -266,8 +267,60 @@ async function getScanSummary() {
     return {};
   }
 
-  const response = await chrome.runtime.sendMessage({ type: "HIP_GET_SCAN_SUMMARY", tabId: activeTabId });
-  return response?.result || {};
+  badgeObservationPromise ??= observeHipBadgeInActiveTab(activeTabId);
+  const [response, badgeObservation] = await Promise.all([
+    chrome.runtime.sendMessage({ type: "HIP_GET_SCAN_SUMMARY", tabId: activeTabId }),
+    badgeObservationPromise
+  ]);
+  return badgeObservation
+    ? { ...(response?.result || {}), ...badgeObservation }
+    : response?.result || {};
+}
+
+/**
+ * Reads only HIP badge attributes from the active page and returns two booleans.
+ * This popup fallback remains useful when an already-open tab has no content script
+ * after an unpacked-extension update; it never reads or returns page text.
+ */
+async function observeHipBadgeInActiveTab(tabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const normalizeHost = hostname => (hostname || "").replace(/^www\./i, "").toLowerCase();
+        const currentDomain = normalizeHost(window.location.hostname);
+        const badges = Array.from(document.querySelectorAll("[data-hip-badge], .hip-trust-badge[data-domain]"));
+        const matchesPage = badges.some(badge => {
+          const declaration = (badge.getAttribute("data-hip-badge") || badge.getAttribute("data-domain") || "").trim();
+          if (!declaration || declaration.length > 253) {
+            return false;
+          }
+
+          try {
+            const parsed = new URL(declaration.includes("://") ? declaration : `https://${declaration}`);
+            return ["http:", "https:"].includes(parsed.protocol) &&
+              !parsed.username && !parsed.password && !parsed.port &&
+              (parsed.pathname === "/" || parsed.pathname === "") && !parsed.search && !parsed.hash &&
+              normalizeHost(parsed.hostname) === currentDomain;
+          } catch {
+            return false;
+          }
+        });
+
+        return {
+          hipBadgeObserved: badges.length > 0,
+          hipBadgeDomainMatch: matchesPage
+        };
+      }
+    });
+    const observation = results?.[0]?.result;
+    return typeof observation?.hipBadgeObserved === "boolean" &&
+      typeof observation?.hipBadgeDomainMatch === "boolean"
+      ? observation
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
