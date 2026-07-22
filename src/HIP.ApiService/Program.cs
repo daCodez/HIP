@@ -875,6 +875,10 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
             await scanResultStorageService.SaveAsync(request, result, cancellationToken);
             return Results.Ok(ToSiteSafetyScanResponse(result));
         }
+        catch (OperationCanceledException)
+        {
+            return Results.Empty;
+        }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
         {
             return Results.BadRequest(new ApiErrorResponse(ex.Message));
