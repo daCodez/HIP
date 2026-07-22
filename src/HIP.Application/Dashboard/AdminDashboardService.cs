@@ -1,4 +1,5 @@
 using HIP.Application.Browser;
+using HIP.Application.Identity;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
@@ -7,6 +8,7 @@ using HIP.Application.SelfHealing;
 using HIP.Application.Scalability;
 using HIP.Application.SiteSafety;
 using HIP.Domain.Audit;
+using HIP.Domain.Identity;
 using HIP.Domain.Reporting;
 using HIP.Domain.Review;
 using HIP.Domain.Risk;
@@ -29,6 +31,7 @@ namespace HIP.Application.Dashboard;
 /// <param name="adminReviewQueueRepository">Generated admin review signal repository.</param>
 /// <param name="weightedFeedbackRepository">Weighted feedback repository.</param>
 /// <param name="adminSiteSafetyRuleRepository">Admin-managed Site Safety rule repository.</param>
+/// <param name="websiteIdentityRepository">Registered website identity repository.</param>
 public sealed class AdminDashboardService(
     IBrowserScanResultRepository browserScanResultRepository,
     IDashboardScanAggregateStore dashboardScanAggregateStore,
@@ -41,7 +44,8 @@ public sealed class AdminDashboardService(
     IGeneratedRuleCandidateRepository generatedRuleCandidateRepository,
     IAdminReviewQueueRepository adminReviewQueueRepository,
     IWeightedFeedbackRepository weightedFeedbackRepository,
-    IAdminSiteSafetyRuleRepository adminSiteSafetyRuleRepository) : IAdminDashboardService
+    IAdminSiteSafetyRuleRepository adminSiteSafetyRuleRepository,
+    IWebsiteIdentityRepository websiteIdentityRepository) : IAdminDashboardService
 {
     private static readonly TimeSpan LegacyReadBudget = TimeSpan.FromMilliseconds(750);
 
@@ -72,6 +76,7 @@ public sealed class AdminDashboardService(
         var appealsRead = await ReadOptionalAsync(appealRepository.ListAsync, cancellationToken);
         var overridesRead = await ReadOptionalAsync(reputationOverrideRepository.ListAsync, cancellationToken);
         var auditLogsRead = await ReadOptionalAsync(auditLogRepository.ListAsync, cancellationToken);
+        var websiteIdentitiesRead = await ReadOptionalAsync(websiteIdentityRepository.ListAsync, cancellationToken);
 
         var findings = findingsRead.Items;
         var rules = rulesRead.Items;
@@ -83,6 +88,7 @@ public sealed class AdminDashboardService(
         var appeals = appealsRead.Items;
         var overrides = overridesRead.Items;
         var auditLogs = auditLogsRead.Items;
+        var websiteIdentities = websiteIdentitiesRead.Items;
         var scanHistory = clientTelemetryRead.IsAvailable ? clientTelemetryRead.Items : browserScans;
         var authoritativeScans = scanHistory
             .Where(BrowserScanResultProvenance.IsServerAuthoritative)
@@ -152,6 +158,11 @@ public sealed class AdminDashboardService(
         var hasExternalProviderData = externalProviderErrors > 0 ||
                                       generatedReviews.Any(item => item.Source == AdminReviewSource.ExternalProvider) ||
                                       browserScans.Any(HasExternalProviderMetadata);
+        var verifiedWebsiteIdentities = websiteIdentities.Count(identity => identity.VerificationStatus == VerificationStatus.Verified);
+        var pendingWebsiteIdentities = websiteIdentities.Count(identity =>
+            identity.VerificationStatus is VerificationStatus.Pending or VerificationStatus.Unverified);
+        var inactiveWebsiteIdentities = websiteIdentities.Count(identity =>
+            identity.VerificationStatus is VerificationStatus.Suspended or VerificationStatus.Revoked or VerificationStatus.Expired);
 
         var riskyFindings = findings.Count(finding => IsRisky(finding.RiskLevel));
         var dangerousDomains = findings
@@ -188,6 +199,10 @@ public sealed class AdminDashboardService(
             Card("clientTelemetryCautionResults", "Observed Caution", clientTelemetryCautionResults, !clientTelemetryRead.IsAvailable ? "Unavailable" : clientTelemetry.Length > 0 ? "Informational" : "No Data", !clientTelemetryRead.IsAvailable || clientTelemetry.Length == 0, "Client observations classified as limited, unknown, or suspicious; not authoritative."),
             Card("clientTelemetryRiskResults", "Observed Risk", clientTelemetryRiskResults, !clientTelemetryRead.IsAvailable ? "Unavailable" : clientTelemetry.Length > 0 ? "Informational" : "No Data", !clientTelemetryRead.IsAvailable || clientTelemetry.Length == 0, "Client observations classified as HighRisk, Dangerous, or Critical; not authoritative."),
             Card("latestClientTelemetry", "Latest Client Observation", latestClientTelemetryUtc is null ? 0 : (int)Math.Max(0, Math.Round((now - latestClientTelemetryUtc.Value).TotalMinutes)), !clientTelemetryRead.IsAvailable ? "Unavailable" : latestClientTelemetryUtc is null ? "No Data" : "Minutes Ago", !clientTelemetryRead.IsAvailable || latestClientTelemetryUtc is null, "Minutes since HIP stored the latest privacy-safe client observation."),
+            Card("registeredWebsiteIdentities", "Registered Domains", websiteIdentities.Count, !websiteIdentitiesRead.IsAvailable ? "Unavailable" : websiteIdentities.Count > 0 ? "Registered" : "No Data", !websiteIdentitiesRead.IsAvailable, "Domains registered with HIP. Registration alone does not prove domain control or site safety."),
+            Card("verifiedWebsiteIdentities", "Control Verified", verifiedWebsiteIdentities, !websiteIdentitiesRead.IsAvailable ? "Unavailable" : "Domain Control", !websiteIdentitiesRead.IsAvailable, "Domains where HIP verified control. This does not certify that a site is safe or compliant."),
+            Card("pendingWebsiteIdentities", "Awaiting Verification", pendingWebsiteIdentities, !websiteIdentitiesRead.IsAvailable ? "Unavailable" : pendingWebsiteIdentities > 0 ? "Action Needed" : "Clear", !websiteIdentitiesRead.IsAvailable, "Registered domains still awaiting successful control verification."),
+            Card("inactiveWebsiteIdentities", "Inactive Verifications", inactiveWebsiteIdentities, !websiteIdentitiesRead.IsAvailable ? "Unavailable" : inactiveWebsiteIdentities > 0 ? "Review" : "Clear", !websiteIdentitiesRead.IsAvailable, "Suspended, revoked, or expired domain verifications."),
             Card("riskyFindings", "Risky Findings", riskyFindings, !findingsRead.IsAvailable ? "Unavailable" : riskyFindings > 0 ? "Needs Review" : "Clear", !findingsRead.IsAvailable, "Risk finding reports with HighRisk, Dangerous, or Critical status."),
             Card("openReviewItems", "Open Review Items", pendingManualReviews, reviewsRead.IsAvailable ? "Queue" : "Unavailable", !reviewsRead.IsAvailable, "Manual review items that still need attention."),
             Card("pendingReviewItems", "Pending Review Items", pendingManualReviews + pendingGeneratedReviews, reviewsRead.IsAvailable && generatedReviewsRead.IsAvailable ? "Queue" : "Unavailable", !reviewsRead.IsAvailable || !generatedReviewsRead.IsAvailable, "Manual and generated review items that still need attention."),
@@ -354,7 +369,8 @@ public sealed class AdminDashboardService(
             Source("manualReviews", reviewsRead),
             Source("appeals", appealsRead),
             Source("reputationOverrides", overridesRead),
-            Source("auditLogs", auditLogsRead)
+            Source("auditLogs", auditLogsRead),
+            Source("websiteIdentities", websiteIdentitiesRead)
         };
 
         var dataSource = hasScanData

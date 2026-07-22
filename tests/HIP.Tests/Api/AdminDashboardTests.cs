@@ -1,11 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using HIP.Application.Browser;
 using HIP.Application.Dashboard;
+using HIP.Application.Identity;
 using HIP.Application.Reputation;
 using HIP.Domain.Reporting;
+using HIP.Domain.Identity;
 using HIP.Domain.Review;
 using HIP.Domain.Risk;
 using HIP.Domain.Rules;
@@ -236,6 +239,61 @@ public sealed class AdminDashboardTests
             Assert.That(feedbackSource.ItemCount, Is.Zero);
             Assert.That(Card(summary, "feedbackReceived").Status, Is.EqualTo("Unavailable"));
             Assert.That(Card(summary, "feedbackReceived").IsPlaceholder, Is.True);
+        });
+    }
+
+    [Test]
+    public async Task Dashboard_reports_website_identity_lifecycle_without_claiming_site_safety()
+    {
+        var identities = new StubWebsiteIdentityRepository(
+            WebsiteIdentity("verified.example", VerificationStatus.Verified),
+            WebsiteIdentity("pending.example", VerificationStatus.Pending),
+            WebsiteIdentity("unverified.example", VerificationStatus.Unverified),
+            WebsiteIdentity("suspended.example", VerificationStatus.Suspended),
+            WebsiteIdentity("revoked.example", VerificationStatus.Revoked),
+            WebsiteIdentity("expired.example", VerificationStatus.Expired));
+        var summary = await Dashboard(
+            new InMemoryBrowserScanResultRepository(),
+            websiteIdentityRepository: identities).GetSummaryAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Card(summary, "registeredWebsiteIdentities").Value, Is.EqualTo(6));
+            Assert.That(Card(summary, "verifiedWebsiteIdentities").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "pendingWebsiteIdentities").Value, Is.EqualTo(2));
+            Assert.That(Card(summary, "inactiveWebsiteIdentities").Value, Is.EqualTo(3));
+            Assert.That(Card(summary, "verifiedWebsiteIdentities").Description, Does.Contain("does not certify"));
+            Assert.That(summary.Sources.Single(source => source.Key == "websiteIdentities").ItemCount, Is.EqualTo(6));
+        });
+    }
+
+    [Test]
+    public async Task Dashboard_marks_website_identity_metrics_unavailable_when_the_repository_fails()
+    {
+        var summary = await Dashboard(
+            new InMemoryBrowserScanResultRepository(),
+            websiteIdentityRepository: new FailingWebsiteIdentityRepository()).GetSummaryAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Card(summary, "registeredWebsiteIdentities").Status, Is.EqualTo("Unavailable"));
+            Assert.That(Card(summary, "registeredWebsiteIdentities").IsPlaceholder, Is.True);
+            Assert.That(Card(summary, "verifiedWebsiteIdentities").IsPlaceholder, Is.True);
+            Assert.That(summary.Sources.Single(source => source.Key == "websiteIdentities").IsAvailable, Is.False);
+        });
+    }
+
+    [Test]
+    public void Dashboard_page_explains_domain_verification_without_a_safety_claim()
+    {
+        var source = ReadDashboardSource();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("Domain identity"));
+            Assert.That(source, Does.Contain("/admin/identity/websites"));
+            Assert.That(source, Does.Contain("Verification confirms control of a domain."));
+            Assert.That(source, Does.Contain("It does not certify that the site is safe or compliant."));
         });
     }
 
@@ -934,18 +992,27 @@ public sealed class AdminDashboardTests
     /// Reads the dashboard Razor source from the repository root so markup-only refresh states are covered.
     /// </summary>
     /// <returns>Dashboard Razor source text.</returns>
-    private static string ReadDashboardSource()
+    private static string ReadDashboardSource([CallerFilePath] string sourceFilePath = "")
     {
-        var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
-        while (directory is not null)
+        foreach (var startPath in new[]
         {
-            var candidate = Path.Combine(directory.FullName, "src", "HIP.Web", "Components", "Pages", "AdminDashboard.razor");
-            if (File.Exists(candidate))
+            Path.GetDirectoryName(sourceFilePath) ?? string.Empty,
+            Directory.GetCurrentDirectory(),
+            TestContext.CurrentContext.WorkDirectory,
+            TestContext.CurrentContext.TestDirectory
+        }.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var directory = new DirectoryInfo(startPath);
+            while (directory is not null)
             {
-                return File.ReadAllText(candidate);
-            }
+                var candidate = Path.Combine(directory.FullName, "src", "HIP.Web", "Components", "Pages", "AdminDashboard.razor");
+                if (File.Exists(candidate))
+                {
+                    return File.ReadAllText(candidate);
+                }
 
-            directory = directory.Parent;
+                directory = directory.Parent;
+            }
         }
 
         throw new FileNotFoundException("Could not locate AdminDashboard.razor from the test output directory.");
@@ -1040,7 +1107,8 @@ public sealed class AdminDashboardTests
         IAdminReviewQueueRepository? generatedReviewRepository = null,
         IWeightedFeedbackRepository? weightedFeedbackRepository = null,
         IAdminSiteSafetyRuleRepository? adminSiteSafetyRuleRepository = null,
-        IRuleRepository? ruleRepository = null)
+        IRuleRepository? ruleRepository = null,
+        IWebsiteIdentityRepository? websiteIdentityRepository = null)
     {
         var auditLogRepository = new InMemoryAuditLogRepository();
         return new AdminDashboardService(
@@ -1055,7 +1123,59 @@ public sealed class AdminDashboardTests
             new InMemoryGeneratedRuleCandidateRepository(),
             generatedReviewRepository ?? new InMemoryAdminReviewQueueRepository(),
             weightedFeedbackRepository ?? new InMemoryWeightedFeedbackRepository(),
-            adminSiteSafetyRuleRepository ?? new InMemoryAdminSiteSafetyRuleRepository());
+            adminSiteSafetyRuleRepository ?? new InMemoryAdminSiteSafetyRuleRepository(),
+            websiteIdentityRepository ?? new StubWebsiteIdentityRepository());
+    }
+
+    private static WebsiteIdentity WebsiteIdentity(string domain, VerificationStatus status) =>
+        new(
+            domain,
+            $"hip:web:{domain}",
+            [],
+            status,
+            VerificationMethod.DnsTxt,
+            DateTimeOffset.UtcNow.AddDays(-1),
+            status == VerificationStatus.Verified ? DateTimeOffset.UtcNow.AddHours(-1) : null);
+
+    private sealed class StubWebsiteIdentityRepository(params WebsiteIdentity[] identities) : IWebsiteIdentityRepository
+    {
+        private readonly Dictionary<string, WebsiteIdentity> records =
+            identities.ToDictionary(identity => identity.Domain, StringComparer.OrdinalIgnoreCase);
+
+        public Task<bool> TryCreateAsync(WebsiteIdentity websiteIdentity, CancellationToken cancellationToken) =>
+            Task.FromResult(records.TryAdd(websiteIdentity.Domain, websiteIdentity));
+
+        public Task<bool> TryUpdateAsync(WebsiteIdentity expected, WebsiteIdentity updated, CancellationToken cancellationToken)
+        {
+            if (!records.TryGetValue(expected.Domain, out var current) || current != expected)
+            {
+                return Task.FromResult(false);
+            }
+
+            records[expected.Domain] = updated;
+            return Task.FromResult(true);
+        }
+
+        public Task<WebsiteIdentity> SaveAsync(WebsiteIdentity websiteIdentity, CancellationToken cancellationToken)
+        {
+            records[websiteIdentity.Domain] = websiteIdentity;
+            return Task.FromResult(websiteIdentity);
+        }
+
+        public Task<WebsiteIdentity?> GetAsync(string domain, CancellationToken cancellationToken) =>
+            Task.FromResult(records.GetValueOrDefault(domain));
+
+        public Task<IReadOnlyCollection<WebsiteIdentity>> ListAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyCollection<WebsiteIdentity>>(records.Values.ToArray());
+    }
+
+    private sealed class FailingWebsiteIdentityRepository : IWebsiteIdentityRepository
+    {
+        public Task<bool> TryCreateAsync(WebsiteIdentity websiteIdentity, CancellationToken cancellationToken) => throw new InvalidOperationException("Unavailable");
+        public Task<bool> TryUpdateAsync(WebsiteIdentity expected, WebsiteIdentity updated, CancellationToken cancellationToken) => throw new InvalidOperationException("Unavailable");
+        public Task<WebsiteIdentity> SaveAsync(WebsiteIdentity websiteIdentity, CancellationToken cancellationToken) => throw new InvalidOperationException("Unavailable");
+        public Task<WebsiteIdentity?> GetAsync(string domain, CancellationToken cancellationToken) => throw new InvalidOperationException("Unavailable");
+        public Task<IReadOnlyCollection<WebsiteIdentity>> ListAsync(CancellationToken cancellationToken) => throw new InvalidOperationException("Unavailable");
     }
 
     /// <summary>
