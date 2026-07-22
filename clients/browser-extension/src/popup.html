@@ -109,6 +109,45 @@
         <strong id="siteSafetyConfidence">Unknown</strong>
       </div>
       <p id="siteSafetySummary" class="site-safety-summary">Checking site safety...</p>
+      <div id="hipScoringPanel" class="formal-scoring-panel" hidden>
+        <h2>Formal HIP score</h2>
+        <div class="status-row">
+          <span>Model</span>
+          <strong id="hipScoringModelVersion">Unavailable</strong>
+        </div>
+        <div class="status-row">
+          <span>Presentation status</span>
+          <strong id="hipPresentationStatus">Unknown</strong>
+        </div>
+        <div class="status-row">
+          <span>Final HIP score</span>
+          <strong id="hipFinalScore">--/100</strong>
+        </div>
+        <div class="status-row">
+          <span>Domain trust</span>
+          <strong id="hipDomainTrustScore">--/100</strong>
+        </div>
+        <div class="status-row">
+          <span>Page trust</span>
+          <strong id="hipPageTrustScore">--/100</strong>
+        </div>
+        <div class="status-row">
+          <span>Content risk</span>
+          <strong id="hipContentRiskScore">--/100 risk</strong>
+        </div>
+        <div class="status-row">
+          <span>Evidence freshness</span>
+          <strong id="hipEvidenceFreshness">Unknown</strong>
+        </div>
+        <div class="status-row">
+          <span>Trust assertion</span>
+          <strong id="hipTrustAssertion">Not available</strong>
+        </div>
+        <div id="hipScoringReasonsPanel" class="formal-scoring-reasons" hidden>
+          <h2>Score reasons</h2>
+          <ul id="hipScoringReasons"></ul>
+        </div>
+      </div>
       <div class="status-row">
         <span>Malware risk</span>
         <strong id="malwareRisk">Unknown</strong>

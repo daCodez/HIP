@@ -1,3 +1,5 @@
+import { createInstallationRequestProof } from "./installationIdentity.js";
+
 export const HIP_CONFIG = Object.freeze({
   apiBaseUrl: "http://localhost:5099",
   webBaseUrl: "http://localhost:5123"
@@ -254,13 +256,16 @@ export class HipApiClient {
       throw new Error("Invalid HIP API base URL.");
     }
 
-    const url = `${this.config.apiBaseUrl}/api/v1/browser/scan-results`;
+    const path = "/api/v1/browser/scan-results";
+    const url = `${this.config.apiBaseUrl}${path}`;
+    const proof = await createInstallationRequestProof("POST", path, result);
     const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/json",
-        ...this.instanceHeaders()
+        ...this.instanceHeaders(),
+        ...deviceProofHeaders(proof)
       },
       body: JSON.stringify(result)
     });
@@ -341,6 +346,16 @@ export class HipApiClient {
 
     return url.toString();
   }
+}
+
+function deviceProofHeaders(proof) {
+  return proof ? {
+    "X-HIP-Device-Id": proof.deviceId,
+    "X-HIP-Device-Timestamp": proof.timestamp,
+    "X-HIP-Device-Nonce": proof.nonce,
+    "X-HIP-Device-Body-SHA256": proof.bodyDigest,
+    "X-HIP-Device-Signature": proof.signature
+  } : {};
 }
 
 /**
@@ -534,6 +549,7 @@ export function buildScanResultPayload({ domain, pageUrl, pageUrlHash = null, lo
     domain,
     pageUrl: settings.allowRawPageUrlSubmission === true ? stripQueryAndFragment(pageUrl) : null,
     pageUrlHash,
+    scannedAtUtc: null,
     pluginVersion,
     score: assessment.score,
     riskLevel: status,

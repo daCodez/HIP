@@ -20,13 +20,18 @@
         "src/safetyPageRouter.js",
         "src/browserPrivacyGuards.js",
         "src/browserScanAssessment.js",
+        "src/formalScoring.js",
+        "src/contentMessageContracts.js",
         "src/content.js"
       ],
       "run_at": "document_idle"
     }
   ],
   "host_permissions": [
-    "http://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "optional_host_permissions": [
     "https://*/*"
   ],
   "permissions": [
@@ -34,6 +39,9 @@
     "scripting",
     "storage"
   ],
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:* https:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+  },
   "icons": {
     "16": "assets/icons/hip-16.svg",
     "32": "assets/icons/hip-32.svg",

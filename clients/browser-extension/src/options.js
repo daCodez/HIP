@@ -1,4 +1,5 @@
 import { DEFAULT_HIP_SETTINGS, HipApiClient, loadHipSettings, saveHipSettings } from "./hipApiClient.js";
+import { ensureHipHostPermissions } from "./extensionHostPermissions.js";
 
 const form = document.getElementById("settingsForm");
 const status = document.getElementById("status");
@@ -36,12 +37,24 @@ document.getElementById("restoreDefaults").addEventListener("click", async () =>
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
-  const settings = readForm();
-  const savedSettings = await saveHipSettings(settings);
-  const syncMessage = await syncProviderSettings(savedSettings);
-  render(savedSettings);
-  status.textContent = "Settings saved.";
-  providerStatus.textContent = syncMessage;
+  status.textContent = "Checking HIP service access...";
+
+  try {
+    const settings = readForm();
+    const granted = await ensureHipHostPermissions([settings.apiBaseUrl, settings.webBaseUrl]);
+    if (!granted) {
+      status.textContent = "Settings not saved. HIP service access was not granted.";
+      return;
+    }
+
+    const savedSettings = await saveHipSettings(settings);
+    const syncMessage = await syncProviderSettings(savedSettings);
+    render(savedSettings);
+    status.textContent = "Settings saved.";
+    providerStatus.textContent = syncMessage;
+  } catch (error) {
+    status.textContent = `Settings not saved: ${error.message}`;
+  }
 });
 
 initialize().catch(error => {

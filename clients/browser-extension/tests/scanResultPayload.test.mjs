@@ -392,7 +392,7 @@ test("content script contains duplicate scan submission guards", async () => {
 
   assert.match(contentScript, /pendingScanSubmissions/);
   assert.match(contentScript, /pageUrlHash/);
-  assert.match(backgroundScript, /pendingScanResultSaves/);
+  assert.match(backgroundScript, /scanSubmissionDeduper/);
   assert.match(backgroundScript, /duplicateSuppressed/);
 });
 

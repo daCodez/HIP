@@ -174,6 +174,63 @@ test("site safety view model renders status confidence summary and warnings", ()
   assert.equal(viewModel.downloadRiskText, "High");
 });
 
+test("site safety view model displays formal HIP scoring and conservative presentation status", () => {
+  const viewModel = buildSiteSafetyViewModel({
+    status: "Clean",
+    confidenceLevel: "High",
+    contentRiskScore: 95,
+    warnings: ["Legacy warning."],
+    scoring: {
+      modelVersion: "hip-0301-v1",
+      domainTrustScore: 84,
+      pageTrustScore: 69,
+      contentRiskScore: 31,
+      finalHipScore: 74,
+      finalStatus: "MostlyTrusted",
+      presentationStatus: "LimitedTrustData",
+      confidence: "Medium",
+      evidenceFreshness: "Mixed",
+      trustAssertionDisposition: "WithheldInsufficientEvidence",
+      canAssertPositiveTrust: false,
+      finalScoreHigherMeansMoreTrust: true,
+      contentRiskScoreHigherMeansMoreRisk: true,
+      reasons: ["Fresh domain evidence is available."],
+      warnings: ["Some evidence is stale."]
+    }
+  });
+
+  assert.equal(viewModel.status, "LimitedTrustData");
+  assert.equal(viewModel.confidenceLevelText, "Medium");
+  assert.equal(viewModel.hasScoringProjection, true);
+  assert.equal(viewModel.scoringModelVersionText, "hip-0301-v1");
+  assert.equal(viewModel.finalHipScoreText, "74/100");
+  assert.equal(viewModel.domainTrustScoreText, "84/100");
+  assert.equal(viewModel.pageTrustScoreText, "69/100");
+  assert.equal(viewModel.contentRiskScoreText, "31/100 risk");
+  assert.equal(viewModel.evidenceFreshnessText, "Mixed");
+  assert.equal(viewModel.trustAssertionText, "Withheld: insufficient evidence");
+  assert.deepEqual(viewModel.scoringReasons, ["Fresh domain evidence is available."]);
+  assert.deepEqual(viewModel.warnings, ["Legacy warning.", "Some evidence is stale."]);
+});
+
+test("site safety view model falls back to inverted legacy content trust", () => {
+  const viewModel = buildSiteSafetyViewModel({
+    status: "Clean",
+    confidenceLevel: "High",
+    domainTrustScore: 90,
+    pageTrustScore: 80,
+    contentRiskScore: 85,
+    finalHipScore: 88,
+    scoring: {
+      modelVersion: "hip-0301-v1",
+      contentRiskScoreHigherMeansMoreRisk: false
+    }
+  });
+
+  assert.equal(viewModel.scoringModelVersionText, "Legacy compatibility projection");
+  assert.equal(viewModel.contentRiskScoreText, "15/100 risk");
+});
+
 test("site safety view model renders SSL Labs Qualys provider evidence", () => {
   const viewModel = buildSiteSafetyViewModel({
     status: "LimitedData",

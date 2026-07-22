@@ -11,6 +11,7 @@ const apiClientSource = await readFile(new URL("../src/hipApiClient.js", import.
 const backgroundSource = await readFile(new URL("../src/background.js", import.meta.url), "utf8");
 const manifestSource = await readFile(new URL("../manifest.json", import.meta.url), "utf8");
 const workerWrapperSource = await readFile(new URL("../background.js", import.meta.url), "utf8");
+const formalScoringSource = await readFile(new URL("../src/formalScoring.js", import.meta.url), "utf8");
 
 test("content script publishes scan progress before site scoring", () => {
   const startupIndex = contentSource.indexOf('markScanStage("Starting")');
@@ -48,10 +49,23 @@ test("content script runs Site Safety during automatic page scan", () => {
 });
 
 test("content script publishes compact Site Safety results for the popup", () => {
-  assert.equal(contentSource.includes("lastSummary.siteSafety = compactSiteSafetyResult(response.result);"), true);
+  assert.equal(contentSource.includes("lastSummary.siteSafety = compactResult;"), true);
   assert.equal(contentSource.includes("function compactSiteSafetyResult"), true);
   assert.equal(contentSource.includes("function safeProviderEvidence"), true);
   assert.equal(contentSource.includes("errors:"), false);
+});
+
+test("formal scoring helper loads before content and controls persisted score direction", () => {
+  const manifest = JSON.parse(manifestSource);
+  const scripts = manifest.content_scripts[0].js;
+
+  assert.equal(scripts.includes("src/formalScoring.js"), true);
+  assert.equal(scripts.indexOf("src/formalScoring.js") < scripts.indexOf("src/content.js"), true);
+  assert.equal(formalScoringSource.includes("projectSiteSafetyScores"), true);
+  assert.equal(contentSource.includes("globalThis.HipFormalScoring"), true);
+  assert.equal(contentSource.includes("const compactResult = compactSiteSafetyResult(response.result);"), true);
+  assert.equal(contentSource.includes("const scoreProjection = formalScoring.projectSiteSafetyScores(response.result);"), true);
+  assert.equal(contentSource.includes("lastSummary.contentRiskScore = scoreProjection?.contentRiskScore ?? null;"), true);
 });
 
 test("content script skips private and HIP owned URLs before Site Safety", () => {

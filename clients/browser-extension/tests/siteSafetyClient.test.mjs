@@ -270,6 +270,13 @@ test("popup contains site safety display fields", async () => {
   assert.match(html, /id="siteSafetyPanel"/);
   assert.match(html, /id="malwareRisk"/);
   assert.match(html, /id="phishingRisk"/);
+  assert.match(html, /id="hipScoringPanel"/);
+  assert.match(html, /id="hipScoringModelVersion"/);
+  assert.match(html, /id="hipPresentationStatus"/);
+  assert.match(html, /id="hipFinalScore"/);
+  assert.match(html, /id="hipEvidenceFreshness"/);
+  assert.match(html, /id="hipTrustAssertion"/);
+  assert.match(html, /id="hipScoringReasons"/);
   assert.match(script, /renderSiteSafety/);
   assert.match(script, /scanSiteSafety/);
 });

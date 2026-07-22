@@ -12,10 +12,20 @@ obj/
 
 # Test output
 TestResults/
+.test-results/
+test-results/
+playwright-report/
 coverage/
 artifacts/
 *.coverage
 *.coveragexml
+
+# JavaScript dependencies
+node_modules/
+
+# Local code-analysis output
+.ua/
+graphify-out/
 
 # Logs
 *.log
