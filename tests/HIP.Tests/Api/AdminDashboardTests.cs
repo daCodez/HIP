@@ -585,14 +585,14 @@ public sealed class AdminDashboardTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(source, Does.Contain("Recent Scans"));
-            Assert.That(source, Does.Contain("Final Score"));
-            Assert.That(source, Does.Contain("Domain Trust"));
-            Assert.That(source, Does.Contain("Page Trust"));
-            Assert.That(source, Does.Contain("Content Risk"));
+            Assert.That(source, Does.Contain("Recent scans"));
+            Assert.That(source, Does.Contain("Final score"));
+            Assert.That(source, Does.Contain("Domain trust"));
+            Assert.That(source, Does.Contain("Page trust"));
+            Assert.That(source, Does.Contain("Content risk"));
             Assert.That(source, Does.Contain("Confidence"));
-            Assert.That(source, Does.Contain("No scans yet."));
-            Assert.That(source, Does.Contain("Scan history not connected yet").Or.Contain("Run the browser plugin"));
+            Assert.That(source, Does.Contain("No authoritative scans yet"));
+            Assert.That(source, Does.Contain("Run the browser extension"));
         });
     }
 
@@ -746,12 +746,11 @@ public sealed class AdminDashboardTests
         Assert.Multiple(() =>
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(body, Does.Contain("HIP Admin · dashboard"));
-            Assert.That(body, Does.Contain("Overview"));
-            Assert.That(body, Does.Contain("Monitor identity signals, investigate risk, and keep HIP healthy."));
-            Assert.That(body, Does.Not.Contain("Privacy-safe operational overview"));
+            Assert.That(body, Does.Contain("HIP Admin Overview"));
+            Assert.That(body, Does.Contain("Operations dashboard"));
+            Assert.That(body, Does.Contain("Today's protection posture"));
             Assert.That(body, Does.Not.Contain("HIP Local Launcher"));
-            Assert.That(body, Does.Contain("Recent threats"));
+            Assert.That(body, Does.Contain("Recent threat cases"));
         });
     }
 
@@ -762,11 +761,12 @@ public sealed class AdminDashboardTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(source, Does.Contain("<h1>Overview</h1>"));
+            Assert.That(source, Does.Contain("Today's protection posture"));
             Assert.That(source, Does.Contain("IAdminDashboardService"));
             Assert.That(source, Does.Contain("Overall HIP protection"));
-            Assert.That(source, Does.Contain("Scan activity"));
-            Assert.That(source, Does.Contain("Risk breakdown"));
+            Assert.That(source, Does.Contain("Protection outcomes by day"));
+            Assert.That(source, Does.Contain("Top risk categories"));
+            Assert.That(source, Does.Contain("Domain identity"));
             Assert.That(source, Does.Contain("Provider health"));
             Assert.That(source, Does.Contain("System activity"));
         });
