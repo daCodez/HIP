@@ -67,11 +67,15 @@
                     }
                     else if (HasClientObservedScore)
                     {
-                        <div class="trust-distribution" aria-label="Client-observed score @ClientObservedScore out of 100; not authoritative">
-                            <i class="observed" style="@SegmentStyle(ClientObservedScore)"></i>
+                        <div class="trust-distribution" aria-label="@ClientOutcomeDistributionLabel">
+                            <i class="trusted" style="@SegmentStyle(ClientTrustedPercent)"></i>
+                            <i class="caution" style="@SegmentStyle(ClientCautionPercent)"></i>
+                            <i class="risk" style="@SegmentStyle(ClientRiskPercent)"></i>
                         </div>
                         <footer class="trust-legend">
-                            <span><i class="observed"></i><b>@ClientObservedScore/100</b> Client-observed · not authoritative</span>
+                            <span><i class="trusted"></i><b>@ClientTrustedPercent%</b> Trusted</span>
+                            <span><i class="caution"></i><b>@ClientCautionPercent%</b> Caution</span>
+                            <span><i class="risk"></i><b>@ClientRiskPercent%</b> Risk</span>
                         </footer>
                     }
                 </div>
@@ -275,6 +279,13 @@
     private int ClientTelemetryCount => CountCard("clientTelemetryObservations");
     private int ClientObservedScore => Math.Clamp(Card("clientTelemetryAverageScore")?.Value ?? 0, 0, 100);
     private bool HasClientObservedScore => ClientTelemetryCount > 0 && Card("clientTelemetryAverageScore")?.IsPlaceholder == false;
+    private int ClientTrustedCount => CountCard("clientTelemetryTrustedResults");
+    private int ClientCautionCount => CountCard("clientTelemetryCautionResults");
+    private int ClientRiskCount => CountCard("clientTelemetryRiskResults");
+    private int ClientClassifiedCount => ClientTrustedCount + ClientCautionCount + ClientRiskCount;
+    private int ClientTrustedPercent => OutcomePercent(ClientTrustedCount, ClientClassifiedCount);
+    private int ClientCautionPercent => OutcomePercent(ClientCautionCount, ClientClassifiedCount);
+    private int ClientRiskPercent => OutcomePercent(ClientRiskCount, ClientClassifiedCount);
     private string ProtectionScoreText => (_summary?.HasScanData == true ? ProtectionScore : HasClientObservedScore ? ClientObservedScore : (int?)null)?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "—";
     private string ProtectionScoreAriaLabel => _summary?.HasScanData == true ? $"Authoritative protection score {ProtectionScore} out of 100" : HasClientObservedScore ? $"Client-observed score {ClientObservedScore} out of 100; not authoritative" : "Protection score unavailable";
     private int JudgmentCount => CountCard("pendingReviewItems") + CountCard("selfHealingCandidates") + CountCard("pendingAppeals");
@@ -292,6 +303,7 @@
     private string DashboardSummary => ProtectionExplanation;
     private string JudgmentHeading => JudgmentCount == 0 ? "No judgments remain." : $"{JudgmentCount} {Pluralize(JudgmentCount, "judgment", "judgments")} remain.";
     private string OutcomeDistributionLabel => $"{TrustedPercent}% trusted, {CautionPercent}% caution, {RiskPercent}% risk";
+    private string ClientOutcomeDistributionLabel => $"Client-observed distribution: {ClientTrustedPercent}% trusted, {ClientCautionPercent}% caution, {ClientRiskPercent}% risk; not authoritative";
     private string SystemStatusLabel => UnavailableSourceCount == 0 ? "Systems operational" : $"{UnavailableSourceCount} sources degraded";
     private string SystemStatusTone => UnavailableSourceCount == 0 ? "operational" : "degraded";
     private string PrioritySeverityTone => SeverityTone(PriorityThreat?.Severity);

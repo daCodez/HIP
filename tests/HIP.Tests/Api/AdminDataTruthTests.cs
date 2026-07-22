@@ -63,16 +63,16 @@ public sealed class AdminDataTruthTests
     public void Dashboard_displays_client_observed_score_without_claiming_authoritative_protection()
     {
         var source = ReadWorkspaceFile("src", "HIP.Web", "Components", "Pages", "AdminDashboard.razor");
-        var styles = ReadWorkspaceFile("src", "HIP.Web", "wwwroot", "admin-overview.css");
 
         Assert.Multiple(() =>
         {
             Assert.That(source, Does.Contain("ClientObservedScore"));
             Assert.That(source, Does.Contain("Client-observed score"));
             Assert.That(source, Does.Contain("not authoritative"));
-            Assert.That(source, Does.Contain("class=\"observed\""));
-            Assert.That(source, Does.Contain("SegmentStyle(ClientObservedScore)"));
-            Assert.That(styles, Does.Contain(".observed{background:var(--primary)!important}"));
+            Assert.That(source, Does.Contain("ClientTrustedPercent"));
+            Assert.That(source, Does.Contain("ClientCautionPercent"));
+            Assert.That(source, Does.Contain("ClientRiskPercent"));
+            Assert.That(source, Does.Contain("Client-observed distribution"));
         });
     }
 

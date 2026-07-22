@@ -368,6 +368,9 @@ public sealed class AdminDashboardTests
             Assert.That(Card(summary, "clientTelemetryObservations").Value, Is.EqualTo(1));
             Assert.That(Card(summary, "clientTelemetryObservations").Status, Is.EqualTo("Untrusted"));
             Assert.That(Card(summary, "clientTelemetryAverageScore").Value, Is.EqualTo(59));
+            Assert.That(Card(summary, "clientTelemetryTrustedResults").Value, Is.Zero);
+            Assert.That(Card(summary, "clientTelemetryCautionResults").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "clientTelemetryRiskResults").Value, Is.Zero);
         });
     }
 
