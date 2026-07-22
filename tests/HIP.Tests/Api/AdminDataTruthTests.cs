@@ -60,6 +60,21 @@ public sealed class AdminDataTruthTests
     }
 
     [Test]
+    public void Score_overview_selects_live_cards_by_contract_key_and_explains_client_telemetry()
+    {
+        var source = ReadWorkspaceFile("src", "HIP.Web", "Components", "Pages", "AdminReputationOverview.razor");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("trustedResults"));
+            Assert.That(source, Does.Contain("clientTelemetryObservations"));
+            Assert.That(source, Does.Contain("privacy-safe client observations stored"));
+            Assert.That(source, Does.Not.Contain("preferredLabels"));
+            Assert.That(source, Does.Contain("card.IsPlaceholder ? \"—\" : card.Value"));
+        });
+    }
+
+    [Test]
     public void Dashboard_consumer_pages_do_not_render_unavailable_cards_as_zero()
     {
         var pages = new[]

@@ -52,7 +52,10 @@ public sealed class AdminDashboardService(
     /// <returns>Admin dashboard summary.</returns>
     public async Task<AdminDashboardSummary> GetSummaryAsync(CancellationToken cancellationToken)
     {
-        var aggregate = await dashboardScanAggregateStore.GetAsync(cancellationToken);
+        // The legacy aggregate predates scan provenance and can contain anonymous client
+        // observations. Keep the injected store for contract compatibility, but derive all
+        // authoritative metrics from records whose server-owned provenance can be verified.
+        _ = dashboardScanAggregateStore;
         var browserScans = await browserScanResultRepository.ListRecentAsync(100, cancellationToken);
         var clientTelemetryRead = await ReadOptionalAsync(browserScanResultRepository.ListAsync, cancellationToken);
         // Keep the dashboard render on the hot path. Some MVP sources still use broad
@@ -80,36 +83,38 @@ public sealed class AdminDashboardService(
         var appeals = appealsRead.Items;
         var overrides = overridesRead.Items;
         var auditLogs = auditLogsRead.Items;
+        var scanHistory = clientTelemetryRead.IsAvailable ? clientTelemetryRead.Items : browserScans;
+        var authoritativeScans = scanHistory
+            .Where(BrowserScanResultProvenance.IsServerAuthoritative)
+            .OrderByDescending(scan => scan.LastCheckedUtc)
+            .ToArray();
         var clientTelemetry = clientTelemetryRead.Items
             .Where(scan => !BrowserScanResultProvenance.IsServerAuthoritative(scan))
             .OrderByDescending(scan => scan.LastCheckedUtc)
             .ToArray();
 
         var now = DateTimeOffset.UtcNow;
-        var hasScanData = aggregate.TotalScans > 0 || browserScans.Count > 0;
-        var useAggregateCounts = aggregate.TotalScans > 0;
-        var totalScans = useAggregateCounts ? aggregate.TotalScans : browserScans.Count;
-        var scansToday = useAggregateCounts
-            ? aggregate.ScansToday
-            : browserScans.Count(scan => scan.LastCheckedUtc.UtcDateTime.Date == now.UtcDateTime.Date);
-        var domainsScanned = await browserScanResultRepository.CountDistinctDomainsAsync(cancellationToken);
-        var linksScanned = browserScans.Sum(scan => scan.LinksScanned);
-        var riskyLinksFound = browserScans.Sum(scan => scan.RiskyLinksFound);
-        var suspiciousLinksFound = browserScans.Sum(scan => scan.SuspiciousLinksFound);
-        var dangerousLinksFound = browserScans.Sum(scan => scan.DangerousLinksFound);
-        var trustedResults = useAggregateCounts ? aggregate.Trusted : browserScans.Count(IsTrustedScan);
-        var mostlyTrustedResults = useAggregateCounts ? aggregate.MostlyTrusted : browserScans.Count(IsMostlyTrustedScan);
-        var limitedTrustResults = useAggregateCounts ? aggregate.LimitedTrustData : browserScans.Count(IsLimitedTrustScan);
-        var unknownResults = useAggregateCounts ? aggregate.Unknown : browserScans.Count(IsUnknownScan);
-        var suspiciousResults = useAggregateCounts ? aggregate.Suspicious : browserScans.Count(IsSuspiciousScan);
-        var highRiskResults = useAggregateCounts ? aggregate.HighRisk : browserScans.Count(IsHighRiskScan);
-        var dangerousResults = useAggregateCounts ? aggregate.Dangerous : browserScans.Count(IsDangerousScan);
-        var scansLast24Hours = browserScans.Count(scan => scan.LastCheckedUtc >= now.AddHours(-24));
-        var scansLast7Days = browserScans.Count(scan => scan.LastCheckedUtc >= now.AddDays(-7));
-        var averageHipScore = (hasScanData && browserScans.Count > 0)
-            ? (int)Math.Round(browserScans.Average(scan => scan.Score))
+        var hasScanData = authoritativeScans.Length > 0;
+        var totalScans = authoritativeScans.Length;
+        var scansToday = authoritativeScans.Count(scan => scan.LastCheckedUtc.UtcDateTime.Date == now.UtcDateTime.Date);
+        var domainsScanned = authoritativeScans.Select(scan => scan.Domain).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        var linksScanned = authoritativeScans.Sum(scan => scan.LinksScanned);
+        var riskyLinksFound = authoritativeScans.Sum(scan => scan.RiskyLinksFound);
+        var suspiciousLinksFound = authoritativeScans.Sum(scan => scan.SuspiciousLinksFound);
+        var dangerousLinksFound = authoritativeScans.Sum(scan => scan.DangerousLinksFound);
+        var trustedResults = authoritativeScans.Count(IsTrustedScan);
+        var mostlyTrustedResults = authoritativeScans.Count(IsMostlyTrustedScan);
+        var limitedTrustResults = authoritativeScans.Count(IsLimitedTrustScan);
+        var unknownResults = authoritativeScans.Count(IsUnknownScan);
+        var suspiciousResults = authoritativeScans.Count(IsSuspiciousScan);
+        var highRiskResults = authoritativeScans.Count(IsHighRiskScan);
+        var dangerousResults = authoritativeScans.Count(IsDangerousScan);
+        var scansLast24Hours = authoritativeScans.Count(scan => scan.LastCheckedUtc >= now.AddHours(-24));
+        var scansLast7Days = authoritativeScans.Count(scan => scan.LastCheckedUtc >= now.AddDays(-7));
+        var averageHipScore = hasScanData
+            ? (int)Math.Round(authoritativeScans.Average(scan => scan.Score))
             : 0;
-        var latestScanUtc = browserScans.OrderByDescending(scan => scan.LastCheckedUtc).FirstOrDefault()?.LastCheckedUtc;
+        var latestScanUtc = authoritativeScans.FirstOrDefault()?.LastCheckedUtc;
         var clientTelemetryDomains = clientTelemetry.Select(scan => scan.Domain).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         var clientTelemetryAverageScore = clientTelemetry.Length == 0
             ? 0

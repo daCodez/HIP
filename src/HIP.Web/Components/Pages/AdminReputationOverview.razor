@@ -28,7 +28,7 @@
             {
                 <article class="score-card">
                     <span>@card.Status</span>
-                    <strong>@card.Value</strong>
+                    <strong>@(card.IsPlaceholder ? "—" : card.Value)</strong>
                     <h3>@card.Label</h3>
                     <p>@card.Description</p>
                 </article>
@@ -44,11 +44,19 @@
                 <span class="hip-pill good">@_summary.DataSource</span>
             </div>
 
-            @if (!_summary.HasScanData)
+            @if (_summary.RecentScans.Count == 0)
             {
                 <div class="hip-threat-empty">
-                    <strong>No stored scan data yet.</strong>
-                    <span>Visit sites with the browser plugin enabled, then refresh the dashboard.</span>
+                    @if (ClientTelemetryCount > 0)
+                    {
+                        <strong>@ClientTelemetryCount privacy-safe client observations stored.</strong>
+                        <span>Client telemetry is visible in the cards above but remains separate from authoritative HIP scores until verified evidence is available.</span>
+                    }
+                    else
+                    {
+                        <strong>No stored scan data yet.</strong>
+                        <span>Visit sites with the browser extension enabled, then refresh the dashboard.</span>
+                    }
                 </div>
             }
             else
@@ -105,19 +113,29 @@
             return [];
         }
 
-        var preferredLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        var cardsByKey = _summary.Cards.ToDictionary(card => card.Key, StringComparer.OrdinalIgnoreCase);
+        var preferredKeys = new[]
         {
-            "Trusted",
-            "MostlyTrusted",
-            "LimitedTrustData",
-            "Unknown",
-            "Suspicious",
-            "HighRisk",
-            "Dangerous",
-            "Feedback Count",
-            "Pending Reviews"
+            "trustedResults",
+            "mostlyTrustedResults",
+            "limitedTrustResults",
+            "unknownResults",
+            "suspiciousResults",
+            "highRiskResults",
+            "dangerousResults",
+            "clientTelemetryObservations",
+            "clientTelemetryDomains",
+            "clientTelemetryAverageScore",
+            "latestClientTelemetry",
+            "feedbackReceived",
+            "pendingReviewItems"
         };
 
-        return _summary.Cards.Where(card => preferredLabels.Contains(card.Label));
+        return preferredKeys
+            .Where(cardsByKey.ContainsKey)
+            .Select(key => cardsByKey[key]);
     }
+
+    private int ClientTelemetryCount =>
+        _summary?.Cards.FirstOrDefault(card => card.Key == "clientTelemetryObservations" && !card.IsPlaceholder)?.Value ?? 0;
 }

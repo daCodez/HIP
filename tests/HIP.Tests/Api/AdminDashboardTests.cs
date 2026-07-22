@@ -347,14 +347,17 @@ public sealed class AdminDashboardTests
     public async Task Dashboard_surfaces_untrusted_client_telemetry_without_treating_it_as_authoritative_score_data()
     {
         var repository = new InMemoryBrowserScanResultRepository();
+        var legacyAggregate = new InMemoryDashboardScanAggregateStore();
         var observation = Scan("observed.example", 59, "LimitedTrustData", 0, 0, 0, DateTimeOffset.UtcNow, "Client-observed telemetry.");
         var metadata = new Dictionary<string, string>(observation.PrivacySafeMetadata, StringComparer.OrdinalIgnoreCase)
         {
             [BrowserScanResultProvenance.MetadataKey] = BrowserScanResultProvenance.UntrustedClient
         };
-        await repository.SaveAsync(observation with { PrivacySafeMetadata = metadata }, CancellationToken.None);
+        var untrustedObservation = observation with { PrivacySafeMetadata = metadata };
+        await repository.SaveAsync(untrustedObservation, CancellationToken.None);
+        await legacyAggregate.UpdateAsync(untrustedObservation, CancellationToken.None);
 
-        var summary = await Dashboard(repository).GetSummaryAsync(CancellationToken.None);
+        var summary = await Dashboard(repository, legacyAggregate).GetSummaryAsync(CancellationToken.None);
 
         Assert.Multiple(() =>
         {
