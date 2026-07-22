@@ -220,7 +220,7 @@ export function buildPopupViewModel(lookup, summary, settings, currentUrl) {
     apiStatus: summary?.apiStatus || "Unknown",
     downloadCandidates: summary?.downloadCandidates ?? 0,
     loginFormsDetected: summary?.loginFormsDetected ?? 0,
-    lastScanText: formatDate(summary?.updatedAt),
+    lastScanText: formatDate(summary?.lastScanUtc || summary?.updatedAt),
     lastSubmittedText: submissionText(summary),
     dataSourceText: assessmentSourceText(lookup, summary),
     lookupUrl: buildPublicLookupUrl(settings?.webBaseUrl, lookup?.domain, lookup?.publicLookupUrl),
@@ -533,7 +533,9 @@ function submissionText(summary) {
 function assessmentSourceText(lookup, summary) {
   const hasClientEvidence = summary?.scanResultDataSource === "BrowserPluginScan" ||
     summary?.siteSafetyDataSource === "SiteSafetyScan";
-  const hasAuthoritativeAssessment = Boolean(lookup) && lookup?.dataSource !== "NoStoredData";
+  const hasAuthoritativeAssessment = typeof lookup?.dataSource === "string" &&
+    lookup.dataSource.length > 0 &&
+    lookup.dataSource !== "NoStoredData";
 
   if (hasClientEvidence) {
     return hasAuthoritativeAssessment
