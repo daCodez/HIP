@@ -100,6 +100,40 @@ p {
   line-height: 1.4;
 }
 
+.technical-details {
+  margin-top: 12px;
+  border: 1px solid #173456;
+  border-radius: 8px;
+  background: #0b1b30;
+}
+
+.technical-details summary {
+  padding: 11px 12px;
+  color: #b7c4d8;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.technical-details summary:hover {
+  color: #f8fafc;
+}
+
+.technical-details summary:focus-visible,
+.lookup-link:focus-visible,
+button:focus-visible {
+  outline: 2px solid #18d7ef;
+  outline-offset: 2px;
+}
+
+.technical-details-content {
+  padding: 0 10px 10px;
+}
+
+.detail-panel {
+  margin-top: 8px;
+}
+
 .formal-scoring-panel {
   display: grid;
   gap: 8px;

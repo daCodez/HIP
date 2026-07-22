@@ -308,8 +308,8 @@ test("warnings are hidden when there are no useful warnings", () => {
 test("feedback copy avoids voting language", () => {
   const copy = feedbackCopy();
 
-  assert.equal(copy.prompt, "Help HIP improve this trust signal.");
-  assert.equal(copy.success, "Thanks. HIP will use this as one trust signal.");
+  assert.equal(copy.prompt, "Your feedback helps HIP improve.");
+  assert.equal(copy.success, "Thanks. Your feedback was recorded.");
   assert.equal(copy.failure, "Feedback could not be sent right now.");
   assert.equal(copy.prompt.includes("vote"), false);
 });
@@ -340,16 +340,16 @@ test("loading summary view model shows explicit pending indicators", () => {
 });
 
 test("popup distinguishes an observed matching badge from verification", () => {
-  assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: true }), "Observed; domain matches");
-  assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: false }), "Observed; domain mismatch");
-  assert.equal(badgeObservationText({ hipBadgeObserved: false, hipBadgeDomainMatch: false }), "Not observed");
+  assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: true }), "Found for this site");
+  assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: false }), "Found for another site");
+  assert.equal(badgeObservationText({ hipBadgeObserved: false, hipBadgeDomainMatch: false }), "Not found");
   assert.equal(badgeObservationText({}), "Scan unavailable");
 });
 
 test("popup markup contains primary UX fields and feedback controls", () => {
   const popupHtml = readFileSync(new URL("../src/popup.html", import.meta.url), "utf8");
 
-  assert.equal(popupHtml.includes("Final HIP Score"), true);
+  assert.equal(popupHtml.includes("HIP trust score"), true);
   assert.equal(popupHtml.includes("Domain Trust"), true);
   assert.equal(popupHtml.includes("Page Trust"), true);
   assert.equal(popupHtml.includes("Content Risk"), true);
@@ -357,9 +357,29 @@ test("popup markup contains primary UX fields and feedback controls", () => {
   assert.equal(popupHtml.includes('id="externalEvidence"'), true);
   assert.equal(popupHtml.includes('id="siteSafetyConfidence"'), true);
   assert.equal(popupHtml.includes('id="warningsPanel"'), true);
-  assert.equal(popupHtml.includes("Looks Safe"), true);
-  assert.equal(popupHtml.includes("Looks Suspicious"), true);
-  assert.equal(popupHtml.includes("Report Issue"), true);
+  assert.equal(popupHtml.includes("Looks safe"), true);
+  assert.equal(popupHtml.includes("Looks suspicious"), true);
+  assert.equal(popupHtml.includes("Report a problem"), true);
+});
+
+test("popup keeps the primary result simple and progressively discloses diagnostics", () => {
+  const popupHtml = readFileSync(new URL("../src/popup.html", import.meta.url), "utf8");
+  const detailsStart = popupHtml.indexOf('<details id="technicalDetails"');
+  const detailsEnd = popupHtml.indexOf("</details>", detailsStart);
+  const warningsStart = popupHtml.indexOf('<section id="warningsPanel"');
+  const technicalContent = popupHtml.slice(detailsStart, detailsEnd);
+
+  assert.ok(detailsStart > -1);
+  assert.ok(popupHtml.includes("<summary>Technical details</summary>"));
+  assert.ok(warningsStart > -1 && warningsStart < detailsStart);
+  assert.ok(technicalContent.includes('id="scanPanel"'));
+  assert.ok(technicalContent.includes('id="hipScoringPanel"'));
+  assert.ok(technicalContent.includes('id="externalEvidencePanel"'));
+  assert.ok(!technicalContent.includes('id="warningsPanel"'));
+
+  for (const id of ["status", "verified", "hipBadge", "siteSafetyStatus", "siteSafetySummary"]) {
+    assert.equal(popupHtml.match(new RegExp(`id="${id}"`, "g"))?.length, 1);
+  }
 });
 
 test("external evidence view model shows readable provider names and multiple details", () => {

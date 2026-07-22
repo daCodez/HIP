@@ -16,7 +16,7 @@
         <small id="pluginVersion">HIP Plugin loading</small>
       </div>
     </header>
-    <p class="trust-message">HTTPS secures the connection. HIP verifies the trust.</p>
+    <p class="trust-message">HIP checks identity, safety, and trust evidence for this site.</p>
 
     <section id="state" class="state loading">Loading HIP score</section>
 
@@ -25,96 +25,88 @@
         <span id="statusBadge" class="status-badge unknown">Unknown</span>
       </div>
       <div class="score-row">
-        <span class="metric-label">Final HIP Score<small id="finalHipScoreHelp">The final trust score for this interaction.</small></span>
+        <span class="metric-label">HIP trust score<small id="finalHipScoreHelp">Overall result based on the evidence HIP has.</small></span>
         <strong id="score">--/100</strong>
-      </div>
-      <div class="status-row">
-        <span>Status</span>
-        <strong id="status">Unknown</strong>
       </div>
       <p id="statusDescription" class="score-explanation">HIP is checking what this status means.</p>
       <div class="status-row">
-        <span class="metric-label">Domain Trust<small id="domainTrustHelp">How trustworthy is this website overall?</small></span>
-        <strong id="domainTrustScore">--/100</strong>
-      </div>
-      <div class="status-row">
-        <span class="metric-label">Page Trust<small id="pageTrustHelp">How trustworthy is this exact page?</small></span>
-        <strong id="pageTrustScore">--/100</strong>
-      </div>
-      <div class="status-row">
-        <span class="metric-label">Content Risk<small id="contentRiskHelp">How risky is the content on this page?</small></span>
-        <strong id="contentRiskScore">--/100</strong>
-      </div>
-      <p id="finalHipScoreExplanation" class="score-explanation">HIP is calculating layered score details.</p>
-      <div class="status-row">
-        <span>Verified</span>
+        <span>Identity verified</span>
         <strong id="verified">Unknown</strong>
       </div>
       <div class="status-row">
-        <span>Identity</span>
-        <strong id="identityStatus">Unknown</strong>
+        <span>HIP badge on page</span>
+        <strong id="hipBadge">Checking...</strong>
       </div>
       <div class="status-row">
-        <span>Last checked</span>
-        <strong id="lastChecked">Unknown</strong>
-      </div>
-    </section>
-
-    <section id="scanPanel" class="score-panel" hidden>
-      <div class="status-row">
-        <span>API status</span>
-        <strong id="apiStatus">Checking</strong>
-      </div>
-      <div class="status-row">
-        <span>Links scanned</span>
-        <strong id="linksScanned">0</strong>
-      </div>
-      <div class="status-row">
-        <span>Risky links</span>
-        <strong id="riskyLinks">0</strong>
-      </div>
-      <div class="status-row">
-        <span>Unknown links</span>
-        <strong id="unknownLinks">0</strong>
-      </div>
-      <div class="status-row">
-        <span>Download candidates</span>
-        <strong id="downloadCandidates">0</strong>
-      </div>
-      <div class="status-row">
-        <span>Login forms</span>
-        <strong id="loginForms">0</strong>
-      </div>
-      <div class="status-row">
-        <span>HIP badge</span>
-        <strong id="hipBadge">Not observed</strong>
-      </div>
-      <div class="status-row">
-        <span>Last scan</span>
-        <strong id="lastScan">Unknown</strong>
-      </div>
-      <div class="status-row">
-        <span>Client telemetry</span>
-        <strong id="lastSubmitted">Pending</strong>
-      </div>
-      <div class="status-row">
-        <span>Assessment source</span>
-        <strong id="dataSource">Pending</strong>
-      </div>
-    </section>
-
-    <section id="siteSafetyPanel" class="score-panel site-safety-panel" hidden>
-      <div class="status-row">
-        <span>Site Safety</span>
-        <strong id="siteSafetyStatus">Unknown</strong>
-      </div>
-      <div class="status-row">
-        <span>Confidence</span>
-        <strong id="siteSafetyConfidence">Unknown</strong>
+        <span>Page safety</span>
+        <strong id="siteSafetyStatus">Checking...</strong>
       </div>
       <p id="siteSafetySummary" class="site-safety-summary">Checking site safety...</p>
-      <div id="hipScoringPanel" class="formal-scoring-panel" hidden>
-        <h2>Formal HIP score</h2>
+    </section>
+
+    <section id="warningsPanel" class="warnings-panel" hidden>
+      <h2>Warnings</h2>
+      <ul id="warnings"></ul>
+    </section>
+
+    <section id="reasonsPanel" class="reasons-panel" hidden>
+      <h2>Why HIP reached this result</h2>
+      <ul id="reasons"></ul>
+    </section>
+
+    <details id="technicalDetails" class="technical-details">
+      <summary>Technical details</summary>
+      <div class="technical-details-content">
+        <section class="score-panel detail-panel" aria-labelledby="scoreDetailsHeading">
+          <h2 id="scoreDetailsHeading">Score details</h2>
+          <div class="status-row">
+            <span>Status</span>
+            <strong id="status">Unknown</strong>
+          </div>
+          <div class="status-row">
+            <span class="metric-label">Domain Trust<small id="domainTrustHelp">How trustworthy is this website overall?</small></span>
+            <strong id="domainTrustScore">--/100</strong>
+          </div>
+          <div class="status-row">
+            <span class="metric-label">Page Trust<small id="pageTrustHelp">How trustworthy is this exact page?</small></span>
+            <strong id="pageTrustScore">--/100</strong>
+          </div>
+          <div class="status-row">
+            <span class="metric-label">Content Risk<small id="contentRiskHelp">How risky is the content on this page?</small></span>
+            <strong id="contentRiskScore">--/100</strong>
+          </div>
+          <p id="finalHipScoreExplanation" class="score-explanation">HIP is calculating layered score details.</p>
+          <div class="status-row">
+            <span>Identity state</span>
+            <strong id="identityStatus">Unknown</strong>
+          </div>
+          <div class="status-row">
+            <span>Last checked</span>
+            <strong id="lastChecked">Unknown</strong>
+          </div>
+        </section>
+
+        <section id="scanPanel" class="score-panel detail-panel" hidden>
+          <h2>Browser scan</h2>
+          <div class="status-row"><span>API status</span><strong id="apiStatus">Checking</strong></div>
+          <div class="status-row"><span>Links scanned</span><strong id="linksScanned">0</strong></div>
+          <div class="status-row"><span>Risky links</span><strong id="riskyLinks">0</strong></div>
+          <div class="status-row"><span>Unknown links</span><strong id="unknownLinks">0</strong></div>
+          <div class="status-row"><span>Download candidates</span><strong id="downloadCandidates">0</strong></div>
+          <div class="status-row"><span>Login forms</span><strong id="loginForms">0</strong></div>
+          <div class="status-row"><span>Last scan</span><strong id="lastScan">Unknown</strong></div>
+          <div class="status-row"><span>Client telemetry</span><strong id="lastSubmitted">Pending</strong></div>
+          <div class="status-row"><span>Assessment source</span><strong id="dataSource">Pending</strong></div>
+        </section>
+
+        <section id="siteSafetyPanel" class="score-panel site-safety-panel detail-panel" hidden>
+          <h2>Safety evidence</h2>
+          <div class="status-row">
+            <span>Confidence</span>
+            <strong id="siteSafetyConfidence">Unknown</strong>
+          </div>
+          <div id="hipScoringPanel" class="formal-scoring-panel" hidden>
+            <h2>Formal HIP score</h2>
         <div class="status-row">
           <span>Model</span>
           <strong id="hipScoringModelVersion">Unavailable</strong>
@@ -151,49 +143,26 @@
           <h2>Score reasons</h2>
           <ul id="hipScoringReasons"></ul>
         </div>
+          </div>
+          <div class="status-row"><span>Malware risk</span><strong id="malwareRisk">Unknown</strong></div>
+          <div class="status-row"><span>Phishing risk</span><strong id="phishingRisk">Unknown</strong></div>
+          <div class="status-row"><span>Redirect risk</span><strong id="redirectRisk">Unknown</strong></div>
+          <div class="status-row"><span>Download risk</span><strong id="downloadRisk">Unknown</strong></div>
+          <div class="status-row"><span>Script risk</span><strong id="scriptRisk">Unknown</strong></div>
+          <div id="externalEvidencePanel" class="external-evidence-panel" hidden>
+            <h2>External evidence</h2>
+            <ul id="externalEvidence"></ul>
+          </div>
+        </section>
       </div>
-      <div class="status-row">
-        <span>Malware risk</span>
-        <strong id="malwareRisk">Unknown</strong>
-      </div>
-      <div class="status-row">
-        <span>Phishing risk</span>
-        <strong id="phishingRisk">Unknown</strong>
-      </div>
-      <div class="status-row">
-        <span>Redirect risk</span>
-        <strong id="redirectRisk">Unknown</strong>
-      </div>
-      <div class="status-row">
-        <span>Download risk</span>
-        <strong id="downloadRisk">Unknown</strong>
-      </div>
-      <div class="status-row">
-        <span>Script risk</span>
-        <strong id="scriptRisk">Unknown</strong>
-      </div>
-      <div id="externalEvidencePanel" class="external-evidence-panel" hidden>
-        <h2>External evidence</h2>
-        <ul id="externalEvidence"></ul>
-      </div>
-    </section>
-
-    <section id="warningsPanel" class="warnings-panel" hidden>
-      <h2>Warnings</h2>
-      <ul id="warnings"></ul>
-    </section>
-
-    <section id="reasonsPanel" class="reasons-panel" hidden>
-      <h2>Reasons</h2>
-      <ul id="reasons"></ul>
-    </section>
+    </details>
 
     <section id="feedbackPanel" class="feedback-panel" hidden>
-      <h2>Help HIP improve this trust signal.</h2>
+      <h2>Does this result look right?</h2>
       <div class="feedback-actions">
-        <button id="feedbackLooksSafe" type="button">Looks Safe</button>
-        <button id="feedbackLooksSuspicious" type="button">Looks Suspicious</button>
-        <button id="feedbackReportIssue" type="button">Report Issue</button>
+        <button id="feedbackLooksSafe" type="button">Looks safe</button>
+        <button id="feedbackLooksSuspicious" type="button">Looks suspicious</button>
+        <button id="feedbackReportIssue" type="button">Report a problem</button>
       </div>
       <p id="feedbackState" class="feedback-state"></p>
     </section>

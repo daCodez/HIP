@@ -52,8 +52,8 @@ export const STATUS_DESCRIPTIONS = Object.freeze({
 });
 
 export const FEEDBACK_COPY = Object.freeze({
-  prompt: "Help HIP improve this trust signal.",
-  success: "Thanks. HIP will use this as one trust signal.",
+  prompt: "Your feedback helps HIP improve.",
+  success: "Thanks. Your feedback was recorded.",
   failure: "Feedback could not be sent right now."
 });
 
@@ -295,14 +295,14 @@ export function buildSiteSafetyViewModel(result = {}) {
  */
 export function badgeObservationText(summary = {}) {
   if (summary?.hipBadgeDomainMatch === true) {
-    return "Observed; domain matches";
+    return "Found for this site";
   }
 
   if (summary?.hipBadgeObserved === true) {
-    return "Observed; domain mismatch";
+    return "Found for another site";
   }
 
-  return summary?.hipBadgeObserved === false ? "Not observed" : "Scan unavailable";
+  return summary?.hipBadgeObserved === false ? "Not found" : "Scan unavailable";
 }
 
 /**
