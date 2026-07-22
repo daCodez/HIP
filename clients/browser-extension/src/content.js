@@ -38,6 +38,7 @@
   }
 
   const {
+    badgeDomainMatchesPage,
     filterSafePublicUrls,
     isHipOwnedPage,
     isSiteSafetyEligibleUrl,
@@ -227,6 +228,7 @@
     publishSummary();
     await scanLoginForms();
     markScanStage("CollectingPageSignals");
+    collectHipBadgeSignals();
     collectScriptSignals();
     publishSummary();
     markScanStage("CheckingSiteSafety");
@@ -552,6 +554,8 @@
         apiStatus: lastSummary.apiStatus,
         scanTimestampUtc: new Date().toISOString(),
         isHttps: String(lastSummary.isHttps),
+        hipBadgeObserved: String(lastSummary.hipBadgeObserved),
+        hipBadgeDomainMatch: String(lastSummary.hipBadgeDomainMatch),
         downloadCandidates: String(lastSummary.downloadCandidates),
         executableDownloadCandidates: String(lastSummary.executableDownloadCandidates),
         formsDetected: String(lastSummary.formsDetected),
@@ -966,6 +970,19 @@
     lastSummary.suspiciousScriptPatternCount = 0;
   }
 
+  /**
+   * Records only badge presence and same-domain declaration matching. Page-controlled
+   * markup is an observed signal, never proof that HIP verified the site or badge.
+   */
+  function collectHipBadgeSignals() {
+    const badges = Array.from(document.querySelectorAll("[data-hip-badge], .hip-trust-badge[data-domain]"));
+    lastSummary.hipBadgeObserved = badges.length > 0;
+    lastSummary.hipBadgeDomainMatch = badges.some(badge => {
+      const declaration = badge.getAttribute("data-hip-badge") || badge.getAttribute("data-domain");
+      return badgeDomainMatchesPage(declaration, currentDomain);
+    });
+  }
+
   function withLookupUrl(lookup) {
     return {
       ...lookup,
@@ -1194,6 +1211,8 @@
       scanResultError: null,
       pageUrlHash: null,
       isHttps: window.location.protocol === "https:",
+      hipBadgeObserved: false,
+      hipBadgeDomainMatch: false,
       pluginVersion
     };
   }

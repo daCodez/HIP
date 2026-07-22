@@ -12,6 +12,34 @@
     return (hostname || "").replace(/^www\./i, "").toLowerCase();
   }
 
+  // Badge declarations are untrusted page markup. Parse only a hostname and never retain
+  // the declaration itself; callers use the result solely for a same-domain boolean.
+  function normalizeBadgeDomain(value) {
+    const candidate = typeof value === "string" ? value.trim() : "";
+    if (!candidate || candidate.length > 253) {
+      return null;
+    }
+
+    try {
+      const parsed = new URL(candidate.includes("://") ? candidate : `https://${candidate}`);
+      if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname ||
+          parsed.username || parsed.password || parsed.port ||
+          (parsed.pathname !== "/" && parsed.pathname !== "") || parsed.search || parsed.hash) {
+        return null;
+      }
+
+      return normalizeHost(parsed.hostname);
+    } catch {
+      return null;
+    }
+  }
+
+  function badgeDomainMatchesPage(declaredDomain, pageDomain) {
+    const normalizedDeclaration = normalizeBadgeDomain(declaredDomain);
+    const normalizedPageDomain = normalizeHost(pageDomain);
+    return Boolean(normalizedDeclaration && normalizedPageDomain && normalizedDeclaration === normalizedPageDomain);
+  }
+
   // Raw page URLs are optional diagnostics, so remove query strings and fragments before anything can leave the browser.
   function stripQueryAndFragment(pageUrl) {
     try {
@@ -92,11 +120,13 @@
   }
 
   globalScope.HipBrowserPrivacyGuards = Object.freeze({
+    badgeDomainMatchesPage,
     filterSafePublicUrls,
     isHipOwnedPage,
     isInternalHost,
     isSiteSafetyEligibleUrl,
     normalizeHost,
+    normalizeBadgeDomain,
     stripQueryAndFragment
   });
 })(globalThis);

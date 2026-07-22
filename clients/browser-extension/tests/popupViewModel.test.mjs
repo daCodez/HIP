@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  badgeObservationText,
   externalEvidenceFor,
   buildSiteSafetyViewModel,
   buildPopupViewModel,
@@ -334,7 +335,14 @@ test("loading summary view model shows explicit pending indicators", () => {
   assert.equal(viewModel.unknownLinks, "Checking...");
   assert.equal(viewModel.downloadCandidates, "Checking...");
   assert.equal(viewModel.loginFormsDetected, "Checking...");
+  assert.equal(viewModel.hipBadgeText, "Checking...");
   assert.equal(viewModel.lastSubmittedText, "Pending");
+});
+
+test("popup distinguishes an observed matching badge from verification", () => {
+  assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: true }), "Observed; domain matches");
+  assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: false }), "Observed; domain mismatch");
+  assert.equal(badgeObservationText({}), "Not observed");
 });
 
 test("popup markup contains primary UX fields and feedback controls", () => {

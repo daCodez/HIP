@@ -47,6 +47,7 @@ const elements = {
   unknownLinks: document.getElementById("unknownLinks"),
   downloadCandidates: document.getElementById("downloadCandidates"),
   loginForms: document.getElementById("loginForms"),
+  hipBadge: document.getElementById("hipBadge"),
   lastScan: document.getElementById("lastScan"),
   lastSubmitted: document.getElementById("lastSubmitted"),
   dataSource: document.getElementById("dataSource"),
@@ -189,6 +190,7 @@ function renderLoadingSummary(stage = "Checking") {
   elements.unknownLinks.textContent = viewModel.unknownLinks;
   elements.downloadCandidates.textContent = viewModel.downloadCandidates;
   elements.loginForms.textContent = viewModel.loginFormsDetected;
+  elements.hipBadge.textContent = viewModel.hipBadgeText;
   elements.lastScan.textContent = viewModel.lastScanText;
   elements.lastSubmitted.textContent = viewModel.lastSubmittedText;
   elements.dataSource.textContent = viewModel.dataSourceText;
@@ -222,6 +224,7 @@ function renderSummary(summary = {}) {
   elements.unknownLinks.textContent = viewModel.unknownLinks;
   elements.downloadCandidates.textContent = viewModel.downloadCandidates;
   elements.loginForms.textContent = viewModel.loginFormsDetected;
+  elements.hipBadge.textContent = viewModel.hipBadgeText;
   elements.lastScan.textContent = viewModel.lastScanText;
   elements.lastSubmitted.textContent = viewModel.lastSubmittedText;
   elements.dataSource.textContent = viewModel.dataSourceText;

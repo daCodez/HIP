@@ -98,6 +98,8 @@ test("scan result payload includes privacy-safe observed page signals", () => {
     summary: {
       isHttps: true,
       downloadCandidates: 3,
+      hipBadgeObserved: true,
+      hipBadgeDomainMatch: true,
       executableDownloadCandidates: 1,
       formsDetected: 2,
       loginFormsDetected: 1,
@@ -112,6 +114,8 @@ test("scan result payload includes privacy-safe observed page signals", () => {
 
   assert.equal(payload.privacySafeMetadata.isHttps, "true");
   assert.equal(payload.privacySafeMetadata.downloadCandidates, "3");
+  assert.equal(payload.privacySafeMetadata.hipBadgeObserved, "true");
+  assert.equal(payload.privacySafeMetadata.hipBadgeDomainMatch, "true");
   assert.equal(payload.privacySafeMetadata.executableDownloadCandidates, "1");
   assert.equal(payload.privacySafeMetadata.formsDetected, "2");
   assert.equal(payload.privacySafeMetadata.loginFormsDetected, "1");
@@ -394,6 +398,15 @@ test("content script contains duplicate scan submission guards", async () => {
   assert.match(contentScript, /pageUrlHash/);
   assert.match(backgroundScript, /scanSubmissionDeduper/);
   assert.match(backgroundScript, /duplicateSuppressed/);
+});
+
+test("content script observes HIP badge markup and submits only boolean badge signals", async () => {
+  const contentScript = await readFile(new URL("../src/content.js", import.meta.url), "utf8");
+
+  assert.match(contentScript, /querySelectorAll\("\[data-hip-badge\], \.hip-trust-badge\[data-domain\]"\)/);
+  assert.match(contentScript, /hipBadgeObserved: String\(lastSummary\.hipBadgeObserved\)/);
+  assert.match(contentScript, /hipBadgeDomainMatch: String\(lastSummary\.hipBadgeDomainMatch\)/);
+  assert.doesNotMatch(contentScript, /hipBadgeTextContent|hipBadgeInnerHtml/);
 });
 
 test("content script reuses an active scan and publishes terminal persistence state", async () => {
