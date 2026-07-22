@@ -143,10 +143,18 @@ public static class HipDatabaseInitializer
                 "Partition" character varying(160) NOT NULL,
                 "Id" character varying(220) NOT NULL,
                 "Json" text NOT NULL,
+                "AggregateVersion" bigint NOT NULL DEFAULT 0,
                 "CreatedAtUtc" timestamp with time zone NOT NULL,
                 "UpdatedAtUtc" timestamp with time zone NOT NULL,
                 CONSTRAINT "PK_hip_records" PRIMARY KEY ("Partition", "Id")
             );
+            """,
+            cancellationToken);
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            ALTER TABLE hip_records
+            ADD COLUMN IF NOT EXISTS "AggregateVersion" bigint NOT NULL DEFAULT 0;
             """,
             cancellationToken);
 

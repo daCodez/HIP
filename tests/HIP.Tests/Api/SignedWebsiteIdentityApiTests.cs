@@ -107,7 +107,9 @@ public sealed class SignedWebsiteIdentityApiTests
             registered.WebsiteIdentity.HipIdentityId,
             contentHash,
             signature,
-            "Low"));
+            "Low",
+            HipIdentityService.InitialSigningKeyId,
+            registered.WebsiteIdentity.CreatedAtUtc));
         var result = await response.Content.ReadFromJsonAsync<SignatureVerificationResult>();
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));

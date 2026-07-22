@@ -40,6 +40,7 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
             entity.Property(record => record.Partition).HasMaxLength(160);
             entity.Property(record => record.Id).HasMaxLength(220);
             entity.Property(record => record.Json).IsRequired();
+            entity.Property(record => record.AggregateVersion).HasDefaultValue(0L);
             entity.HasIndex(record => record.UpdatedAtUtc);
         });
 

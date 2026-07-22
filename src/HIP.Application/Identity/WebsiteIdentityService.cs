@@ -14,7 +14,8 @@ public sealed class WebsiteIdentityService(
     IHipIdentityRepository identityRepository,
     IDomainVerificationService domainVerificationService,
     IWebsiteIdentityRepository websiteIdentityRepository,
-    IAuditLogService auditLogService) : IWebsiteIdentityService
+    IAuditLogService auditLogService,
+    ISigningKeyLifecycleService signingKeyLifecycleService) : IWebsiteIdentityService
 {
     /// <summary>
     /// Registers a website identity and creates a DNS or well-known verification challenge.
@@ -42,11 +43,21 @@ public sealed class WebsiteIdentityService(
             domain);
 
         await identityRepository.SaveAsync(identity, cancellationToken);
+        await signingKeyLifecycleService.RegisterAsync(
+            new RegisterSigningKeyRequest(
+                identity.IdentityId,
+                HipIdentityService.InitialSigningKeyId,
+                keyPair.Algorithm,
+                keyPair.PublicKey,
+                "system:website-registration",
+                "Register the website identity's initial managed signing key.",
+                identity.CreatedAtUtc),
+            cancellationToken);
         var verification = await domainVerificationService.StartAsync(domain, request.VerificationMethod, cancellationToken);
         var website = new WebsiteIdentity(
             domain,
             identity.IdentityId,
-            [new SigningKey("default", keyPair.Algorithm, keyPair.PublicKey)],
+            [new SigningKey(HipIdentityService.InitialSigningKeyId, keyPair.Algorithm, keyPair.PublicKey)],
             VerificationStatus.Pending,
             request.VerificationMethod,
             identity.CreatedAtUtc,

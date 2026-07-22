@@ -12,16 +12,26 @@ public sealed record IdentityRegistrationResponse(
     string? DevelopmentPrivateKey,
     string Warning);
 
+/// <summary>
+/// Requests development-only signing. A missing key identifier selects the documented initial development key.
+/// </summary>
 public sealed record SignContentRequest(
     string IdentityId,
     string ContentHash,
     string DevelopmentPrivateKey,
-    DateTimeOffset? ExpiresAtUtc);
+    DateTimeOffset? ExpiresAtUtc,
+    string? KeyId = null);
 
+/// <summary>
+/// Requests development-only verification with managed-key lifecycle enforcement.
+/// </summary>
+/// <param name="TrustedSignedAtUtc">Authenticated signing time from a trusted envelope or stored HIP signature; never untrusted request metadata.</param>
 public sealed record VerifySignatureRequest(
     string IdentityId,
     string ContentHash,
-    string SignatureValue);
+    string SignatureValue,
+    string? KeyId = null,
+    DateTimeOffset? TrustedSignedAtUtc = null);
 
 public sealed record WebsiteIdentityRegistrationRequest(
     string Domain,
@@ -51,14 +61,26 @@ public sealed record DomainVerificationRetryResult(
 /// </summary>
 public sealed record DomainVerificationRevokeRequest(string Reason);
 
+/// <summary>
+/// Requests signing through the managed legacy signature facade.
+/// </summary>
+/// <param name="KeyId">Required managed key identifier. Null remains source-compatible but fails clearly at runtime.</param>
 public sealed record HipSignatureRequest(
     string IdentityId,
     string ContentHash,
     string DevelopmentPrivateKey,
-    DateTimeOffset? ExpiresAtUtc);
+    DateTimeOffset? ExpiresAtUtc,
+    string? KeyId = null);
 
+/// <summary>
+/// Requests public verification against immutable managed key history.
+/// </summary>
+/// <param name="KeyId">Required immutable managed key identifier. Null remains source-compatible but fails clearly at runtime.</param>
+/// <param name="TrustedSignedAtUtc">Authenticated signing time from a trusted envelope or stored HIP signature; never untrusted request metadata.</param>
 public sealed record HipSignatureVerificationRequest(
     string IdentityId,
     string ContentHash,
     string SignatureValue,
-    string? SignerReputationStatus);
+    string? SignerReputationStatus,
+    string? KeyId = null,
+    DateTimeOffset? TrustedSignedAtUtc = null);

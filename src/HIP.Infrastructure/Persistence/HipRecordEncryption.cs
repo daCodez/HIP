@@ -32,6 +32,13 @@ public interface IHipRecordEncryptor
     /// <param name="storedPayload">Payload from the database record column.</param>
     /// <returns>Plain JSON for deserialization.</returns>
     string Unprotect(string storedPayload);
+
+    /// <summary>
+    /// Reports whether a stored payload uses HIP's authenticated encryption envelope.
+    /// </summary>
+    /// <param name="storedPayload">Payload read from persistent storage.</param>
+    /// <returns>True only for a HIP encrypted-record envelope.</returns>
+    bool IsProtectedPayload(string storedPayload);
 }
 
 /// <summary>
@@ -95,7 +102,7 @@ public sealed class DevelopmentHipRecordEncryptor : IHipRecordEncryptor
     public string Unprotect(string storedPayload)
     {
         ArgumentNullException.ThrowIfNull(storedPayload);
-        if (!LooksLikeEnvelope(storedPayload))
+        if (!IsProtectedPayload(storedPayload))
         {
             return storedPayload;
         }
@@ -126,6 +133,13 @@ public sealed class DevelopmentHipRecordEncryptor : IHipRecordEncryptor
         }
 
         throw new InvalidOperationException("HIP could not decrypt a persisted record with the configured record encryption key. For local development, clear the old database volume or configure the previous key as a legacy key.");
+    }
+
+    /// <inheritdoc />
+    public bool IsProtectedPayload(string storedPayload)
+    {
+        ArgumentNullException.ThrowIfNull(storedPayload);
+        return LooksLikeEnvelope(storedPayload);
     }
 
     /// <summary>

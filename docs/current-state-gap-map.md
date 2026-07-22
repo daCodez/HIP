@@ -176,7 +176,7 @@ make any retained Web routes thin forwards or documented compatibility paths.
 | Development signing and verification | Complete only as a development foundation | The provider demonstrates origin/integrity behavior and must not be described as production-safe or post-quantum. |
 | Signature provider strategy/factory | Missing | Development and future production providers are not selected through a capability-aware factory. |
 | ML-DSA-65 | Missing | No supported production provider is implemented. |
-| Key lifecycle | Missing; Needs security review | Rotation, retirement, expiry, compromise, revocation enforcement, and protected storage are incomplete. |
+| Key lifecycle | Complete foundation; Needs security review | Algorithm-neutral states, fail-closed transitions, historical signing windows, privacy-safe audit evidence, encrypted persistence, and optimistic concurrency are implemented. Managed-key provider linearization remains production integration work. |
 | Canonical JSON | Missing | RFC 8785 canonicalization and fixtures are absent. |
 | HIP envelope | Missing | Versioned issuer, subject, claims, digest, signature, and expiry envelope is absent. |
 | Replay defense | Partial; Needs security review | Redis-backed atomic nonce storage exists; timestamp tolerance, message-ID policy, envelope integration, and complete failure policy remain HIP-0106 work. |
@@ -296,7 +296,8 @@ reconciliation in the owning work package.
 | HIP-0102 RFC 8785 canonical JSON | Complete |
 | HIP-0103 Signature provider factory | Complete |
 | HIP-0104 ML-DSA-65 provider | Complete |
-| HIP-0105 through HIP-0108 Protocol | Missing, except development identity/signing foundations |
+| HIP-0105 Key lifecycle | Complete |
+| HIP-0106 through HIP-0108 Protocol | Missing, except distributed nonce storage and envelope-model foundations |
 | HIP-0201 through HIP-0205 Identity and authorization | Missing or partial development foundations |
 | HIP-0301 through HIP-0306 Scoring/providers | Partial |
 | HIP-0401 through HIP-0406 Rules/review | Partial |
@@ -332,19 +333,19 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-HIP-0105: add the signing-key lifecycle model and transition service.
+HIP-0106: complete protocol replay protection.
 
 Acceptance criteria:
 
-- Domain states distinguish active, retiring, retired, and revoked signing keys
-  without coupling lifecycle rules to storage or one algorithm.
-- Validated transitions fail closed, prevent revoked-key reuse, and allow only
-  explicitly active keys to create new signatures.
-- Rotation activates a replacement key while preserving the metadata required
-  to evaluate historical signatures from retired keys.
-- Every lifecycle transition records privacy-safe actor, reason, and timestamp
-  evidence through an application audit boundary.
-- Focused tests cover allowed and rejected transitions, rotation, revocation,
-  historical verification policy, audit evidence, and concurrent stale updates.
+- The signed version-one envelope carries bounded issuer-scoped message and nonce
+  identifiers so replay inputs cannot be supplied out of band.
+- A server-owned policy validates expiry, timestamp tolerance, and maximum
+  validity windows before reserving replay state.
+- Message IDs and nonces are atomically deduplicated across instances through
+  separate Redis namespaces without logging raw identifiers.
+- Duplicate state and storage failures return typed, fail-closed outcomes; there
+  is no process-local fallback when distributed state is unavailable.
+- Focused tests cover time boundaries, issuer isolation, duplicate message IDs,
+  duplicate nonces, state failures, cancellation, and distributed behavior.
 
-Rollback is a normal Git revert of the isolated HIP-0105 key-lifecycle commit.
+Rollback is a normal Git revert of the isolated HIP-0106 replay-protection commit.

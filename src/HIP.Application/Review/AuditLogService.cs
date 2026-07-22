@@ -5,7 +5,8 @@ namespace HIP.Application.Review;
 
 public sealed class AuditLogService(IAuditLogRepository repository) : IAuditLogService
 {
-    public AuditLogEntry Write(
+    /// <inheritdoc />
+    public AuditLogEntry CreateEntry(
         string actorId,
         string action,
         TargetType targetType,
@@ -18,7 +19,7 @@ public sealed class AuditLogService(IAuditLogRepository repository) : IAuditLogS
         IReadOnlyDictionary<string, string>? afterMetadata = null,
         string? correlationId = null)
     {
-        var entry = new AuditLogEntry(
+        return new AuditLogEntry(
             $"audit-{Guid.NewGuid():N}",
             string.IsNullOrWhiteSpace(actorId) ? "system" : actorId,
             action,
@@ -34,6 +35,33 @@ public sealed class AuditLogService(IAuditLogRepository repository) : IAuditLogS
             AfterMetadata = Sanitize(afterMetadata),
             CorrelationId = correlationId
         };
+    }
+
+    public AuditLogEntry Write(
+        string actorId,
+        string action,
+        TargetType targetType,
+        string targetId,
+        string summary,
+        AuditSeverity severity,
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string? actorRole = null,
+        IReadOnlyDictionary<string, string>? beforeMetadata = null,
+        IReadOnlyDictionary<string, string>? afterMetadata = null,
+        string? correlationId = null)
+    {
+        var entry = CreateEntry(
+            actorId,
+            action,
+            targetType,
+            targetId,
+            summary,
+            severity,
+            metadata,
+            actorRole,
+            beforeMetadata,
+            afterMetadata,
+            correlationId);
 
         Run(repository.SaveAsync(entry, CancellationToken.None));
         return entry;

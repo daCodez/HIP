@@ -101,6 +101,7 @@ public static class DependencyInjection
         services.AddSingleton<IHipSignatureProviderFactory, HipSignatureProviderFactory>();
         services.AddScoped<IHipIdentityService, HipIdentityService>();
         services.AddScoped<IHipSignatureService, HipSignatureService>();
+        services.AddScoped<ISigningKeyLifecycleService, SigningKeyLifecycleService>();
         services.AddScoped<IWebsiteIdentityService, WebsiteIdentityService>();
         services.TryAddSingleton<IDnsTxtRecordResolver, NoOpDnsTxtRecordResolver>();
         services.AddScoped<IDomainVerificationService, DnsDomainVerificationService>();

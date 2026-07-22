@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddSingleton<IDnsTxtRecordResolver, DnsClientTxtRecordResolver>();
 
         services.AddScoped<IHipIdentityRepository, EfHipIdentityRepository>();
+        services.AddScoped<ISigningKeyLifecycleRepository, EfSigningKeyLifecycleRepository>();
         services.AddScoped<IDomainVerificationRequestRepository, EfDomainVerificationRequestRepository>();
         services.AddScoped<IWebsiteIdentityRepository, EfWebsiteIdentityRepository>();
         services.AddScoped<IReputationProfileRepository, EfReputationProfileRepository>();

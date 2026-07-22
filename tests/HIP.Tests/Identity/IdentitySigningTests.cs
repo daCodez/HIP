@@ -133,11 +133,14 @@ public sealed class IdentitySigningTests
         var keyPair = crypto.GenerateKeyPair();
         var identity = new HipIdentity("hip:web:signed.example", IdentitySubjectType.Website, "signed.example", keyPair.PublicKey, keyPair.Algorithm, VerificationStatus.Verified, DateTimeOffset.UtcNow, "signed.example");
         await repository.SaveAsync(identity, CancellationToken.None);
-        var signatureService = new HipSignatureService(crypto, repository);
+        var lifecycle = SigningKeyLifecycle();
+        await RegisterDefaultKeyAsync(lifecycle, identity, keyPair);
+        var signatureService = new HipSignatureService(crypto, repository, lifecycle);
         var hash = crypto.HashContent("homepage");
         var signature = crypto.SignHash(hash, keyPair.PrivateKey);
 
-        var result = await signatureService.VerifyAsync(new HipSignatureVerificationRequest(identity.IdentityId, hash, signature, "Trusted"), CancellationToken.None);
+        var result = await signatureService.VerifyAsync(new HipSignatureVerificationRequest(
+            identity.IdentityId, hash, signature, "Trusted", HipIdentityService.InitialSigningKeyId, identity.CreatedAtUtc), CancellationToken.None);
 
         Assert.That(result.IsValid, Is.True);
         Assert.That(result.SignedIdentityStatus, Is.EqualTo("Verified"));
@@ -152,11 +155,14 @@ public sealed class IdentitySigningTests
         var keyPair = crypto.GenerateKeyPair();
         var identity = new HipIdentity("hip:web:low-rep.example", IdentitySubjectType.Website, "low-rep.example", keyPair.PublicKey, keyPair.Algorithm, VerificationStatus.Verified, DateTimeOffset.UtcNow, "low-rep.example");
         await repository.SaveAsync(identity, CancellationToken.None);
-        var signatureService = new HipSignatureService(crypto, repository);
+        var lifecycle = SigningKeyLifecycle();
+        await RegisterDefaultKeyAsync(lifecycle, identity, keyPair);
+        var signatureService = new HipSignatureService(crypto, repository, lifecycle);
         var hash = crypto.HashContent("homepage");
         var signature = crypto.SignHash(hash, keyPair.PrivateKey);
 
-        var result = await signatureService.VerifyAsync(new HipSignatureVerificationRequest(identity.IdentityId, hash, signature, "Low"), CancellationToken.None);
+        var result = await signatureService.VerifyAsync(new HipSignatureVerificationRequest(
+            identity.IdentityId, hash, signature, "Low", HipIdentityService.InitialSigningKeyId, identity.CreatedAtUtc), CancellationToken.None);
 
         Assert.That(result.IsValid, Is.True);
         Assert.That(result.FinalRiskStatus, Is.EqualTo("Caution"));
@@ -211,7 +217,7 @@ public sealed class IdentitySigningTests
     private static HipIdentityService Service(out DevelopmentHipCryptoProvider crypto)
     {
         crypto = new DevelopmentHipCryptoProvider();
-        return new HipIdentityService(crypto, new InMemoryHipIdentityRepository());
+        return new HipIdentityService(crypto, new InMemoryHipIdentityRepository(), SigningKeyLifecycle());
     }
 
     private static WebsiteIdentityService WebsiteService()
@@ -221,7 +227,8 @@ public sealed class IdentitySigningTests
             new InMemoryHipIdentityRepository(),
             new InMemoryDomainVerificationService(),
             new TestWebsiteIdentityRepository(),
-            new AuditLogService(new InMemoryAuditLogRepository()));
+            new AuditLogService(new InMemoryAuditLogRepository()),
+            SigningKeyLifecycle());
     }
 
     [Test]
@@ -247,7 +254,8 @@ public sealed class IdentitySigningTests
         var audit = new AuditLogService(new InMemoryAuditLogRepository());
         var service = new WebsiteIdentityService(
             new DevelopmentHipCryptoProvider(), identityRepository,
-            new InMemoryDomainVerificationService(), new TestWebsiteIdentityRepository(), audit);
+            new InMemoryDomainVerificationService(), new TestWebsiteIdentityRepository(), audit,
+            SigningKeyLifecycle());
         var registered = await service.RegisterAsync(
             new WebsiteIdentityRegistrationRequest("revoke.example", "Revoke", VerificationMethod.DnsTxt),
             CancellationToken.None);
@@ -279,15 +287,33 @@ public sealed class IdentitySigningTests
         var service = new WebsiteIdentityService(
             new DevelopmentHipCryptoProvider(), new InMemoryHipIdentityRepository(),
             new InMemoryDomainVerificationService(), repository,
-            new AuditLogService(new InMemoryAuditLogRepository()));
+            new AuditLogService(new InMemoryAuditLogRepository()),
+            SigningKeyLifecycle());
 
         var identities = await service.ListAsync(CancellationToken.None);
 
         Assert.That(identities.Select(identity => identity.Domain), Is.EqualTo(new[] { "newer.example", "older.example" }));
     }
 
-    private static HipSignatureService SignatureService(DevelopmentHipCryptoProvider crypto) =>
-        new(crypto, new InMemoryHipIdentityRepository());
+    private static SigningKeyLifecycleService SigningKeyLifecycle() =>
+        new(
+            new InMemorySigningKeyLifecycleRepository(),
+            new AuditLogService(new InMemoryAuditLogRepository()));
+
+    private static Task<SigningKeyRing> RegisterDefaultKeyAsync(
+        ISigningKeyLifecycleService lifecycle,
+        HipIdentity identity,
+        HipKeyPair keyPair) =>
+        lifecycle.RegisterAsync(
+            new RegisterSigningKeyRequest(
+                identity.IdentityId,
+                HipIdentityService.InitialSigningKeyId,
+                keyPair.Algorithm,
+                keyPair.PublicKey,
+                "test:identity-signing",
+                "Register the test identity's managed signing key.",
+                identity.CreatedAtUtc),
+            CancellationToken.None);
 
     /// <summary>
     /// Test-only website identity repository used to verify service behavior without static process state.
