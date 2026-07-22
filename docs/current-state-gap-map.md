@@ -310,8 +310,11 @@ lifecycle work.
 
 ### Known verification gaps
 
-- The full .NET suite is not currently green: dashboard source-contract tests
-  still expect earlier dashboard markup/build-marker behavior.
+- The focused dashboard contract is reconciled with the current implementation:
+  all 47 `AdminDashboardTests` pass with isolated build artifacts, including
+  rendered routes, source contracts, privacy-safe projections, dependency
+  availability, and website-verification lifecycle metrics. The full .NET suite
+  was intentionally not rerun as part of this focused work package.
 - Focused production authentication, MFA, step-up, device proof, tamper,
   actor-binding, and sensitive-action tests exist. Authorization closure tests
   cover every protected Web API route and page template without rendering
