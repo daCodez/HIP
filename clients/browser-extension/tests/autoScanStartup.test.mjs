@@ -120,6 +120,18 @@ test("popup probes badge markup directly when an already-open tab has no content
   assert.equal(popupSource.includes("hipBadgeDomainMatch: matchesPage"), true);
 });
 
+test("popup reads the content summary directly when the service worker cache is empty", () => {
+  assert.equal(popupSource.includes("function getContentScriptSummary"), true);
+  assert.equal(popupSource.includes('type: "HIP_GET_CONTENT_SUMMARY"'), true);
+  assert.equal(popupSource.includes("const summary = contentSummary || response?.result || {}"), true);
+});
+
+test("popup verifies refresh responses and retries injection safely", () => {
+  assert.equal(popupSource.includes("if (response?.ok)"), true);
+  assert.equal(popupSource.includes("return response?.ok === true"), true);
+  assert.equal(popupSource.includes('console.warn("HIP content scanner startup unavailable."'), false);
+});
+
 test("popup renders completed content-script Site Safety before duplicate API scan", () => {
   const summaryIndex = popupSource.indexOf("const summarySiteSafety = siteSafetyResultFromSummary(summary);");
   const renderIndex = popupSource.indexOf("return renderSiteSafetyResult(summarySiteSafety);", summaryIndex);
