@@ -42,9 +42,9 @@
 
         <section class="editorial-hero" aria-label="HIP protection summary">
             <article class="trust-panel">
-                <div class="editorial-score" aria-label="Protection score @ProtectionScore out of 100">
+                <div class="editorial-score" aria-label="@ProtectionScoreAriaLabel">
                     <div class="editorial-score-line">
-                        <strong>@ProtectionScore</strong><span>/100</span>
+                        <strong>@ProtectionScoreText</strong><span>/100</span>
                     </div>
                     <b>@ProtectionStatus</b>
                 </div>
@@ -92,10 +92,27 @@
         </section>
 
         <section class="editorial-metrics" aria-label="Current operational metrics">
-            @Metric("scansToday", "Scans today", "Stored scans received today")
-            @Metric("suspiciousResults", "Threats identified", "Suspicious or caution results")
-            @Metric("activeRules", "Active rules", "Rules currently enforcing behavior")
-            @Metric("domainsScanned", "Domains scanned", "Distinct domains with stored scans")
+            @if (_summary.HasScanData)
+            {
+                @Metric("scansToday", "Scans today", "Stored authoritative scans received today")
+                @Metric("suspiciousResults", "Threats identified", "Suspicious or caution results")
+                @Metric("activeRules", "Active rules", "Rules currently enforcing behavior")
+                @Metric("domainsScanned", "Domains scanned", "Distinct domains with authoritative scans")
+            }
+            else if (ClientTelemetryCount > 0)
+            {
+                @Metric("clientTelemetryObservations", "Client observations", "Stored privacy-safe telemetry; not authoritative")
+                @Metric("clientTelemetryDomains", "Observed domains", "Distinct client-observed domains")
+                @Metric("clientTelemetryAverageScore", "Observed score", "Informational only; not an authoritative HIP score")
+                @Metric("latestClientTelemetry", "Latest observation", "Minutes since client telemetry was stored")
+            }
+            else
+            {
+                @Metric("scansToday", "Scans today", "Stored scans received today")
+                @Metric("suspiciousResults", "Threats identified", "Suspicious or caution results")
+                @Metric("activeRules", "Active rules", "Rules currently enforcing behavior")
+                @Metric("domainsScanned", "Domains scanned", "Distinct domains with stored scans")
+            }
         </section>
 
         <section class="editorial-lower">
@@ -148,7 +165,7 @@
             <header><div><p class="kicker">Stored evidence</p><h2 id="recent-scans-heading">Recent scans</h2></div><a href="/admin/scans">View all</a></header>
             @if (_summary.RecentScans.Count == 0)
             {
-                @Empty("No scans yet", "Scan history is not connected yet. Run the browser extension to submit a privacy-safe scan summary.")
+                @Empty("No authoritative scans yet", ClientTelemetryCount > 0 ? $"HIP stored {ClientTelemetryCount} privacy-safe client {Pluralize(ClientTelemetryCount, "observation", "observations")}; they remain non-authoritative until verified evidence is available." : "Run the browser extension to submit privacy-safe telemetry. HIP will keep it separate from authoritative trust evidence.")
             }
             else
             {
@@ -169,7 +186,7 @@
         <section class="editorial-details" aria-label="Supporting operational evidence">
             <article class="overview-panel"><header><div><p class="kicker">Priority response</p><h2>Recent threat cases</h2></div><a href="/admin/review">Review all</a></header>@if (_summary.RecentThreats.Count == 0) { @Empty("No active threats", "No high-risk evidence is present in connected data.") } else { @foreach (var threat in _summary.RecentThreats.Take(4)) { <a class="threat-card" href="@ThreatLink(threat)"><span class="risk-dot"></span><div><b>@threat.Domain</b><small>@threat.ReasonSummary</small><em>@threat.Severity · @threat.Source · @Relative(threat.CreatedAtUtc)</em></div><strong>@(threat.FinalHipScore?.ToString() ?? "—")</strong></a> } }</article>
             <article class="overview-panel"><p class="kicker">Stored evidence</p><h2>Top risk categories</h2>@RiskBar("Suspicious links", "suspiciousLinksFound") @RiskBar("Dangerous links", "dangerousLinksFound") @RiskBar("Risk findings", "riskyFindings") @RiskBar("Feedback spikes", "suspiciousFeedbackSpikes")</article>
-            <article class="overview-panel"><p class="kicker">Infrastructure</p><h2>Provider health</h2>@Health("HIP API", _summary.ApiHealth, "Dashboard request completed") @Health("Optional data sources", UnavailableSourceCount == 0 ? "Available" : "Degraded", UnavailableSourceCount == 0 ? "All dashboard dependencies answered" : $"{UnavailableSourceCount} source(s) unavailable") @Health("External providers", Card("externalProviderErrors")?.Status ?? "Unavailable", Card("externalProviderErrors")?.IsPlaceholder == true ? "No provider evidence" : "Evidence received") @Health("Browser scanner", _summary.HasScanData ? "Evidence" : "Waiting", _summary.DataSource)</article>
+            <article class="overview-panel"><p class="kicker">Infrastructure</p><h2>Provider health</h2>@Health("HIP API", _summary.ApiHealth, "Dashboard request completed") @Health("Optional data sources", UnavailableSourceCount == 0 ? "Available" : "Degraded", UnavailableSourceCount == 0 ? "All dashboard dependencies answered" : $"{UnavailableSourceCount} source(s) unavailable") @Health("External providers", Card("externalProviderErrors")?.Status ?? "Unavailable", Card("externalProviderErrors")?.IsPlaceholder == true ? "No provider evidence" : "Evidence received") @Health("Browser scanner", _summary.HasScanData ? "Evidence" : ClientTelemetryCount > 0 ? "Telemetry" : "Waiting", _summary.HasScanData ? _summary.DataSource : ClientTelemetryCount > 0 ? $"{ClientTelemetryCount} non-authoritative client observations stored" : _summary.DataSource)</article>
             <article class="overview-panel"><p class="kicker">Detection logic</p><h2>Rule performance</h2>@RuleRow("Active rules", "activeRules") @RuleRow("Simulation rules", "simulationRules") @RuleRow("Watch-only rules", "watchOnlyRules") @RuleRow("Awaiting approval", "selfHealingCandidates")<small class="data-note">Trigger and false-positive metrics are not yet exposed by the dashboard service.</small></article>
             <article class="overview-panel activity-panel"><p class="kicker">Audit stream</p><h2>System activity</h2>@if (_summary.RecentActivity.Count == 0) { @Empty("No recent activity", "Events will appear as HIP records system changes.") } else { <div class="activity-timeline">@foreach (var activity in _summary.RecentActivity.Take(6)) { <div><i></i><span><b>@activity.ActivityType</b><small>@activity.Summary</small><em>@Relative(activity.CreatedAtUtc)</em></span></div> }</div> }</article>
         </section>
@@ -243,6 +260,9 @@
     private int CautionPercent => OutcomePercent(CautionCount, ClassifiedCount);
     private int RiskPercent => OutcomePercent(HighRiskCount + CriticalCount, ClassifiedCount);
     private int ProtectionScore => Math.Clamp(Card("averageHipScore")?.Value ?? 0, 0, 100);
+    private int ClientTelemetryCount => CountCard("clientTelemetryObservations");
+    private string ProtectionScoreText => _summary?.HasScanData == true ? ProtectionScore.ToString(System.Globalization.CultureInfo.InvariantCulture) : "—";
+    private string ProtectionScoreAriaLabel => _summary?.HasScanData == true ? $"Protection score {ProtectionScore} out of 100" : "Authoritative protection score unavailable";
     private int JudgmentCount => CountCard("pendingReviewItems") + CountCard("selfHealingCandidates") + CountCard("pendingAppeals");
     private AdminRecentThreatItem? PriorityThreat => _summary?.RecentThreats.FirstOrDefault();
     private int MaxBucketTotal => Math.Max(1, DailyOutcomes.Max(bucket => bucket.Total));
@@ -250,8 +270,10 @@
     private string ProtectionLabel => ProtectionScore >= 85 ? "Protected" : ProtectionScore >= 60 ? "Caution" : ProtectionScore >= 30 ? "High risk" : "Critical";
     private string ProtectionStatus => _summary?.HasScanData != true ? "Awaiting evidence" : JudgmentCount > 0 ? "Protection pending review" : ProtectionLabel;
     private string ProtectionHeading => _summary?.HasScanData != true ? "Protection needs evidence." : JudgmentCount > 0 ? "Strong evidence, incomplete judgment." : "Current evidence is fully reviewed.";
-    private string ProtectionExplanation => _summary?.HasScanData == true ? JudgmentCount > 0 ? $"{JudgmentCount} {Pluralize(JudgmentCount, "decision", "decisions")} require review before protection status can be confirmed." : $"Average HIP score across {_summary.RecentScans.Count} recent privacy-safe scan summaries." : "HIP needs stored scan evidence before it can calculate protection.";
-    private string DashboardHeading => _summary?.HasScanData == true && (ProtectionScore < 85 || JudgmentCount > 0) ? "Trust needs attention." : "Trust is operating normally.";
+    private string ProtectionExplanation => _summary?.HasScanData == true ? JudgmentCount > 0 ? $"{JudgmentCount} {Pluralize(JudgmentCount, "decision", "decisions")} require review before protection status can be confirmed." : $"Average HIP score across {_summary.RecentScans.Count} recent privacy-safe scan summaries." : ClientTelemetryCount > 0 ? $"HIP stored {ClientTelemetryCount} privacy-safe client {Pluralize(ClientTelemetryCount, "observation", "observations")}. They are visible below but cannot become an authoritative score without verified evidence." : "HIP needs stored scan evidence before it can calculate protection.";
+    private string DashboardHeading => _summary?.HasScanData != true
+        ? ClientTelemetryCount > 0 ? "Client telemetry is arriving." : "Trust needs evidence."
+        : ProtectionScore < 85 || JudgmentCount > 0 ? "Trust needs attention." : "Trust is operating normally.";
     private string DashboardSummary => ProtectionExplanation;
     private string JudgmentHeading => JudgmentCount == 0 ? "No judgments remain." : $"{JudgmentCount} {Pluralize(JudgmentCount, "judgment", "judgments")} remain.";
     private string OutcomeDistributionLabel => $"{TrustedPercent}% trusted, {CautionPercent}% caution, {RiskPercent}% risk";

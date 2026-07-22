@@ -396,6 +396,15 @@ test("content script contains duplicate scan submission guards", async () => {
   assert.match(backgroundScript, /duplicateSuppressed/);
 });
 
+test("content script reuses an active scan and publishes terminal persistence state", async () => {
+  const contentScript = await readFile(new URL("../src/content.js", import.meta.url), "utf8");
+
+  assert.match(contentScript, /let activeScanPromise = null/);
+  assert.match(contentScript, /if \(activeScanPromise\) \{\s*return activeScanPromise;/);
+  assert.match(contentScript, /response\.result\?\.duplicateSuppressed \? "DuplicateSuppressed" : "Success"/);
+  assert.match(contentScript, /lastSummary\.lastSubmittedUtc = response\.result\?\.lastCheckedUtc[\s\S]*?publishSummary\(\);/);
+});
+
 test("content script records a terminal failure when scan persistence throws", async () => {
   const contentScript = await readFile(new URL("../src/content.js", import.meta.url), "utf8");
 

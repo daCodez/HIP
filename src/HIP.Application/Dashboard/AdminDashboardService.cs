@@ -54,6 +54,7 @@ public sealed class AdminDashboardService(
     {
         var aggregate = await dashboardScanAggregateStore.GetAsync(cancellationToken);
         var browserScans = await browserScanResultRepository.ListRecentAsync(100, cancellationToken);
+        var clientTelemetryRead = await ReadOptionalAsync(browserScanResultRepository.ListAsync, cancellationToken);
         // Keep the dashboard render on the hot path. Some MVP sources still use broad
         // encrypted-record scans, so each optional source gets a small read budget. These
         // reads intentionally stay sequential because the current EF-backed stores share a
@@ -79,6 +80,10 @@ public sealed class AdminDashboardService(
         var appeals = appealsRead.Items;
         var overrides = overridesRead.Items;
         var auditLogs = auditLogsRead.Items;
+        var clientTelemetry = clientTelemetryRead.Items
+            .Where(scan => !BrowserScanResultProvenance.IsServerAuthoritative(scan))
+            .OrderByDescending(scan => scan.LastCheckedUtc)
+            .ToArray();
 
         var now = DateTimeOffset.UtcNow;
         var hasScanData = aggregate.TotalScans > 0 || browserScans.Count > 0;
@@ -105,6 +110,11 @@ public sealed class AdminDashboardService(
             ? (int)Math.Round(browserScans.Average(scan => scan.Score))
             : 0;
         var latestScanUtc = browserScans.OrderByDescending(scan => scan.LastCheckedUtc).FirstOrDefault()?.LastCheckedUtc;
+        var clientTelemetryDomains = clientTelemetry.Select(scan => scan.Domain).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        var clientTelemetryAverageScore = clientTelemetry.Length == 0
+            ? 0
+            : (int)Math.Round(clientTelemetry.Average(scan => scan.Score));
+        var latestClientTelemetryUtc = clientTelemetry.FirstOrDefault()?.LastCheckedUtc;
         var pendingManualReviews = reviews.Count(item => item.Status is ReviewStatus.Open or ReviewStatus.InReview or ReviewStatus.NeedsMoreInfo);
         var pendingGeneratedReviews = generatedReviews.Count(item => item.Status is AdminReviewStatus.Open or AdminReviewStatus.InReview or AdminReviewStatus.Escalated);
         var highSeverityReviews = reviews.Count(item => item.Priority is ReviewPriority.High or ReviewPriority.Critical) +
@@ -163,6 +173,10 @@ public sealed class AdminDashboardService(
             Card("scansLast7Days", "Last 7 Days", scansLast7Days, hasScanData ? "Recent" : "No Data", !hasScanData, "Browser plugin scans received in the last 7 days."),
             Card("averageHipScore", "Average HIP Score", averageHipScore, hasScanData ? "Average" : "No Data", !hasScanData, "Average HIP score across stored browser scans."),
             Card("latestScan", "Latest Scan", latestScanUtc is null ? 0 : (int)Math.Max(0, Math.Round((now - latestScanUtc.Value).TotalMinutes)), latestScanUtc is null ? "No Data" : "Minutes Ago", !hasScanData, "Minutes since the latest stored browser scan."),
+            Card("clientTelemetryObservations", "Client Telemetry", clientTelemetry.Length, !clientTelemetryRead.IsAvailable ? "Unavailable" : clientTelemetry.Length > 0 ? "Untrusted" : "No Data", !clientTelemetryRead.IsAvailable || clientTelemetry.Length == 0, "Stored privacy-safe client observations that do not affect authoritative HIP scores."),
+            Card("clientTelemetryDomains", "Observed Domains", clientTelemetryDomains, !clientTelemetryRead.IsAvailable ? "Unavailable" : clientTelemetry.Length > 0 ? "Untrusted" : "No Data", !clientTelemetryRead.IsAvailable || clientTelemetry.Length == 0, "Distinct domains observed by untrusted browser clients."),
+            Card("clientTelemetryAverageScore", "Observed Client Score", clientTelemetryAverageScore, !clientTelemetryRead.IsAvailable ? "Unavailable" : clientTelemetry.Length > 0 ? "Informational" : "No Data", !clientTelemetryRead.IsAvailable || clientTelemetry.Length == 0, "Average client-observed score; informational only and not authoritative trust evidence."),
+            Card("latestClientTelemetry", "Latest Client Observation", latestClientTelemetryUtc is null ? 0 : (int)Math.Max(0, Math.Round((now - latestClientTelemetryUtc.Value).TotalMinutes)), !clientTelemetryRead.IsAvailable ? "Unavailable" : latestClientTelemetryUtc is null ? "No Data" : "Minutes Ago", !clientTelemetryRead.IsAvailable || latestClientTelemetryUtc is null, "Minutes since HIP stored the latest privacy-safe client observation."),
             Card("riskyFindings", "Risky Findings", riskyFindings, !findingsRead.IsAvailable ? "Unavailable" : riskyFindings > 0 ? "Needs Review" : "Clear", !findingsRead.IsAvailable, "Risk finding reports with HighRisk, Dangerous, or Critical status."),
             Card("openReviewItems", "Open Review Items", pendingManualReviews, reviewsRead.IsAvailable ? "Queue" : "Unavailable", !reviewsRead.IsAvailable, "Manual review items that still need attention."),
             Card("pendingReviewItems", "Pending Review Items", pendingManualReviews + pendingGeneratedReviews, reviewsRead.IsAvailable && generatedReviewsRead.IsAvailable ? "Queue" : "Unavailable", !reviewsRead.IsAvailable || !generatedReviewsRead.IsAvailable, "Manual and generated review items that still need attention."),
@@ -319,6 +333,7 @@ public sealed class AdminDashboardService(
 
         var sourceStatuses = new[]
         {
+            new AdminDashboardSourceStatus("clientTelemetry", clientTelemetryRead.IsAvailable, clientTelemetry.Length),
             Source("riskFindings", findingsRead),
             Source("trustRules", rulesRead),
             Source("generatedRuleCandidates", candidatesRead),
@@ -331,7 +346,12 @@ public sealed class AdminDashboardService(
             Source("auditLogs", auditLogsRead)
         };
 
-        return new AdminDashboardSummary(cards, recentActivity, "Healthy", DateTimeOffset.UtcNow, hasScanData ? "BrowserPluginScanResults" : "NoStoredScanData", hasScanData, topRiskyDomains, recentScans, recentThreats)
+        var dataSource = hasScanData
+            ? "BrowserPluginScanResults"
+            : clientTelemetry.Length > 0
+                ? "ClientTelemetryOnly"
+                : "NoStoredScanData";
+        return new AdminDashboardSummary(cards, recentActivity, "Healthy", DateTimeOffset.UtcNow, dataSource, hasScanData, topRiskyDomains, recentScans, recentThreats)
         {
             Sources = sourceStatuses
         };

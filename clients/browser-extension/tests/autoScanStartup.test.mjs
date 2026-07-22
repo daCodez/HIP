@@ -24,7 +24,7 @@ test("content script publishes scan progress before site scoring", () => {
 });
 
 test("content script publishes safe failure summary when initialization fails", () => {
-  assert.equal(contentSource.includes("initialize().catch(handleInitializationError);"), true);
+  assert.equal(contentSource.includes("runScan().catch(handleInitializationError);"), true);
   assert.equal(contentSource.includes('markScanStage("Failed")'), true);
   assert.equal(contentSource.includes('lastSummary.apiStatus = "Unavailable"'), true);
   assert.equal(contentSource.includes("publishSummary();"), true);

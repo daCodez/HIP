@@ -33,6 +33,7 @@ test("popup view model renders score domain and reasons", () => {
     status: "Trusted",
     verificationStatus: "Verified",
     signedIdentityStatus: "Valid",
+    dataSource: "BrowserPluginScanResults",
     lastCheckedUtc: "2026-05-30T10:15:00Z",
     reasons: ["No known scam reports", "No suspicious redirects found"]
   }, {
@@ -100,6 +101,18 @@ test("popup distinguishes stored client telemetry from an authoritative HIP asse
 
   assert.equal(viewModel.lastSubmittedText, "Client telemetry stored (2026-07-22 08:35 UTC)");
   assert.equal(viewModel.dataSourceText, "Client-observed evidence; no authoritative HIP assessment");
+});
+
+test("missing data source is not presented as an authoritative HIP assessment", () => {
+  const viewModel = buildPopupViewModel({
+    domain: "example.com",
+    score: 56,
+    status: "LimitedTrustData"
+  }, {}, {
+    webBaseUrl: "https://hip.local"
+  }, "https://example.com");
+
+  assert.equal(viewModel.dataSourceText, "No authoritative HIP assessment");
 });
 
 test("popup view model renders layered scores", () => {

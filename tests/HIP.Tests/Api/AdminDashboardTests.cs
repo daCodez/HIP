@@ -344,6 +344,31 @@ public sealed class AdminDashboardTests
     }
 
     [Test]
+    public async Task Dashboard_surfaces_untrusted_client_telemetry_without_treating_it_as_authoritative_score_data()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        var observation = Scan("observed.example", 59, "LimitedTrustData", 0, 0, 0, DateTimeOffset.UtcNow, "Client-observed telemetry.");
+        var metadata = new Dictionary<string, string>(observation.PrivacySafeMetadata, StringComparer.OrdinalIgnoreCase)
+        {
+            [BrowserScanResultProvenance.MetadataKey] = BrowserScanResultProvenance.UntrustedClient
+        };
+        await repository.SaveAsync(observation with { PrivacySafeMetadata = metadata }, CancellationToken.None);
+
+        var summary = await Dashboard(repository).GetSummaryAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(summary.HasScanData, Is.False);
+            Assert.That(summary.DataSource, Is.EqualTo("ClientTelemetryOnly"));
+            Assert.That(summary.RecentScans, Is.Empty);
+            Assert.That(Card(summary, "totalScans").IsPlaceholder, Is.True);
+            Assert.That(Card(summary, "clientTelemetryObservations").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "clientTelemetryObservations").Status, Is.EqualTo("Untrusted"));
+            Assert.That(Card(summary, "clientTelemetryAverageScore").Value, Is.EqualTo(59));
+        });
+    }
+
+    [Test]
     public async Task Dashboard_empty_state_does_not_generate_fake_activity_or_threats()
     {
         var service = Dashboard(new InMemoryBrowserScanResultRepository());

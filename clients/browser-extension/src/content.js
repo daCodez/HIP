@@ -27,6 +27,7 @@
   ].join(", ");
   const reportedDomains = new Set();
   const pendingScanSubmissions = new Set();
+  let activeScanPromise = null;
   const privacyGuards = window.HipBrowserPrivacyGuards;
   const scanAssessment = window.HipBrowserScanAssessment;
   const formalScoring = globalThis.HipFormalScoring;
@@ -79,7 +80,7 @@
     message = validation.message;
 
     if (message?.type === "HIP_REFRESH_SCAN") {
-      initialize()
+      runScan()
         .then(() => sendResponse({ ok: true, result: contentMessageContracts.safeSummary(lastSummary) }))
         .catch(error => {
           handleInitializationError(error);
@@ -100,7 +101,26 @@
     void handleDeviceRegistrationBridgeMessage(event);
   });
 
-  initialize().catch(handleInitializationError);
+  runScan().catch(handleInitializationError);
+
+  /**
+   * Reuses the active page scan when popup refresh and document startup overlap.
+   * This prevents a second scan from resetting a completed persistence state to Pending.
+   */
+  function runScan() {
+    if (activeScanPromise) {
+      return activeScanPromise;
+    }
+
+    const scan = initialize();
+    activeScanPromise = scan;
+    scan.finally(() => {
+      if (activeScanPromise === scan) {
+        activeScanPromise = null;
+      }
+    }).catch(() => {});
+    return scan;
+  }
 
   /**
    * Bridges the authenticated HIP consumer-device page to extension-owned key
@@ -565,18 +585,22 @@
       const response = await chrome.runtime.sendMessage({ type: "HIP_SAVE_SCAN_RESULT", result: payload });
       if (!response?.ok) {
         lastSummary.scanResultSubmission = "Failure";
+        lastSummary.scanResultDataSource = "NotStored";
         lastSummary.scanResultError = response?.error || "Submission failed";
+        publishSummary();
         console.warn("HIP scan result was not persisted.", response?.error);
         return;
       }
 
-      lastSummary.scanResultSubmission = "Success";
+      lastSummary.scanResultSubmission = response.result?.duplicateSuppressed ? "DuplicateSuppressed" : "Success";
       lastSummary.scanResultDataSource = "BrowserPluginScan";
       lastSummary.lastSubmittedUtc = response.result?.lastCheckedUtc || new Date().toISOString();
+      publishSummary();
     } catch (error) {
       lastSummary.scanResultSubmission = "Failure";
       lastSummary.scanResultDataSource = "NotStored";
       lastSummary.scanResultError = "HIP scan result persistence unavailable.";
+      publishSummary();
       throw error;
     } finally {
       pendingScanSubmissions.delete(submissionKey);

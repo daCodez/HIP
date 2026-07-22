@@ -16,8 +16,8 @@ let activeLookup = null;
 let activeSiteSafety = null;
 let popupStartedContentScan = false;
 
-const summaryPollAttempts = 6;
-const summaryPollDelayMs = 450;
+const summaryPollAttempts = 24;
+const summaryPollDelayMs = 500;
 
 const elements = {
   domain: document.getElementById("domain"),
