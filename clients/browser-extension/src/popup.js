@@ -268,13 +268,30 @@ async function getScanSummary() {
   }
 
   badgeObservationPromise ??= observeHipBadgeInActiveTab(activeTabId);
-  const [response, badgeObservation] = await Promise.all([
+  const [response, contentSummary, badgeObservation] = await Promise.all([
     chrome.runtime.sendMessage({ type: "HIP_GET_SCAN_SUMMARY", tabId: activeTabId }),
+    getContentScriptSummary(activeTabId),
     badgeObservationPromise
   ]);
+  const summary = contentSummary || response?.result || {};
   return badgeObservation
-    ? { ...(response?.result || {}), ...badgeObservation }
-    : response?.result || {};
+    ? { ...summary, ...badgeObservation }
+    : summary;
+}
+
+/**
+ * Reads the current tab's privacy-safe summary directly. Manifest V3 workers may
+ * restart and lose their in-memory cache while the page content script remains active.
+ */
+async function getContentScriptSummary(tabId) {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, { type: "HIP_GET_CONTENT_SUMMARY" });
+    return response?.ok && response.result && typeof response.result === "object"
+      ? response.result
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -329,14 +346,16 @@ async function observeHipBadgeInActiveTab(tabId) {
  */
 async function startContentScanIfNeeded() {
   if (!activeTabId || popupStartedContentScan) {
-    return;
+    return false;
   }
 
   popupStartedContentScan = true;
 
   try {
-    await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
-    return;
+    const response = await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
+    if (response?.ok) {
+      return true;
+    }
   } catch {
     // This is expected after an unpacked-extension reload: Chrome keeps old tabs open
     // without the new content script attached, so the popup injects it once below.
@@ -344,9 +363,10 @@ async function startContentScanIfNeeded() {
 
   try {
     await injectContentScanner(activeTabId);
-    await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
-  } catch (error) {
-    console.warn("HIP content scanner startup unavailable.", error);
+    const response = await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
+    return response?.ok === true;
+  } catch {
+    return false;
   }
 }
 
@@ -619,14 +639,15 @@ async function refreshScan() {
   elements.refreshScan.disabled = true;
   renderLoadingSummary("Refreshing scan");
   try {
-    await chrome.tabs.sendMessage(activeTabId, { type: "HIP_REFRESH_SCAN" });
+    popupStartedContentScan = false;
+    await startContentScanIfNeeded();
     const summary = await waitForScanSummary();
     await renderSiteSafety(summary).catch(handleSiteSafetyUnavailable);
     if (activeLookup) {
       renderLookup(activeLookup, summary);
     }
-  } catch (error) {
-    console.warn("HIP scan refresh unavailable.", error);
+  } catch {
+    renderSummary(await getScanSummary());
   } finally {
     elements.refreshScan.disabled = false;
   }
