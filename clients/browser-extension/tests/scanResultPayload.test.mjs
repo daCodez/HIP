@@ -407,6 +407,7 @@ test("content script observes HIP badge markup and submits only boolean badge si
   assert.match(contentScript, /hipBadgeObserved: String\(lastSummary\.hipBadgeObserved\)/);
   assert.match(contentScript, /hipBadgeDomainMatch: String\(lastSummary\.hipBadgeDomainMatch\)/);
   assert.doesNotMatch(contentScript, /hipBadgeTextContent|hipBadgeInnerHtml/);
+  assert.doesNotMatch(contentScript, /console\.warn\("HIP scan result was not persisted\./);
 });
 
 test("content script reuses an active scan and publishes terminal persistence state", async () => {

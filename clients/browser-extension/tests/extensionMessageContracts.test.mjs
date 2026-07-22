@@ -38,6 +38,7 @@ function emptySummary() {
     scanResultDataSource: "BrowserPluginScan", scanStage: "Complete",
     lastSubmittedUtc: null, lastScanUtc: null, updatedAt: null,
     scanResultError: null, pageUrlHash: hash, isHttps: true,
+    hipBadgeObserved: true, hipBadgeDomainMatch: true,
     pluginVersion: "HIP Plugin v0.1.14-dev"
   };
 }
@@ -98,7 +99,9 @@ test("accepts the complete reviewed service-worker message inventory", () => {
         pluginVersion: "HIP Plugin v0.1.14-dev", scannedAtUtc: null, score: 90, riskLevel: "Safe",
         status: "Safe", reasons: ["No elevated risk."], linksScanned: 1,
         riskyLinksFound: 0, suspiciousLinksFound: 0, dangerousLinksFound: 0,
-        recommendedAction: "Allow", privacySafeMetadata: { scanMode: "Normal" }
+        recommendedAction: "Allow", privacySafeMetadata: {
+          scanMode: "Normal", hipBadgeObserved: "true", hipBadgeDomainMatch: "true"
+        }
       }
     },
     { type: "HIP_SCAN_SUMMARY", summary: emptySummary() },

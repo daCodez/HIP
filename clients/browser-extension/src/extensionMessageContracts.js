@@ -87,11 +87,12 @@ const SUMMARY_KEYS = new Set([
   "evidenceFreshness", "trustAssertionDisposition", "providerEvidenceCount",
   "siteSafety", "scanResultSubmission", "scanResultDataSource", "scanStage",
   "lastSubmittedUtc", "lastScanUtc", "updatedAt", "scanResultError",
-  "pageUrlHash", "isHttps", "pluginVersion"
+  "pageUrlHash", "isHttps", "hipBadgeObserved", "hipBadgeDomainMatch", "pluginVersion"
 ]);
 
 const SCAN_METADATA_KEYS = new Set([
-  "scanMode", "apiStatus", "scanTimestampUtc", "isHttps", "downloadCandidates",
+  "scanMode", "apiStatus", "scanTimestampUtc", "isHttps", "hipBadgeObserved",
+  "hipBadgeDomainMatch", "downloadCandidates",
   "executableDownloadCandidates", "formsDetected", "loginFormsDetected",
   "passwordFieldsDetected", "paymentFieldsDetected", "crossDomainLoginForms",
   "shortenedLinkCandidates", "obfuscatedLinkCandidates", "redirectCandidates",
