@@ -17,6 +17,28 @@ public interface IDomainVerificationService
     Task<DomainVerificationRequest> StartAsync(string domain, VerificationMethod method, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Returns the existing challenge or atomically creates one without replacing its token.
+    /// </summary>
+    /// <param name="domain">Domain controlled by the website owner.</param>
+    /// <param name="method">Verification method whose challenge must remain stable.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>The existing or newly elected challenge.</returns>
+    Task<DomainVerificationRequest> GetOrStartAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken);
+
+    /// <summary>Gets an existing challenge without creating or rotating one.</summary>
+    /// <param name="domain">Domain controlled by the website owner.</param>
+    /// <param name="method">Verification method associated with the challenge.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>The stored challenge, or null when one has not been created.</returns>
+    Task<DomainVerificationRequest?> GetAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Verifies a previously created domain challenge.
     /// </summary>
     /// <param name="domain">Domain being verified.</param>
@@ -35,6 +57,13 @@ public interface IDomainVerificationService
     /// Revokes the stored challenge so later retries cannot reactivate it.
     /// </summary>
     Task<DomainVerificationRequest> RevokeAsync(string domain, VerificationMethod method, CancellationToken cancellationToken);
+
+    /// <summary>Replaces an expired challenge with a new bounded token generation.</summary>
+    Task<DomainVerificationRequest> RenewExpiredAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken) =>
+        throw new NotSupportedException("This domain verification provider does not support expired challenge renewal.");
 
     /// <summary>
     /// Checks the live DNS TXT verification status for a domain.

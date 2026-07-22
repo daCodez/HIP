@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using HIP.Domain.Audit;
 using HIP.Domain.Review;
 
@@ -19,7 +21,7 @@ public sealed class AuditLogService(IAuditLogRepository repository) : IAuditLogS
         IReadOnlyDictionary<string, string>? afterMetadata = null,
         string? correlationId = null)
     {
-        return new AuditLogEntry(
+        var entry = new AuditLogEntry(
             $"audit-{Guid.NewGuid():N}",
             string.IsNullOrWhiteSpace(actorId) ? "system" : actorId,
             action,
@@ -35,6 +37,7 @@ public sealed class AuditLogService(IAuditLogRepository repository) : IAuditLogS
             AfterMetadata = Sanitize(afterMetadata),
             CorrelationId = correlationId
         };
+        return AuditLogIntegrity.Seal(entry);
     }
 
     public AuditLogEntry Write(
@@ -67,12 +70,52 @@ public sealed class AuditLogService(IAuditLogRepository repository) : IAuditLogS
         return entry;
     }
 
+    public AuditLogEntry WriteOnce(
+        string idempotencyKey,
+        string actorId,
+        string action,
+        TargetType targetType,
+        string targetId,
+        string summary,
+        AuditSeverity severity,
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string? actorRole = null,
+        IReadOnlyDictionary<string, string>? beforeMetadata = null,
+        IReadOnlyDictionary<string, string>? afterMetadata = null,
+        string? correlationId = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey)))
+            .ToLowerInvariant();
+        var entry = AuditLogIntegrity.Seal(CreateEntry(
+            actorId,
+            action,
+            targetType,
+            targetId,
+            summary,
+            severity,
+            metadata,
+            actorRole,
+            beforeMetadata,
+            afterMetadata,
+            correlationId) with
+        {
+            AuditLogId = $"audit-idempotent-{hash}"
+        });
+        Run(repository.TryCreateAsync(entry, CancellationToken.None));
+        return entry;
+    }
+
     public IReadOnlyCollection<AuditLogEntry> List() =>
         Run(ListAsync(CancellationToken.None));
 
     public async Task<IReadOnlyCollection<AuditLogEntry>> ListAsync(CancellationToken cancellationToken)
     {
         var entries = await repository.ListAsync(cancellationToken).ConfigureAwait(false);
+        if (entries.Any(entry => !AuditLogIntegrity.Verify(entry)))
+        {
+            throw new InvalidOperationException("HIP audit integrity verification failed.");
+        }
         return entries
             .OrderByDescending(entry => entry.CreatedAtUtc)
             .ToArray();

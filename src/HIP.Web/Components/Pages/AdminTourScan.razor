@@ -1,5 +1,7 @@
 @page "/admin/tour-scan"
 
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+
 <PageTitle>HIP Tour Scan</PageTitle>
 
 <section class="hip-tour-backdrop">

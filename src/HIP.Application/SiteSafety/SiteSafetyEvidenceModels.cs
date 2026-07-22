@@ -185,6 +185,48 @@ public enum SiteSafetyEvidenceItemQuality
     Strong
 }
 
+/// <summary>Provider-neutral completion state for one bounded evidence collection attempt.</summary>
+public enum SiteSafetyProviderResultStatus
+{
+    /// <summary>The provider returned a complete validated result.</summary>
+    Succeeded = 0,
+
+    /// <summary>The provider returned usable evidence together with one or more safe errors.</summary>
+    Partial = 1,
+
+    /// <summary>The provider exceeded its bounded execution time.</summary>
+    TimedOut = 2,
+
+    /// <summary>The provider failed or returned an invalid result.</summary>
+    Failed = 3
+}
+
+/// <summary>Freshness of a normalized provider result at collection completion.</summary>
+public enum SiteSafetyProviderFreshness
+{
+    /// <summary>The result is within the preferred freshness window and has not expired.</summary>
+    Fresh = 0,
+
+    /// <summary>The result remains valid but is older than the preferred freshness window.</summary>
+    Stale = 1,
+
+    /// <summary>The result has reached or passed its provider-defined expiry.</summary>
+    Expired = 2
+}
+
+/// <summary>Most sensitive class of privacy-safe metadata retained in a provider result.</summary>
+public enum SiteSafetyProviderPrivacyClassification
+{
+    /// <summary>The result retains only public domain-level metadata.</summary>
+    PublicDomainMetadata = 0,
+
+    /// <summary>The result retains a one-way URL hash or URL-scoped derived metadata.</summary>
+    HashedUrlMetadata = 1,
+
+    /// <summary>The result contains bounded browser-observed labels or counts, never raw page values.</summary>
+    PrivacySafeObservedSignals = 2
+}
+
 /// <summary>
 /// Represents one normalized provider finding that can influence scoring.
 /// </summary>
@@ -233,6 +275,10 @@ public sealed record SiteSafetyEvidenceItem(
 /// <param name="Errors">Safe provider errors, excluding secrets and raw private content.</param>
 /// <param name="IsAuthoritativeForRisk">Whether risk hits from this provider can force stronger safety status.</param>
 /// <param name="IsAuthoritativeForTrust">Whether clean or positive results from this provider are allowed to provide trust boost.</param>
+/// <param name="ResultStatus">Provider-neutral completion status assigned at the collection boundary.</param>
+/// <param name="LatencyMilliseconds">Bounded elapsed provider collection time in milliseconds.</param>
+/// <param name="Freshness">Freshness classification at collection completion.</param>
+/// <param name="PrivacyClassification">Most sensitive privacy-safe metadata class retained by this result.</param>
 public sealed record SiteSafetyEvidence(
     string ProviderName,
     SiteSafetyEvidenceProviderType ProviderType,
@@ -245,7 +291,11 @@ public sealed record SiteSafetyEvidence(
     DateTimeOffset ExpiresAtUtc,
     IReadOnlyCollection<string> Errors,
     bool IsAuthoritativeForRisk,
-    bool IsAuthoritativeForTrust);
+    bool IsAuthoritativeForTrust,
+    SiteSafetyProviderResultStatus ResultStatus = SiteSafetyProviderResultStatus.Succeeded,
+    long LatencyMilliseconds = 0,
+    SiteSafetyProviderFreshness Freshness = SiteSafetyProviderFreshness.Fresh,
+    SiteSafetyProviderPrivacyClassification PrivacyClassification = SiteSafetyProviderPrivacyClassification.PublicDomainMetadata);
 
 /// <summary>
 /// Context passed to evidence providers so they can return normalized facts without receiving page text or form values.

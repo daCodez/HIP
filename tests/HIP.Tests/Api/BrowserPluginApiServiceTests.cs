@@ -79,6 +79,8 @@ public sealed class BrowserPluginApiServiceTests
         Assert.That(json.RootElement.GetProperty("domain").GetString(), Is.EqualTo("example.com"));
         Assert.That(json.RootElement.GetProperty("status").GetString(), Is.Not.Empty);
         Assert.That(json.RootElement.TryGetProperty("domainTrustScore", out _), Is.True);
+        Assert.That(json.RootElement.GetProperty("scoring").GetProperty("modelVersion").GetString(), Is.EqualTo("hip-0301-v1"));
+        Assert.That(json.RootElement.GetProperty("scoring").GetProperty("contentRiskScoreHigherMeansMoreRisk").GetBoolean(), Is.True);
         Assert.That(json.RootElement.ToString().Contains("password="), Is.False);
     }
 
@@ -131,6 +133,7 @@ public sealed class BrowserPluginApiServiceTests
             Assert.That(metadata.GetProperty("pageTrustScore").GetString(), Is.Not.Empty);
             Assert.That(metadata.GetProperty("contentRiskScore").GetString(), Is.Not.Empty);
             Assert.That(metadata.GetProperty("providerNames").GetString(), Does.Contain("BrowserObservedSignalProvider"));
+            Assert.That(metadata.GetProperty("submissionTrust").GetString(), Is.EqualTo("untrusted-client"));
             Assert.That(serialized, Does.Not.Contain("token=secret-password"));
             Assert.That(serialized, Does.Not.Contain("pageText"));
             Assert.That(serialized, Does.Not.Contain("formValues"));
@@ -139,13 +142,15 @@ public sealed class BrowserPluginApiServiceTests
     }
 
     /// <summary>
-    /// Verifies browser-instance provider settings cannot be changed unless the host explicitly opts in.
+    /// Verifies authorized provider settings cannot be changed unless the host explicitly opts in.
     /// </summary>
     [Test]
-    public async Task Api_service_provider_preferences_reject_public_writes_by_default()
+    public async Task Api_service_provider_preferences_reject_authorized_writes_by_default()
     {
         await using var factory = new HipWebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
         using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Admin");
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-User", "api-provider-admin");
         client.DefaultRequestHeaders.Add("X-HIP-Instance-Id", "api-first-instance");
 
         var update = await client.PostAsJsonAsync("/api/v1/site-safety/external-providers", ProviderPreferencePayload(false));
@@ -172,6 +177,10 @@ public sealed class BrowserPluginApiServiceTests
             });
         using var firstClient = factory.CreateClient();
         using var secondClient = factory.CreateClient();
+        firstClient.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Admin");
+        firstClient.DefaultRequestHeaders.Add("X-HIP-Admin-User", "api-provider-admin");
+        secondClient.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Admin");
+        secondClient.DefaultRequestHeaders.Add("X-HIP-Admin-User", "api-provider-admin");
         firstClient.DefaultRequestHeaders.Add("X-HIP-Instance-Id", "api-first-instance");
         secondClient.DefaultRequestHeaders.Add("X-HIP-Instance-Id", "api-second-instance");
 

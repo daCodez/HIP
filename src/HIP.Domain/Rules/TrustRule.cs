@@ -15,4 +15,5 @@ public sealed record TrustRule(
     string CreatedReason,
     ApprovalStatus ApprovalStatus,
     decimal ConfidenceScore,
-    int Version);
+    int Version,
+    HipRuleCreatorType CreatorType = HipRuleCreatorType.Human);

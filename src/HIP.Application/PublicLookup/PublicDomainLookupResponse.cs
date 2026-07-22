@@ -65,7 +65,14 @@ public sealed record PublicDomainLookupResponse(
     int? SuspiciousLinksFound,
     int? DangerousLinksFound,
     string DataSource,
-    string Message);
+    string Message)
+{
+    /// <summary>Optional provider-assisted wording; it never replaces HIP's deterministic score or explanation.</summary>
+    public string? AssistedExplanation { get; init; }
+
+    /// <summary>Name of the optional explanation provider, or Deterministic when no assistance was accepted.</summary>
+    public string ExplanationSource { get; init; } = "Deterministic";
+}
 
 /// <summary>
 /// Public-safe score component used by lookup pages and API clients.

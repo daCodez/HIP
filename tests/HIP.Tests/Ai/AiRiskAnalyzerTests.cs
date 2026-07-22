@@ -115,7 +115,7 @@ public sealed class AiRiskAnalyzerTests
     }
 
     [Test]
-    public async Task Low_risk_rule_suggestion_can_be_active_but_still_requires_simulation()
+    public async Task Low_risk_rule_suggestion_remains_a_disabled_approval_pending_ai_draft()
     {
         var analyzer = new DevelopmentHipAiRiskAnalyzer();
         var analysis = new HipAiRiskAnalysisResult(
@@ -138,8 +138,12 @@ public sealed class AiRiskAnalyzerTests
         Assert.Multiple(() =>
         {
             Assert.That(suggestion.RecommendedMode, Is.EqualTo(RuleMode.Active));
-            Assert.That(suggestion.RequiresApproval, Is.False);
+            Assert.That(suggestion.RequiresApproval, Is.True);
             Assert.That(suggestion.SimulationRequired, Is.True);
+            Assert.That(suggestion.ProposedRule.Enabled, Is.False);
+            Assert.That(suggestion.ProposedRule.Mode, Is.EqualTo(RuleMode.Disabled));
+            Assert.That(suggestion.ProposedRule.ApprovalStatus, Is.EqualTo(ApprovalStatus.Pending));
+            Assert.That(suggestion.ProposedRule.CreatorType, Is.EqualTo(HipRuleCreatorType.AiSuggested));
         });
     }
 }

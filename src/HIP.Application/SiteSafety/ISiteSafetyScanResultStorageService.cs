@@ -3,18 +3,18 @@ using HIP.Application.Browser;
 namespace HIP.Application.SiteSafety;
 
 /// <summary>
-/// Persists privacy-safe Site Safety scan summaries for lookup and dashboard aggregation.
+/// Persists privacy-safe Site Safety scan summaries as untrusted client telemetry.
 /// </summary>
 /// <remarks>
-/// The storage boundary intentionally reuses the browser scan result store because browser-observed Site Safety scans
-/// are the live data source currently consumed by the public lookup and admin dashboard. The service stores hashes,
-/// scores, labels, counts, provider names, rule identifiers, and timestamps only; it must never store page text,
-/// form values, credentials, cookies, private messages, or raw browsing history.
+/// The storage boundary intentionally reuses the browser scan result store while marking every anonymous observation
+/// untrusted. Public lookup, dashboard aggregation, and authoritative outbox workflows must ignore these records.
+/// The service stores hashes, scores, labels, counts, provider names, rule identifiers, and timestamps only; it must
+/// never store page text, form values, credentials, cookies, private messages, or raw browsing history.
 /// </remarks>
 public interface ISiteSafetyScanResultStorageService
 {
     /// <summary>
-    /// Saves a Site Safety scan result as a privacy-safe domain/page summary.
+    /// Saves a Site Safety scan result as an untrusted privacy-safe domain/page summary.
     /// </summary>
     /// <param name="request">Original scan request containing the validated URL and structural observations.</param>
     /// <param name="result">Completed Site Safety scan result.</param>
@@ -26,7 +26,8 @@ public interface ISiteSafetyScanResultStorageService
 /// <summary>
 /// Bridges Site Safety scan output into HIP's existing privacy-safe browser scan result repository.
 /// </summary>
-public sealed class SiteSafetyScanResultStorageService(IBrowserScanResultService browserScanResultService) : ISiteSafetyScanResultStorageService
+public sealed class SiteSafetyScanResultStorageService(
+    IUntrustedBrowserScanResultSubmissionService browserScanResultService) : ISiteSafetyScanResultStorageService
 {
     private const string UnknownPluginVersion = "unknown";
 
@@ -49,7 +50,7 @@ public sealed class SiteSafetyScanResultStorageService(IBrowserScanResultService
             BuildMetadata(request, result),
             result.ScannedAtUtc);
 
-        await browserScanResultService.SaveAsync(saveRequest, cancellationToken);
+        await browserScanResultService.SaveUntrustedAsync(saveRequest, cancellationToken);
     }
 
     /// <summary>

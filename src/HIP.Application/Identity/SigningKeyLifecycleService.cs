@@ -1,4 +1,5 @@
 using HIP.Application.Review;
+using HIP.Application.Protocol;
 using HIP.Domain.Audit;
 using HIP.Domain.Identity;
 using HIP.Domain.Review;
@@ -10,10 +11,76 @@ namespace HIP.Application.Identity;
 /// </summary>
 public sealed class SigningKeyLifecycleService(
     ISigningKeyLifecycleRepository repository,
-    IAuditLogService auditLogService) : ISigningKeyLifecycleService
+    IAuditLogService auditLogService,
+    IHipPublicKeyFingerprintService publicKeyFingerprintService) : ISigningKeyLifecycleService
 {
     private const int MaximumActorIdLength = 256;
     private const int MaximumReasonLength = 1_024;
+
+    /// <inheritdoc />
+    public async Task<IdentitySigningKeyRegistrationResult> RegisterIdentityAsync(
+        RegisterIdentitySigningKeyRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Identity);
+        ValidateEvidence(request.ActorId, request.Reason);
+
+        var identity = request.Identity;
+        var publicKeyFingerprint = publicKeyFingerprintService.ComputePublicKeyFingerprint(
+            identity.KeyAlgorithm,
+            identity.PublicKey);
+        var keyRing = SigningKeyRing.Create(identity.IdentityId)
+            .RegisterActiveKey(
+                request.KeyId,
+                identity.KeyAlgorithm,
+                identity.PublicKey,
+                publicKeyFingerprint,
+                request.TransitionAtUtc);
+        var auditEntry = CreateAudit(
+            request.ActorId,
+            request.Reason,
+            request.TransitionAtUtc,
+            keyRing,
+            keyRing.GetRequiredKey(request.KeyId),
+            fromStatus: "Unregistered",
+            action: "IdentityAndSigningKeyRegistered",
+            AuditSeverity.Medium);
+        var lifecycleTransition = new SigningKeyLifecycleTransitionBatch(
+            keyRing,
+            expectedVersion: 0,
+            [auditEntry]);
+        var registrationBatch = new IdentitySigningKeyRegistrationBatch(identity, lifecycleTransition);
+
+        try
+        {
+            if (await repository.TryRegisterIdentityAsync(registrationBatch, cancellationToken)
+                    .ConfigureAwait(false))
+            {
+                return new IdentitySigningKeyRegistrationResult(identity, keyRing);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            var committed = await ReconcileInitialRegistrationAsync(
+                    identity,
+                    keyRing,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (committed is not null)
+            {
+                return committed;
+            }
+
+            throw;
+        }
+
+        return await ReconcileInitialRegistrationAsync(identity, keyRing, cancellationToken)
+                   .ConfigureAwait(false) ??
+               throw new IdentitySigningKeyRegistrationConflictException(
+                   identity.IdentityId,
+                   request.KeyId);
+    }
 
     /// <inheritdoc />
     public async Task<SigningKeyRing> RegisterAsync(
@@ -23,11 +90,15 @@ public sealed class SigningKeyLifecycleService(
         ArgumentNullException.ThrowIfNull(request);
         ValidateEvidence(request.ActorId, request.Reason);
 
+        var publicKeyFingerprint = publicKeyFingerprintService.ComputePublicKeyFingerprint(
+            request.Algorithm,
+            request.PublicKey);
         var keyRing = SigningKeyRing.Create(request.IdentityId)
             .RegisterActiveKey(
                 request.KeyId,
                 request.Algorithm,
                 request.PublicKey,
+                publicKeyFingerprint,
                 request.TransitionAtUtc);
 
         var auditEntry = CreateAudit(
@@ -45,6 +116,101 @@ public sealed class SigningKeyLifecycleService(
     }
 
     /// <inheritdoc />
+    public async Task<SigningKeyRing> EnsureInitialKeyAsync(
+        RegisterSigningKeyRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateEvidence(request.ActorId, request.Reason);
+
+        var publicKeyFingerprint = publicKeyFingerprintService.ComputePublicKeyFingerprint(
+            request.Algorithm,
+            request.PublicKey);
+        var requestedRing = SigningKeyRing.Create(request.IdentityId)
+            .RegisterActiveKey(
+                request.KeyId,
+                request.Algorithm,
+                request.PublicKey,
+                publicKeyFingerprint,
+                request.TransitionAtUtc);
+
+        var existingRing = await repository.GetAsync(
+                requestedRing.IdentityId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (existingRing is not null)
+        {
+            return EnsureBootstrapMatch(existingRing, requestedRing);
+        }
+
+        var auditEntry = CreateAudit(
+            request.ActorId,
+            request.Reason,
+            request.TransitionAtUtc,
+            requestedRing,
+            requestedRing.GetRequiredKey(request.KeyId),
+            fromStatus: "Unregistered",
+            action: "SigningKeyActivated",
+            AuditSeverity.Medium);
+        var transitionBatch = new SigningKeyLifecycleTransitionBatch(
+            requestedRing,
+            expectedVersion: 0,
+            [auditEntry]);
+        if (await repository.TrySaveAsync(transitionBatch, cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return requestedRing;
+        }
+
+        var concurrentWinner = await repository.GetAsync(
+                requestedRing.IdentityId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return concurrentWinner is null
+            ? throw new SigningKeyConcurrencyException(requestedRing.IdentityId, expectedVersion: 0)
+            : EnsureBootstrapMatch(concurrentWinner, requestedRing);
+    }
+
+    /// <inheritdoc />
+    public async Task<SigningKeyRing> EnsureKeyRingAsync(
+        RegisterSigningKeyRequest fallbackInitialKey,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(fallbackInitialKey);
+        ValidateEvidence(fallbackInitialKey.ActorId, fallbackInitialKey.Reason);
+
+        var existingRing = await repository.GetAsync(
+                fallbackInitialKey.IdentityId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (existingRing is not null)
+        {
+            return EnsureIdentityBinding(existingRing, fallbackInitialKey);
+        }
+
+        try
+        {
+            return await EnsureInitialKeyAsync(fallbackInitialKey, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (SigningKeyBootstrapMismatchException)
+        {
+            // A different authoritative registration may win after the missing-ring read.
+            // Read-through never rewrites or reactivates that winner.
+            var concurrentWinner = await repository.GetAsync(
+                    fallbackInitialKey.IdentityId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (concurrentWinner is not null)
+            {
+                return EnsureIdentityBinding(concurrentWinner, fallbackInitialKey);
+            }
+
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<SigningKeyRotationResult> RotateAsync(
         RotateSigningKeyRequest request,
         CancellationToken cancellationToken)
@@ -57,11 +223,15 @@ public sealed class SigningKeyLifecycleService(
         EnsureExpectedVersion(currentRing, request.ExpectedVersion);
 
         var previousStatus = currentRing.GetRequiredKey(request.CurrentKeyId).Status;
+        var publicKeyFingerprint = publicKeyFingerprintService.ComputePublicKeyFingerprint(
+            request.Algorithm,
+            request.PublicKey);
         var updatedRing = currentRing.Rotate(
             request.CurrentKeyId,
             request.ReplacementKeyId,
             request.Algorithm,
             request.PublicKey,
+            publicKeyFingerprint,
             request.TransitionAtUtc);
 
         var previousKey = updatedRing.GetRequiredKey(request.CurrentKeyId);
@@ -105,11 +275,15 @@ public sealed class SigningKeyLifecycleService(
         EnsureExpectedVersion(currentRing, request.ExpectedVersion);
 
         var previousStatus = currentRing.GetRequiredKey(request.CompromisedKeyId).Status;
+        var publicKeyFingerprint = publicKeyFingerprintService.ComputePublicKeyFingerprint(
+            request.Algorithm,
+            request.PublicKey);
         var updatedRing = currentRing.ReplaceCompromised(
             request.CompromisedKeyId,
             request.ReplacementKeyId,
             request.Algorithm,
             request.PublicKey,
+            publicKeyFingerprint,
             request.TransitionAtUtc);
 
         var compromisedKey = updatedRing.GetRequiredKey(request.CompromisedKeyId);
@@ -220,6 +394,129 @@ public sealed class SigningKeyLifecycleService(
             .ConfigureAwait(false);
         return updatedRing;
     }
+
+    private static SigningKeyRing EnsureBootstrapMatch(
+        SigningKeyRing existingRing,
+        SigningKeyRing requestedRing)
+    {
+        var requestedKey = requestedRing.Keys.Single();
+        var existingKey = existingRing.Keys.SingleOrDefault(key =>
+            string.Equals(key.KeyId, requestedKey.KeyId, StringComparison.Ordinal));
+
+        if (string.Equals(
+                existingRing.IdentityId,
+                requestedRing.IdentityId,
+                StringComparison.Ordinal) &&
+            existingKey is not null &&
+            string.Equals(
+                existingKey.Algorithm,
+                requestedKey.Algorithm,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                existingKey.PublicKeyFingerprint,
+                requestedKey.PublicKeyFingerprint,
+                StringComparison.Ordinal))
+        {
+            return existingRing;
+        }
+
+        throw new SigningKeyBootstrapMismatchException(existingRing.IdentityId, requestedKey.KeyId);
+    }
+
+    private SigningKeyRing EnsureIdentityBinding(
+        SigningKeyRing existingRing,
+        RegisterSigningKeyRequest fallbackInitialKey)
+    {
+        var identityPublicKeyFingerprint = publicKeyFingerprintService.ComputePublicKeyFingerprint(
+            fallbackInitialKey.Algorithm,
+            fallbackInitialKey.PublicKey);
+        if (string.Equals(
+                existingRing.IdentityId,
+                fallbackInitialKey.IdentityId,
+                StringComparison.Ordinal) &&
+            existingRing.Keys.Any(key =>
+                string.Equals(key.Algorithm, fallbackInitialKey.Algorithm, StringComparison.Ordinal) &&
+                string.Equals(
+                    key.PublicKeyFingerprint,
+                    identityPublicKeyFingerprint,
+                    StringComparison.Ordinal)))
+        {
+            return existingRing;
+        }
+
+        throw new SigningKeyBootstrapMismatchException(
+            existingRing.IdentityId,
+            fallbackInitialKey.KeyId);
+    }
+
+    private async Task<IdentitySigningKeyRegistrationResult?> ReconcileInitialRegistrationAsync(
+        HipIdentity requestedIdentity,
+        SigningKeyRing requestedRing,
+        CancellationToken cancellationToken)
+    {
+        var storedIdentity = await repository.GetRegisteredIdentityAsync(
+                requestedIdentity.IdentityId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        var storedRing = await repository.GetAsync(
+                requestedIdentity.IdentityId,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (storedIdentity is null && storedRing is null)
+        {
+            return null;
+        }
+
+        if (storedIdentity is null || storedRing is null)
+        {
+            throw new IdentitySigningKeyRegistrationInconsistencyException(
+                requestedIdentity.IdentityId,
+                identityExists: storedIdentity is not null,
+                keyRingExists: storedRing is not null);
+        }
+
+        var requestedKey = requestedRing.Keys.Single();
+        var storedKey = storedRing.Keys.SingleOrDefault(key =>
+            string.Equals(key.KeyId, requestedKey.KeyId, StringComparison.Ordinal));
+        var storedIdentityFingerprint = publicKeyFingerprintService.ComputePublicKeyFingerprint(
+            storedIdentity.KeyAlgorithm,
+            storedIdentity.PublicKey);
+        if (!IdentityMatches(
+                storedIdentity,
+                requestedIdentity,
+                storedIdentityFingerprint,
+                requestedKey.PublicKeyFingerprint) ||
+            !string.Equals(storedRing.IdentityId, requestedRing.IdentityId, StringComparison.Ordinal) ||
+            storedKey is null ||
+            !string.Equals(storedKey.Algorithm, requestedKey.Algorithm, StringComparison.Ordinal) ||
+            !string.Equals(
+                storedKey.PublicKeyFingerprint,
+                requestedKey.PublicKeyFingerprint,
+                StringComparison.Ordinal) ||
+            storedKey.ActivatedAtUtc != requestedKey.ActivatedAtUtc)
+        {
+            throw new IdentitySigningKeyRegistrationConflictException(
+                requestedIdentity.IdentityId,
+                requestedKey.KeyId);
+        }
+
+        return new IdentitySigningKeyRegistrationResult(storedIdentity, storedRing);
+    }
+
+    private static bool IdentityMatches(
+        HipIdentity stored,
+        HipIdentity requested,
+        string storedPublicKeyFingerprint,
+        string requestedPublicKeyFingerprint) =>
+        string.Equals(stored.IdentityId, requested.IdentityId, StringComparison.Ordinal) &&
+        stored.IdentityType == requested.IdentityType &&
+        string.Equals(stored.DisplayName, requested.DisplayName, StringComparison.Ordinal) &&
+        string.Equals(stored.KeyAlgorithm, requested.KeyAlgorithm, StringComparison.Ordinal) &&
+        string.Equals(storedPublicKeyFingerprint, requestedPublicKeyFingerprint, StringComparison.Ordinal) &&
+        stored.VerificationStatus == requested.VerificationStatus &&
+        stored.CreatedAtUtc == requested.CreatedAtUtc &&
+        string.Equals(stored.ReputationTargetId, requested.ReputationTargetId, StringComparison.Ordinal);
 
     private async Task<SigningKeyRing> GetRequiredRingAsync(
         string identityId,

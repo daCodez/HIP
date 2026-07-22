@@ -22,6 +22,29 @@ public interface IBrowserScanResultRepository
     Task<BrowserScanResultRecord?> GetLatestByDomainAsync(string domain, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Retrieves the latest scan that HIP explicitly marked as server-authoritative for public scoring.
+    /// </summary>
+    /// <param name="domain">Normalized domain.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>The latest authoritative result, or null when HIP has no authoritative evidence for the domain.</returns>
+    async Task<BrowserScanResultRecord?> GetLatestAuthoritativeByDomainAsync(
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        var latest = await GetLatestByDomainAsync(domain, cancellationToken);
+        if (latest is null || BrowserScanResultProvenance.IsServerAuthoritative(latest))
+        {
+            return latest;
+        }
+
+        return (await ListAsync(cancellationToken))
+            .Where(result => result.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase))
+            .Where(BrowserScanResultProvenance.IsServerAuthoritative)
+            .OrderByDescending(result => result.LastCheckedUtc)
+            .FirstOrDefault();
+    }
+
+    /// <summary>
     /// Lists stored browser scan results for privacy-safe aggregation in admin dashboards.
     /// </summary>
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
@@ -29,17 +52,17 @@ public interface IBrowserScanResultRepository
     Task<IReadOnlyCollection<BrowserScanResultRecord>> ListAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Lists a bounded number of recent browser scan results for dashboard tables without forcing full history reads.
+    /// Lists a bounded number of recent server-authoritative scan results for dashboard tables.
     /// </summary>
     /// <param name="maxCount">Maximum number of recent scan records to return.</param>
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
-    /// <returns>Recent scan results, newest first.</returns>
+    /// <returns>Recent authoritative scan results, newest first.</returns>
     Task<IReadOnlyCollection<BrowserScanResultRecord>> ListRecentAsync(int maxCount, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Counts distinct normalized domains across all stored browser scan results.
+    /// Counts distinct normalized domains across server-authoritative browser scan results.
     /// </summary>
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
-    /// <returns>The number of distinct stored scan domains.</returns>
+    /// <returns>The number of distinct authoritative scan domains.</returns>
     Task<int> CountDistinctDomainsAsync(CancellationToken cancellationToken);
 }

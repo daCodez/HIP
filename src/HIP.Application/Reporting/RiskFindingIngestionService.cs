@@ -46,13 +46,17 @@ public sealed class RiskFindingIngestionService(
     public async Task<IReadOnlyCollection<PatternCluster>> DetectPatternsAsync(CancellationToken cancellationToken)
     {
         var reports = await repository.ListAsync(cancellationToken);
-        var findings = reports.Select(ToSuspiciousFinding).ToArray();
+        var findings = reports
+            .Where(report => HasPrivilegedReporterTrust(report.ReporterTrustLevel))
+            .Select(ToSuspiciousFinding)
+            .ToArray();
         return patternDetectionService.DetectPatterns(findings);
     }
 
     private bool CreateReviewIfNeeded(RiskFindingReport report)
     {
-        if (report.RiskLevel is not (RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical))
+        if (!HasPrivilegedReporterTrust(report.ReporterTrustLevel) ||
+            report.RiskLevel is not (RiskStatus.HighRisk or RiskStatus.Dangerous or RiskStatus.Critical))
         {
             return false;
         }
@@ -80,6 +84,9 @@ public sealed class RiskFindingIngestionService(
 
         return true;
     }
+
+    private static bool HasPrivilegedReporterTrust(ReporterTrustLevel reporterTrustLevel) =>
+        reporterTrustLevel is ReporterTrustLevel.High or ReporterTrustLevel.Trusted;
 
     private static SuspiciousFinding ToSuspiciousFinding(RiskFindingReport report) =>
         new(

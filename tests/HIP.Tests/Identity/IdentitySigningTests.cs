@@ -1,5 +1,6 @@
 using HIP.Application.Browser;
 using HIP.Application.Identity;
+using HIP.Application.Protocol;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
 using HIP.Application.Review;
@@ -95,6 +96,9 @@ public sealed class IdentitySigningTests
         Assert.That(response.WebsiteIdentity.Domain, Is.EqualTo("example.com"));
         Assert.That(response.WebsiteIdentity.HipIdentityId, Is.EqualTo("hip:web:example.com"));
         Assert.That(response.WebsiteIdentity.PublicKeys.Single().Algorithm, Is.EqualTo(DevelopmentHipCryptoProvider.Algorithm));
+        Assert.That(response.DevelopmentPrivateKey, Is.Not.Null.And.Not.Empty);
+        Assert.That(response.IsRecovery, Is.False);
+        Assert.That(response.RequiresSigningKeyRotation, Is.False);
         Assert.That(response.Warning, Does.Contain("non-production placeholder crypto provider"));
     }
 
@@ -126,6 +130,41 @@ public sealed class IdentitySigningTests
     }
 
     [Test]
+    public async Task Website_verification_rejects_a_challenge_from_a_different_method()
+    {
+        var repository = new InMemorySigningKeyLifecycleRepository();
+        var domainService = new InMemoryDomainVerificationService();
+        var crypto = new DevelopmentHipCryptoProvider();
+        var audit = new AuditLogService(repository);
+        var service = new WebsiteIdentityService(
+            crypto,
+            repository,
+            domainService,
+            new TestWebsiteIdentityRepository(),
+            audit,
+            SigningKeyLifecycle(repository),
+            repository);
+        await service.RegisterAsync(
+            new WebsiteIdentityRegistrationRequest("method-bound.example", "Method Bound", VerificationMethod.DnsTxt),
+            CancellationToken.None);
+        var unrelated = await domainService.StartAsync(
+            "method-bound.example",
+            VerificationMethod.WellKnownHipJson,
+            CancellationToken.None);
+
+        Assert.ThrowsAsync<WebsiteIdentityRegistrationConflictException>(() =>
+            service.VerifyAsync(
+                new WebsiteVerificationRequest(
+                    "method-bound.example",
+                    VerificationMethod.WellKnownHipJson,
+                    unrelated.Token),
+                CancellationToken.None));
+        var current = await service.GetAsync("method-bound.example", CancellationToken.None);
+
+        Assert.That(current!.VerificationStatus, Is.EqualTo(VerificationStatus.Pending));
+    }
+
+    [Test]
     public async Task Signature_verification_result_can_be_returned()
     {
         var repository = new InMemoryHipIdentityRepository();
@@ -140,7 +179,7 @@ public sealed class IdentitySigningTests
         var signature = crypto.SignHash(hash, keyPair.PrivateKey);
 
         var result = await signatureService.VerifyAsync(new HipSignatureVerificationRequest(
-            identity.IdentityId, hash, signature, "Trusted", HipIdentityService.InitialSigningKeyId, identity.CreatedAtUtc), CancellationToken.None);
+            identity.IdentityId, hash, signature, "Trusted", HipIdentityService.InitialSigningKeyId), CancellationToken.None);
 
         Assert.That(result.IsValid, Is.True);
         Assert.That(result.SignedIdentityStatus, Is.EqualTo("Verified"));
@@ -162,7 +201,7 @@ public sealed class IdentitySigningTests
         var signature = crypto.SignHash(hash, keyPair.PrivateKey);
 
         var result = await signatureService.VerifyAsync(new HipSignatureVerificationRequest(
-            identity.IdentityId, hash, signature, "Low", HipIdentityService.InitialSigningKeyId, identity.CreatedAtUtc), CancellationToken.None);
+            identity.IdentityId, hash, signature, "Low", HipIdentityService.InitialSigningKeyId), CancellationToken.None);
 
         Assert.That(result.IsValid, Is.True);
         Assert.That(result.FinalRiskStatus, Is.EqualTo("Caution"));
@@ -217,18 +256,22 @@ public sealed class IdentitySigningTests
     private static HipIdentityService Service(out DevelopmentHipCryptoProvider crypto)
     {
         crypto = new DevelopmentHipCryptoProvider();
-        return new HipIdentityService(crypto, new InMemoryHipIdentityRepository(), SigningKeyLifecycle());
+        var repository = new InMemorySigningKeyLifecycleRepository();
+        return new HipIdentityService(crypto, repository, SigningKeyLifecycle(repository));
     }
 
     private static WebsiteIdentityService WebsiteService()
     {
+        var repository = new InMemorySigningKeyLifecycleRepository();
+        var auditLogService = new AuditLogService(repository);
         return new(
             new DevelopmentHipCryptoProvider(),
-            new InMemoryHipIdentityRepository(),
+            repository,
             new InMemoryDomainVerificationService(),
             new TestWebsiteIdentityRepository(),
-            new AuditLogService(new InMemoryAuditLogRepository()),
-            SigningKeyLifecycle());
+            auditLogService,
+            SigningKeyLifecycle(repository),
+            repository);
     }
 
     [Test]
@@ -250,27 +293,84 @@ public sealed class IdentitySigningTests
     [Test]
     public async Task Website_identity_revoke_updates_identity_and_writes_critical_audit_entry()
     {
-        var identityRepository = new InMemoryHipIdentityRepository();
-        var audit = new AuditLogService(new InMemoryAuditLogRepository());
+        var atomicRepository = new InMemorySigningKeyLifecycleRepository();
+        IHipIdentityRepository identityRepository = atomicRepository;
+        var audit = new AuditLogService(atomicRepository);
         var service = new WebsiteIdentityService(
-            new DevelopmentHipCryptoProvider(), identityRepository,
+            new DevelopmentHipCryptoProvider(),
+            atomicRepository,
             new InMemoryDomainVerificationService(), new TestWebsiteIdentityRepository(), audit,
-            SigningKeyLifecycle());
+            SigningKeyLifecycle(atomicRepository), atomicRepository);
         var registered = await service.RegisterAsync(
             new WebsiteIdentityRegistrationRequest("revoke.example", "Revoke", VerificationMethod.DnsTxt),
             CancellationToken.None);
 
         var revoked = await service.RevokeVerificationAsync(
             "revoke.example", "Ownership changed", "owner-1", "Owner", CancellationToken.None);
+        var revokedAgain = await service.RevokeVerificationAsync(
+            "revoke.example", "Ownership changed", "owner-1", "Owner", CancellationToken.None);
         var hipIdentity = await identityRepository.GetAsync(registered.WebsiteIdentity.HipIdentityId, CancellationToken.None);
-        var auditEntry = audit.List().Single(entry => entry.Action == "domain-verification.revoked");
+        var auditEntries = audit.List().Where(entry => entry.Action == "domain-verification.revoked").ToArray();
+        var auditEntry = auditEntries.Single();
 
         Assert.That(revoked.VerificationStatus, Is.EqualTo(VerificationStatus.Revoked));
+        Assert.That(revokedAgain, Is.EqualTo(revoked));
         Assert.That(revoked.RevokedAtUtc, Is.Not.Null);
         Assert.That(hipIdentity!.VerificationStatus, Is.EqualTo(VerificationStatus.Revoked));
+        Assert.That(auditEntries, Has.Length.EqualTo(1));
         Assert.That(auditEntry.ActorId, Is.EqualTo("owner-1"));
         Assert.That(auditEntry.Severity, Is.EqualTo(HIP.Domain.Audit.AuditSeverity.Critical));
         Assert.That(auditEntry.Metadata.Values, Has.None.Contains(registered.VerificationRequest.Token));
+    }
+
+    [Test]
+    public async Task Website_verify_reconciles_a_preexisting_canonical_revocation_without_reactivation()
+    {
+        var repository = new InMemorySigningKeyLifecycleRepository();
+        IHipIdentityRepository identityRepository = repository;
+        var domainService = new InMemoryDomainVerificationService();
+        var websiteRepository = new TestWebsiteIdentityRepository();
+        var service = new WebsiteIdentityService(
+            new DevelopmentHipCryptoProvider(),
+            repository,
+            domainService,
+            websiteRepository,
+            new AuditLogService(repository),
+            SigningKeyLifecycle(repository),
+            repository);
+        var registered = await service.RegisterAsync(
+            new WebsiteIdentityRegistrationRequest(
+                "canonical-revoked.example",
+                "Canonical revoked",
+                VerificationMethod.WellKnownHipJson),
+            CancellationToken.None);
+        var identity = await identityRepository.GetAsync(
+            registered.WebsiteIdentity.HipIdentityId,
+            CancellationToken.None);
+        Assert.That(
+            await identityRepository.TryUpdateAsync(
+                identity!,
+                identity! with { VerificationStatus = VerificationStatus.Revoked },
+                CancellationToken.None),
+            Is.True);
+
+        Assert.ThrowsAsync<InvalidOperationException>(() => service.VerifyAsync(
+            new WebsiteVerificationRequest(
+                registered.WebsiteIdentity.Domain,
+                VerificationMethod.WellKnownHipJson,
+                registered.VerificationRequest.Token),
+            CancellationToken.None));
+        var website = await websiteRepository.GetAsync(
+            registered.WebsiteIdentity.Domain,
+            CancellationToken.None);
+        var challenge = await domainService.GetAsync(
+            registered.WebsiteIdentity.Domain,
+            VerificationMethod.WellKnownHipJson,
+            CancellationToken.None);
+
+        Assert.That(website!.VerificationStatus, Is.EqualTo(VerificationStatus.Revoked));
+        Assert.That(website.RevokedAtUtc, Is.Not.Null);
+        Assert.That(challenge!.Status, Is.EqualTo(VerificationStatus.Revoked));
     }
 
     [Test]
@@ -284,21 +384,32 @@ public sealed class IdentitySigningTests
             "newer.example", "hip:web:newer.example", [], VerificationStatus.Verified,
             VerificationMethod.DnsTxt, new DateTimeOffset(2026, 7, 13, 10, 0, 0, TimeSpan.Zero),
             new DateTimeOffset(2026, 7, 13, 10, 5, 0, TimeSpan.Zero)), CancellationToken.None);
+        var lifecycleRepository = new InMemorySigningKeyLifecycleRepository();
         var service = new WebsiteIdentityService(
-            new DevelopmentHipCryptoProvider(), new InMemoryHipIdentityRepository(),
+            new DevelopmentHipCryptoProvider(),
+            lifecycleRepository,
             new InMemoryDomainVerificationService(), repository,
-            new AuditLogService(new InMemoryAuditLogRepository()),
-            SigningKeyLifecycle());
+            new AuditLogService(lifecycleRepository),
+            SigningKeyLifecycle(lifecycleRepository),
+            lifecycleRepository);
 
         var identities = await service.ListAsync(CancellationToken.None);
 
         Assert.That(identities.Select(identity => identity.Domain), Is.EqualTo(new[] { "newer.example", "older.example" }));
     }
 
-    private static SigningKeyLifecycleService SigningKeyLifecycle() =>
+    private static SigningKeyLifecycleService SigningKeyLifecycle()
+    {
+        var repository = new InMemorySigningKeyLifecycleRepository();
+        return SigningKeyLifecycle(repository);
+    }
+
+    private static SigningKeyLifecycleService SigningKeyLifecycle(
+        InMemorySigningKeyLifecycleRepository repository) =>
         new(
-            new InMemorySigningKeyLifecycleRepository(),
-            new AuditLogService(new InMemoryAuditLogRepository()));
+            repository,
+            new AuditLogService(repository),
+            new HipPublicKeyFingerprintService([new DevelopmentHipCryptoProvider()]));
 
     private static Task<SigningKeyRing> RegisterDefaultKeyAsync(
         ISigningKeyLifecycleService lifecycle,
@@ -321,6 +432,37 @@ public sealed class IdentitySigningTests
     private sealed class TestWebsiteIdentityRepository : IWebsiteIdentityRepository
     {
         private readonly Dictionary<string, WebsiteIdentity> identities = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <inheritdoc />
+        public Task<bool> TryCreateAsync(
+            WebsiteIdentity websiteIdentity,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (identities)
+            {
+                return Task.FromResult(identities.TryAdd(websiteIdentity.Domain, websiteIdentity));
+            }
+        }
+
+        public Task<bool> TryUpdateAsync(
+            WebsiteIdentity expected,
+            WebsiteIdentity updated,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (identities)
+            {
+                if (!identities.TryGetValue(expected.Domain, out var current) ||
+                    !Equals(current, expected))
+                {
+                    return Task.FromResult(false);
+                }
+
+                identities[expected.Domain] = updated;
+                return Task.FromResult(true);
+            }
+        }
 
         /// <summary>
         /// Saves a website identity for later test lookup.

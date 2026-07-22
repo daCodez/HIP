@@ -1,4 +1,5 @@
 using FluentValidation;
+using HIP.Application.Scoring;
 using HIP.Domain.Scoring;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
@@ -13,17 +14,28 @@ namespace HIP.Application.SiteSafety;
 /// </summary>
 /// <param name="validator">Validator that blocks unsafe scan targets and malformed input.</param>
 /// <param name="logger">Structured logger for safe scan telemetry.</param>
+/// <param name="evidenceProviders">Registered provider-neutral evidence sources.</param>
+/// <param name="ruleOptions">Configured deterministic scoring rules.</param>
+/// <param name="adminRuleRepository">Optional live admin-rule repository.</param>
+/// <param name="sandboxLinkScanService">Optional sandbox link-analysis service.</param>
+/// <param name="scoringPipeline">Optional formal HIP scoring pipeline.</param>
+/// <param name="timeProvider">Clock used for deterministic provider timing and freshness.</param>
 public sealed class SiteSafetyScanner(
     IValidator<SiteSafetyScanRequest> validator,
     ILogger<SiteSafetyScanner> logger,
     IEnumerable<ISiteSafetyEvidenceProvider>? evidenceProviders = null,
     SiteSafetyRuleOptions? ruleOptions = null,
     IAdminSiteSafetyRuleRepository? adminRuleRepository = null,
-    ISandboxLinkScanService? sandboxLinkScanService = null) : ISiteSafetyScanner
+    ISandboxLinkScanService? sandboxLinkScanService = null,
+    IHipScoringPipeline? scoringPipeline = null,
+    TimeProvider? timeProvider = null) : ISiteSafetyScanner, IUntrustedSiteSafetyScanner
 {
     private const int MaxRecentScans = 1024;
     private static readonly ConcurrentDictionary<string, CachedSiteSafetyScan> RecentScans = new();
     private static readonly object RecentScanGate = new();
+    private readonly IHipScoringPipeline formalScoringPipeline =
+        scoringPipeline ?? new HipScoringPipeline(new HipMandatoryScoreConstraintPolicy());
+    private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
 
     private static readonly HashSet<string> ExecutableExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -63,7 +75,28 @@ public sealed class SiteSafetyScanner(
     /// <param name="request">The scan request.</param>
     /// <param name="cancellationToken">Token used to cancel scan work.</param>
     /// <returns>A Site Safety Scan result with score impact across page, content, and final HIP score.</returns>
-    public async Task<SiteSafetyScanResult> ScanAsync(SiteSafetyScanRequest request, CancellationToken cancellationToken)
+    public Task<SiteSafetyScanResult> ScanAsync(
+        SiteSafetyScanRequest request,
+        CancellationToken cancellationToken) =>
+        ScanCoreAsync(request, allowAuthoritativeSideEffects: true, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<SiteSafetyScanResult> ScanUntrustedAsync(
+        SiteSafetyScanRequest request,
+        CancellationToken cancellationToken) =>
+        ScanCoreAsync(request, allowAuthoritativeSideEffects: false, cancellationToken);
+
+    /// <summary>
+    /// Runs the shared evaluator after selecting whether this call may affect authoritative HIP state.
+    /// </summary>
+    /// <param name="request">Validated scan input.</param>
+    /// <param name="allowAuthoritativeSideEffects">Whether cache publication and sandbox queueing are allowed.</param>
+    /// <param name="cancellationToken">Token used to cancel scan work.</param>
+    /// <returns>The computed Site Safety result.</returns>
+    private async Task<SiteSafetyScanResult> ScanCoreAsync(
+        SiteSafetyScanRequest request,
+        bool allowAuthoritativeSideEffects,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         logger.LogInformation("Starting HIP Site Safety Scan for URL host.");
@@ -75,9 +108,9 @@ public sealed class SiteSafetyScanner(
 
             var uri = new Uri(request.Url, UriKind.Absolute);
             var domain = NormalizeHost(uri.Host);
-            var providers = ActiveEvidenceProviders();
+            var providers = ActiveEvidenceProviders(allowAuthoritativeSideEffects);
             var cacheKey = BuildCacheKey(request, providers);
-            var canUseCache = CanUseCache(providers);
+            var canUseCache = allowAuthoritativeSideEffects && CanUseCache(providers);
             if (canUseCache && TryGetCachedResult(cacheKey, out var cached))
             {
                 logger.LogInformation("Returned cached HIP Site Safety Scan for domain {Domain}.", domain);
@@ -91,6 +124,8 @@ public sealed class SiteSafetyScanner(
             var matchedRules = await EvaluateRulesAsync(ruleInput, cancellationToken);
             var context = Analyze(uri, domain, signals, matchedRules, options);
             var scores = BuildScoreImpact(context);
+            var confidenceLevel = ConfidenceLevel(context);
+            var formalScoring = BuildFormalScoring(context, scores, evidence, matchedRules, confidenceLevel);
             var status = DetermineStatus(context);
             var summary = BuildSummary(status, context);
 
@@ -114,20 +149,25 @@ public sealed class SiteSafetyScanner(
                 context.Warnings,
                 context.PositiveSignals,
                 context.NegativeSignals,
-                ConfidenceLevel(context),
+                confidenceLevel,
                 scores.DomainTrustScore,
                 scores.PageTrustScore,
                 scores.ContentRiskScore,
                 scores.FinalHipScore,
                 evidence,
                 scores,
-                matchedRules);
+                matchedRules,
+                formalScoring);
             if (canUseCache)
             {
                 StoreRecentScan(cacheKey, new CachedSiteSafetyScan(result, DateTimeOffset.UtcNow.Add(options.ScanCacheDuration)));
             }
 
-            await QueueSandboxScanIfNeededAsync(request, result, cancellationToken);
+            if (allowAuthoritativeSideEffects)
+            {
+                await QueueSandboxScanIfNeededAsync(request, result, cancellationToken);
+            }
+
             return result;
         }
         catch (ValidationException)
@@ -387,13 +427,24 @@ public sealed class SiteSafetyScanner(
     /// <summary>
     /// Resolves the active evidence providers, falling back to browser-observed evidence when none are registered.
     /// </summary>
+    /// <param name="allowExternalProviders">Whether the selected trust path may consult stateful external providers.</param>
     /// <returns>Evidence providers to use for this scan.</returns>
-    private IReadOnlyCollection<ISiteSafetyEvidenceProvider> ActiveEvidenceProviders()
+    private IReadOnlyCollection<ISiteSafetyEvidenceProvider> ActiveEvidenceProviders(bool allowExternalProviders)
     {
         var providers = evidenceProviders?.ToArray() ?? [];
         if (providers.Length == 0)
         {
             providers = [new BrowserObservedSignalProvider()];
+        }
+
+        if (!allowExternalProviders)
+        {
+            var localProviders = providers
+                .Where(provider => provider is not IExternalSiteEvidenceProvider)
+                .ToArray();
+            return localProviders.Length == 0
+                ? [new BrowserObservedSignalProvider()]
+                : localProviders;
         }
 
         var externalOptions = providers.OfType<IExternalSiteEvidenceProvider>()
@@ -426,7 +477,7 @@ public sealed class SiteSafetyScanner(
     /// <returns>Normalized provider evidence records.</returns>
     private async Task<IReadOnlyCollection<SiteSafetyEvidence>> CollectEvidenceAsync(Uri uri, string domain, SiteSafetyObservedSignals signals, IReadOnlyCollection<ISiteSafetyEvidenceProvider> providers, CancellationToken cancellationToken)
     {
-        var checkedAt = DateTimeOffset.UtcNow;
+        var checkedAt = timeProvider.GetUtcNow();
         var context = new SiteSafetyEvidenceContext(
             uri,
             domain,
@@ -446,42 +497,50 @@ public sealed class SiteSafetyScanner(
         SiteSafetyEvidenceContext context,
         CancellationToken cancellationToken)
     {
+        var startedAt = timeProvider.GetTimestamp();
         try
         {
-            return await provider.CollectEvidenceAsync(context, cancellationToken);
+            var evidence = await provider.CollectEvidenceAsync(context, cancellationToken);
+            return SiteSafetyProviderResultContract.Normalize(
+                evidence,
+                provider.ProviderName,
+                provider.ProviderType,
+                context,
+                timeProvider.GetElapsedTime(startedAt),
+                timeProvider.GetUtcNow());
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return FailedProviderEvidence(provider, context, "Provider timed out.");
+            return FailedProviderEvidence(provider, context, SiteSafetyProviderResultStatus.TimedOut, startedAt, "Provider timed out.");
         }
         catch (TimeoutException)
         {
-            return FailedProviderEvidence(provider, context, "Provider timed out.");
+            return FailedProviderEvidence(provider, context, SiteSafetyProviderResultStatus.TimedOut, startedAt, "Provider timed out.");
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "HIP Site Safety evidence provider {ProviderName} failed safely.", provider.ProviderName);
-            return FailedProviderEvidence(provider, context, "Provider failed safely.");
+            return FailedProviderEvidence(provider, context, SiteSafetyProviderResultStatus.Failed, startedAt, "Provider failed safely.");
         }
     }
 
     /// <summary>
     /// Creates safe provider-failure evidence that lowers confidence without crashing the scan.
     /// </summary>
-    private static SiteSafetyEvidence FailedProviderEvidence(ISiteSafetyEvidenceProvider provider, SiteSafetyEvidenceContext context, string error) =>
-        new(
+    private SiteSafetyEvidence FailedProviderEvidence(
+        ISiteSafetyEvidenceProvider provider,
+        SiteSafetyEvidenceContext context,
+        SiteSafetyProviderResultStatus status,
+        long startedAt,
+        string error) =>
+        SiteSafetyProviderResultContract.CreateFailure(
             provider.ProviderName,
             provider.ProviderType,
-            SiteSafetyEvidenceTargetType.Domain,
-            context.Domain,
-            context.UrlHash,
-            [],
-            Confidence: 0,
-            context.CheckedAtUtc,
-            context.CheckedAtUtc.AddMinutes(10),
-            [error],
-            IsAuthoritativeForRisk: false,
-            IsAuthoritativeForTrust: false);
+            context,
+            status,
+            timeProvider.GetElapsedTime(startedAt),
+            timeProvider.GetUtcNow(),
+            error);
 
     /// <summary>
     /// Builds HIP score impact without replacing domain, reputation, or identity scoring.
@@ -536,6 +595,157 @@ public sealed class SiteSafetyScanner(
         }
 
         return new SiteSafetyScoreImpact(domainTrust, pageTrust, contentTrust, finalScore, final.ComponentScores);
+    }
+
+    /// <summary>
+    /// Produces the versioned HIP-0301 result while preserving the legacy Site Safety projections.
+    /// The legacy ContentRiskScore is actually a content-trust value, so it is inverted explicitly.
+    /// </summary>
+    private HipScoringResult BuildFormalScoring(
+        SiteSafetyContext context,
+        SiteSafetyScoreImpact legacyScores,
+        IReadOnlyCollection<SiteSafetyEvidence> evidence,
+        IReadOnlyCollection<SiteSafetyRuleResult> matchedRules,
+        string confidenceLevel)
+    {
+        var confidence = context.HasConflictingEvidence
+            ? HipScoreConfidence.Conflicted
+            : confidenceLevel switch
+            {
+                "High" => HipScoreConfidence.High,
+                "Medium" => HipScoreConfidence.Medium,
+                _ => HipScoreConfidence.Low
+            };
+        var freshness = DetermineEvidenceFreshness(context, evidence);
+        var reasons = context.Reasons.Count > 0
+            ? context.Reasons
+            : ["HIP evaluated the domain, exact page, and privacy-safe content-risk signals."];
+
+        return formalScoringPipeline.Score(new HipScoringRequest(
+            legacyScores.DomainTrustScore,
+            legacyScores.PageTrustScore,
+            ScoreValue.Maximum - legacyScores.ContentRiskScore,
+            confidence,
+            freshness,
+            reasons,
+            context.Warnings,
+            PageTrustExpected: true,
+            EvidenceContext: BuildScoringEvidenceContext(context, matchedRules),
+            ReasonEntries: BuildRuleReasonEntries(matchedRules)));
+    }
+
+    /// <summary>
+    /// Projects enforced score-changing rules into stable privacy-safe catalog entries. Simulation
+    /// and watch-only matches remain observable to admins but never enter the formal score contract.
+    /// </summary>
+    private static IReadOnlyCollection<HipScoringReasonEntry> BuildRuleReasonEntries(
+        IReadOnlyCollection<SiteSafetyRuleResult> matchedRules) => matchedRules
+        .Where(rule => !rule.IsSimulationOnly && (rule.RiskImpact != 0 || rule.TrustImpact != 0))
+        .OrderBy(rule => rule.RuleId, StringComparer.Ordinal)
+        .Take(HipScoringResult.MaximumReasonEntries - 8)
+        .Select(rule => HipScoringReasonCatalog.RuleSignal(
+            rule.RuleId,
+            rule.Reason,
+            rule.Warning,
+            rule.RiskImpact != 0
+                ? new HipScoreImpact(HipScoreImpactKind.RiskScoreIncrease, rule.RiskImpact)
+                : new HipScoreImpact(HipScoreImpactKind.TrustScoreDelta, rule.TrustImpact)))
+        .ToArray();
+
+    /// <summary>
+    /// Projects explicit privacy-safe facts for later score constraints. Numeric score thresholds are
+    /// intentionally not reinterpreted here; facts come from matched evidence rules and scan scope.
+    /// </summary>
+    private static HipScoringEvidenceContext BuildScoringEvidenceContext(
+        SiteSafetyContext context,
+        IReadOnlyCollection<SiteSafetyRuleResult> matchedRules)
+    {
+        var facts = new Dictionary<HipScoringEvidenceFactType, HipScoringEvidenceFact>();
+        void Add(HipScoringEvidenceFactType type, string sourceCode) =>
+            facts.TryAdd(type, new HipScoringEvidenceFact(type, sourceCode));
+
+        var enforcedRules = matchedRules.Where(rule => !rule.IsSimulationOnly).ToArray();
+        if (enforcedRules.Any(rule =>
+                rule.RiskCategory == SiteSafetyRiskCategory.Malware &&
+                rule.EvidenceQuality == SiteSafetyEvidenceQuality.Confirmed))
+        {
+            Add(HipScoringEvidenceFactType.ConfirmedMalware, "site-safety:confirmed-malware");
+        }
+
+        if (enforcedRules.Any(rule =>
+                rule.RiskCategory == SiteSafetyRiskCategory.Phishing &&
+                rule.EvidenceQuality == SiteSafetyEvidenceQuality.Confirmed))
+        {
+            Add(HipScoringEvidenceFactType.ConfirmedPhishing, "site-safety:confirmed-phishing");
+        }
+
+        if (enforcedRules.Any(rule =>
+                rule.Source == SiteSafetyRuleSource.Admin &&
+                rule.StatusOverride == SiteSafetyScanStatus.Dangerous &&
+                rule.Severity == SiteSafetyRuleSeverity.Critical))
+        {
+            Add(
+                HipScoringEvidenceFactType.ApprovedCriticalRiskOverride,
+                "site-safety:approved-critical-risk-override");
+        }
+
+        if (enforcedRules.Any(rule =>
+                string.Equals(rule.RuleId, "download-executable", StringComparison.Ordinal)))
+        {
+            Add(
+                HipScoringEvidenceFactType.StrongExecutableDownloadRisk,
+                "site-safety:executable-download");
+        }
+
+        Add(HipScoringEvidenceFactType.IdentityMissing, "site-safety:identity-not-evaluated");
+        if (!context.TrustDataAvailable)
+        {
+            Add(HipScoringEvidenceFactType.UnknownTarget, "site-safety:unknown-target");
+            Add(HipScoringEvidenceFactType.LimitedEvidence, "site-safety:limited-evidence");
+        }
+
+        if (context.KnownTrustedDomain)
+        {
+            Add(HipScoringEvidenceFactType.TrustedParentDomain, "site-safety:trusted-parent-domain");
+        }
+
+        if (context.UserGeneratedContentSurface)
+        {
+            Add(HipScoringEvidenceFactType.UserGeneratedContent, "site-safety:user-generated-content");
+        }
+
+        if (context.UserGeneratedContentSurface || enforcedRules.Any(rule =>
+                rule.RiskImpact > 0 && rule.RiskCategory is not SiteSafetyRiskCategory.Reputation))
+        {
+            Add(HipScoringEvidenceFactType.RiskyExactPage, "site-safety:risky-exact-page");
+        }
+
+        return new HipScoringEvidenceContext(facts.Values.ToArray());
+    }
+
+    private static HipEvidenceFreshness DetermineEvidenceFreshness(
+        SiteSafetyContext context,
+        IReadOnlyCollection<SiteSafetyEvidence> evidence)
+    {
+        if (!context.TrustDataAvailable)
+        {
+            return HipEvidenceFreshness.Missing;
+        }
+
+        if (evidence.Count == 0)
+        {
+            return HipEvidenceFreshness.Fresh;
+        }
+
+        var staleCount = evidence.Count(item => item.Freshness is SiteSafetyProviderFreshness.Stale or SiteSafetyProviderFreshness.Expired);
+        if (staleCount == 0)
+        {
+            return HipEvidenceFreshness.Fresh;
+        }
+
+        return staleCount == evidence.Count
+            ? HipEvidenceFreshness.Stale
+            : HipEvidenceFreshness.Mixed;
     }
 
     /// <summary>

@@ -1,8 +1,8 @@
-using System.Text.RegularExpressions;
+using System.Globalization;
 
 namespace HIP.Application.PublicLookup;
 
-public static partial class DomainInputValidator
+public static class DomainInputValidator
 {
     public static string ValidateAndNormalize(string domain)
     {
@@ -11,19 +11,38 @@ public static partial class DomainInputValidator
             throw new ArgumentException("Domain is required.", nameof(domain));
         }
 
-        var normalized = domain.Trim().TrimEnd('.').ToLowerInvariant();
+        var candidate = domain.Trim().TrimEnd('.');
+        if (candidate.Contains('/') || candidate.Contains(':') || candidate.Any(char.IsControl))
+        {
+            throw new ArgumentException("Domain must be a valid public host name.", nameof(domain));
+        }
+
+        string normalized;
+        try
+        {
+            normalized = new IdnMapping { UseStd3AsciiRules = true }
+                .GetAscii(candidate)
+                .ToLowerInvariant();
+        }
+        catch (ArgumentException exception)
+        {
+            throw new ArgumentException("Domain must be a valid public host name.", nameof(domain), exception);
+        }
+
+        var labels = normalized.Split('.', StringSplitOptions.None);
         if (normalized.Length > 253 ||
-            normalized.Contains('/') ||
-            normalized.Contains(':') ||
-            Uri.CheckHostName(normalized) == UriHostNameType.Unknown ||
-            !DomainPattern().IsMatch(normalized))
+            Uri.CheckHostName(normalized) != UriHostNameType.Dns ||
+            labels.Length < 2 ||
+            labels[^1].Length < 2 ||
+            labels.Any(label =>
+                label.Length is < 1 or > 63 ||
+                label[0] == '-' ||
+                label[^1] == '-' ||
+                label.Any(character => character is not (>= 'a' and <= 'z') and not (>= '0' and <= '9') and not '-')))
         {
             throw new ArgumentException("Domain must be a valid public host name.", nameof(domain));
         }
 
         return normalized;
     }
-
-    [GeneratedRegex(@"^(?=.{1,253}$)(?!-)(?:[a-z0-9-]{1,63}\.)+[a-z]{2,63}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex DomainPattern();
 }

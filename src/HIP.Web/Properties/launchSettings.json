@@ -18,6 +18,16 @@
         "environmentVariables": {
           "ASPNETCORE_ENVIRONMENT": "Development"
         }
+      },
+      "maintenance": {
+        "commandName": "Project",
+        "dotnetRunMessages": false,
+        "launchBrowser": false,
+        "commandLineArgs": "--maintenance=consumer-history-owner-index-backfill --confirm=APPLY-CONSUMER-HISTORY-OWNER-INDEX",
+        "environmentVariables": {
+          "ASPNETCORE_ENVIRONMENT": "Development",
+          "DOTNET_ENVIRONMENT": "Development"
+        }
       }
     }
   }

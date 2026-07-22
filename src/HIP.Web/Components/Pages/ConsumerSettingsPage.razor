@@ -1,7 +1,10 @@
 @page "/consumer/settings"
+@page "/consumer/alerts"
 @attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
 @rendermode InteractiveServer
 @inject IConsumerPortalService ConsumerPortalService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthorizationService AuthorizationService
 
 <PageTitle>HIP Consumer Settings</PageTitle>
 
@@ -10,7 +13,7 @@
         <div>
             <p class="eyebrow">Consumer Portal</p>
             <h1>Alert Settings</h1>
-            <p>Settings are development MVP settings for connected clients. They do not collect message contents.</p>
+            <p>Encrypted owner-scoped alert settings for connected clients. They do not collect message contents.</p>
         </div>
     </section>
 
@@ -27,7 +30,11 @@
                 <option>Paranoid</option>
             </select>
         </label>
-        <button class="primary-button" @onclick="Save">Save Settings</button>
+        <button class="primary-button" @onclick="SaveAsync" disabled="@(_accessError is not null)">Save Settings</button>
+        @if (_accessError is not null)
+        {
+            <p class="admin-message" role="alert">@_accessError</p>
+        }
         @if (!string.IsNullOrWhiteSpace(_message))
         {
             <p class="admin-message">@_message</p>
@@ -41,17 +48,47 @@
     private bool _enableSafetyPageRouting = true;
     private string _scanMode = "Normal";
     private string _message = string.Empty;
+    private string? _accessError;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        Apply(ConsumerPortalService.GetSettings("development-consumer"));
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var access = await HipConsumerPageAccess.ExecuteAsync(
+            authenticationState.User,
+            consumerId => ConsumerPortalService.GetSettingsAsync(consumerId, CancellationToken.None));
+        if (!access.Succeeded || access.Value is null)
+        {
+            _accessError = HipConsumerPageAccess.AccessUnavailableMessage;
+            return;
+        }
+
+        Apply(access.Value);
     }
 
-    private void Save()
+    private async Task SaveAsync()
     {
-        var result = ConsumerPortalService.SaveSettings(
-            "development-consumer",
-            new ConsumerSettings(_enablePopupAlerts, _enablePrivateWarnings, _enableSafetyPageRouting, _scanMode));
+        _message = string.Empty;
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+            authenticationState.User,
+            AuthorizationService,
+            ConsumerPolicies.CanUseConsumerPortal,
+            consumerId => ConsumerPortalService.SaveSettingsAsync(
+                consumerId,
+                new ConsumerSettings(
+                    _enablePopupAlerts,
+                    _enablePrivateWarnings,
+                    _enableSafetyPageRouting,
+                    _scanMode),
+                CancellationToken.None));
+        if (!access.Succeeded || access.Value is null)
+        {
+            _accessError = HipConsumerPageAccess.AccessUnavailableMessage;
+            return;
+        }
+
+        _accessError = null;
+        var result = access.Value;
         _message = result.Message;
         if (result.Settings is not null)
         {

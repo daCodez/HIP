@@ -7,4 +7,9 @@ public interface IHipIdentityRepository
     Task<HipIdentity> SaveAsync(HipIdentity identity, CancellationToken cancellationToken);
 
     Task<HipIdentity?> GetAsync(string identityId, CancellationToken cancellationToken);
+
+    Task<bool> TryUpdateAsync(
+        HipIdentity expected,
+        HipIdentity updated,
+        CancellationToken cancellationToken);
 }

@@ -107,6 +107,14 @@ The MVP hashing service returns values with a `sha256:` compatibility prefix, bu
 
 Development defaults are intentionally marked as development-only. Outside local Development, HIP refuses the shared default key so deployments must provide real secret material. HMAC hashing is for privacy minimization and stable correlation of the same risky URL/sender/device within HIP; it is not authentication and must not replace HIP signatures.
 
+### Planned privacy-key rotation
+
+New privacy hashes always use `HipSecurity:PrivacyHashingKey`. During a planned rotation, a bounded set of former keys may be supplied through `HipSecurity:LegacyPrivacyHashingKeys`. HIP uses those keys only on explicitly rotation-aware read or validation paths: consumer scan/report/appeal ownership, consumer device owner partitions, service-client owner partitions, and Second Life HUD device credentials. New records, challenges, and credentials continue to use only the current key.
+
+Legacy keys create a temporary correlation and credential-acceptance window. Give that window an explicit end time, remove each former key after the affected retention or credential grace period, and monitor failed access after removal. Never add a key that is suspected or known to be compromised: keeping a compromised key configured preserves an attacker's ability to derive privacy hashes and, for stateless HUD credentials, to create otherwise valid MACs. Use the affected product's revocation/reset controls and replace the key instead.
+
+This compatibility mechanism does not reinterpret or recompute generic historical URL, sender, or evidence hashes. Those stored values retain their original meaning and retention policy; rotation-aware candidate matching is limited to the owner and credential paths listed above.
+
 ## Retention Policy
 
 The MVP retention model defines:
@@ -152,16 +160,16 @@ The MVP SL HUD endpoints are:
 
 ## Review Queue Connection
 
-High-risk, Dangerous, and Critical reports create review items automatically. Lower-risk reports can be stored without forcing admin review.
+High-risk, Dangerous, and Critical reports create review items automatically only when reporter trust is `High` or `Trusted`. Lower-trust and lower-risk reports can be stored without forcing privileged admin review.
 
 ## Self-Healing Connection
 
-Accepted reports can be converted into privacy-safe suspicious findings for self-healing pattern detection. The self-healing path receives hashes, domains, risk reasons, platform, timestamps, and anonymized evidence only.
+Accepted reports with `High` or `Trusted` reporter trust can be converted into privacy-safe suspicious findings for self-healing pattern detection. The self-healing path receives hashes, domains, risk reasons, platform, timestamps, and anonymized evidence only.
 
 ## Known Limitations
 
 - In-memory report storage only.
 - HIP signatures are placeholders.
-- No rate limiting or reporter identity trust enforcement yet.
+- Anonymous public risk findings are rate-limited and forced to `Unknown` reporter provenance; production reporter identity binding remains future work.
 - Retention policy is modeled but cleanup is not automated yet.
 - No production queue or database persistence yet.

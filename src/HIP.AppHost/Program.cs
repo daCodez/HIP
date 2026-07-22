@@ -8,7 +8,12 @@ var builder = DistributedApplication.CreateBuilder(args);
 // or deployment configuration. Aspire marks them secret so their values are not
 // published in the application manifest or written to logs.
 var recordEncryptionKey = builder.AddParameter("hip-record-encryption-key", secret: true);
+var legacyRecordEncryptionKey = builder.AddParameter("hip-legacy-record-encryption-key", secret: true);
 var privacyHashingKey = builder.AddParameter("hip-privacy-hashing-key", secret: true);
+var legacyPrivacyHashingKey = string.IsNullOrWhiteSpace(
+    builder.Configuration["Parameters:hip-legacy-privacy-hashing-key"])
+    ? null
+    : builder.AddParameter("hip-legacy-privacy-hashing-key", secret: true);
 var enableCoreDns = !string.Equals(builder.Configuration["HIP_ASPIRE_ENABLE_COREDNS"], "false", StringComparison.OrdinalIgnoreCase);
 var coreDnsDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "eng", "coredns"));
 var coreDns = enableCoreDns
@@ -40,7 +45,13 @@ var apiService = builder.AddProject<Projects.HIP_ApiService>("hip-api", launchPr
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
     .WithEnvironment("HipInfrastructure__DatabaseProvider", "PostgreSQL")
     .WithEnvironment("HipSecurity__RecordEncryptionKey", recordEncryptionKey)
+    .WithEnvironment("HipSecurity__LegacyRecordEncryptionKeys__0", legacyRecordEncryptionKey)
     .WithEnvironment("HipSecurity__PrivacyHashingKey", privacyHashingKey);
+
+if (legacyPrivacyHashingKey is not null)
+{
+    apiService.WithEnvironment("HipSecurity__LegacyPrivacyHashingKeys__0", legacyPrivacyHashingKey);
+}
 
 if (coreDns is not null)
 {
@@ -51,7 +62,7 @@ if (coreDns is not null)
         .WaitFor(coreDns);
 }
 
-builder.AddProject<Projects.HIP_Web>("hip-web", launchProfileName: "http")
+var web = builder.AddProject<Projects.HIP_Web>("hip-web", launchProfileName: "http")
     .WithExternalHttpEndpoints()
     // Add the admin shell as an Aspire dashboard action; the base URL remains available separately.
     .WithUrlForEndpoint("http", _ => new() { Url = "/admin", DisplayText = "Admin" })
@@ -65,9 +76,35 @@ builder.AddProject<Projects.HIP_Web>("hip-web", launchProfileName: "http")
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
     .WithEnvironment("HipInfrastructure__DatabaseProvider", "PostgreSQL")
     .WithEnvironment("HipSecurity__RecordEncryptionKey", recordEncryptionKey)
+    .WithEnvironment("HipSecurity__LegacyRecordEncryptionKeys__0", legacyRecordEncryptionKey)
     .WithEnvironment("HipSecurity__PrivacyHashingKey", privacyHashingKey);
 
-builder.AddProject<Projects.HIP_SandboxWorker>("hip-sandbox-worker")
+if (legacyPrivacyHashingKey is not null)
+{
+    web.WithEnvironment("HipSecurity__LegacyPrivacyHashingKeys__0", legacyPrivacyHashingKey);
+}
+
+// This one-shot project never starts an HTTP listener and is opt-in in the Aspire dashboard.
+// Starting it is the explicit operator confirmation to index pre-HIP-0205 global consumer history.
+var ownerIndexBackfill = builder.AddProject<Projects.HIP_Web>("hip-owner-index-backfill", launchProfileName: "maintenance")
+    .WithReference(hipDatabase)
+    .WaitFor(hipDatabase)
+    .WithReference(redis)
+    .WaitFor(redis)
+    .WithExplicitStart()
+    .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
+    .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
+    .WithEnvironment("HipInfrastructure__DatabaseProvider", "PostgreSQL")
+    .WithEnvironment("HipSecurity__RecordEncryptionKey", recordEncryptionKey)
+    .WithEnvironment("HipSecurity__LegacyRecordEncryptionKeys__0", legacyRecordEncryptionKey)
+    .WithEnvironment("HipSecurity__PrivacyHashingKey", privacyHashingKey);
+
+if (legacyPrivacyHashingKey is not null)
+{
+    ownerIndexBackfill.WithEnvironment("HipSecurity__LegacyPrivacyHashingKeys__0", legacyPrivacyHashingKey);
+}
+
+var sandboxWorker = builder.AddProject<Projects.HIP_SandboxWorker>("hip-sandbox-worker")
     .WithReference(hipDatabase)
     .WaitFor(hipDatabase)
     .WithReference(redis)
@@ -75,9 +112,15 @@ builder.AddProject<Projects.HIP_SandboxWorker>("hip-sandbox-worker")
     .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
     .WithEnvironment("HipInfrastructure__DatabaseProvider", "PostgreSQL")
     .WithEnvironment("HipSecurity__RecordEncryptionKey", recordEncryptionKey)
+    .WithEnvironment("HipSecurity__LegacyRecordEncryptionKeys__0", legacyRecordEncryptionKey)
     .WithEnvironment("HipSecurity__PrivacyHashingKey", privacyHashingKey)
     // The worker is registered now so Aspire starts it with the rest of HIP.
     // Browser execution stays disabled until the hardened runner exists.
     .WithEnvironment("SandboxWorker__ExecuteBrowserSandbox", "false");
+
+if (legacyPrivacyHashingKey is not null)
+{
+    sandboxWorker.WithEnvironment("HipSecurity__LegacyPrivacyHashingKeys__0", legacyPrivacyHashingKey);
+}
 
 builder.Build().Run();

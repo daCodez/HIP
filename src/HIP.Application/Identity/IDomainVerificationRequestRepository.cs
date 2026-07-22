@@ -8,6 +8,22 @@ namespace HIP.Application.Identity;
 public interface IDomainVerificationRequestRepository
 {
     /// <summary>
+    /// Atomically creates a challenge only when its domain-and-method key is unused.
+    /// </summary>
+    /// <param name="request">Challenge candidate whose normalized key must be unique.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>True when the candidate was created; false when a challenge already exists.</returns>
+    Task<bool> TryCreateAsync(
+        DomainVerificationRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Atomically replaces a challenge only when its persisted snapshot is unchanged.</summary>
+    Task<bool> TryUpdateAsync(
+        DomainVerificationRequest expected,
+        DomainVerificationRequest updated,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Saves the latest state of a domain verification challenge without exposing the token to logs.
     /// </summary>
     /// <param name="request">Verification challenge to persist.</param>

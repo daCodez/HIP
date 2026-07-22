@@ -37,6 +37,20 @@ public sealed class InMemoryBrowserScanResultRepository : IBrowserScanResultRepo
         return Task.FromResult(result);
     }
 
+    /// <inheritdoc />
+    public Task<BrowserScanResultRecord?> GetLatestAuthoritativeByDomainAsync(
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        var result = resultsById.Values
+            .Where(item => item.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase))
+            .Where(BrowserScanResultProvenance.IsServerAuthoritative)
+            .OrderByDescending(item => item.LastCheckedUtc)
+            .FirstOrDefault();
+
+        return Task.FromResult(result);
+    }
+
     /// <summary>
     /// Lists all stored scan results for aggregation tests and development dashboards.
     /// </summary>
@@ -52,7 +66,7 @@ public sealed class InMemoryBrowserScanResultRepository : IBrowserScanResultRepo
     }
 
     /// <summary>
-    /// Lists the most recent in-memory scan results for dashboard tables without exposing private page content.
+    /// Lists the most recent authoritative in-memory scan results for dashboard tables.
     /// </summary>
     /// <param name="maxCount">Maximum number of scan results to return.</param>
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
@@ -61,6 +75,7 @@ public sealed class InMemoryBrowserScanResultRepository : IBrowserScanResultRepo
     {
         var boundedMax = Math.Max(0, maxCount);
         var results = resultsById.Values
+            .Where(BrowserScanResultProvenance.IsServerAuthoritative)
             .OrderByDescending(item => item.LastCheckedUtc)
             .Take(boundedMax)
             .ToArray();
@@ -69,13 +84,14 @@ public sealed class InMemoryBrowserScanResultRepository : IBrowserScanResultRepo
     }
 
     /// <summary>
-    /// Counts distinct normalized domains across every in-memory scan record.
+    /// Counts distinct normalized domains across authoritative in-memory scan records.
     /// </summary>
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
     /// <returns>The number of distinct stored scan domains.</returns>
     public Task<int> CountDistinctDomainsAsync(CancellationToken cancellationToken)
     {
         var count = resultsById.Values
+            .Where(BrowserScanResultProvenance.IsServerAuthoritative)
             .Select(result => result.Domain)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();

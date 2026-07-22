@@ -35,6 +35,32 @@ public sealed class AdminRolesAuditTests
     }
 
     [Test]
+    public void Service_client_permissions_are_granted_only_to_owner_and_admin()
+    {
+        var expectedRoles = new HashSet<string>(StringComparer.Ordinal)
+        {
+            AdminRoles.Owner,
+            AdminRoles.Admin
+        };
+
+        foreach (var role in AdminRoleCatalog.Roles)
+        {
+            var expected = expectedRoles.Contains(role.Role);
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    AdminRoleCatalog.HasPermission(role.Role, AdminPermissions.ServiceClientsView),
+                    Is.EqualTo(expected),
+                    $"Unexpected {AdminPermissions.ServiceClientsView} grant for {role.Role}.");
+                Assert.That(
+                    AdminRoleCatalog.HasPermission(role.Role, AdminPermissions.ServiceClientsManage),
+                    Is.EqualTo(expected),
+                    $"Unexpected {AdminPermissions.ServiceClientsManage} grant for {role.Role}.");
+            });
+        }
+    }
+
+    [Test]
     public void Moderator_can_review_but_cannot_manage_system()
     {
         Assert.That(AdminRoleCatalog.HasPermission(AdminRoles.Moderator, AdminPermissions.ReviewDecide), Is.True);
@@ -68,9 +94,13 @@ public sealed class AdminRolesAuditTests
             new RuleSimulationService(new RuleActionApplier(matching)),
             audit);
 
-        await service.SaveAsync(RuleEngineTests.NewDomainShortenerRule(RuleMode.Watch), CancellationToken.None);
+        await service.SaveAsync(
+            RuleEngineTests.NewDomainShortenerRule(RuleMode.Watch),
+            "authenticated-rule-admin",
+            CancellationToken.None);
 
-        Assert.That(audit.List().Any(entry => entry.Action == "Rule changed"), Is.True);
+        var entry = audit.List().Single(entry => entry.Action == "Rule changed");
+        Assert.That(entry.ActorId, Is.EqualTo("authenticated-rule-admin"));
     }
 
     [Test]

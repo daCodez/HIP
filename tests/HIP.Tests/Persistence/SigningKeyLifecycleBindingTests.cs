@@ -41,7 +41,12 @@ public sealed class SigningKeyLifecycleBindingTests
         var encryptor = new DevelopmentHipRecordEncryptor();
         var activatedAt = new DateTimeOffset(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
         var otherIdentityRing = SigningKeyRing.Create("hip:domain:other")
-            .RegisterActiveKey("key-1", "ML-DSA-65", "public-key", activatedAt);
+            .RegisterActiveKey(
+                "key-1",
+                "ML-DSA-65",
+                "public-key",
+                "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                activatedAt);
         var json = JsonSerializer.Serialize(otherIdentityRing, SerializerOptions());
         context.Records.Add(new HipDbRecord
         {
@@ -67,7 +72,12 @@ public sealed class SigningKeyLifecycleBindingTests
         var encryptor = new DevelopmentHipRecordEncryptor();
         var activatedAt = new DateTimeOffset(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
         var original = SigningKeyRing.Create("hip:domain:requested")
-            .RegisterActiveKey("key-1", "ML-DSA-65", "public-key", activatedAt);
+            .RegisterActiveKey(
+                "key-1",
+                "ML-DSA-65",
+                "public-key",
+                "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                activatedAt);
         context.Records.Add(new HipDbRecord
         {
             Partition = Partition,
@@ -88,6 +98,80 @@ public sealed class SigningKeyLifecycleBindingTests
             Assert.That(restored!.IdentityId, Is.EqualTo(original.IdentityId));
             Assert.That(restored.GetRequiredKey("key-1").Status, Is.EqualTo(SigningKeyStatus.Active));
         });
+    }
+
+    [Test]
+    public void Lifecycle_repository_rejects_older_valid_ciphertext_replayed_into_a_newer_row()
+    {
+        using var context = CreateContext();
+        var encryptor = new DevelopmentHipRecordEncryptor();
+        var activatedAt = new DateTimeOffset(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
+        var olderRing = SigningKeyRing.Create("hip:domain:requested")
+            .RegisterActiveKey(
+                "key-1",
+                "ML-DSA-65",
+                "public-key-1",
+                "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                activatedAt);
+        var newerRing = olderRing.Rotate(
+            "key-1",
+            "key-2",
+            "ML-DSA-65",
+            "public-key-2",
+            "sha256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            activatedAt.AddMinutes(1));
+        context.Records.Add(new HipDbRecord
+        {
+            Partition = Partition,
+            Id = olderRing.IdentityId,
+            Json = encryptor.Protect(JsonSerializer.Serialize(olderRing, SerializerOptions())),
+            AggregateVersion = newerRing.Version,
+            CreatedAtUtc = activatedAt,
+            UpdatedAtUtc = activatedAt.AddMinutes(1)
+        });
+        context.SaveChanges();
+        var repository = new EfSigningKeyLifecycleRepository(new HipRecordStore(context, encryptor));
+
+        Assert.ThrowsAsync<InvalidOperationException>(() => repository.GetAsync(
+            olderRing.IdentityId,
+            CancellationToken.None));
+    }
+
+    [Test]
+    public void Lifecycle_repository_rejects_database_version_behind_encrypted_aggregate()
+    {
+        using var context = CreateContext();
+        var encryptor = new DevelopmentHipRecordEncryptor();
+        var activatedAt = new DateTimeOffset(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
+        var olderRing = SigningKeyRing.Create("hip:domain:requested")
+            .RegisterActiveKey(
+                "key-1",
+                "ML-DSA-65",
+                "public-key-1",
+                "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                activatedAt);
+        var newerRing = olderRing.Rotate(
+            "key-1",
+            "key-2",
+            "ML-DSA-65",
+            "public-key-2",
+            "sha256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            activatedAt.AddMinutes(1));
+        context.Records.Add(new HipDbRecord
+        {
+            Partition = Partition,
+            Id = newerRing.IdentityId,
+            Json = encryptor.Protect(JsonSerializer.Serialize(newerRing, SerializerOptions())),
+            AggregateVersion = olderRing.Version,
+            CreatedAtUtc = activatedAt,
+            UpdatedAtUtc = activatedAt.AddMinutes(1)
+        });
+        context.SaveChanges();
+        var repository = new EfSigningKeyLifecycleRepository(new HipRecordStore(context, encryptor));
+
+        Assert.ThrowsAsync<InvalidOperationException>(() => repository.GetAsync(
+            newerRing.IdentityId,
+            CancellationToken.None));
     }
 
     private static HipDbContext CreateContext()

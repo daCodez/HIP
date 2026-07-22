@@ -20,4 +20,8 @@ public sealed record AuditLogEntry(
     public IReadOnlyDictionary<string, string> AfterMetadata { get; init; } = new Dictionary<string, string>();
 
     public string? CorrelationId { get; init; }
+
+    public string IntegrityVersion { get; init; } = string.Empty;
+
+    public string IntegrityHash { get; init; } = string.Empty;
 }

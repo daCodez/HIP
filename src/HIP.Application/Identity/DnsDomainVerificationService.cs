@@ -10,9 +10,15 @@ namespace HIP.Application.Identity;
 public sealed class DnsDomainVerificationService(
     IDnsTxtRecordResolver txtRecordResolver,
     IDomainVerificationRequestRepository verificationRepository,
-    ILogger<DnsDomainVerificationService> logger) : IDomainVerificationService
+    ILogger<DnsDomainVerificationService> logger,
+    DomainVerificationLifecycleOptions? lifecycleOptions = null,
+    TimeProvider? timeProvider = null,
+    IWellKnownHipDocumentVerifier? wellKnownVerifier = null) : IDomainVerificationService
 {
     private const string VerificationPrefix = "hip-site-verification=";
+    private readonly DomainVerificationLifecycleOptions lifecycle =
+        (lifecycleOptions ?? DomainVerificationLifecycleOptions.Default).Validate();
+    private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
 
     /// <summary>
     /// Creates a domain verification challenge token for DNS TXT or .well-known based verification.
@@ -29,19 +35,84 @@ public sealed class DnsDomainVerificationService(
         }
 
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+        var now = clock.GetUtcNow();
         var request = new DomainVerificationRequest(
             normalized,
             method,
             Guid.NewGuid().ToString("N"),
             VerificationStatus.Pending,
-            DateTimeOffset.UtcNow,
-            null);
+            now,
+            null,
+            now.Add(lifecycle.ChallengeLifetime));
 
-        return await verificationRepository.SaveAsync(request, cancellationToken);
+        if (!await verificationRepository.TryCreateAsync(request, cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException(
+                $"A domain verification challenge already exists for '{normalized}' and cannot be replaced by starting a new challenge.");
+        }
+
+        return request;
+    }
+
+    /// <inheritdoc />
+    public async Task<DomainVerificationRequest> GetOrStartAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken)
+    {
+        if (method is not (VerificationMethod.DnsTxt or VerificationMethod.WellKnownHipJson))
+        {
+            throw new ArgumentException("MVP verification supports DNS TXT and .well-known/hip.json only.", nameof(method));
+        }
+
+        var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+        var now = clock.GetUtcNow();
+        var request = new DomainVerificationRequest(
+            normalized,
+            method,
+            Guid.NewGuid().ToString("N"),
+            VerificationStatus.Pending,
+            now,
+            null,
+            now.Add(lifecycle.ChallengeLifetime));
+
+        try
+        {
+            if (await verificationRepository.TryCreateAsync(request, cancellationToken).ConfigureAwait(false))
+            {
+                return request;
+            }
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            var committed = await verificationRepository.GetAsync(normalized, method, cancellationToken)
+                .ConfigureAwait(false);
+            if (committed is not null)
+            {
+                return committed;
+            }
+
+            throw;
+        }
+
+        return await verificationRepository.GetAsync(normalized, method, cancellationToken)
+                .ConfigureAwait(false) ??
+            throw new InvalidOperationException(
+                $"Domain verification challenge for '{normalized}' could not be created or reconciled.");
+    }
+
+    /// <inheritdoc />
+    public Task<DomainVerificationRequest?> GetAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken)
+    {
+        var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+        return verificationRepository.GetAsync(normalized, method, cancellationToken);
     }
 
     /// <summary>
-    /// Verifies an existing domain challenge. DNS TXT verification queries live DNS; .well-known remains an MVP placeholder.
+    /// Verifies an existing domain challenge against live DNS or a fetched signed well-known document.
     /// </summary>
     /// <param name="domain">Domain being verified.</param>
     /// <param name="method">Verification method used for the challenge.</param>
@@ -60,20 +131,59 @@ public sealed class DnsDomainVerificationService(
         {
             throw new InvalidOperationException("Revoked domain verification cannot be retried or reactivated.");
         }
-
-        var status = method switch
+        if (IsExpired(request))
         {
-            VerificationMethod.DnsTxt => MapDnsCheckStatus((await CheckDnsTxtAsync(normalized, token, cancellationToken)).Status),
-            VerificationMethod.WellKnownHipJson => TokensMatch(request.Token, token) ? VerificationStatus.Verified : VerificationStatus.Unverified,
-            _ => throw new ArgumentException("MVP verification supports DNS TXT and .well-known/hip.json only.", nameof(method))
-        };
+            return await ExpireAsync(request, cancellationToken).ConfigureAwait(false);
+        }
 
+        VerificationStatus status;
+        string message;
+        if (method == VerificationMethod.DnsTxt)
+        {
+            status = TokensMatch(request.Token, token)
+                ? MapDnsCheckStatus((await CheckDnsTxtAsync(normalized, request.Token, cancellationToken)).Status)
+                : VerificationStatus.Unverified;
+            message = StatusMessage(status);
+        }
+        else if (method == VerificationMethod.WellKnownHipJson)
+        {
+            if (!TokensMatch(request.Token, token))
+            {
+                status = VerificationStatus.Unverified;
+                message = "The supplied verification challenge does not match the active domain claim.";
+            }
+            else if (wellKnownVerifier is null)
+            {
+                status = VerificationStatus.Pending;
+                message = "Signed well-known document verification is unavailable in this runtime.";
+            }
+            else
+            {
+                var result = await wellKnownVerifier.VerifyAsync(request, cancellationToken).ConfigureAwait(false);
+                status = result.Status switch
+                {
+                    WellKnownHipDocumentVerificationStatus.Verified => VerificationStatus.Verified,
+                    WellKnownHipDocumentVerificationStatus.NotAvailable => VerificationStatus.Pending,
+                    _ => VerificationStatus.Unverified
+                };
+                message = result.Message;
+            }
+        }
+        else
+        {
+            throw new ArgumentException("MVP verification supports DNS TXT and .well-known/hip.json only.", nameof(method));
+        }
+
+        var checkedAtUtc = clock.GetUtcNow();
         var updated = request with
         {
             Status = status,
-            VerifiedAtUtc = status == VerificationStatus.Verified ? DateTimeOffset.UtcNow : null
+            VerifiedAtUtc = status == VerificationStatus.Verified ? checkedAtUtc : null,
+            LastCheckedAtUtc = checkedAtUtc,
+            LastCheckMessage = message
         };
-        return await verificationRepository.SaveAsync(updated, cancellationToken);
+        return await TryApplyTransitionAsync(request, updated, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -84,9 +194,9 @@ public sealed class DnsDomainVerificationService(
         VerificationMethod method,
         CancellationToken cancellationToken)
     {
-        if (method != VerificationMethod.DnsTxt)
+        if (method is not (VerificationMethod.DnsTxt or VerificationMethod.WellKnownHipJson))
         {
-            throw new InvalidOperationException("Automated retry is available only for production DNS TXT verification.");
+            throw new InvalidOperationException("Automated retry supports DNS TXT and signed well-known verification only.");
         }
 
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
@@ -97,15 +207,62 @@ public sealed class DnsDomainVerificationService(
             throw new InvalidOperationException("Revoked domain verification cannot be retried.");
         }
 
-        var check = await CheckDnsTxtAsync(normalized, request.Token, cancellationToken);
+        if (IsExpired(request))
+        {
+            var expired = await ExpireAsync(request, cancellationToken).ConfigureAwait(false);
+            return new DomainVerificationRetryResult(
+                expired,
+                new DomainVerificationCheckResult(
+                    normalized,
+                    $"_hip.{normalized}",
+                    DomainVerificationCheckStatus.PendingVerification,
+                    clock.GetUtcNow(),
+                    "The verification challenge expired. Issue a new challenge before checking DNS again."));
+        }
+
+        var check = method == VerificationMethod.DnsTxt
+            ? await CheckDnsTxtAsync(normalized, request.Token, cancellationToken).ConfigureAwait(false)
+            : await CheckWellKnownAsync(request, cancellationToken).ConfigureAwait(false);
         var status = MapDnsCheckStatus(check.Status);
         var updated = request with
         {
             Status = status,
-            VerifiedAtUtc = status == VerificationStatus.Verified ? DateTimeOffset.UtcNow : null
+            VerifiedAtUtc = status == VerificationStatus.Verified ? clock.GetUtcNow() : null,
+            LastCheckedAtUtc = check.CheckedAtUtc,
+            LastCheckMessage = check.Message
         };
-        await verificationRepository.SaveAsync(updated, cancellationToken);
-        return new DomainVerificationRetryResult(updated, check);
+        var persisted = await TryApplyTransitionAsync(request, updated, cancellationToken)
+            .ConfigureAwait(false);
+        return new DomainVerificationRetryResult(persisted, check);
+    }
+
+    private async Task<DomainVerificationCheckResult> CheckWellKnownAsync(
+        DomainVerificationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var checkedAtUtc = clock.GetUtcNow();
+        if (wellKnownVerifier is null)
+        {
+            return new DomainVerificationCheckResult(
+                request.Domain,
+                $"https://{request.Domain}/.well-known/hip.json",
+                DomainVerificationCheckStatus.PendingVerification,
+                checkedAtUtc,
+                "Signed well-known document verification is unavailable in this runtime.");
+        }
+
+        var result = await wellKnownVerifier.VerifyAsync(request, cancellationToken).ConfigureAwait(false);
+        return new DomainVerificationCheckResult(
+            request.Domain,
+            $"https://{request.Domain}/.well-known/hip.json",
+            result.Status switch
+            {
+                WellKnownHipDocumentVerificationStatus.Verified => DomainVerificationCheckStatus.Verified,
+                WellKnownHipDocumentVerificationStatus.Invalid => DomainVerificationCheckStatus.Invalid,
+                _ => DomainVerificationCheckStatus.PendingVerification
+            },
+            checkedAtUtc,
+            result.Message);
     }
 
     /// <summary>
@@ -119,8 +276,112 @@ public sealed class DnsDomainVerificationService(
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
         var request = await verificationRepository.GetAsync(normalized, method, cancellationToken) ??
             throw new ArgumentException("Domain verification request was not found.", nameof(domain));
-        var revoked = request with { Status = VerificationStatus.Revoked, VerifiedAtUtc = null };
-        return await verificationRepository.SaveAsync(revoked, cancellationToken);
+        return await RevokePersistedAsync(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DomainVerificationRequest> RenewExpiredAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken)
+    {
+        var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+        var request = await verificationRepository.GetAsync(normalized, method, cancellationToken) ??
+            throw new ArgumentException("Domain verification request was not found.", nameof(domain));
+        if (request.Status == VerificationStatus.Revoked)
+        {
+            throw new InvalidOperationException("Revoked domain verification cannot issue another challenge.");
+        }
+        if (request.Status != VerificationStatus.Expired && IsExpired(request))
+        {
+            request = await ExpireAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        if (request.Status != VerificationStatus.Expired)
+        {
+            throw new InvalidOperationException("Only an expired verification challenge can be renewed.");
+        }
+
+        var now = clock.GetUtcNow();
+        var renewed = request with
+        {
+            Token = Guid.NewGuid().ToString("N"),
+            Status = VerificationStatus.Pending,
+            CreatedAtUtc = now,
+            VerifiedAtUtc = null,
+            ExpiresAtUtc = now.Add(lifecycle.ChallengeLifetime),
+            LastCheckedAtUtc = null,
+            LastCheckMessage = "A new domain verification challenge was issued.",
+            RevokedAtUtc = null,
+            ChallengeVersion = checked(request.ChallengeVersion + 1)
+        };
+        if (!await verificationRepository.TryUpdateAsync(request, renewed, cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("Domain verification state changed concurrently; reload before renewing.");
+        }
+
+        return renewed;
+    }
+
+    private async Task<DomainVerificationRequest> TryApplyTransitionAsync(
+        DomainVerificationRequest expected,
+        DomainVerificationRequest updated,
+        CancellationToken cancellationToken)
+    {
+        if (await verificationRepository.TryUpdateAsync(expected, updated, cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return updated;
+        }
+
+        var current = await verificationRepository.GetAsync(
+                expected.Domain,
+                expected.Method,
+                cancellationToken)
+            .ConfigureAwait(false) ??
+            throw new InvalidOperationException("Domain verification state disappeared during a concurrent update.");
+        if (current.Status == VerificationStatus.Revoked)
+        {
+            throw new InvalidOperationException("Revoked domain verification cannot be retried or reactivated.");
+        }
+
+        throw new InvalidOperationException("Domain verification state changed concurrently; retry the operation.");
+    }
+
+    private async Task<DomainVerificationRequest> RevokePersistedAsync(
+        DomainVerificationRequest initial,
+        CancellationToken cancellationToken)
+    {
+        var current = initial;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (current.Status == VerificationStatus.Revoked)
+            {
+                return current;
+            }
+
+            var now = clock.GetUtcNow();
+            var revoked = current with
+            {
+                Status = VerificationStatus.Revoked,
+                VerifiedAtUtc = null,
+                LastCheckedAtUtc = now,
+                LastCheckMessage = "Domain verification was revoked.",
+                RevokedAtUtc = now
+            };
+            if (await verificationRepository.TryUpdateAsync(current, revoked, cancellationToken)
+                    .ConfigureAwait(false))
+            {
+                return revoked;
+            }
+
+            current = await verificationRepository.GetAsync(
+                    current.Domain,
+                    current.Method,
+                    cancellationToken)
+                .ConfigureAwait(false) ??
+                throw new InvalidOperationException("Domain verification state disappeared during revocation.");
+        }
+
+        throw new InvalidOperationException("Domain verification revocation could not win concurrent updates.");
     }
 
     /// <summary>
@@ -135,7 +396,7 @@ public sealed class DnsDomainVerificationService(
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
         var token = NormalizeExpectedToken(expectedToken);
         var recordName = $"_hip.{normalized}";
-        var checkedAtUtc = DateTimeOffset.UtcNow;
+        var checkedAtUtc = clock.GetUtcNow();
 
         try
         {
@@ -256,5 +517,38 @@ public sealed class DnsDomainVerificationService(
         DomainVerificationCheckStatus.Invalid => "HIP found a DNS TXT verification record, but it did not match the expected token.",
         DomainVerificationCheckStatus.PendingVerification => "HIP could not complete the DNS verification check yet.",
         _ => "HIP did not find a DNS TXT verification record for this domain."
+    };
+
+    private bool IsExpired(DomainVerificationRequest request) =>
+        request.Status == VerificationStatus.Expired ||
+        (request.Status != VerificationStatus.Verified &&
+         (request.ExpiresAtUtc ?? request.CreatedAtUtc.Add(lifecycle.ChallengeLifetime)) <= clock.GetUtcNow());
+
+    private async Task<DomainVerificationRequest> ExpireAsync(
+        DomainVerificationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Status == VerificationStatus.Expired)
+        {
+            return request;
+        }
+
+        var expired = request with
+        {
+            Status = VerificationStatus.Expired,
+            VerifiedAtUtc = null,
+            ExpiresAtUtc = request.ExpiresAtUtc ?? request.CreatedAtUtc.Add(lifecycle.ChallengeLifetime),
+            LastCheckedAtUtc = clock.GetUtcNow(),
+            LastCheckMessage = "The domain verification challenge expired before it was completed."
+        };
+        return await TryApplyTransitionAsync(request, expired, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string StatusMessage(VerificationStatus status) => status switch
+    {
+        VerificationStatus.Verified => "Domain verification succeeded.",
+        VerificationStatus.Unverified => "The verification evidence did not match the active challenge.",
+        VerificationStatus.Expired => "The domain verification challenge expired.",
+        _ => "Domain verification remains pending."
     };
 }

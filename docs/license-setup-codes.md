@@ -12,7 +12,7 @@ Setup codes allow a marketplace buyer to activate one or more HUD devices while 
 2. The buyer places the setup code in the HUD configuration.
 3. The HUD calls `POST /api/v1/sl-hud/activate`.
 4. HIP validates the code, status, and device limit.
-5. HIP returns a device ID and HUD settings.
+5. HIP returns a device ID, HUD settings, and an opaque credential bound to that license/device activation.
 
 Example response:
 
@@ -21,6 +21,7 @@ Example response:
   "activated": true,
   "licenseStatus": "Active",
   "deviceId": "sl-hud-example",
+  "deviceCredential": "v2.lic-example.opaque-mac",
   "settings": {
     "mode": "Normal",
     "popupAlertsEnabled": true,
@@ -41,6 +42,8 @@ Example response:
 ## Setup Code Security
 
 Setup codes are generated with cryptographic randomness and are not sequential. List/detail views show masked setup codes. The raw setup code is shown only immediately after creation so support can deliver it to the buyer.
+
+HUD credential v2 binds the otherwise public device ID to its exact license. Suspending, revoking, expiring, or resetting the license invalidates access. Reassigning a reset device ID to a different license produces a different credential. Clients holding the earlier 64-character v1 development credential must activate again after upgrading; HIP intentionally does not accept that device-only credential format.
 
 Default allowed device count is `1` unless support/admin chooses another value.
 
@@ -71,7 +74,7 @@ HIP must not expose raw avatar identity, full setup codes in lists, private chat
 
 ## MVP Limitations
 
-- In-memory storage only.
+- The default runtime uses encrypted PostgreSQL-backed records; the in-memory implementation remains for isolated tests.
 - No production billing or marketplace validation yet.
-- No rate limiting yet.
+- Activation is rate limited and request-size bounded, but setup-code lookup still scans the encrypted license partition until the planned keyed lookup index is deployed.
 - No durable audit trail for license lifecycle actions yet.

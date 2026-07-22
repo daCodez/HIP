@@ -1,8 +1,10 @@
 using HIP.Application;
 using HIP.Application.Identity;
+using HIP.Application.Protocol;
 using HIP.Application.Review;
 using HIP.Domain.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 
 namespace HIP.Tests.Protocol;
 
@@ -10,11 +12,15 @@ public sealed class SigningKeyRingLifecycleTests
 {
     private static readonly DateTimeOffset InitialTime =
         new(2026, 7, 17, 12, 0, 0, TimeSpan.Zero);
+    private const string FirstFingerprint = "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    private const string SecondFingerprint = "sha256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+    private const string ThirdFingerprint = "sha256:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
 
     [Test]
     public void Domain_states_allow_only_explicit_forward_transitions()
     {
-        var active = ManagedSigningKey.CreateActive("key-1", "ML-DSA-65", "public-key", InitialTime);
+        var active = ManagedSigningKey.CreateActive(
+            "key-1", "ML-DSA-65", "public-key", FirstFingerprint, InitialTime);
         var retiring = active.BeginRotation("key-2", InitialTime.AddMinutes(1));
         var retired = retiring.Retire(InitialTime.AddMinutes(2));
         var revoked = retired.Revoke(InitialTime.AddMinutes(3));
@@ -38,7 +44,8 @@ public sealed class SigningKeyRingLifecycleTests
     [Test]
     public void Invalid_or_reversed_transitions_fail_closed()
     {
-        var active = ManagedSigningKey.CreateActive("key-1", "ML-DSA-65", "public-key", InitialTime);
+        var active = ManagedSigningKey.CreateActive(
+            "key-1", "ML-DSA-65", "public-key", FirstFingerprint, InitialTime);
         var retiring = active.BeginRotation("key-2", InitialTime.AddMinutes(1));
         var retired = retiring.Retire(InitialTime.AddMinutes(2));
         var revoked = retired.Revoke(InitialTime.AddMinutes(3));
@@ -61,7 +68,8 @@ public sealed class SigningKeyRingLifecycleTests
         var maximumKeyId = new string('k', SigningKeyLifecycleLimits.MaximumKeyIdLength);
 
         var keyRing = SigningKeyRing.Create(maximumIdentityId)
-            .RegisterActiveKey(maximumKeyId, "ML-DSA-65", "public-key", InitialTime);
+            .RegisterActiveKey(
+                maximumKeyId, "ML-DSA-65", "public-key", FirstFingerprint, InitialTime);
 
         Assert.Multiple(() =>
         {
@@ -74,6 +82,7 @@ public sealed class SigningKeyRingLifecycleTests
                     new string('k', SigningKeyLifecycleLimits.MaximumKeyIdLength + 1),
                     "ML-DSA-65",
                     "public-key",
+                    FirstFingerprint,
                     InitialTime));
         });
     }
@@ -81,7 +90,8 @@ public sealed class SigningKeyRingLifecycleTests
     [Test]
     public void Historical_verification_uses_the_original_signing_window_and_fails_closed_at_cutoff()
     {
-        var active = ManagedSigningKey.CreateActive("key-1", "ML-DSA-65", "public-key", InitialTime);
+        var active = ManagedSigningKey.CreateActive(
+            "key-1", "ML-DSA-65", "public-key", FirstFingerprint, InitialTime);
         var retiring = active.BeginRotation("key-2", InitialTime.AddMinutes(1));
         var retired = retiring.Retire(InitialTime.AddMinutes(2));
         var revoked = retired.Revoke(InitialTime.AddMinutes(3));
@@ -99,21 +109,70 @@ public sealed class SigningKeyRingLifecycleTests
     }
 
     [Test]
-    public void Key_identifiers_and_public_material_cannot_be_reused()
+    public void Key_identifiers_and_canonical_public_material_cannot_be_reused()
     {
         var initial = SigningKeyRing.Create("hip:domain:example")
-            .RegisterActiveKey("key-1", "ML-DSA-65", "public-key-1", InitialTime);
+            .RegisterActiveKey(
+                "key-1", "ML-DSA-65", "public-key-1", FirstFingerprint, InitialTime);
         var rotated = initial.Rotate(
-            "key-1", "key-2", "ML-DSA-65", "public-key-2", InitialTime.AddMinutes(1));
+            "key-1", "key-2", "ML-DSA-65", "public-key-2", SecondFingerprint,
+            InitialTime.AddMinutes(1));
         var revokedOldKey = rotated.Revoke("key-1", InitialTime.AddMinutes(2));
 
         Assert.Multiple(() =>
         {
             Assert.Throws<InvalidOperationException>(() => initial.Rotate(
-                "key-1", "key-1", "ML-DSA-65", "public-key-3", InitialTime.AddMinutes(1)));
+                "key-1", "key-1", "ML-DSA-65", "public-key-3", ThirdFingerprint,
+                InitialTime.AddMinutes(1)));
             Assert.Throws<InvalidOperationException>(() => revokedOldKey.Rotate(
-                "key-2", "key-3", "ML-DSA-65", "public-key-1", InitialTime.AddMinutes(3)));
+                "key-2", "key-3", "ML-DSA-65", "public-key-1", FirstFingerprint,
+                InitialTime.AddMinutes(3)));
         });
+    }
+
+    [Test]
+    public void Canonical_fingerprint_reuse_is_rejected_on_rotation_emergency_and_deserialization()
+    {
+        const string originalPem = "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----";
+        const string rewrappedOriginalPem = "-----BEGIN PUBLIC KEY-----\r\nAA\r\nAA\r\n-----END PUBLIC KEY-----";
+        var initial = SigningKeyRing.Create("hip:domain:example")
+            .RegisterActiveKey(
+                "key-1",
+                "ML-DSA-65",
+                originalPem,
+                FirstFingerprint,
+                InitialTime);
+        var rotated = initial.Rotate(
+            "key-1",
+            "key-2",
+            "ML-DSA-65",
+            "-----BEGIN PUBLIC KEY-----\nBBBB\n-----END PUBLIC KEY-----",
+            SecondFingerprint,
+            InitialTime.AddMinutes(1));
+
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<InvalidOperationException>(() => rotated.Rotate(
+                "key-2",
+                "key-3",
+                "ML-DSA-65",
+                rewrappedOriginalPem,
+                FirstFingerprint,
+                InitialTime.AddMinutes(2)));
+            Assert.Throws<InvalidOperationException>(() => rotated.ReplaceCompromised(
+                "key-2",
+                "key-3",
+                "ML-DSA-65",
+                rewrappedOriginalPem,
+                FirstFingerprint,
+                InitialTime.AddMinutes(2)));
+            Assert.That(rotated.GetRequiredKey("key-1").PublicKey, Is.EqualTo(originalPem));
+        });
+
+        var serialized = JsonSerializer.Serialize(rotated);
+        var tampered = serialized.Replace(SecondFingerprint, FirstFingerprint, StringComparison.Ordinal);
+
+        Assert.Throws<ArgumentException>(() => JsonSerializer.Deserialize<SigningKeyRing>(tampered));
     }
 
     [Test]
@@ -353,7 +412,20 @@ public sealed class SigningKeyRingLifecycleTests
     {
         var repository = new InMemorySigningKeyLifecycleRepository();
         var audit = new AuditLogService(repository);
-        return new LifecycleFixture(repository, audit, new SigningKeyLifecycleService(repository, audit));
+        return new LifecycleFixture(
+            repository,
+            audit,
+            new SigningKeyLifecycleService(repository, audit, new DeterministicFingerprintService()));
+    }
+
+    private sealed class DeterministicFingerprintService : IHipPublicKeyFingerprintService
+    {
+        public string ComputePublicKeyFingerprint(string algorithm, string publicKey)
+        {
+            var input = System.Text.Encoding.UTF8.GetBytes($"{algorithm.Length}:{algorithm}{publicKey}");
+            var digest = System.Security.Cryptography.SHA256.HashData(input);
+            return $"sha256:{Convert.ToBase64String(digest).TrimEnd('=').Replace('+', '-').Replace('/', '_')}";
+        }
     }
 
     private sealed record LifecycleFixture(

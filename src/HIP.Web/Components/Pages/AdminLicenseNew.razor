@@ -1,7 +1,10 @@
 @page "/admin/licenses/new"
 @rendermode InteractiveServer
-@attribute [Authorize(Policy = AdminPolicies.CanManageLicenses)]
+@attribute [Authorize(Policy = AdminPolicies.CanAdministerLicenses)]
 @inject ISetupCodeLicenseService LicenseService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IWebHostEnvironment HostEnvironment
 <PageTitle>Create a License | HIP Admin</PageTitle>
 <main class="license-create-page">
     <section class="hip-page-heading license-heading"><div><span class="hip-eyebrow">HIP Admin · licenses</span><h1>Create a license</h1><p>Give a Second Life HUD owner access to HIP.</p></div><a class="hip-secondary-action" href="/admin/licenses">Back to licenses</a></section>
@@ -9,22 +12,104 @@
         <article class="hip-panel padded license-form-panel">
             <div><span class="license-step">Step 1</span><h2>Choose access</h2><p>You can change or cancel access later.</p></div>
             <label class="license-field"><span>How many devices can use it?</span><small>Choose from 1 to 25 devices.</small><InputNumber @bind-Value="AllowedDeviceCount" min="1" max="25" /></label>
+            <label class="license-field"><span>Setup code validity</span><small>The one-time code expires after 1 to 168 hours. Active HUD credentials have a separate lifecycle.</small><InputNumber @bind-Value="ValidForHours" min="1" max="168" /></label>
             <fieldset class="protection-options"><legend>Starting protection level</legend><InputRadioGroup @bind-Value="InitialScanMode"><label><InputRadio Value='@("Quiet")' /><span><strong>Quiet</strong><small>Only urgent warnings</small></span></label><label><InputRadio Value='@("Normal")' /><span><strong>Standard <em>Recommended</em></strong><small>Balanced protection for everyday use</small></span></label><label><InputRadio Value='@("Strict")' /><span><strong>Strict</strong><small>More cautious about uncertain activity</small></span></label><label><InputRadio Value='@("Paranoid")' /><span><strong>Maximum</strong><small>Warn about anything HIP cannot confirm</small></span></label></InputRadioGroup></fieldset>
-            @if (!string.IsNullOrWhiteSpace(_error)) { <p class="license-form-error" role="alert">@_error</p> }
-            <button class="hip-primary-action" type="button" @onclick="CreateCode" disabled="@(CreatedCode is not null)">@(CreatedCode is null ? "Create license" : "License created")</button>
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <p class="license-form-error" role="alert">
+                    @_error
+                    @if (_requiresStepUp)
+                    {
+                        <a href="@StepUpHref">Confirm identity</a>
+                    }
+                </p>
+            }
+            <button class="hip-primary-action" type="button" @onclick="CreateCodeAsync" disabled="@(CreatedCode is not null)">@(CreatedCode is null ? "Create license" : "License created")</button>
         </article>
         <article class="hip-panel padded license-result-panel">
             <div><span class="license-step">Step 2</span><h2>Share the license code</h2></div>
             @if (CreatedCode is null) { <div class="license-result-placeholder"><div aria-hidden="true">•••• •••• ••••</div><p>The code will appear here after you create the license.</p></div> }
-            else { <div class="license-code-result" role="status"><span>New license code</span><code>@CreatedCode.SetupCode</code></div><a class="hip-secondary-action" href="@($"/admin/licenses/{CreatedCode.LicenseId}")">Manage this license</a> }
+            else { <div class="license-code-result" role="status"><span>New license code</span><code>@CreatedCode.SetupCode</code><small>Expires @CreatedCode.SetupCodeExpiresAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'")</small></div><a class="hip-secondary-action" href="@($"/admin/licenses/{CreatedCode.LicenseId}")">Manage this license</a> }
             <div class="license-copy-warning"><strong>Copy this code before leaving this page</strong><p>For safety, HIP will hide most of the code after you leave. Give it only to the HUD owner.</p></div>
         </article>
     </section>
 </main>
 @code {
     private int AllowedDeviceCount { get; set; } = 1;
+    private int ValidForHours { get; set; } = 24;
     private string InitialScanMode { get; set; } = "Normal";
     private CreateSetupCodeResponse? CreatedCode { get; set; }
     private string? _error;
-    private void CreateCode() { _error = null; if (AllowedDeviceCount is < 1 or > 25) { _error = "Choose a number between 1 and 25."; return; } CreatedCode = LicenseService.CreateSetupCode(new CreateSetupCodeRequest(AllowedDeviceCount, "admin-ui", InitialScanMode)); }
+    private bool _requiresStepUp;
+    private const string StepUpHref = "/step-up?returnUrl=%2Fadmin%2Flicenses%2Fnew";
+
+    /// <summary>
+    /// Creates a setup code only after rechecking recent privileged authentication in the active circuit.
+    /// </summary>
+    private async Task CreateCodeAsync()
+    {
+        _error = null;
+        _requiresStepUp = false;
+        if (AllowedDeviceCount is < 1 or > 25)
+        {
+            _error = "Choose a number between 1 and 25.";
+            return;
+        }
+        if (ValidForHours is < 1 or > 168)
+        {
+            _error = "Choose a setup-code validity between 1 and 168 hours.";
+            return;
+        }
+
+        var actor = await RequireRecentActorAsync();
+        if (actor is null)
+        {
+            return;
+        }
+
+        CreatedCode = LicenseService.CreateSetupCode(
+            new CreateSetupCodeRequest(AllowedDeviceCount, actor, InitialScanMode, ValidForHours));
+    }
+
+    /// <summary>
+    /// Resolves a privacy-safe authenticated actor only after confirming recent privileged authentication.
+    /// </summary>
+    private async Task<string?> RequireRecentActorAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var administration = await AuthorizationService.AuthorizeAsync(
+            authenticationState.User,
+            null,
+            AdminPolicies.CanAdministerLicenses);
+        if (!administration.Succeeded)
+        {
+            _error = "You do not have permission to create licenses.";
+            return null;
+        }
+
+        var recentAuthentication = await AuthorizationService.AuthorizeAsync(
+            authenticationState.User,
+            null,
+            AdminPolicies.RecentPrivilegedAuthentication);
+        if (recentAuthentication.Succeeded)
+        {
+            var actor = authenticationState.User.FindFirst(HipAuthenticationClaimTypes.ActorId)?.Value;
+            if (string.IsNullOrWhiteSpace(actor) && HostEnvironment.IsDevelopment())
+            {
+                actor = authenticationState.User.Identity?.Name;
+            }
+
+            if (!string.IsNullOrWhiteSpace(actor))
+            {
+                return actor;
+            }
+
+            _error = "HIP could not confirm the authenticated administrator.";
+            return null;
+        }
+
+        _error = "Confirm your identity before changing license access.";
+        _requiresStepUp = true;
+        return null;
+    }
 }

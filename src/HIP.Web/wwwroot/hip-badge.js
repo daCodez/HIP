@@ -40,7 +40,43 @@
       return;
     }
 
+    await verifySignedBadge(badge, requestedDomain, apiBase);
+
     renderLiveBadge(container, badge, apiBase);
+  }
+
+  async function verifySignedBadge(badge, requestedDomain, apiBase) {
+    const signed = badge && badge.signedBadge;
+    const payload = signed && signed.payload;
+    const expiresAt = payload && Date.parse(payload.expiresAtUtc);
+    if (!badge || badge.isAvailable !== true || badge.signatureStatus !== "Verified" ||
+        !signed || !payload || !signed.signature ||
+        payload.documentType !== "hip-live-badge" || payload.version !== "1.0" ||
+        normalizeDomain(payload.domain) !== requestedDomain ||
+        payload.score !== badge.score || payload.status !== badge.status ||
+        payload.verifiedDomain !== badge.verifiedDomain ||
+        payload.identityVerificationStatus !== badge.identityVerificationStatus ||
+        payload.verifiedMeaning !== badge.verifiedMeaning ||
+        !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      throw new Error("HIP badge signature state is unavailable or inconsistent.");
+    }
+
+    const response = await fetch(`${apiBase}/api/v1/badge/verify`, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(signed)
+    });
+    if (!response.ok) {
+      throw new Error(`HIP badge verification failed with status ${response.status}.`);
+    }
+
+    const result = await response.json();
+    if (!result || result.isVerified !== true || result.status !== "Verified") {
+      throw new Error("HIP badge signature did not verify.");
+    }
   }
 
   function renderLiveBadge(container, badge, apiBase) {

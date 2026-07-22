@@ -52,15 +52,15 @@ public sealed class SecondLifeHudServiceTests
     }
 
     [Test]
-    public async Task Suspicious_finding_can_create_review_item()
+    public async Task Medium_trust_hud_report_does_not_create_immediate_review_item()
     {
         var review = new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), new AuditLogService(new InMemoryAuditLogRepository()));
         var service = Service(review);
 
         var response = await service.ReportFindingAsync(Report(RiskStatus.HighRisk), CancellationToken.None);
 
-        Assert.That(response.ReviewCreated, Is.True);
-        Assert.That(review.List(), Has.Count.EqualTo(1));
+        Assert.That(response.ReviewCreated, Is.False);
+        Assert.That(review.List(), Is.Empty);
     }
 
     [Test]
@@ -151,6 +151,55 @@ public sealed class SecondLifeHudServiceTests
     }
 
     [Test]
+    public void Hud_scan_rejects_more_than_eight_detected_urls()
+    {
+        var service = Service();
+        var urls = Enumerable.Range(1, 9).Select(index => $"https://example{index}.test/").ToArray();
+
+        var exception = Assert.Throws<ArgumentException>(() => service.Scan(new SecondLifeHudScanRequest(
+            "hud-1",
+            "GroupChat",
+            null,
+            urls,
+            "sender-hash")));
+
+        Assert.That(exception!.Message, Does.Contain("at most 8"));
+    }
+
+    [TestCaseSource(nameof(OversizedScanRequests))]
+    public void Hud_scan_rejects_oversized_compact_fields(SecondLifeHudScanRequest request)
+    {
+        var service = Service();
+
+        Assert.Throws<ArgumentException>(() => service.Scan(request));
+    }
+
+    [Test]
+    public void Hud_scan_response_does_not_echo_private_request_fields()
+    {
+        var service = Service();
+        const string privatePathMarker = "private-path-marker-8675309";
+        const string senderMarker = "sender-marker-8675309";
+
+        var response = service.Scan(new SecondLifeHudScanRequest(
+            "hud-1",
+            "GroupChat",
+            "urgent reward",
+            [$"https://risky.example/{privatePathMarker}"],
+            senderMarker));
+        var serialized = System.Text.Json.JsonSerializer.Serialize(response);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(serialized, Does.Not.Contain(privatePathMarker));
+            Assert.That(serialized, Does.Not.Contain(senderMarker));
+            Assert.That(serialized, Does.Not.Contain("urgent reward"));
+            Assert.That(serialized, Does.Not.Contain("hud-1"));
+            Assert.That(serialized, Does.Contain("risky.example"));
+        });
+    }
+
+    [Test]
     public void Hud_settings_can_enable_and_disable_popup_alerts()
     {
         var service = Service();
@@ -163,6 +212,67 @@ public sealed class SecondLifeHudServiceTests
             Assert.That(response.Saved, Is.True);
             Assert.That(settings.Mode, Is.EqualTo("Quiet"));
             Assert.That(settings.PopupAlertsEnabled, Is.False);
+        });
+    }
+
+    [Test]
+    public void Hud_scan_honors_disabled_private_warnings_and_safety_routing()
+    {
+        var service = Service();
+        service.SaveSettings("hud-1", new SecondLifeHudSettings("hud-1", "Normal", false, false, false));
+
+        var response = service.Scan(new SecondLifeHudScanRequest(
+            "hud-1",
+            "GroupChat",
+            "urgent reward",
+            ["https://risky.example/path"],
+            null));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.RiskLevel, Is.EqualTo("High"));
+            Assert.That(response.RecommendedHudAction, Is.EqualTo("StatusOnly"));
+            Assert.That(response.SafetyPageUrl, Is.Null);
+        });
+    }
+
+    [Test]
+    public void Hud_scan_honors_popup_disabled_while_retaining_private_warning()
+    {
+        var service = Service();
+        service.SaveSettings("hud-1", new SecondLifeHudSettings("hud-1", "Normal", false, true, true));
+
+        var response = service.Scan(new SecondLifeHudScanRequest(
+            "hud-1",
+            "GroupChat",
+            "urgent reward",
+            ["https://risky.example/path"],
+            null));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.RecommendedHudAction, Is.EqualTo("PrivateWarning"));
+            Assert.That(response.SafetyPageUrl, Does.Contain("risky.example"));
+        });
+    }
+
+    [Test]
+    public void Quiet_mode_keeps_medium_risk_on_hud_status_only()
+    {
+        var service = Service();
+        service.SaveSettings("hud-1", new SecondLifeHudSettings("hud-1", "Quiet", true, true, true));
+
+        var response = service.Scan(new SecondLifeHudScanRequest(
+            "hud-1",
+            "GroupChat",
+            "claim",
+            [],
+            null));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.RiskLevel, Is.EqualTo("Medium"));
+            Assert.That(response.RecommendedHudAction, Is.EqualTo("StatusOnly"));
         });
     }
 
@@ -216,4 +326,12 @@ public sealed class SecondLifeHudServiceTests
             "Broken-up URL pattern.",
             DateTimeOffset.UtcNow,
             "sl-hud-signature-placeholder");
+
+    private static IEnumerable<SecondLifeHudScanRequest> OversizedScanRequests()
+    {
+        yield return new("hud-1", new string('s', 65), null, [], null);
+        yield return new("hud-1", "GroupChat", new string('m', 281), [], null);
+        yield return new("hud-1", "GroupChat", null, [new string('u', 2049)], null);
+        yield return new("hud-1", "GroupChat", null, [], new string('h', 129));
+    }
 }

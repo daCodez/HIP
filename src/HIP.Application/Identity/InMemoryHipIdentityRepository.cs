@@ -18,4 +18,28 @@ public sealed class InMemoryHipIdentityRepository : IHipIdentityRepository
         _identities.TryGetValue(identityId, out var identity);
         return Task.FromResult(identity);
     }
+
+    public Task<bool> TryUpdateAsync(
+        HipIdentity expected,
+        HipIdentity updated,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        ArgumentNullException.ThrowIfNull(updated);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expected.IdentityType != updated.IdentityType ||
+            !string.Equals(expected.IdentityId, updated.IdentityId, StringComparison.Ordinal) ||
+            !string.Equals(expected.DisplayName, updated.DisplayName, StringComparison.Ordinal) ||
+            !string.Equals(expected.PublicKey, updated.PublicKey, StringComparison.Ordinal) ||
+            !string.Equals(expected.KeyAlgorithm, updated.KeyAlgorithm, StringComparison.Ordinal) ||
+            expected.CreatedAtUtc != updated.CreatedAtUtc ||
+            !string.Equals(expected.ReputationTargetId, updated.ReputationTargetId, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "HIP verification-status updates cannot change canonical identity fields.",
+                nameof(updated));
+        }
+
+        return Task.FromResult(_identities.TryUpdate(expected.IdentityId, updated, expected));
+    }
 }

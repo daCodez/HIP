@@ -11,25 +11,45 @@
     <NavLink class="nav-item" href="admin" Match="NavLinkMatch.All">@Icon("grid")<span>Overview</span></NavLink>
 
     <p class="group-title">Trust operations</p>
-    <NavLink class="nav-item" href="admin/alerts">@Icon("bell")<span>Alert Center</span><b class="count">5</b></NavLink>
+    <AuthorizeView Policy="@AdminPolicies.CanViewReviews">
+        <Authorized>
+            <NavLink class="nav-item" href="admin/alerts">@Icon("bell")<span>Alert Center</span></NavLink>
+            <NavLink class="nav-item" href="admin/review">@Icon("search")<span>Review Queue</span></NavLink>
+            <NavLink class="nav-item" href="admin/review-queue">@Icon("eye")<span>Safety Signals</span></NavLink>
+        </Authorized>
+    </AuthorizeView>
     <NavLink class="nav-item" href="admin/message-shield">@Icon("shield")<span>Message Shield</span></NavLink>
-    <NavLink class="nav-item" href="admin/review">@Icon("search")<span>Review Queue</span><b class="count">12</b></NavLink>
-    <NavLink class="nav-item" href="admin/review-queue">@Icon("eye")<span>Safety Signals</span></NavLink>
-    <NavLink class="nav-item" href="admin/appeals">@Icon("file")<span>Appeals</span></NavLink>
+    <AuthorizeView Policy="@AdminPolicies.CanViewAppeals">
+        <Authorized>
+            <NavLink class="nav-item" href="admin/appeals">@Icon("file")<span>Appeals</span></NavLink>
+        </Authorized>
+    </AuthorizeView>
 
     <p class="group-title">Intelligence</p>
     <NavLink class="nav-item" href="admin/reputation">@Icon("grid")<span>Score Overview</span></NavLink>
     <NavLink class="nav-item" href="admin/reputation/signals">@Icon("bolt")<span>Trust Signals</span></NavLink>
     <NavLink class="nav-item" href="admin/reputation/senders">@Icon("file")<span>Sender Profiles</span></NavLink>
-    <NavLink class="nav-item" href="admin/reports">@Icon("file")<span>Reports</span></NavLink>
+    <AuthorizeView Policy="@AdminPolicies.CanViewReviews">
+        <Authorized>
+            <NavLink class="nav-item" href="admin/reports">@Icon("file")<span>Reports</span></NavLink>
+        </Authorized>
+    </AuthorizeView>
     <NavLink class="nav-item" href="admin/feedback">@Icon("eye")<span>Feedback Loop</span></NavLink>
 
     <p class="group-title">Identity &amp; clients</p>
     <NavLink class="nav-item" href="admin/identity/websites">@Icon("shield")<span>Domain Verification</span></NavLink>
     <NavLink class="nav-item" href="admin/platforms">@Icon("settings")<span>Platform Connections</span></NavLink>
     <NavLink class="nav-item" href="consumer/devices">@Icon("grid")<span>Devices</span></NavLink>
-    <NavLink class="nav-item" href="/admin/licenses" data-enhance-nav="false">@Icon("file")<span>Licenses</span></NavLink>
-    <NavLink class="nav-item" href="admin/sl-hud-simulator">@Icon("eye")<span>HUD Simulator</span></NavLink>
+    <AuthorizeView Policy="@AdminPolicies.CanViewLicenses">
+        <Authorized>
+            <NavLink class="nav-item" href="/admin/licenses" data-enhance-nav="false">@Icon("file")<span>Licenses</span></NavLink>
+        </Authorized>
+    </AuthorizeView>
+    <AuthorizeView Policy="@AdminPolicies.CanSupportLicenses">
+        <Authorized>
+            <NavLink class="nav-item" href="admin/sl-hud-simulator">@Icon("eye")<span>HUD Simulator</span></NavLink>
+        </Authorized>
+    </AuthorizeView>
 
     <p class="group-title">Automation</p>
     <NavLink class="nav-item" href="admin/rules">@Icon("bolt")<span>Rule Builder</span></NavLink>
@@ -38,27 +58,59 @@
 
     <p class="group-title">System</p>
     <NavLink class="nav-item" href="admin/audit-logs">@Icon("file")<span>Audit Trail</span></NavLink>
-    <NavLink class="nav-item" href="admin/api">@Icon("grid")<span>API &amp; Developer</span></NavLink>
+    <AuthorizeView Policy="@AdminPolicies.CanViewServiceClients">
+        <Authorized>
+            <NavLink class="nav-item" href="admin/api">@Icon("grid")<span>API &amp; Developer</span></NavLink>
+        </Authorized>
+    </AuthorizeView>
     <NavLink class="nav-item" href="admin/privacy">@Icon("shield")<span>Privacy &amp; Safety</span></NavLink>
     <NavLink class="nav-item" href="admin/roles">@Icon("eye")<span>Roles &amp; Permissions</span></NavLink>
     <NavLink class="nav-item" href="admin/settings">@Icon("settings")<span>Settings</span></NavLink>
 </nav>
 
-<div class="operator">
-    <span class="avatar">DC</span>
-    <div>
-        <b>daCodez</b>
-        <small>Platform owner</small>
-    </div>
-    <form class="operator-signout" method="post" action="/auth/logout">
-        <AntiforgeryToken />
-        <button type="submit" title="Sign out" aria-label="Sign out">
-            @Icon("logout")
-        </button>
-    </form>
-</div>
+<AuthorizeView Context="authentication">
+    <Authorized>
+        <div class="operator">
+            <span class="avatar">@OperatorInitials(authentication.User)</span>
+            <div>
+                <b>@OperatorLabel(authentication.User)</b>
+                <small>@OperatorRole(authentication.User)</small>
+            </div>
+            <form class="operator-signout" method="post" action="/auth/logout">
+                <AntiforgeryToken />
+                <button type="submit" title="Sign out" aria-label="Sign out">
+                    @Icon("logout")
+                </button>
+            </form>
+        </div>
+    </Authorized>
+</AuthorizeView>
 
 @code {
+    private static string OperatorLabel(System.Security.Claims.ClaimsPrincipal principal)
+    {
+        var actorId = principal.FindFirst(HipAuthenticationClaimTypes.ActorId)?.Value;
+        if (!string.IsNullOrWhiteSpace(actorId))
+        {
+            var suffix = actorId.Length > 8 ? actorId[^8..] : actorId;
+            return $"HIP operator {suffix}";
+        }
+
+        return string.IsNullOrWhiteSpace(principal.Identity?.Name)
+            ? "HIP operator"
+            : principal.Identity.Name;
+    }
+
+    private static string OperatorRole(System.Security.Claims.ClaimsPrincipal principal) =>
+        principal.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Authenticated user";
+
+    private static string OperatorInitials(System.Security.Claims.ClaimsPrincipal principal)
+    {
+        var role = OperatorRole(principal);
+        var initials = new string(role.Where(char.IsLetterOrDigit).Take(2).ToArray()).ToUpperInvariant();
+        return initials.Length == 0 ? "HIP" : initials;
+    }
+
     private static RenderFragment Icon(string name) => name switch
     {
         "search" => Svg("<circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m16 16 4 4\"/>"),

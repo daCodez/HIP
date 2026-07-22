@@ -1,6 +1,7 @@
 using HIP.Application.Browser;
 using HIP.Domain.Risk;
 using HIP.Domain.Scoring;
+using HIP.Application.Explanations;
 using Microsoft.Extensions.Logging;
 
 namespace HIP.Application.PublicLookup;
@@ -12,7 +13,8 @@ namespace HIP.Application.PublicLookup;
 /// <param name="logger">Optional logger used to record storage availability problems without exposing private scan data.</param>
 public sealed class PublicDomainLookupService(
     IBrowserScanResultRepository browserScanResultRepository,
-    ILogger<PublicDomainLookupService>? logger = null) : IPublicDomainLookupService
+    ILogger<PublicDomainLookupService>? logger = null,
+    ITrustExplanationAssistant? explanationAssistant = null) : IPublicDomainLookupService
 {
     private static readonly HashSet<string> StrongDomainTrust = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -48,7 +50,34 @@ public sealed class PublicDomainLookupService(
             return BuildNoStoredDataResponse(normalized);
         }
 
-        return BuildStoredScanResponse(normalized, storedScan);
+        var response = BuildStoredScanResponse(normalized, storedScan);
+        if (explanationAssistant is null)
+        {
+            return response;
+        }
+
+        var assistance = await explanationAssistant.TryExplainAsync(
+            new TrustExplanationRequest(
+                response.FinalHipScore,
+                response.DomainTrustScore,
+                response.PageTrustScore,
+                response.ContentRiskScore,
+                response.Status,
+                BuildExplanationSignalCodes(response)),
+            cancellationToken);
+        return assistance is null
+            ? response
+            : response with { AssistedExplanation = assistance.Explanation, ExplanationSource = assistance.ProviderName };
+    }
+
+    private static IReadOnlyCollection<string> BuildExplanationSignalCodes(PublicDomainLookupResponse response)
+    {
+        var codes = new List<string> { $"status-{response.Status.ToString().ToLowerInvariant()}" };
+        if (response.PublicBadgeEligible) codes.Add("identity-verified");
+        if (response.RiskyLinksFound > 0) codes.Add("risky-links");
+        if (response.SuspiciousLinksFound > 0) codes.Add("suspicious-links");
+        if (response.DangerousLinksFound > 0) codes.Add("dangerous-links");
+        return codes;
     }
 
     /// <summary>
@@ -66,7 +95,7 @@ public sealed class PublicDomainLookupService(
     {
         try
         {
-            return await browserScanResultRepository.GetLatestByDomainAsync(normalizedDomain, cancellationToken);
+            return await browserScanResultRepository.GetLatestAuthoritativeByDomainAsync(normalizedDomain, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

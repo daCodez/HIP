@@ -2,6 +2,14 @@ using HIP.Domain.Risk;
 
 namespace HIP.Domain.Safety;
 
+public enum SafetyContinuationRequirement
+{
+    None = 0,
+    Confirmation,
+    ExtraConfirmation,
+    Blocked
+}
+
 public sealed record SafetyResult(
     string OriginalUrl,
     string? FinalDestinationUrl,
@@ -13,7 +21,14 @@ public sealed record SafetyResult(
     bool AllowContinue,
     bool ShouldRouteToSafetyPage,
     bool CanReportAsSafe,
-    bool CanReportAsDangerous);
+    bool CanReportAsDangerous,
+    int PageTrustScore = 0,
+    int ContentRiskScore = 0,
+    int FinalHipScore = 0,
+    SafetyContinuationRequirement ContinuationRequirement = SafetyContinuationRequirement.None)
+{
+    public bool ContentRiskScoreHigherMeansMoreRisk => true;
+}
 
 public sealed record PrivacySafeRiskReport(
     string RiskyUrl,

@@ -123,6 +123,34 @@ public sealed class PrivacySafeReportingTests
         Assert.That(policy.Reason, Does.Contain("long-term"));
     }
 
+    [Test]
+    public async Task Cleanup_uses_shorter_retention_for_user_linked_reports()
+    {
+        var now = new DateTimeOffset(2026, 7, 21, 20, 0, 0, TimeSpan.Zero);
+        var service = Service();
+        await service.SubmitAsync(Report() with
+        {
+            ReportId = "linked-expired",
+            ReportedAtUtc = now.AddDays(-30)
+        }, CancellationToken.None);
+        await service.SubmitAsync(Report() with
+        {
+            ReportId = "unlinked-current",
+            SenderHash = null,
+            DeviceHash = null,
+            ReportedAtUtc = now.AddDays(-89)
+        }, CancellationToken.None);
+
+        var deleted = await service.DeleteExpiredAsync(now, 10, CancellationToken.None);
+        var remaining = await service.ListAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(deleted, Is.EqualTo(1));
+            Assert.That(remaining.Select(report => report.ReportId), Is.EquivalentTo(new[] { "unlinked-current" }));
+        });
+    }
+
     private static PrivacySafeReportService Service() =>
         new(new PrivacySafeReportValidator(), new Sha256PrivacyHashingService());
 

@@ -104,7 +104,8 @@ public sealed class HipDevHeaderAuthenticationHandler(
         var claims = new[]
         {
             new Claim(ClaimTypes.Name, user),
-            new Claim(ClaimTypes.Role, role)
+            new Claim(ClaimTypes.Role, role),
+            new Claim(HipAuthenticationClaimTypes.ActorId, user)
         };
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);
@@ -133,7 +134,7 @@ public sealed class HipDevHeaderAuthenticationHandler(
         var claims = new[]
         {
             new Claim(ClaimTypes.Name, consumerId),
-            new Claim("hip_consumer_id", consumerId)
+            new Claim(HipAuthenticationClaimTypes.ConsumerId, consumerId)
         };
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);

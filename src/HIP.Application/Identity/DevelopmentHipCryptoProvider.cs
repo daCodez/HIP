@@ -63,6 +63,25 @@ public sealed class DevelopmentHipCryptoProvider : IHipCryptoProvider
     }
 
     /// <inheritdoc />
+    public string ComputePublicKeyFingerprint(string publicKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicKey);
+        const string prefix = "dev-public:";
+        if (!publicKey.StartsWith(prefix, StringComparison.Ordinal) ||
+            publicKey.Length != prefix.Length + 64 ||
+            publicKey.AsSpan(prefix.Length).ContainsAnyExcept("0123456789abcdef"))
+        {
+            throw new ArgumentException(
+                "Development public keys must use the canonical dev-public format.",
+                nameof(publicKey));
+        }
+
+        return HipPublicKeyFingerprint.ComputeSha256(
+            Algorithm,
+            Encoding.UTF8.GetBytes(publicKey));
+    }
+
+    /// <inheritdoc />
     public string HashContent(string content)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(content));

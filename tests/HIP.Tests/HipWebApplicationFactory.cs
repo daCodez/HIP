@@ -67,8 +67,10 @@ public sealed class HipWebApplicationFactory<TProgram> : WebApplicationFactory<T
         {
             services.AddSingleton<IStartupFilter>(new RemoteIpAddressStartupFilter(remoteIpAddress));
             services.RemoveAll<IDuplicateSubmissionGuard>();
+            services.RemoveAll<IReplayMessageIdStore>();
             services.RemoveAll<IReplayNonceStore>();
             services.AddSingleton<IDuplicateSubmissionGuard, InMemoryDuplicateSubmissionGuard>();
+            services.AddSingleton<IReplayMessageIdStore, InMemoryReplayMessageIdStore>();
             services.AddSingleton<IReplayNonceStore, InMemoryReplayNonceStore>();
             services.RemoveAll<IDbContextOptionsConfiguration<HipDbContext>>();
             services.RemoveAll<DbContextOptions<HipDbContext>>();

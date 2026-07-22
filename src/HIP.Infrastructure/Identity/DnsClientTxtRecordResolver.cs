@@ -39,7 +39,8 @@ public sealed class DnsClientTxtRecordResolver : IDnsTxtRecordResolver
             var result = await _lookupClient.QueryAsync(recordName, QueryType.TXT, cancellationToken: cancellationToken);
             return result.Answers
                 .TxtRecords()
-                .SelectMany(record => record.Text)
+                // One TXT RDATA value may contain multiple character strings; RFC clients concatenate them.
+                .Select(record => string.Concat(record.Text))
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .ToArray();
         }

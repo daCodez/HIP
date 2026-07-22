@@ -62,17 +62,37 @@ public sealed class RiskFindingIngestionTests
         Assert.That(response.NormalizedDomain, Is.EqualTo("example.com"));
     }
 
-    [Test]
-    public async Task High_risk_report_creates_review_item()
+    [TestCase(ReporterTrustLevel.High)]
+    [TestCase(ReporterTrustLevel.Trusted)]
+    public async Task Trusted_high_risk_report_creates_review_item(ReporterTrustLevel reporterTrustLevel)
     {
         var audit = new AuditLogService(new InMemoryAuditLogRepository());
         var review = new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), audit);
         var service = Service(review);
 
-        var response = await service.IngestAsync(Report(RiskStatus.HighRisk), CancellationToken.None);
+        var response = await service.IngestAsync(
+            Report(RiskStatus.HighRisk) with { ReporterTrustLevel = reporterTrustLevel },
+            CancellationToken.None);
 
         Assert.That(response.ReviewCreated, Is.True);
         Assert.That(review.List(), Has.Count.EqualTo(1));
+    }
+
+    [TestCase(ReporterTrustLevel.Unknown)]
+    [TestCase(ReporterTrustLevel.Low)]
+    [TestCase(ReporterTrustLevel.Medium)]
+    public async Task Untrusted_high_risk_report_does_not_create_review_item(ReporterTrustLevel reporterTrustLevel)
+    {
+        var audit = new AuditLogService(new InMemoryAuditLogRepository());
+        var review = new ReviewQueueService(new ReviewItemValidator(), new InMemoryReviewQueueRepository(), audit);
+        var service = Service(review);
+
+        var response = await service.IngestAsync(
+            Report(RiskStatus.Critical) with { ReporterTrustLevel = reporterTrustLevel },
+            CancellationToken.None);
+
+        Assert.That(response.ReviewCreated, Is.False);
+        Assert.That(review.List(), Is.Empty);
     }
 
     [Test]
@@ -88,18 +108,64 @@ public sealed class RiskFindingIngestionTests
         Assert.That(review.List(), Is.Empty);
     }
 
-    [Test]
-    public async Task Report_can_feed_self_healing_path()
+    [TestCase(ReporterTrustLevel.High)]
+    [TestCase(ReporterTrustLevel.Trusted)]
+    public async Task Trusted_report_can_feed_self_healing_path(ReporterTrustLevel reporterTrustLevel)
     {
         var service = Service();
 
-        await service.IngestAsync(Report(RiskStatus.HighRisk) with { Domain = "cluster.example", Reason = "Shortened URL abuse detected" }, CancellationToken.None);
-        await service.IngestAsync(Report(RiskStatus.HighRisk) with { Domain = "cluster.example", Reason = "Shortened URL abuse detected", UrlHash = "sha256:two" }, CancellationToken.None);
+        await service.IngestAsync(
+            Report(RiskStatus.HighRisk) with
+            {
+                Domain = "cluster.example",
+                Reason = "Shortened URL abuse detected",
+                ReporterTrustLevel = reporterTrustLevel
+            },
+            CancellationToken.None);
+        await service.IngestAsync(
+            Report(RiskStatus.HighRisk) with
+            {
+                Domain = "cluster.example",
+                Reason = "Shortened URL abuse detected",
+                UrlHash = "sha256:two",
+                ReporterTrustLevel = reporterTrustLevel
+            },
+            CancellationToken.None);
 
         var clusters = await service.DetectPatternsAsync(CancellationToken.None);
 
         Assert.That(clusters, Has.Count.EqualTo(1));
         Assert.That(clusters.Single().PatternType, Is.EqualTo(FindingType.ShortenedUrlAbuse));
+    }
+
+    [TestCase(ReporterTrustLevel.Unknown)]
+    [TestCase(ReporterTrustLevel.Low)]
+    [TestCase(ReporterTrustLevel.Medium)]
+    public async Task Untrusted_reports_do_not_feed_self_healing_path(ReporterTrustLevel reporterTrustLevel)
+    {
+        var service = Service();
+
+        await service.IngestAsync(
+            Report(RiskStatus.HighRisk) with
+            {
+                Domain = "untrusted-cluster.example",
+                Reason = "Shortened URL abuse detected",
+                ReporterTrustLevel = reporterTrustLevel
+            },
+            CancellationToken.None);
+        await service.IngestAsync(
+            Report(RiskStatus.HighRisk) with
+            {
+                Domain = "untrusted-cluster.example",
+                Reason = "Shortened URL abuse detected",
+                UrlHash = "sha256:two",
+                ReporterTrustLevel = reporterTrustLevel
+            },
+            CancellationToken.None);
+
+        var clusters = await service.DetectPatternsAsync(CancellationToken.None);
+
+        Assert.That(clusters, Is.Empty);
     }
 
     [Test]

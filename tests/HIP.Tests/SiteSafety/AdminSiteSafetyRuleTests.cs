@@ -3,6 +3,7 @@ using FluentValidation;
 using FluentValidation.Results;
 using HIP.Application.Review;
 using HIP.Application.SiteSafety;
+using HIP.Domain.Scoring;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HIP.Tests.SiteSafety;
@@ -106,6 +107,11 @@ public sealed class AdminSiteSafetyRuleTests
         {
             Assert.That(result.DownloadRiskScore, Is.EqualTo(0));
             Assert.That(result.MatchedRules, Has.Some.Matches<SiteSafetyRuleResult>(rule => rule.IsSimulationOnly));
+            Assert.That(result.Scoring, Is.Not.Null);
+            Assert.That(result.Scoring!.EvidenceContext.Has(HipScoringEvidenceFactType.StrongExecutableDownloadRisk), Is.False);
+            Assert.That(result.Scoring.EvidenceContext.Has(HipScoringEvidenceFactType.RiskyExactPage), Is.False);
+            Assert.That(result.Scoring.ReasonEntries.Select(entry => entry.Code),
+                Does.Not.Contain("rule:simulation-rule"));
         });
     }
 
@@ -129,6 +135,11 @@ public sealed class AdminSiteSafetyRuleTests
         {
             Assert.That(result.DownloadRiskScore, Is.EqualTo(0));
             Assert.That(result.MatchedRules, Has.Some.Matches<SiteSafetyRuleResult>(rule => rule.IsSimulationOnly));
+            Assert.That(result.Scoring, Is.Not.Null);
+            Assert.That(result.Scoring!.EvidenceContext.Has(HipScoringEvidenceFactType.StrongExecutableDownloadRisk), Is.False);
+            Assert.That(result.Scoring.EvidenceContext.Has(HipScoringEvidenceFactType.RiskyExactPage), Is.False);
+            Assert.That(result.Scoring.ReasonEntries.Select(entry => entry.Code),
+                Does.Not.Contain("rule:watch-rule"));
         });
     }
 
@@ -488,6 +499,19 @@ public sealed class AdminSiteSafetyRuleTests
             Assert.That(disabled.Status, Is.EqualTo(AdminSiteSafetyRuleStatus.Disabled));
             Assert.That(disabled.IsRollbackAvailable, Is.True);
         });
+    }
+
+    [Test]
+    public async Task Legacy_high_impact_rule_cannot_bypass_versioned_two_person_workflow()
+    {
+        var service = CreateService();
+        var rule = await service.CreateAsync(
+            ValidRule("Legacy high impact") with { Severity = SiteSafetyRuleSeverity.High },
+            CancellationToken.None);
+
+        Assert.That(
+            async () => await service.ApproveAsync(rule.RuleId, "owner", CancellationToken.None),
+            Throws.InvalidOperationException.With.Message.Contains("versioned approval workflow"));
     }
 
     /// <summary>

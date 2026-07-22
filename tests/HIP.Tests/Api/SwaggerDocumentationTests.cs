@@ -53,6 +53,7 @@ public sealed class SwaggerDocumentationTests
 
         var siteSafetyPost = siteSafetyPath.GetProperty("post");
         Assert.That(siteSafetyPost.GetProperty("summary").GetString(), Is.EqualTo("Runs a privacy-safe site safety scan from browser-observed signals."));
+        Assert.That(siteSafetyPost.GetProperty("description").GetString(), Does.Contain("untrusted client telemetry"));
         Assert.That(siteSafetyPost.GetProperty("description").GetString(), Does.Contain("Expected flow"));
         Assert.That(siteSafetyPost.GetProperty("description").GetString(), Does.Contain("Request may include"));
         Assert.That(siteSafetyPost.GetProperty("description").GetString(), Does.Contain("Status guidance"));

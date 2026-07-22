@@ -28,6 +28,8 @@ public interface IAdminScanDetailService
 /// <param name="TargetType">Target scope for this scan.</param>
 /// <param name="ScannedAtUtc">UTC scan time from the stored browser scan.</param>
 /// <param name="FinalStatus">Stored final status label.</param>
+/// <param name="SubmissionTrust">Server-normalized provenance for the stored scan.</param>
+/// <param name="IsAuthoritative">Whether HIP produced the stored scan through an authoritative server path.</param>
 /// <param name="SiteSafetyStatus">Re-evaluated Site Safety status label.</param>
 /// <param name="DomainTrustScore">Root-domain trust score.</param>
 /// <param name="PageTrustScore">Exact-page trust score.</param>
@@ -50,6 +52,8 @@ public sealed record AdminScanDetail(
     string TargetType,
     DateTimeOffset ScannedAtUtc,
     string FinalStatus,
+    string SubmissionTrust,
+    bool IsAuthoritative,
     string SiteSafetyStatus,
     int DomainTrustScore,
     int PageTrustScore,
@@ -126,7 +130,7 @@ public sealed record AdminScanReviewStatusDetail(
 /// </summary>
 public sealed class AdminScanDetailService(
     IBrowserScanResultRepository scanResultRepository,
-    ISiteSafetyScanner siteSafetyScanner,
+    IUntrustedSiteSafetyScanner siteSafetyScanner,
     IWeightedFeedbackAggregationService feedbackAggregationService,
     IAdminReviewQueueRepository reviewQueueRepository) : IAdminScanDetailService
 {
@@ -145,9 +149,10 @@ public sealed class AdminScanDetailService(
             return null;
         }
 
-        var safety = await siteSafetyScanner.ScanAsync(new SiteSafetyScanRequest(BuildSafeScanUrl(scan), BuildSignals(scan)), cancellationToken);
+        var safety = await siteSafetyScanner.ScanUntrustedAsync(new SiteSafetyScanRequest(BuildSafeScanUrl(scan), BuildSignals(scan)), cancellationToken);
         var feedback = await feedbackAggregationService.GetSummaryAsync(scan.Domain, cancellationToken);
         var review = await FindRelatedReviewAsync(scan, cancellationToken);
+        var isAuthoritative = BrowserScanResultProvenance.IsServerAuthoritative(scan);
 
         return new AdminScanDetail(
             scan.ScanResultId,
@@ -156,6 +161,8 @@ public sealed class AdminScanDetailService(
             "BrowserPluginScan",
             scan.LastCheckedUtc,
             scan.Status,
+            BrowserScanResultProvenance.GetSubmissionTrust(scan),
+            isAuthoritative,
             safety.Status.ToString(),
             safety.DomainTrustScore,
             safety.PageTrustScore,

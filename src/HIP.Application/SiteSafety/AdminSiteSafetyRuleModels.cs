@@ -280,29 +280,9 @@ public sealed class AdminSiteSafetyRuleValidator : AbstractValidator<AdminSiteSa
     /// <summary>
     /// Allow-listed fields available to admin rules.
     /// </summary>
-    public static readonly HashSet<string> SupportedFields = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Domain",
-        "Tld",
-        "HasHttps",
-        "RedirectCount",
-        "ShortenedLinkCount",
-        "ObfuscatedLinkCount",
-        "ExternalScriptCount",
-        "InlineScriptCount",
-        "SuspiciousScriptPatternCount",
-        "ExecutableDownloadCount",
-        "ArchiveDownloadCount",
-        "HasLoginForm",
-        "HasPasswordField",
-        "HasPaymentField",
-        "KnownAbuseReports",
-        "DomainReputationScore",
-        "PageReputationScore",
-        "MatchedRiskTerms",
-        "ProviderEvidenceType",
-        "ProviderEvidenceStatus"
-    };
+    public static readonly HashSet<string> SupportedFields = new(
+        AdminSiteSafetyRuleFieldCatalog.Fields.Select(field => field.Name),
+        StringComparer.OrdinalIgnoreCase);
 
     private static readonly string[] PrivateFieldNames =
     [
@@ -338,10 +318,14 @@ public sealed class AdminSiteSafetyRuleValidator : AbstractValidator<AdminSiteSa
                 .Must(field => SupportedFields.Contains(field))
                 .WithMessage("Unsupported or private field.");
             condition.RuleFor(item => item.Field)
-                .Must(field => !PrivateFieldNames.Any(privateName => field.Contains(privateName, StringComparison.OrdinalIgnoreCase)))
+                .Must(field => field is not null &&
+                               !PrivateFieldNames.Any(privateName => field.Contains(privateName, StringComparison.OrdinalIgnoreCase)))
                 .WithMessage("Private fields are not available to admin rules.");
             condition.RuleFor(item => item.Operator).IsInEnum();
             condition.RuleFor(item => item.Value.ValueKind).NotEqual(JsonValueKind.Undefined);
+            condition.RuleFor(item => item)
+                .Must(item => AdminSiteSafetyRuleFieldCatalog.TryValidate(item, out _))
+                .WithMessage("Condition field, operator, and value must match the typed HIP rule catalog.");
         });
         RuleFor(rule => rule)
             .Must(rule => !RuleText(rule).Contains("eval(", StringComparison.OrdinalIgnoreCase) &&
@@ -460,6 +444,7 @@ public sealed class AdminSiteSafetyRuleService(
     public async Task<AdminSiteSafetyRule> ApproveAsync(string ruleId, string approvedBy, CancellationToken cancellationToken)
     {
         var current = await RequireRuleAsync(ruleId, cancellationToken);
+        RejectLegacyHighImpactTransition(current);
         var actor = string.IsNullOrWhiteSpace(approvedBy) ? "dev-admin" : approvedBy;
         return await UpdateAsync(current with
         {
@@ -476,6 +461,7 @@ public sealed class AdminSiteSafetyRuleService(
     public async Task<AdminSiteSafetyRule> ActivateAsync(string ruleId, string actorId, CancellationToken cancellationToken)
     {
         var current = await RequireRuleAsync(ruleId, cancellationToken);
+        RejectLegacyHighImpactTransition(current);
         var actor = string.IsNullOrWhiteSpace(actorId) ? "dev-admin" : actorId;
         return await UpdateAsync(current with
         {
@@ -548,6 +534,15 @@ public sealed class AdminSiteSafetyRuleService(
     /// <summary>
     /// Creates a URL-safe rule ID.
     /// </summary>
+    private static void RejectLegacyHighImpactTransition(AdminSiteSafetyRule rule)
+    {
+        if (rule.Severity is SiteSafetyRuleSeverity.High or SiteSafetyRuleSeverity.Critical)
+        {
+            throw new InvalidOperationException(
+                "High-impact rules require the versioned approval workflow and cannot use the legacy single-approver transition.");
+        }
+    }
+
     private static string Slug(string value) =>
         string.Join('-', value.Trim().ToLowerInvariant().Select(character => char.IsLetterOrDigit(character) ? character : '-')).Replace("--", "-", StringComparison.Ordinal).Trim('-');
 

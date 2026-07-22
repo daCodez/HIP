@@ -8,12 +8,19 @@
 @inject IRuleRepository RuleRepository
 @inject IAdminSiteSafetyRuleRepository SiteSafetyRuleRepository
 @inject AdminSiteSafetyRuleService SiteSafetyRuleService
+@inject IRuleSimulationResultRepository SimulationRepository
+@inject RuleApprovalWorkflowService ApprovalWorkflowService
+@inject RuleDeploymentService DeploymentService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IWebHostEnvironment HostEnvironment
+@inject IJSRuntime JavaScript
 
 <PageTitle>HIP Admin Rule Builder</PageTitle>
 
 <main class="admin-rule-page">
     <section class="admin-rule-header">
-        <p class="eyebrow">Admin MVP</p>
+        <p class="eyebrow">Trust operations</p>
         <h1>Admin Rule Builder</h1>
         <p>Create simple HIP rules, inspect live JSON, run simulation, and save rules. This route is protected by the rule-management admin policy.</p>
     </section>
@@ -108,7 +115,8 @@
                 <button type="button" @onclick="RunSimulation">Run Simulation</button>
                 <button type="button" @onclick="EnableRule">Enable Rule</button>
                 <button type="button" @onclick="DisableRule">Disable Rule</button>
-                <button type="button" @onclick="CopyJson">Copy JSON</button>
+                <button type="button" @onclick="ValidateJson">Validate JSON</button>
+                <button type="button" @onclick="CopyJsonAsync">Copy JSON</button>
                 <button type="button" @onclick="EditJson">Edit JSON</button>
                 <button type="button" @onclick="RestoreFormView">Restore Form View</button>
             </div>
@@ -118,6 +126,51 @@
                 <p class="admin-message">@_message</p>
             }
         </div>
+    </section>
+
+    <section class="rule-builder-panel">
+        <h2>Approval and Deployment</h2>
+        <p>A saved rule version needs a persisted passing simulation before approval. Approvers must be independent of the creator. High-impact rules require two approvers and start in watch mode; critical rules also require a tested rollback and manual deployment authorization.</p>
+
+        <label>Transition reason
+            <input @bind="_transitionReason" maxlength="500" placeholder="Explain the security decision" />
+        </label>
+
+        <div class="button-row">
+            <button type="button" @onclick="RequestApprovalAsync" disabled="@(_simulation is null || !_simulation.Passed)">Request Approval</button>
+            <button type="button" @onclick="ApproveAsync" disabled="@(_workflow is null || _workflow.Approvals.Count >= _workflow.RequiredApprovalCount)">Approve Version</button>
+            <button type="button" @onclick="CompleteRollbackTestAsync" disabled="@(_workflow?.RollbackTestRequired != true || _workflow.RollbackTestCompleted)">Record Rollback Test</button>
+            <button type="button" @onclick="AuthorizeManualDeploymentAsync" disabled="@(_workflow?.ManualDeploymentRequired != true || _workflow.ManualDeploymentAuthorized)">Authorize Manual Deployment</button>
+            <button type="button" @onclick="ActivateAsync" disabled="@(_workflow is null || !RuleApprovalWorkflowService.CanActivate(_workflow))">Activate Approved Version</button>
+            <button type="button" @onclick="PromoteAsync" disabled="@(_deployment?.Status != RuleDeploymentStatus.Watch)">Promote Watch to Active</button>
+            <button type="button" @onclick="RollbackAsync" disabled="@(_deployment?.RollbackAvailable != true)">Rollback</button>
+        </div>
+
+        @if (_workflow is null)
+        {
+            <p>No approval workflow is selected in this session.</p>
+        }
+        else
+        {
+            <div class="simulation-grid">
+                <span>Rule version: <strong>@_workflow.RuleVersion</strong></span>
+                <span>Impact: <strong>@_workflow.ImpactLevel</strong></span>
+                <span>Approvals: <strong>@_workflow.Approvals.Count / @_workflow.RequiredApprovalCount</strong></span>
+                <span>Status: <strong>@_workflow.Status</strong></span>
+                <span>Rollback test: <strong>@(_workflow.RollbackTestRequired ? (_workflow.RollbackTestCompleted ? "Complete" : "Required") : "Not required")</strong></span>
+                <span>Manual deployment: <strong>@(_workflow.ManualDeploymentRequired ? (_workflow.ManualDeploymentAuthorized ? "Authorized" : "Required") : "Not required")</strong></span>
+            </div>
+        }
+
+        @if (_deployment is not null)
+        {
+            <div class="simulation-grid">
+                <span>Deployed version: <strong>@(_deployment.ActiveRule?.Version.ToString() ?? "Disabled")</strong></span>
+                <span>Deployment state: <strong>@_deployment.Status</strong></span>
+                <span>Rollback target: <strong>@(_deployment.RollbackRule?.Version.ToString() ?? (_deployment.UseDisabledRollback ? "Disabled" : "None"))</strong></span>
+                <span>State version: <strong>@_deployment.Version</strong></span>
+            </div>
+        }
     </section>
 
     <section class="rule-builder-panel">
@@ -274,7 +327,7 @@
         {
             <table class="admin-rule-table">
                 <thead>
-                    <tr><th>Name</th><th>Enabled</th><th>Mode</th><th>Severity</th><th>Confidence</th><th>Approval</th><th>Simulation</th><th>Version</th></tr>
+                    <tr><th>Name</th><th>Enabled</th><th>Mode</th><th>Severity</th><th>Confidence</th><th>Approval</th><th>Simulation</th><th>Version</th><th>History</th></tr>
                 </thead>
                 <tbody>
                     @foreach (var rule in _savedRules)
@@ -288,10 +341,43 @@
                             <td>@rule.RequiresApproval / @rule.ApprovalStatus</td>
                             <td>@rule.SimulationRequired</td>
                             <td>@rule.Version</td>
+                            <td><button type="button" @onclick="() => LoadVersionHistoryAsync(rule.RuleId)">View versions</button></td>
                         </tr>
                     }
                 </tbody>
             </table>
+        }
+    </section>
+
+    <section class="rule-builder-panel">
+        <h2>Version History</h2>
+        @if (_versionHistory.Count == 0)
+        {
+            <p>Select a saved rule to inspect its immutable version history.</p>
+        }
+        else
+        {
+            <table class="admin-rule-table">
+                <thead><tr><th>Version</th><th>Mode</th><th>Severity</th><th>Approval</th><th>Inspect</th></tr></thead>
+                <tbody>
+                    @foreach (var version in _versionHistory)
+                    {
+                        <tr>
+                            <td>@version.Version</td>
+                            <td>@version.Mode</td>
+                            <td>@version.Severity</td>
+                            <td>@version.ApprovalStatus</td>
+                            <td><button type="button" @onclick="() => InspectVersion(version)">View JSON</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        @if (_inspectedVersion is not null)
+        {
+            <h3>@_inspectedVersion.Name version @_inspectedVersion.Version</h3>
+            <pre class="json-preview">@RuleJsonService.ToJson(_inspectedVersion)</pre>
+            <p>Historical versions are read-only. Use the deployment rollback control above to perform an authorized rollback.</p>
         }
     </section>
 </main>
@@ -311,6 +397,11 @@
     private string? _selectedSiteSafetyRuleId;
     private string? _siteSafetySimulationMessage;
     private AdminSiteSafetyRuleSimulationResult? _siteSafetySimulation;
+    private RuleApprovalWorkflowState? _workflow;
+    private RuleDeploymentState? _deployment;
+    private string _transitionReason = string.Empty;
+    private IReadOnlyCollection<TrustRule> _versionHistory = [];
+    private TrustRule? _inspectedVersion;
 
     protected override async Task OnInitializedAsync()
     {
@@ -359,9 +450,21 @@
 
         try
         {
-            await AdminRuleService.SaveAsync(rule, CancellationToken.None);
+            var actor = await RequireRecentActorAsync();
+            if (actor is null)
+            {
+                return;
+            }
+
+            var saved = await AdminRuleService.SaveAsync(rule, actor, CancellationToken.None);
+            _form.Load(saved);
+            _simulation = null;
+            _workflow = null;
+            _deployment = await DeploymentService.GetAsync(saved.RuleId, CancellationToken.None);
             _savedRules = await AdminRuleService.ListAsync(CancellationToken.None);
-            _message = "Rule saved.";
+            await LoadVersionHistoryAsync(saved.RuleId);
+            SyncJsonFromForm();
+            _message = $"Rule version {saved.Version} saved. Run a new simulation before requesting approval.";
         }
         catch (FluentValidation.ValidationException ex)
         {
@@ -369,7 +472,42 @@
         }
     }
 
-    private void RunSimulation()
+    /// <summary>
+    /// Reauthorizes the active circuit and resolves the server-authenticated HIP actor for persistence.
+    /// </summary>
+    private async Task<string?> RequireRecentActorAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var managementAuthorization = await AuthorizationService.AuthorizeAsync(
+            authenticationState.User,
+            null,
+            AdminPolicies.CanManageRules);
+        var recentAuthorization = await AuthorizationService.AuthorizeAsync(
+            authenticationState.User,
+            null,
+            AdminPolicies.RecentPrivilegedAuthentication);
+        if (!managementAuthorization.Succeeded || !recentAuthorization.Succeeded)
+        {
+            _message = "Sign in again before saving security-sensitive rule changes.";
+            return null;
+        }
+
+        var actor = authenticationState.User.FindFirst(HipAuthenticationClaimTypes.ActorId)?.Value;
+        if (string.IsNullOrWhiteSpace(actor) && HostEnvironment.IsDevelopment())
+        {
+            actor = authenticationState.User.Identity?.Name;
+        }
+
+        if (string.IsNullOrWhiteSpace(actor))
+        {
+            _message = "The authenticated HIP actor identity is unavailable.";
+            return null;
+        }
+
+        return actor;
+    }
+
+    private async Task RunSimulation()
     {
         if (!TryGetRule(out var rule))
         {
@@ -377,8 +515,10 @@
         }
 
         _simulation = AdminRuleService.Simulate(rule, null);
-        _form.ConfidenceScore = _simulation.ConfidenceScore * 100m;
-        SyncJsonFromForm();
+        await SimulationRepository.SaveAsync(_simulation.SimulationId, _simulation, CancellationToken.None);
+        _message = _simulation.Passed
+            ? "Passing simulation persisted for this exact rule snapshot."
+            : "Simulation failed. Resolve failed cases before requesting approval.";
     }
 
     /// <summary>
@@ -444,9 +584,16 @@
         SyncJsonFromForm();
     }
 
-    private void CopyJson()
+    private async Task CopyJsonAsync()
     {
-        _message = "MVP placeholder: select the preview text to copy JSON.";
+        await JavaScript.InvokeVoidAsync("navigator.clipboard.writeText", _json);
+        _message = "Rule JSON copied.";
+    }
+
+    private void ValidateJson()
+    {
+        _ = TryGetRule(out _);
+        _message = _jsonError is null ? "Rule JSON is valid." : null;
     }
 
     private void EditJson()
@@ -516,7 +663,108 @@
         if (existing is not null)
         {
             _form.Load(existing);
+            _deployment = await DeploymentService.GetAsync(existing.RuleId, CancellationToken.None);
+            await LoadVersionHistoryAsync(existing.RuleId);
         }
+    }
+
+    private async Task LoadVersionHistoryAsync(string ruleId)
+    {
+        _versionHistory = await RuleRepository.ListVersionsAsync(ruleId, CancellationToken.None);
+        _inspectedVersion = _versionHistory.FirstOrDefault();
+    }
+
+    private void InspectVersion(TrustRule version) => _inspectedVersion = version;
+
+    private async Task RequestApprovalAsync()
+    {
+        if (_simulation is null || !_simulation.Passed)
+        {
+            _message = "Run and pass a simulation before requesting approval.";
+            return;
+        }
+
+        await RunWorkflowMutationAsync(async actor =>
+        {
+            var rule = await RuleRepository.GetByIdAsync(_simulation.RuleId, CancellationToken.None) ??
+                       throw new InvalidOperationException("Save the simulated rule version before requesting approval.");
+            _workflow = await ApprovalWorkflowService.RequestAsync(rule, _simulation.SimulationId, actor, CancellationToken.None);
+            _message = $"Approval workflow created for rule version {_workflow.RuleVersion}.";
+        });
+    }
+
+    private Task ApproveAsync() => RunWorkflowMutationAsync(async actor =>
+    {
+        _workflow = await ApprovalWorkflowService.ApproveAsync(RequiredWorkflowId(), actor, CancellationToken.None);
+        _message = "Independent approval recorded.";
+    });
+
+    private Task CompleteRollbackTestAsync() => RunWorkflowMutationAsync(async actor =>
+    {
+        _workflow = await ApprovalWorkflowService.CompleteRollbackTestAsync(
+            RequiredWorkflowId(), actor, RequiredTransitionReason(), CancellationToken.None);
+        _message = "Rollback test recorded.";
+    });
+
+    private Task AuthorizeManualDeploymentAsync() => RunWorkflowMutationAsync(async actor =>
+    {
+        _workflow = await ApprovalWorkflowService.AuthorizeManualDeploymentAsync(
+            RequiredWorkflowId(), actor, RequiredTransitionReason(), CancellationToken.None);
+        _message = "Manual deployment authorized.";
+    });
+
+    private Task ActivateAsync() => RunWorkflowMutationAsync(async actor =>
+    {
+        _deployment = await DeploymentService.ActivateAsync(
+            RequiredWorkflowId(), actor, RequiredTransitionReason(), CancellationToken.None);
+        _message = $"Rule version {_deployment.ActiveRule?.Version} deployed in {_deployment.Status} mode.";
+    });
+
+    private Task PromoteAsync() => RunWorkflowMutationAsync(async actor =>
+    {
+        var deployment = _deployment ?? throw new InvalidOperationException("No deployment is selected.");
+        _deployment = await DeploymentService.PromoteAsync(
+            deployment.RuleId, deployment.Version, actor, RequiredTransitionReason(), CancellationToken.None);
+        _message = "Watch-mode rule promoted to active enforcement.";
+    });
+
+    private Task RollbackAsync() => RunWorkflowMutationAsync(async actor =>
+    {
+        var deployment = _deployment ?? throw new InvalidOperationException("No deployment is selected.");
+        _deployment = await DeploymentService.RollbackAsync(
+            deployment.RuleId, deployment.Version, actor, RequiredTransitionReason(), CancellationToken.None);
+        _message = $"Rule deployment rolled back to {_deployment.Status}.";
+    });
+
+    private async Task RunWorkflowMutationAsync(Func<string, Task> mutation)
+    {
+        try
+        {
+            var actor = await RequireRecentActorAsync();
+            if (actor is null)
+            {
+                return;
+            }
+
+            await mutation(actor);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            _message = exception.Message;
+        }
+    }
+
+    private string RequiredWorkflowId() =>
+        _workflow?.WorkflowId ?? throw new InvalidOperationException("No approval workflow is selected.");
+
+    private string RequiredTransitionReason()
+    {
+        if (string.IsNullOrWhiteSpace(_transitionReason))
+        {
+            throw new ArgumentException("A transition reason is required.");
+        }
+
+        return _transitionReason.Trim();
     }
 
 }

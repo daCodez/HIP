@@ -1,8 +1,11 @@
 @page "/admin/review"
 @page "/admin/review/{ReviewItemId}"
-@attribute [Authorize(Policy = AdminPolicies.CanReviewReports)]
+@attribute [Authorize(Policy = AdminPolicies.CanViewReviews)]
 @rendermode InteractiveServer
 @inject IReviewQueueService ReviewQueueService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IWebHostEnvironment HostEnvironment
 
 <PageTitle>HIP Review Queue</PageTitle>
 
@@ -11,8 +14,20 @@
         <p class="eyebrow">Admin MVP</p>
         <h1>Review Queue</h1>
         <p>Review suspicious findings, generated rules, false positives, safety reports, and risky admin decisions using privacy-safe summaries only.</p>
-        <button type="button" @onclick="CreateSample">Create Sample Review</button>
+        @if (HostEnvironment.IsDevelopment())
+        {
+            <AuthorizeView Policy="@AdminPolicies.CanDecideReviews">
+                <Authorized>
+                    <button type="button" @onclick="CreateSample">Create Sample Review</button>
+                </Authorized>
+            </AuthorizeView>
+        }
     </section>
+
+    @if (_message is not null)
+    {
+        <p class="admin-message" role="status">@_message</p>
+    }
 
     @if (_selected is not null)
     {
@@ -48,9 +63,14 @@
                         <td>@item.CreatedAtUtc.UtcDateTime.ToString("u")</td>
                         <td>@item.RecommendedAction</td>
                         <td>
-                            <button type="button" @onclick="() => Approve(item.ReviewItemId)">Approve</button>
-                            <button type="button" @onclick="() => Reject(item.ReviewItemId)">Reject</button>
-                            <button type="button" @onclick="() => MoreInfo(item.ReviewItemId)">More Info</button>
+                            <AuthorizeView Policy="@AdminPolicies.CanDecideReviews">
+                                <Authorized>
+                                    <button type="button" @onclick="() => Approve(item.ReviewItemId)">Approve</button>
+                                    <button type="button" @onclick="() => Reject(item.ReviewItemId)">Reject</button>
+                                    <button type="button" @onclick="() => MoreInfo(item.ReviewItemId)">More Info</button>
+                                </Authorized>
+                                <NotAuthorized><span>View only</span></NotAuthorized>
+                            </AuthorizeView>
                         </td>
                     </tr>
                 }
@@ -65,6 +85,7 @@
 
     private IReadOnlyCollection<ReviewItem> _items = [];
     private ReviewItem? _selected;
+    private string? _message;
 
     protected override void OnInitialized() => Refresh();
 
@@ -76,9 +97,8 @@
         _selected = string.IsNullOrWhiteSpace(ReviewItemId) ? null : ReviewQueueService.Get(ReviewItemId);
     }
 
-    private void CreateSample()
-    {
-        ReviewQueueService.Create(new ReviewItem(
+    private Task CreateSample() =>
+        RunAuthorizedMutationAsync(actor => ReviewQueueService.Create(new ReviewItem(
             "",
             ReviewType.RiskyDomain,
             TargetType.Domain,
@@ -90,32 +110,56 @@
             ReviewPriority.High,
             DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow,
-            "admin-dev",
+            actor,
             null,
             "self-healing",
             "URL hashes and domain risk reason only.",
             new Dictionary<string, string> { ["urlHash"] = "sha256:sample", ["evidenceType"] = "anonymized-finding" },
             "Keep generated rule in watch mode pending approval.",
             null,
-            null));
-        Refresh();
-    }
+            null)),
+            developmentOnly: true);
 
-    private void Approve(string id)
-    {
-        ReviewQueueService.Approve(id, "admin-dev", "Reviewed evidence summary and approved recommended action.");
-        Refresh();
-    }
+    private Task Approve(string id) =>
+        RunAuthorizedMutationAsync(actor => ReviewQueueService.Approve(
+            id,
+            actor,
+            "Reviewed evidence summary and approved recommended action."));
 
-    private void Reject(string id)
-    {
-        ReviewQueueService.Reject(id, "admin-dev", "Evidence is insufficient for this action.");
-        Refresh();
-    }
+    private Task Reject(string id) =>
+        RunAuthorizedMutationAsync(actor => ReviewQueueService.Reject(
+            id,
+            actor,
+            "Evidence is insufficient for this action."));
 
-    private void MoreInfo(string id)
+    private Task MoreInfo(string id) =>
+        RunAuthorizedMutationAsync(actor => ReviewQueueService.RequestMoreInfo(
+            id,
+            actor,
+            "Need more privacy-safe evidence before decision."));
+
+    /// <summary>
+    /// Reauthorizes the current circuit immediately before a direct review mutation.
+    /// </summary>
+    private async Task RunAuthorizedMutationAsync(
+        Func<string, ReviewItem> mutation,
+        bool developmentOnly = false)
     {
-        ReviewQueueService.RequestMoreInfo(id, "admin-dev", "Need more privacy-safe evidence before decision.");
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var result = await HipAdminPageAccess.ExecuteAuthorizedAsync(
+            authenticationState.User,
+            AuthorizationService,
+            HostEnvironment,
+            AdminPolicies.CanDecideReviews,
+            mutation,
+            developmentOnly);
+        if (!result.Succeeded)
+        {
+            _message = HipAdminPageAccess.AccessUnavailableMessage;
+            return;
+        }
+
+        _message = null;
         Refresh();
     }
 }

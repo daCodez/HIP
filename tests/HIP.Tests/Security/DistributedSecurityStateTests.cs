@@ -71,6 +71,55 @@ public sealed class DistributedSecurityStateTests
     }
 
     [Test]
+    public async Task Replay_message_identifier_is_rejected_across_instances_until_expiry()
+    {
+        var timeProvider = new ManualTimeProvider();
+        var store = new TestAtomicExpiryStore(timeProvider);
+        var firstInstance = new RedisReplayMessageIdStore(store);
+        var secondInstance = new RedisReplayMessageIdStore(store);
+
+        var first = await firstInstance.TryReserveAsync(
+            "issuer-1",
+            "message-1",
+            TimeSpan.FromMinutes(5));
+        var replay = await secondInstance.TryReserveAsync(
+            "issuer-1",
+            "message-1",
+            TimeSpan.FromMinutes(5));
+        timeProvider.Advance(TimeSpan.FromMinutes(5));
+        var afterExpiry = await secondInstance.TryReserveAsync(
+            "issuer-1",
+            "message-1",
+            TimeSpan.FromMinutes(5));
+
+        Assert.That(new[] { first, replay, afterExpiry },
+            Is.EqualTo(new[] { true, false, true }));
+    }
+
+    [Test]
+    public async Task Replay_message_identifiers_are_case_sensitive_and_issuer_scoped()
+    {
+        var store = new TestAtomicExpiryStore();
+        var messageStore = new RedisReplayMessageIdStore(store);
+
+        var first = await messageStore.TryReserveAsync(
+            "issuer-1",
+            "Message-A",
+            TimeSpan.FromMinutes(5));
+        var differentCase = await messageStore.TryReserveAsync(
+            "issuer-1",
+            "message-a",
+            TimeSpan.FromMinutes(5));
+        var differentIssuer = await messageStore.TryReserveAsync(
+            "issuer-2",
+            "Message-A",
+            TimeSpan.FromMinutes(5));
+
+        Assert.That(new[] { first, differentCase, differentIssuer },
+            Has.All.True);
+    }
+
+    [Test]
     public void Fingerprints_are_unambiguous_when_untrusted_parts_contain_delimiters()
     {
         var first = SecurityStateKey.Fingerprint("duplicate", "scope", ["a|b", "c"]);

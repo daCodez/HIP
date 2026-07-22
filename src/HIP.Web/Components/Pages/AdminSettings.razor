@@ -2,6 +2,9 @@
 @attribute [Authorize(Policy = AdminPolicies.CanManageRules)]
 @rendermode InteractiveServer
 @inject ExternalSiteEvidenceOptions ExternalEvidenceOptions
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IWebHostEnvironment HostEnvironment
 
 <PageTitle>HIP Admin Settings</PageTitle>
 
@@ -46,6 +49,10 @@
         {
             <p class="admin-message">@_message</p>
         }
+        @if (_requiresStepUp)
+        {
+            <p class="admin-message"><a href="@StepUpHref">Confirm identity</a> and then retry the save.</p>
+        }
     </section>
 </main>
 
@@ -58,6 +65,8 @@
     private ProviderFormState _googleWebRisk = new();
     private ProviderFormState _virusTotal = new();
     private string _message = string.Empty;
+    private bool _requiresStepUp;
+    private const string StepUpHref = "/step-up?returnUrl=%2Fadmin%2Fsettings";
 
     /// <summary>
     /// Loads runtime external evidence settings into the form.
@@ -74,9 +83,50 @@
     }
 
     /// <summary>
-    /// Saves runtime settings for development/MVP provider control.
+    /// Saves runtime settings only after reauthorizing the active interactive-server circuit.
     /// </summary>
-    private void Save()
+    private async Task Save()
+    {
+        _message = string.Empty;
+        _requiresStepUp = false;
+
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var managementAuthorization = await AuthorizationService.AuthorizeAsync(
+            authenticationState.User,
+            null,
+            AdminPolicies.CanManageRules);
+        if (!managementAuthorization.Succeeded)
+        {
+            ClearApiKeyInputs();
+            _message = HipAdminPageAccess.AccessUnavailableMessage;
+            return;
+        }
+
+        var recentAuthorization = await HipAdminPageAccess.ExecuteAuthorizedAsync(
+            authenticationState.User,
+            AuthorizationService,
+            HostEnvironment,
+            AdminPolicies.RecentPrivilegedAuthentication,
+            _ =>
+            {
+                ApplySettings();
+                return true;
+            });
+        if (!recentAuthorization.Succeeded)
+        {
+            ClearApiKeyInputs();
+            _requiresStepUp = true;
+            _message = "Confirm your identity again before saving external provider settings.";
+            return;
+        }
+
+        _message = "External provider settings saved for the current running HIP process. Persist these values in appsettings or secret storage before production.";
+    }
+
+    /// <summary>
+    /// Applies validated form values to the current process after authorization succeeds.
+    /// </summary>
+    private void ApplySettings()
     {
         ExternalEvidenceOptions.ExternalProvidersEnabled = _externalProvidersEnabled;
         ExternalEvidenceOptions.AllowFullUrlChecks = _allowFullUrlChecks;
@@ -85,7 +135,6 @@
         Apply(ExternalEvidenceOptions.SslLabs, _sslLabs);
         Apply(ExternalEvidenceOptions.GoogleWebRisk, _googleWebRisk);
         Apply(ExternalEvidenceOptions.VirusTotal, _virusTotal);
-        _message = "External provider settings saved for the current running HIP process. Persist these values in appsettings or secret storage before production.";
     }
 
     /// <summary>
@@ -97,9 +146,25 @@
     {
         options.Enabled = state.Enabled;
         options.Endpoint = string.IsNullOrWhiteSpace(state.Endpoint) ? null : state.Endpoint.Trim();
-        options.ApiKey = string.IsNullOrWhiteSpace(state.ApiKey) ? null : state.ApiKey.Trim();
+        if (!string.IsNullOrWhiteSpace(state.ApiKey))
+        {
+            options.ApiKey = state.ApiKey.Trim();
+            state.HasConfiguredApiKey = true;
+        }
+
+        state.ApiKey = null;
         options.AllowFullUrl = state.AllowFullUrl;
         options.CacheDuration = state.CacheHours > 0 ? TimeSpan.FromHours(state.CacheHours) : null;
+    }
+
+    /// <summary>
+    /// Discards unsaved replacement keys so a failed authorization never re-renders them.
+    /// </summary>
+    private void ClearApiKeyInputs()
+    {
+        _sslLabs.ApiKey = null;
+        _googleWebRisk.ApiKey = null;
+        _virusTotal.ApiKey = null;
     }
 
     /// <summary>
@@ -119,9 +184,10 @@
             <input @bind="state.Endpoint" placeholder="Provider endpoint or adapter URL" />
         </label>
         <label>
-            API key placeholder
-            <input @bind="state.ApiKey" placeholder="Use secret storage before production" />
+            API key replacement
+            <input type="password" @bind="state.ApiKey" autocomplete="new-password" placeholder="Leave blank to keep the configured key" />
         </label>
+        <small>@(state.HasConfiguredApiKey ? "An API key is configured. Enter a replacement only when rotating it." : "No API key is configured.")</small>
         <label>
             Cache hours
             <input type="number" min="0" max="168" @bind="state.CacheHours" />
@@ -142,8 +208,11 @@
         /// <summary>Provider endpoint or adapter URL.</summary>
         public string? Endpoint { get; set; }
 
-        /// <summary>API key placeholder. Production should use secret storage.</summary>
+        /// <summary>Write-only replacement API key. Existing keys are never loaded into form state.</summary>
         public string? ApiKey { get; set; }
+
+        /// <summary>Whether provider options contain a configured key without exposing its value.</summary>
+        public bool HasConfiguredApiKey { get; set; }
 
         /// <summary>Provider cache hours.</summary>
         public int CacheHours { get; set; }
@@ -158,7 +227,7 @@
             Enabled = options.Enabled,
             AllowFullUrl = options.AllowFullUrl,
             Endpoint = options.Endpoint,
-            ApiKey = options.ApiKey,
+            HasConfiguredApiKey = !string.IsNullOrWhiteSpace(options.ApiKey),
             CacheHours = options.CacheDuration is null ? 0 : Math.Max(0, (int)Math.Round(options.CacheDuration.Value.TotalHours))
         };
     }

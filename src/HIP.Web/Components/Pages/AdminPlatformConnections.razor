@@ -3,6 +3,9 @@
 @rendermode InteractiveServer
 @inject IAdminDashboardService DashboardService
 @inject IPlatformConnectionService PlatformConnectionService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IWebHostEnvironment HostEnvironment
 
 <PageTitle>HIP Platform Connections</PageTitle>
 
@@ -11,7 +14,11 @@
         <h1>Platform Connections</h1>
         <p>Manage platforms that HIP monitors for threats.</p>
     </div>
-    <button class="hip-primary-action" type="button" @onclick="FocusDiscordForm">+ Connect Discord Bot</button>
+    <AuthorizeView Policy="@AdminPolicies.CanManagePlatforms">
+        <Authorized>
+            <button class="hip-primary-action" type="button" @onclick="FocusDiscordForm">+ Connect Discord Bot</button>
+        </Authorized>
+    </AuthorizeView>
 </section>
 
 @if (_summary is null || _connections is null)
@@ -27,7 +34,7 @@ else
     var discordConnected = discord?.Status.Equals(nameof(HipPlatformConnectionStatus.Connected), StringComparison.OrdinalIgnoreCase) == true;
 
     <section class="hip-card-row three">
-        <article class="hip-mini-stat good"><strong>1</strong><span>Connected Client Type</span></article>
+        <article class="hip-mini-stat @(_summary.HasScanData ? "good" : null)"><strong>@(_summary.HasScanData ? "1" : "0")</strong><span>Client Types With Evidence</span></article>
         <article class="hip-mini-stat"><strong>@CardValue("totalScans")</strong><span>Browser Scans</span></article>
         <article class="hip-mini-stat"><strong>@ConfiguredPlatformCount</strong><span>Configured Message Platform(s)</span></article>
     </section>
@@ -37,7 +44,7 @@ else
         <article class="hip-platform-row">
             <span class="platform-avatar">BP</span>
             <div>
-                <h3>Browser Plugin <span class="hip-pill good">Connected</span> <span class="hip-pill good">active</span></h3>
+                <h3>Browser Extension <span class="hip-pill @(_summary.HasScanData ? "good" : "caution")">@(_summary.HasScanData ? "Evidence received" : "Waiting for data")</span></h3>
                 <p>@CardValue("totalScans") stored privacy-safe scan(s) · Last scan: @LatestScanLabel()</p>
                 <div>
                     <small>Read current domain</small>
@@ -82,66 +89,70 @@ else
         </article>
     </section>
 
-    <section class="hip-stack" id="discord-connection-form" @ref="_discordForm">
-        <div class="hip-section-heading">
-            <h2>Connect Discord Bot</h2>
-            <p>Install the HIP bot with Discord OAuth for server channel monitoring. Webhook URLs are optional outbound alert destinations; they do not let HIP read chats.</p>
-        </div>
+    <AuthorizeView Policy="@AdminPolicies.CanManagePlatforms">
+        <Authorized>
+            <section class="hip-stack" id="discord-connection-form" @ref="_discordForm">
+                <div class="hip-section-heading">
+                    <h2>Connect Discord Bot</h2>
+                    <p>Install the HIP bot with Discord OAuth for server channel monitoring. Webhook URLs are optional outbound alert destinations; they do not let HIP read chats.</p>
+                </div>
 
-        <section class="hip-panel padded narrow">
-            <h3>What this connection can monitor</h3>
-            <p>HIP can monitor Discord server channels where the HIP bot is installed and has permission to see messages. HIP stores privacy-safe URL, domain, score, and sender-hash signals, not raw message bodies.</p>
-            <p>Discord bots cannot monitor arbitrary private DMs or group DMs. Private chat protection needs a separate user-side client flow later.</p>
-        </section>
+                <section class="hip-panel padded narrow">
+                    <h3>What this connection can monitor</h3>
+                    <p>HIP can monitor Discord server channels where the HIP bot is installed and has permission to see messages. HIP stores privacy-safe URL, domain, score, and sender-hash signals, not raw message bodies.</p>
+                    <p>Discord bots cannot monitor arbitrary private DMs or group DMs. Private chat protection needs a separate user-side client flow later.</p>
+                </section>
 
-        @if (!string.IsNullOrWhiteSpace(_saveMessage))
-        {
-            <p class="hip-success-text">@_saveMessage</p>
-        }
+                @if (!string.IsNullOrWhiteSpace(_saveMessage))
+                {
+                    <p class="hip-success-text">@_saveMessage</p>
+                }
 
-        @if (!string.IsNullOrWhiteSpace(_saveError))
-        {
-            <p class="hip-error-text">@_saveError</p>
-        }
+                @if (!string.IsNullOrWhiteSpace(_saveError))
+                {
+                    <p class="hip-error-text">@_saveError</p>
+                }
 
-        <div class="hip-form-grid two">
-            <label>
-                Discord guild/server ID
-                <input @bind="_discordGuildId" placeholder="123456789012345678" />
-                <small>This identifies the server selected during bot install.</small>
-            </label>
-            <label>
-                Server display name
-                <input @bind="_discordGuildName" placeholder="Community server" />
-            </label>
-            <label>
-                Discord application/client ID
-                <input @bind="_discordClientId" placeholder="123456789012345678" />
-                <small>This builds the bot OAuth install link shown above after saving.</small>
-            </label>
-            <label>
-                Bot user ID
-                <input @bind="_discordBotUserId" placeholder="123456789012345678" />
-            </label>
-            <label>
-                Optional alert webhook URL
-                <input @bind="_discordWebhookUrl" type="password" placeholder="https://discord.com/api/webhooks/..." />
-                <small>Only for outbound HIP alerts. It cannot monitor chats; HIP stores only a keyed hash.</small>
-            </label>
-            <label>
-                Bot token marker
-                <input @bind="_discordBotToken" type="password" placeholder="Optional local setup marker" />
-                <small>Use secret storage for real bot credentials. HIP records only that one was supplied; the raw token is never stored.</small>
-            </label>
-        </div>
+                <div class="hip-form-grid two">
+                    <label>
+                        Discord guild/server ID
+                        <input @bind="_discordGuildId" placeholder="123456789012345678" />
+                        <small>This identifies the server selected during bot install.</small>
+                    </label>
+                    <label>
+                        Server display name
+                        <input @bind="_discordGuildName" placeholder="Community server" />
+                    </label>
+                    <label>
+                        Discord application/client ID
+                        <input @bind="_discordClientId" placeholder="123456789012345678" />
+                        <small>This builds the bot OAuth install link shown above after saving.</small>
+                    </label>
+                    <label>
+                        Bot user ID
+                        <input @bind="_discordBotUserId" placeholder="123456789012345678" />
+                    </label>
+                    <label>
+                        Optional alert webhook URL
+                        <input @bind="_discordWebhookUrl" type="password" placeholder="https://discord.com/api/webhooks/..." />
+                        <small>Only for outbound HIP alerts. It cannot monitor chats; HIP stores only a keyed hash.</small>
+                    </label>
+                    <label>
+                        Bot token marker
+                        <input @bind="_discordBotToken" type="password" placeholder="Optional local setup marker" />
+                        <small>Use secret storage for real bot credentials. HIP records only that one was supplied; the raw token is never stored.</small>
+                    </label>
+                </div>
 
-        <div class="hip-action-row">
-            <button class="hip-primary-action" type="button" disabled="@_savingDiscord" @onclick="SaveDiscordAsync">
-                @(_savingDiscord ? "Saving..." : "Save Discord Bot Connection")
-            </button>
-            <button class="hip-secondary-action" type="button" disabled="@(!discordConnected || _savingDiscord)" @onclick="DisableDiscordAsync">Disable Discord</button>
-        </div>
-    </section>
+                <div class="hip-action-row">
+                    <button class="hip-primary-action" type="button" disabled="@_savingDiscord" @onclick="SaveDiscordAsync">
+                        @(_savingDiscord ? "Saving..." : "Save Discord Bot Connection")
+                    </button>
+                    <button class="hip-secondary-action" type="button" disabled="@(!discordConnected || _savingDiscord)" @onclick="DisableDiscordAsync">Disable Discord</button>
+                </div>
+            </section>
+        </Authorized>
+    </AuthorizeView>
 }
 
 @code {
@@ -171,9 +182,14 @@ else
     /// Gets a live dashboard card value.
     /// </summary>
     /// <param name="key">Dashboard card key.</param>
-    /// <returns>Card value or zero.</returns>
-    private int CardValue(string key) =>
-        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
+    /// <returns>Card value, or an unavailable marker when the source did not answer.</returns>
+    private string CardValue(string key)
+    {
+        var card = _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+        return card is null || card.IsPlaceholder
+            ? "—"
+            : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     /// <summary>
     /// Returns a human-readable latest scan label from live dashboard cards.
@@ -261,7 +277,12 @@ else
                 _discordWebhookUrl,
                 _discordBotToken);
 
-            await PlatformConnectionService.ConnectDiscordAsync(request, "local-admin", CancellationToken.None);
+            if (!await RunAuthorizedPlatformMutationAsync(actor =>
+                PlatformConnectionService.ConnectDiscordAsync(request, actor, CancellationToken.None)))
+            {
+                return;
+            }
+
             _discordWebhookUrl = null;
             _discordBotToken = null;
             _saveMessage = "Discord bot connection saved. HIP can accept privacy-safe Discord bot submissions from server channels the bot is allowed to read.";
@@ -278,6 +299,40 @@ else
     }
 
     /// <summary>
+    /// Reauthorizes the current circuit for platform management and recent privileged access before a mutation starts.
+    /// </summary>
+    /// <param name="mutation">Actor-bound platform mutation to invoke after both checks succeed.</param>
+    /// <returns>True when the mutation ran; otherwise false.</returns>
+    private async Task<bool> RunAuthorizedPlatformMutationAsync(Func<string, Task> mutation)
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var managementAuthorization = await AuthorizationService.AuthorizeAsync(
+            authenticationState.User,
+            null,
+            AdminPolicies.CanManagePlatforms);
+        if (!managementAuthorization.Succeeded)
+        {
+            _saveError = HipAdminPageAccess.AccessUnavailableMessage;
+            return false;
+        }
+
+        var recentAuthorization = await HipAdminPageAccess.ExecuteAuthorizedAsync(
+            authenticationState.User,
+            AuthorizationService,
+            HostEnvironment,
+            AdminPolicies.RecentPrivilegedAuthentication,
+            actor => mutation(actor));
+        if (!recentAuthorization.Succeeded || recentAuthorization.Value is null)
+        {
+            _saveError = HipAdminPageAccess.AccessUnavailableMessage;
+            return false;
+        }
+
+        await recentAuthorization.Value;
+        return true;
+    }
+
+    /// <summary>
     /// Disables the Discord platform connection without deleting saved metadata.
     /// </summary>
     private async Task DisableDiscordAsync()
@@ -287,7 +342,12 @@ else
         _saveMessage = null;
         try
         {
-            await PlatformConnectionService.DisableDiscordAsync("local-admin", CancellationToken.None);
+            if (!await RunAuthorizedPlatformMutationAsync(actor =>
+                PlatformConnectionService.DisableDiscordAsync(actor, CancellationToken.None)))
+            {
+                return;
+            }
+
             _saveMessage = "Discord connection disabled.";
             await LoadConnectionsAsync();
         }

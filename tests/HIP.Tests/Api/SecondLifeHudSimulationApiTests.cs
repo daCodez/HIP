@@ -18,6 +18,7 @@ public sealed class SecondLifeHudSimulationApiTests
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
+        AuthorizeSupport(client);
 
         var response = await client.PostAsJsonAsync("/api/v1/sl-hud/simulate", new
         {
@@ -45,6 +46,7 @@ public sealed class SecondLifeHudSimulationApiTests
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
+        AuthorizeSupport(client);
 
         var response = await client.PostAsJsonAsync("/api/v1/sl-hud/simulate", new
         {
@@ -59,5 +61,32 @@ public sealed class SecondLifeHudSimulationApiTests
         });
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task Sl_hud_simulation_route_rejects_anonymous_requests()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/sl-hud/simulate", new
+        {
+            sender = "Example Resident",
+            sourceType = "GroupChat",
+            messageText = "hello",
+            detectedUrls = Array.Empty<string>(),
+            scanMode = "Normal",
+            popupAlertsEnabled = true,
+            privateWarningsEnabled = true,
+            safetyPageRoutingEnabled = true
+        });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
+    private static void AuthorizeSupport(HttpClient client)
+    {
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Support");
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-User", "hud-simulation-test");
     }
 }

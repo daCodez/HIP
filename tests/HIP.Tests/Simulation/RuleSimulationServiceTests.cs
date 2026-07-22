@@ -2,6 +2,7 @@ using HIP.Application.Rules;
 using HIP.Application.Simulation;
 using HIP.Domain.Risk;
 using HIP.Tests.Rules;
+using System.Text.Json;
 
 namespace HIP.Tests.Simulation;
 
@@ -146,6 +147,54 @@ public sealed class RuleSimulationServiceTests
 
         Assert.That(names, Does.Not.Contain("private chat log"));
         Assert.That(result.PrivacyImpact, Does.Not.Contain("message body"));
+    }
+
+    [Test]
+    public void Simulation_result_is_version_bound_and_persists_only_fixture_structure()
+    {
+        var result = Service().Simulate(RuleEngineTests.NewDomainShortenerRule(HIP.Domain.Rules.RuleMode.Active),
+        [
+            new RuleSimulationTestCase(
+                "privacy-safe fixture",
+                new FactSet(new Dictionary<string, object?>
+                {
+                    ["domain.ageDays"] = 5,
+                    ["domain.name"] = "fixture-value-must-not-persist.example",
+                    ["url.usesShortener"] = true,
+                    ["content.containsUrgencyLanguage"] = true
+                }),
+                true,
+                RiskStatus.HighRisk,
+                true)
+        ]);
+        var json = JsonSerializer.Serialize(result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.SimulationId, Does.Match("^simulation:[0-9a-f]{32}$"));
+            Assert.That(result.RuleVersion, Is.GreaterThanOrEqualTo(1));
+            Assert.That(result.FixtureSetId, Does.Match("^fixtures:[0-9a-f]{64}$"));
+            Assert.That(result.StartedAtUtc, Is.Not.EqualTo(default(DateTimeOffset)));
+            Assert.That(result.CompletedAtUtc, Is.GreaterThanOrEqualTo(result.StartedAtUtc));
+            Assert.That(result.CaseResults.Single().InputFactKeys,
+                Is.EquivalentTo(new[] { "content.containsUrgencyLanguage", "domain.ageDays", "domain.name", "url.usesShortener" }));
+            Assert.That(json, Does.Not.Contain("fixture-value-must-not-persist.example"));
+        });
+    }
+
+    [Test]
+    public void Simulation_rejects_private_content_fixture_fields()
+    {
+        var testCase = new RuleSimulationTestCase(
+            "unsafe fixture",
+            new FactSet(new Dictionary<string, object?> { ["form.passwordValue"] = "never persist" }),
+            false,
+            null,
+            null);
+
+        Assert.That(
+            () => Service().Simulate(RuleEngineTests.NewDomainShortenerRule(HIP.Domain.Rules.RuleMode.Active), [testCase]),
+            Throws.ArgumentException.With.Message.Contains("private-content"));
     }
 
     private static RuleSimulationService Service() =>

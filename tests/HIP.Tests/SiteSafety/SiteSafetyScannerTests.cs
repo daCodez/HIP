@@ -1,6 +1,9 @@
 using FluentValidation;
 using FluentValidation.Results;
+using HIP.Application.Scoring;
 using HIP.Application.SiteSafety;
+using HIP.Domain.Risk;
+using HIP.Domain.Scoring;
 using HIP.Tests.Support;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -28,6 +31,60 @@ public sealed class SiteSafetyScannerTests
             Assert.That(result.Status, Is.EqualTo(SiteSafetyScanStatus.LimitedData));
             Assert.That(result.FinalHipScore, Is.LessThan(81));
             Assert.That(result.Summary, Does.Contain("limited trust data"));
+            Assert.That(result.Scoring, Is.Not.Null);
+            Assert.That(result.Scoring!.TrustAssertionDisposition, Is.EqualTo(HipTrustAssertionDisposition.WithheldInsufficientEvidence));
+            Assert.That(result.Scoring.PresentationStatus, Is.EqualTo(RiskStatus.LimitedTrustData));
+        });
+    }
+
+    /// <summary>
+    /// The versioned formal result uses higher-is-risk content semantics without changing legacy fields.
+    /// </summary>
+    [Test]
+    public async Task Formal_scoring_preserves_legacy_projections_and_makes_score_direction_explicit()
+    {
+        var result = await CreateScanner().ScanAsync(
+            new SiteSafetyScanRequest(
+                "https://github.com/example/repository",
+                new SiteSafetyObservedSignals(ContainsScamWording: true, TrustDataAvailable: true)),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Scoring, Is.Not.Null);
+            Assert.That(result.Scoring!.ModelVersion, Is.EqualTo(HipScoringResult.CurrentModelVersion));
+            Assert.That(result.Scoring.DomainTrustScore, Is.EqualTo(result.DomainTrustScore));
+            Assert.That(result.Scoring.PageTrustScore, Is.EqualTo(result.PageTrustScore));
+            Assert.That(result.Scoring.ContentRiskScore, Is.EqualTo(100 - result.ContentRiskScore));
+            Assert.That(result.Scoring.FinalScoreHigherMeansMoreTrust, Is.True);
+            Assert.That(result.Scoring.ContentRiskScoreHigherMeansMoreRisk, Is.True);
+            Assert.That(result.FinalHipScore, Is.EqualTo(result.ScoreImpact.FinalHipScore));
+            Assert.That(result.Scoring.FinalScore.BaselineScore.Value, Is.GreaterThan(result.Scoring.FinalHipScore));
+            Assert.That(result.Scoring.FinalHipScore, Is.EqualTo(69));
+            Assert.That(result.Scoring.Reasons, Has.Some.Contains("user-generated area"));
+        });
+    }
+
+    [Test]
+    public async Task Formal_scoring_projects_typed_cap_evidence_without_inferring_it_from_scores()
+    {
+        var result = await CreateScanner().ScanAsync(
+            new SiteSafetyScanRequest(
+                "https://github.com/example/repository/releases",
+                new SiteSafetyObservedSignals(
+                    DownloadLinks: ["https://github.com/example/repository/releases/tool.exe"],
+                    KnownMalwareIndicator: true)),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Scoring, Is.Not.Null);
+            Assert.That(result.Scoring!.EvidenceContext.Has(HipScoringEvidenceFactType.ConfirmedMalware), Is.True);
+            Assert.That(result.Scoring.EvidenceContext.Has(HipScoringEvidenceFactType.StrongExecutableDownloadRisk), Is.True);
+            Assert.That(result.Scoring.EvidenceContext.Has(HipScoringEvidenceFactType.IdentityMissing), Is.True);
+            Assert.That(result.Scoring.EvidenceContext.Has(HipScoringEvidenceFactType.TrustedParentDomain), Is.True);
+            Assert.That(result.Scoring.EvidenceContext.Has(HipScoringEvidenceFactType.UserGeneratedContent), Is.True);
+            Assert.That(result.Scoring.EvidenceContext.Has(HipScoringEvidenceFactType.RiskyExactPage), Is.True);
         });
     }
 
@@ -66,6 +123,18 @@ public sealed class SiteSafetyScannerTests
             Assert.That(result.DownloadRiskScore, Is.GreaterThanOrEqualTo(40));
             Assert.That(result.Status, Is.AnyOf(SiteSafetyScanStatus.Suspicious, SiteSafetyScanStatus.HighRisk));
             Assert.That(result.Warnings, Has.Some.Contains("executable"));
+            Assert.That(result.Scoring, Is.Not.Null);
+            Assert.That(result.Scoring!.EvidenceContext.Has(HipScoringEvidenceFactType.StrongExecutableDownloadRisk), Is.True);
+            Assert.That(result.Scoring.EvidenceContext.Has(HipScoringEvidenceFactType.IdentityMissing), Is.True);
+            Assert.That(result.Scoring.FinalScore.BaselineScore.Value, Is.GreaterThan(39));
+            Assert.That(result.Scoring.FinalHipScore, Is.EqualTo(39));
+            Assert.That(result.Scoring.Reasons, Has.Some.Contains("limits the final HIP score to 39"));
+            Assert.That(result.Scoring.ReasonEntries, Has.Some.Matches<HipScoringReasonEntry>(entry =>
+                entry.Code == "rule:download-executable" &&
+                entry.Impact.Kind == HipScoreImpactKind.RiskScoreIncrease &&
+                entry.Impact.Value >= 40 &&
+                entry.EvidenceSourceCode == "site-safety:rule:download-executable" &&
+                entry.PrivacyClassification == HipEvidencePrivacyClassification.DerivedMetadata));
         });
     }
 
@@ -263,6 +332,7 @@ public sealed class SiteSafetyScannerTests
         {
             Assert.That(result.Status, Is.EqualTo(SiteSafetyScanStatus.ScanFailed));
             Assert.That(result.FinalHipScore, Is.EqualTo(50));
+            Assert.That(result.Scoring, Is.Null);
         });
     }
 
@@ -319,7 +389,10 @@ public sealed class SiteSafetyScannerTests
     /// Creates the scanner with its production validator and a null logger for deterministic unit tests.
     /// </summary>
     private static SiteSafetyScanner CreateScanner() =>
-        new(new SiteSafetyScanValidator(), NullLogger<SiteSafetyScanner>.Instance);
+        new(
+            new SiteSafetyScanValidator(),
+            NullLogger<SiteSafetyScanner>.Instance,
+            scoringPipeline: new HipScoringPipeline(new HipMandatoryScoreConstraintPolicy()));
 
     /// <summary>
     /// Test-only validator that simulates unexpected infrastructure failure.

@@ -55,6 +55,51 @@ public sealed class MlDsa65SignatureProviderTests
     }
 
     [Test]
+    public void Public_key_fingerprint_is_stable_across_equivalent_pem_line_wrapping()
+    {
+        var provider = new MlDsa65SignatureProvider();
+        if (!MlDsa65SignatureProvider.IsRuntimeSupported)
+        {
+            Assert.That(provider.Capabilities.IsAvailable, Is.False);
+            return;
+        }
+
+        var keyPair = provider.GenerateKeyPair();
+        var rewrappedPem = RewrapPublicKeyPem(keyPair.PublicKey, lineLength: 37);
+
+        var exportedFingerprint = provider.ComputePublicKeyFingerprint(keyPair.PublicKey);
+        var rewrappedFingerprint = provider.ComputePublicKeyFingerprint(rewrappedPem);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rewrappedPem, Is.Not.EqualTo(keyPair.PublicKey));
+            Assert.That(rewrappedFingerprint, Is.EqualTo(exportedFingerprint));
+            Assert.That(exportedFingerprint, Does.Match("^sha256:[A-Za-z0-9_-]{43}$"));
+            Assert.Throws<ArgumentException>(() =>
+                provider.ComputePublicKeyFingerprint(keyPair.PrivateKey));
+        });
+    }
+
+    [Test]
+    public void Development_public_key_fingerprint_is_deterministic_and_rejects_non_public_material()
+    {
+        var provider = new HIP.Application.Identity.DevelopmentHipCryptoProvider();
+        var keyPair = provider.GenerateKeyPair();
+
+        var fingerprint = provider.ComputePublicKeyFingerprint(keyPair.PublicKey);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(provider.ComputePublicKeyFingerprint(keyPair.PublicKey), Is.EqualTo(fingerprint));
+            Assert.That(fingerprint, Does.Match("^sha256:[A-Za-z0-9_-]{43}$"));
+            Assert.Throws<ArgumentException>(() =>
+                provider.ComputePublicKeyFingerprint(keyPair.PrivateKey));
+            Assert.Throws<ArgumentException>(() =>
+                provider.ComputePublicKeyFingerprint($" {keyPair.PublicKey}"));
+        });
+    }
+
+    [Test]
     public void Malformed_or_oversized_inputs_fail_before_cryptographic_processing()
     {
         var provider = new MlDsa65SignatureProvider();
@@ -105,6 +150,7 @@ public sealed class MlDsa65SignatureProviderTests
             "mldsa-key-1",
             MlDsa65SignatureProvider.Algorithm,
             SignatureAlgorithmFamily.PostQuantum,
+            HipProtocolSignature.Rfc8785Canonicalization,
             new string('a', 64));
         var capabilities = new MlDsa65SignatureProvider().Capabilities;
 
@@ -121,7 +167,7 @@ public sealed class MlDsa65SignatureProviderTests
     public void Application_registration_includes_mldsa65_without_replacing_development_identity_crypto()
     {
         var services = new ServiceCollection();
-        services.AddHipApplication();
+        services.AddHipApplication(allowDevelopmentCryptoProvider: true);
         using var provider = services.BuildServiceProvider();
 
         var signatureProviders = provider.GetServices<IHipSignatureProvider>().ToArray();
@@ -135,5 +181,19 @@ public sealed class MlDsa65SignatureProviderTests
                 provider.GetRequiredService<HIP.Application.Identity.IHipCryptoProvider>(),
                 Is.TypeOf<HIP.Application.Identity.DevelopmentHipCryptoProvider>());
         });
+    }
+
+    private static string RewrapPublicKeyPem(string pem, int lineLength)
+    {
+        var payload = string.Concat(pem
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Where(line => !line.StartsWith("-----", StringComparison.Ordinal)));
+        var lines = new List<string>();
+        for (var offset = 0; offset < payload.Length; offset += lineLength)
+        {
+            lines.Add(payload.Substring(offset, Math.Min(lineLength, payload.Length - offset)));
+        }
+
+        return $"-----BEGIN PUBLIC KEY-----\r\n{string.Join("\r\n", lines)}\r\n-----END PUBLIC KEY-----";
     }
 }

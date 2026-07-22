@@ -1,6 +1,8 @@
 @page "/safety"
+@attribute [AllowAnonymous]
 @inject NavigationManager Navigation
 @inject ISafetyRoutingService SafetyService
+@inject ISafetyDecisionService DecisionService
 
 <PageTitle>HIP Safety Warning</PageTitle>
 
@@ -13,19 +15,19 @@
         {
             <p class="reason">@_error</p>
             <div class="actions">
-                <button type="button" @onclick="GoBack">Go Back</button>
+                <button type="button" @onclick="GoBackAsync">Go Back</button>
             </div>
         }
         else if (_result is not null)
         {
             <dl>
                 <div>
-                    <dt>Original URL</dt>
+                    <dt>Evaluated destination</dt>
                     <dd>@DisplayOriginalUrl</dd>
                 </div>
                 <div>
                     <dt>Final destination</dt>
-                    <dd>@(_result.FinalDestinationUrl ?? "Not resolved in MVP")</dd>
+                    <dd>@(_result.FinalDestinationUrl ?? "No server-confirmed redirect destination")</dd>
                 </div>
                 <div>
                     <dt>Risk</dt>
@@ -36,8 +38,16 @@
                     <dd>@_result.DomainScore/100</dd>
                 </div>
                 <div>
-                    <dt>Sender score</dt>
-                    <dd>@(_result.SenderScore?.ToString() ?? "Not supplied")</dd>
+                    <dt>Exact-page trust</dt>
+                    <dd>@_result.PageTrustScore/100</dd>
+                </div>
+                <div>
+                    <dt>Content risk</dt>
+                    <dd>@_result.ContentRiskScore/100 (higher means more risk)</dd>
+                </div>
+                <div>
+                    <dt>Final HIP score</dt>
+                    <dd>@_result.FinalHipScore/100</dd>
                 </div>
                 <div>
                     <dt>Recommended action</dt>
@@ -50,19 +60,38 @@
             </dl>
 
             <p class="reason">@_result.Reason</p>
+            @if (_result.FinalDestinationUrl is null)
+            {
+                <p class="reason">HIP does not follow untrusted redirects from this public page until SSRF-safe destination resolution is available.</p>
+            }
+            @if (_statusMessage is not null)
+            {
+                <p class="reason" role="status">@_statusMessage</p>
+            }
 
             <div class="actions">
-                <button type="button" @onclick="GoBack">Go Back</button>
+                <button type="button" @onclick="GoBackAsync" disabled="@_busy">Go Back</button>
                 @if (_result.AllowContinue)
                 {
-                    <a class="continue" href="@_result.OriginalUrl" target="_self" rel="noreferrer noopener">Continue Anyway</a>
+                    @if (_result.ContinuationRequirement == SafetyContinuationRequirement.ExtraConfirmation && !_dangerAcknowledged)
+                    {
+                        <button type="button" class="continue" @onclick="AcknowledgeDanger" disabled="@_busy">I understand this destination is dangerous</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="continue" @onclick="ContinueAsync" disabled="@_busy">
+                            @(_result.ContinuationRequirement == SafetyContinuationRequirement.ExtraConfirmation
+                                ? "Continue after second confirmation"
+                                : "Continue after review")
+                        </button>
+                    }
                 }
                 else
                 {
                     <span class="blocked">Continue is blocked for critical risk.</span>
                 }
-                <button type="button">Report Safe</button>
-                <button type="button">Report Dangerous</button>
+                <button type="button" @onclick="() => ReportAsync(SafetyDecisionAction.ReportSafe)" disabled="@_busy">Report Safe</button>
+                <button type="button" @onclick="() => ReportAsync(SafetyDecisionAction.ReportDangerous)" disabled="@_busy">Report Dangerous</button>
             </div>
         }
     </section>
@@ -80,6 +109,9 @@
 
     private SafetyResult? _result;
     private string? _error;
+    private string? _statusMessage;
+    private bool _dangerAcknowledged;
+    private bool _busy;
 
     private string DisplaySource => string.IsNullOrWhiteSpace(Source) ? "Unknown" : Source;
 
@@ -93,6 +125,8 @@
 
     protected override void OnParametersSet()
     {
+        _dangerAcknowledged = false;
+        _statusMessage = null;
         if (string.IsNullOrWhiteSpace(Url))
         {
             _error = "No URL was provided.";
@@ -112,7 +146,11 @@
                     DomainScore = 5,
                     RecommendedAction = SafetyRoutingService.RecommendedActionFor(RiskStatus.Critical),
                     AllowContinue = false,
-                    ShouldRouteToSafetyPage = true
+                    ShouldRouteToSafetyPage = true,
+                    PageTrustScore = 0,
+                    ContentRiskScore = 98,
+                    FinalHipScore = 5,
+                    ContinuationRequirement = SafetyContinuationRequirement.Blocked
                 };
             }
 
@@ -125,8 +163,73 @@
         }
     }
 
-    private void GoBack()
+    private void AcknowledgeDanger()
     {
+        _dangerAcknowledged = true;
+        _statusMessage = "Danger acknowledged. A second, separate action is still required to continue.";
+    }
+
+    private async Task ContinueAsync()
+    {
+        if (_result is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        var decision = await DecisionService.RecordAsync(
+            new SafetyDecisionRequest(
+                _result.OriginalUrl,
+                Source,
+                SafetyDecisionAction.Continue,
+                _dangerAcknowledged),
+            CancellationToken.None);
+        _busy = false;
+        if (!decision.IsRecorded)
+        {
+            _statusMessage = decision.Status == SafetyDecisionStatus.AdditionalConfirmationRequired
+                ? "An additional confirmation is required before continuing."
+                : "HIP policy did not allow this destination to open.";
+            return;
+        }
+
+        Navigation.NavigateTo(_result.OriginalUrl, forceLoad: true);
+    }
+
+    private async Task GoBackAsync()
+    {
+        if (_result is not null)
+        {
+            await DecisionService.RecordAsync(
+                new SafetyDecisionRequest(
+                    _result.OriginalUrl,
+                    Source,
+                    SafetyDecisionAction.GoBack,
+                    DangerAcknowledged: false),
+                CancellationToken.None);
+        }
+
         Navigation.NavigateTo("/lookup");
+    }
+
+    private async Task ReportAsync(SafetyDecisionAction action)
+    {
+        if (_result is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        var decision = await DecisionService.RecordAsync(
+            new SafetyDecisionRequest(
+                _result.OriginalUrl,
+                Source,
+                action,
+                DangerAcknowledged: false),
+            CancellationToken.None);
+        _busy = false;
+        _statusMessage = decision.IsRecorded
+            ? "Your privacy-safe report was recorded for review."
+            : "HIP could not record the report right now.";
     }
 }

@@ -207,10 +207,10 @@ public sealed class BrowserScanResultApiTests
     }
 
     /// <summary>
-    /// Verifies public lookup uses the stored browser scan result and includes source and count fields.
+    /// Verifies public lookup does not treat an anonymous browser submission as authoritative evidence.
     /// </summary>
     [Test]
-    public async Task Public_lookup_uses_stored_browser_scan_result_when_available()
+    public async Task Public_lookup_ignores_anonymous_browser_scan_result()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
@@ -224,17 +224,15 @@ public sealed class BrowserScanResultApiTests
         Assert.Multiple(() =>
         {
             Assert.That(json.RootElement.GetProperty("domain").GetString(), Is.EqualTo(domain));
-            Assert.That(json.RootElement.GetProperty("score").GetInt32(), Is.InRange(0, 100));
-            Assert.That(json.RootElement.GetProperty("status").GetString(), Is.Not.EqualTo("Trusted"));
-            Assert.That(json.RootElement.GetProperty("riskLevel").GetString(), Is.Not.EqualTo("Trusted"));
+            Assert.That(json.RootElement.GetProperty("score").GetInt32(), Is.InRange(45, 60));
+            Assert.That(json.RootElement.GetProperty("status").GetString(), Is.EqualTo("LimitedTrustData"));
+            Assert.That(json.RootElement.GetProperty("riskLevel").GetString(), Is.EqualTo("LimitedTrustData"));
             Assert.That(json.RootElement.GetProperty("domainTrustScore").GetInt32(), Is.InRange(0, 100));
             Assert.That(json.RootElement.GetProperty("pageTrustScore").GetInt32(), Is.InRange(0, 100));
             Assert.That(json.RootElement.GetProperty("contentRiskScore").GetInt32(), Is.InRange(0, 100));
             Assert.That(json.RootElement.GetProperty("finalHipScoreExplanation").GetString(), Is.Not.Empty);
-            Assert.That(json.RootElement.GetProperty("dataSource").GetString(), Is.EqualTo("BrowserPluginScan"));
-            Assert.That(json.RootElement.GetProperty("linksScanned").GetInt32(), Is.EqualTo(42));
-            Assert.That(json.RootElement.GetProperty("riskyLinksFound").GetInt32(), Is.EqualTo(2));
-            Assert.That(json.RootElement.GetProperty("dangerousLinksFound").GetInt32(), Is.EqualTo(0));
+            Assert.That(json.RootElement.GetProperty("dataSource").GetString(), Is.EqualTo("NoStoredData"));
+            Assert.That(json.RootElement.GetProperty("recommendedAction").GetString(), Is.EqualTo("ShowCaution"));
         });
     }
 

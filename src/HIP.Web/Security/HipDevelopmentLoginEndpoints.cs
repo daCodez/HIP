@@ -124,9 +124,11 @@ public static class HipDevelopmentLoginEndpoints
         }
 
         var trimmed = returnUrl.Trim();
-        return trimmed.StartsWith("/", StringComparison.Ordinal) &&
+        return trimmed.Length <= 2048 &&
+               trimmed.StartsWith("/", StringComparison.Ordinal) &&
                !trimmed.StartsWith("//", StringComparison.Ordinal) &&
-               !trimmed.StartsWith("/\\", StringComparison.Ordinal) &&
+               !trimmed.Contains('\\') &&
+               !trimmed.Any(char.IsControl) &&
                !Uri.TryCreate(trimmed, UriKind.Absolute, out _)
             ? trimmed
             : "/admin";

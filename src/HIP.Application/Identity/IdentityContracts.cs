@@ -25,13 +25,11 @@ public sealed record SignContentRequest(
 /// <summary>
 /// Requests development-only verification with managed-key lifecycle enforcement.
 /// </summary>
-/// <param name="TrustedSignedAtUtc">Authenticated signing time from a trusted envelope or stored HIP signature; never untrusted request metadata.</param>
 public sealed record VerifySignatureRequest(
     string IdentityId,
     string ContentHash,
     string SignatureValue,
-    string? KeyId = null,
-    DateTimeOffset? TrustedSignedAtUtc = null);
+    string? KeyId = null);
 
 public sealed record WebsiteIdentityRegistrationRequest(
     string Domain,
@@ -42,7 +40,9 @@ public sealed record WebsiteIdentityRegistrationResponse(
     WebsiteIdentity WebsiteIdentity,
     DomainVerificationRequest VerificationRequest,
     string? DevelopmentPrivateKey,
-    string Warning);
+    string Warning,
+    bool IsRecovery = false,
+    bool RequiresSigningKeyRotation = false);
 
 public sealed record WebsiteVerificationRequest(
     string Domain,
@@ -76,11 +76,9 @@ public sealed record HipSignatureRequest(
 /// Requests public verification against immutable managed key history.
 /// </summary>
 /// <param name="KeyId">Required immutable managed key identifier. Null remains source-compatible but fails clearly at runtime.</param>
-/// <param name="TrustedSignedAtUtc">Authenticated signing time from a trusted envelope or stored HIP signature; never untrusted request metadata.</param>
 public sealed record HipSignatureVerificationRequest(
     string IdentityId,
     string ContentHash,
     string SignatureValue,
     string? SignerReputationStatus,
-    string? KeyId = null,
-    DateTimeOffset? TrustedSignedAtUtc = null);
+    string? KeyId = null);

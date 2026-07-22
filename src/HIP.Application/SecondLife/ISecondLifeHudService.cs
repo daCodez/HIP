@@ -8,7 +8,14 @@ public interface ISecondLifeHudService
 
     SecondLifeHudSettings GetSettings(string deviceId);
 
+    SecondLifeHudSettings GetSettings(string licenseId, string deviceId);
+
     SecondLifeHudSettingsResponse SaveSettings(string deviceId, SecondLifeHudSettings settings);
+
+    SecondLifeHudSettingsResponse SaveSettings(
+        string licenseId,
+        string deviceId,
+        SecondLifeHudSettings settings);
 
     Task<SecondLifeHudFindingResponse> ReportFindingAsync(SecondLifeHudFindingReport report, CancellationToken cancellationToken);
 }

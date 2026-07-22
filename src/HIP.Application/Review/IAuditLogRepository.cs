@@ -6,6 +6,8 @@ public interface IAuditLogRepository
 {
     Task SaveAsync(AuditLogEntry entry, CancellationToken cancellationToken);
 
+    Task<bool> TryCreateAsync(AuditLogEntry entry, CancellationToken cancellationToken);
+
     Task<IReadOnlyCollection<AuditLogEntry>> ListAsync(CancellationToken cancellationToken);
 }
 
@@ -18,10 +20,22 @@ public sealed class InMemoryAuditLogRepository : IAuditLogRepository
     {
         lock (gate)
         {
-            entries[entry.AuditLogId] = entry;
+            if (!entries.TryAdd(entry.AuditLogId, entry))
+            {
+                throw new InvalidOperationException("Audit entries are append-only.");
+            }
         }
 
         return Task.CompletedTask;
+    }
+
+    public Task<bool> TryCreateAsync(AuditLogEntry entry, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (gate)
+        {
+            return Task.FromResult(entries.TryAdd(entry.AuditLogId, entry));
+        }
     }
 
     public Task<IReadOnlyCollection<AuditLogEntry>> ListAsync(CancellationToken cancellationToken)

@@ -128,6 +128,7 @@ public sealed record SiteSafetyObservedSignals(
 /// <param name="ProviderEvidence">Normalized provider evidence used by the scan. Raw private page content is not included.</param>
 /// <param name="ScoreImpact">Detailed score impact for the larger HIP scoring model.</param>
 /// <param name="MatchedRules">Built-in and admin rule results that contributed to the scan. Raw private evidence is not included.</param>
+/// <param name="Scoring">Versioned formal scoring result. Legacy top-level score fields retain their existing compatibility semantics.</param>
 public sealed record SiteSafetyScanResult(
     string ScanId,
     string Url,
@@ -154,7 +155,8 @@ public sealed record SiteSafetyScanResult(
     int FinalHipScore,
     IReadOnlyCollection<SiteSafetyEvidence> ProviderEvidence,
     SiteSafetyScoreImpact ScoreImpact,
-    IReadOnlyCollection<SiteSafetyRuleResult>? MatchedRules = null);
+    IReadOnlyCollection<SiteSafetyRuleResult>? MatchedRules = null,
+    HipScoringResult? Scoring = null);
 
 /// <summary>
 /// Explains how the Site Safety Scan contributes to HIP's larger scoring categories.

@@ -31,6 +31,7 @@ public sealed class ManagedSigningKey
         string keyId,
         string algorithm,
         string publicKey,
+        string publicKeyFingerprint,
         SigningKeyStatus status,
         string? replacementKeyId,
         DateTimeOffset activatedAtUtc,
@@ -46,6 +47,9 @@ public sealed class ManagedSigningKey
             : SigningKeyLifecycleValidation.NormalizeKeyId(replacementKeyId, nameof(replacementKeyId));
         var normalizedAlgorithm = SigningKeyLifecycleValidation.NormalizeAlgorithm(algorithm, nameof(algorithm));
         var normalizedPublicKey = SigningKeyLifecycleValidation.NormalizePublicKey(publicKey, nameof(publicKey));
+        var normalizedPublicKeyFingerprint = SigningKeyLifecycleValidation.NormalizePublicKeyFingerprint(
+            publicKeyFingerprint,
+            nameof(publicKeyFingerprint));
 
         ValidatePersistedState(
             normalizedKeyId,
@@ -61,6 +65,7 @@ public sealed class ManagedSigningKey
         KeyId = normalizedKeyId;
         Algorithm = normalizedAlgorithm;
         PublicKey = normalizedPublicKey;
+        PublicKeyFingerprint = normalizedPublicKeyFingerprint;
         Status = status;
         ReplacementKeyId = normalizedReplacementKeyId;
         ActivatedAtUtc = activatedAtUtc;
@@ -79,6 +84,11 @@ public sealed class ManagedSigningKey
 
     /// <summary>Gets the public verification material. Private key material is never represented here.</summary>
     public string PublicKey { get; }
+
+    /// <summary>
+    /// Gets the provider-canonical, algorithm-bound fingerprint used to prevent historical key reuse.
+    /// </summary>
+    public string PublicKeyFingerprint { get; }
 
     /// <summary>Gets the current lifecycle status.</summary>
     public SigningKeyStatus Status { get; }
@@ -136,17 +146,22 @@ public sealed class ManagedSigningKey
         string keyId,
         string algorithm,
         string publicKey,
+        string publicKeyFingerprint,
         DateTimeOffset activatedAtUtc)
     {
         var normalizedKeyId = SigningKeyLifecycleValidation.NormalizeKeyId(keyId, nameof(keyId));
         var normalizedAlgorithm = SigningKeyLifecycleValidation.NormalizeAlgorithm(algorithm, nameof(algorithm));
         var normalizedPublicKey = SigningKeyLifecycleValidation.NormalizePublicKey(publicKey, nameof(publicKey));
+        var normalizedPublicKeyFingerprint = SigningKeyLifecycleValidation.NormalizePublicKeyFingerprint(
+            publicKeyFingerprint,
+            nameof(publicKeyFingerprint));
         SigningKeyLifecycleValidation.EnsureUtc(activatedAtUtc, nameof(activatedAtUtc));
 
         return new ManagedSigningKey(
             normalizedKeyId,
             normalizedAlgorithm,
             normalizedPublicKey,
+            normalizedPublicKeyFingerprint,
             SigningKeyStatus.Active,
             replacementKeyId: null,
             activatedAtUtc,
@@ -176,6 +191,7 @@ public sealed class ManagedSigningKey
             KeyId,
             Algorithm,
             PublicKey,
+            PublicKeyFingerprint,
             SigningKeyStatus.Retiring,
             normalizedReplacementKeyId,
             ActivatedAtUtc,
@@ -196,6 +212,7 @@ public sealed class ManagedSigningKey
             KeyId,
             Algorithm,
             PublicKey,
+            PublicKeyFingerprint,
             SigningKeyStatus.Retired,
             ReplacementKeyId,
             ActivatedAtUtc,
@@ -228,6 +245,7 @@ public sealed class ManagedSigningKey
             KeyId,
             Algorithm,
             PublicKey,
+            PublicKeyFingerprint,
             SigningKeyStatus.Revoked,
             ReplacementKeyId,
             ActivatedAtUtc,
@@ -260,6 +278,7 @@ public sealed class ManagedSigningKey
             KeyId,
             Algorithm,
             PublicKey,
+            PublicKeyFingerprint,
             SigningKeyStatus.Revoked,
             normalizedReplacementKeyId,
             ActivatedAtUtc,
@@ -429,14 +448,16 @@ public sealed class SigningKeyRing
         }
 
         var keyIds = keys.Select(key => key.KeyId).ToHashSet(StringComparer.Ordinal);
-        var publicKeys = keys.Select(key => key.PublicKey).ToHashSet(StringComparer.Ordinal);
+        var publicKeyFingerprints = keys
+            .Select(key => key.PublicKeyFingerprint)
+            .ToHashSet(StringComparer.Ordinal);
         var activeKeyCount = keys.Count(key => key.Status == SigningKeyStatus.Active);
         if (keyIds.Count != keys.Count ||
-            publicKeys.Count != keys.Count ||
+            publicKeyFingerprints.Count != keys.Count ||
             (keys.Count > 0 && activeKeyCount != 1))
         {
             throw new ArgumentException(
-                "A non-empty signing-key ring must contain one active key and cannot reuse identifiers or public keys.",
+                "A non-empty signing-key ring must contain one active key and cannot reuse identifiers or canonical public-key fingerprints.",
                 nameof(keys));
         }
 
@@ -471,6 +492,7 @@ public sealed class SigningKeyRing
         string keyId,
         string algorithm,
         string publicKey,
+        string publicKeyFingerprint,
         DateTimeOffset activatedAtUtc)
     {
         if (_keys.Count != 0)
@@ -478,7 +500,14 @@ public sealed class SigningKeyRing
             throw new InvalidOperationException($"Identity '{IdentityId}' already has a managed signing key.");
         }
 
-        return WithKeys([ManagedSigningKey.CreateActive(keyId, algorithm, publicKey, activatedAtUtc)]);
+        return WithKeys([
+            ManagedSigningKey.CreateActive(
+                keyId,
+                algorithm,
+                publicKey,
+                publicKeyFingerprint,
+                activatedAtUtc)
+        ]);
     }
 
     /// <summary>
@@ -489,15 +518,17 @@ public sealed class SigningKeyRing
         string replacementKeyId,
         string algorithm,
         string publicKey,
+        string publicKeyFingerprint,
         DateTimeOffset transitionAtUtc)
     {
-        EnsureCanAddKey(replacementKeyId, publicKey);
+        EnsureCanAddKey(replacementKeyId, publicKeyFingerprint);
         var current = GetRequiredKey(currentKeyId);
         var retiring = current.BeginRotation(replacementKeyId, transitionAtUtc);
         var replacement = ManagedSigningKey.CreateActive(
             replacementKeyId,
             algorithm,
             publicKey,
+            publicKeyFingerprint,
             transitionAtUtc);
 
         var nextKeys = new ManagedSigningKey[_keys.Count + 1];
@@ -518,15 +549,17 @@ public sealed class SigningKeyRing
         string replacementKeyId,
         string algorithm,
         string publicKey,
+        string publicKeyFingerprint,
         DateTimeOffset transitionAtUtc)
     {
-        EnsureCanAddKey(replacementKeyId, publicKey);
+        EnsureCanAddKey(replacementKeyId, publicKeyFingerprint);
         var current = GetRequiredKey(compromisedKeyId);
         var revoked = current.RevokeWithReplacement(replacementKeyId, transitionAtUtc);
         var replacement = ManagedSigningKey.CreateActive(
             replacementKeyId,
             algorithm,
             publicKey,
+            publicKeyFingerprint,
             transitionAtUtc);
 
         var nextKeys = new ManagedSigningKey[_keys.Count + 1];
@@ -580,7 +613,7 @@ public sealed class SigningKeyRing
         return WithKeys(nextKeys);
     }
 
-    private void EnsureCanAddKey(string keyId, string publicKey)
+    private void EnsureCanAddKey(string keyId, string publicKeyFingerprint)
     {
         if (_keys.Count >= MaximumKeyCount)
         {
@@ -589,17 +622,22 @@ public sealed class SigningKeyRing
         }
 
         var normalizedKeyId = SigningKeyLifecycleValidation.NormalizeKeyId(keyId, nameof(keyId));
-        var normalizedPublicKey = SigningKeyLifecycleValidation.NormalizePublicKey(publicKey, nameof(publicKey));
+        var normalizedPublicKeyFingerprint = SigningKeyLifecycleValidation.NormalizePublicKeyFingerprint(
+            publicKeyFingerprint,
+            nameof(publicKeyFingerprint));
         if (_keys.Any(key => string.Equals(key.KeyId, normalizedKeyId, StringComparison.Ordinal)))
         {
             throw new InvalidOperationException(
                 $"Signing key '{normalizedKeyId}' already exists for identity '{IdentityId}'.");
         }
 
-        if (_keys.Any(key => string.Equals(key.PublicKey, normalizedPublicKey, StringComparison.Ordinal)))
+        if (_keys.Any(key => string.Equals(
+                key.PublicKeyFingerprint,
+                normalizedPublicKeyFingerprint,
+                StringComparison.Ordinal)))
         {
             throw new InvalidOperationException(
-                $"Signing key material has already been used for identity '{IdentityId}'.");
+                $"Canonical signing key material has already been used for identity '{IdentityId}'.");
         }
     }
 
@@ -632,6 +670,7 @@ internal static class SigningKeyLifecycleValidation
 {
     private const int MaximumAlgorithmLength = 128;
     private const int MaximumPublicKeyLength = 65_536;
+    private const int MaximumPublicKeyFingerprintLength = 256;
 
     public static string NormalizeIdentityId(string value, string parameterName) =>
         NormalizeBounded(
@@ -652,6 +691,28 @@ internal static class SigningKeyLifecycleValidation
 
     public static string NormalizePublicKey(string value, string parameterName) =>
         NormalizeBounded(value, MaximumPublicKeyLength, parameterName, "Public key");
+
+    public static string NormalizePublicKeyFingerprint(string value, string parameterName)
+    {
+        var normalized = NormalizeBounded(
+            value,
+            MaximumPublicKeyFingerprintLength,
+            parameterName,
+            "Public-key fingerprint");
+        var separator = normalized.IndexOf(':', StringComparison.Ordinal);
+        if (separator < 1 || separator == normalized.Length - 1 ||
+            normalized.AsSpan(0, separator).ContainsAnyExcept("abcdefghijklmnopqrstuvwxyz0123456789-") ||
+            normalized.AsSpan(separator + 1).ContainsAnyExcept(
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_") ||
+            normalized.AsSpan(separator + 1).Length < 16)
+        {
+            throw new ArgumentException(
+                "Public-key fingerprints must use canonical digest-name:base64url form.",
+                parameterName);
+        }
+
+        return normalized;
+    }
 
     public static void EnsureUtc(DateTimeOffset value, string parameterName)
     {

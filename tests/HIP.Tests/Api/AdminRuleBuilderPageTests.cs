@@ -22,6 +22,16 @@ public sealed class AdminRuleBuilderPageTests
         Assert.That(html, Does.Contain("Admin Rule Builder"));
         Assert.That(html, Does.Contain("Live JSON Preview"));
         Assert.That(html, Does.Contain("Site Safety Rule Simulation"));
+        Assert.That(html, Does.Contain("Approval and Deployment"));
+        Assert.That(html, Does.Contain("Version History"));
+        Assert.That(html, Does.Contain("Validate JSON"));
+        Assert.That(html, Does.Contain("Request Approval"));
+        Assert.That(html, Does.Contain("Approve Version"));
+        Assert.That(html, Does.Contain("Record Rollback Test"));
+        Assert.That(html, Does.Contain("Activate Approved Version"));
+        Assert.That(html, Does.Contain("Promote Watch to Active"));
+        Assert.That(html, Does.Contain("Rollback"));
+        Assert.That(html, Does.Not.Contain("MVP placeholder"));
     }
 
     [Test]
@@ -182,8 +192,9 @@ public sealed class AdminRuleBuilderPageTests
         Assert.That(html, Does.Not.Contain("Order by"));
         Assert.That(html, Does.Not.Contain("verification-order-button"));
         Assert.That(html, Does.Not.Contain("CoreDNS"));
-        Assert.That(html, Does.Not.Contain(".well-known/hip.json"));
-        Assert.That(html, Does.Not.Contain("Verification method"));
+        Assert.That(html, Does.Contain(".well-known/hip.json"));
+        Assert.That(html, Does.Contain("Verification method"));
+        Assert.That(html, Does.Contain("Signed .well-known/hip.json"));
         Assert.That(html, Does.Contain("Verification proves control of the domain"));
         Assert.That(html.IndexOf("Start Verification", StringComparison.Ordinal),
             Is.LessThan(html.IndexOf("Registered Domains", StringComparison.Ordinal)));
@@ -233,6 +244,21 @@ public sealed class AdminRuleBuilderPageTests
         public LicenseSummary? ResetActivation(string licenseId) => inner.ResetActivation(licenseId);
 
         public LicenseSummary? SetStatus(string licenseId, LicenseStatus status) => inner.SetStatus(licenseId, status);
+
+        public Task<bool> IsActiveDeviceAsync(
+            string licenseId,
+            string deviceId,
+            CancellationToken cancellationToken = default) =>
+            inner.IsActiveDeviceAsync(licenseId, deviceId, cancellationToken);
+
+        public LicenseHudSettings GetSettingsForDevice(string licenseId, string deviceId) =>
+            inner.GetSettingsForDevice(licenseId, deviceId);
+
+        public (bool Saved, string Message, LicenseHudSettings Settings) SaveSettingsForDevice(
+            string licenseId,
+            string deviceId,
+            LicenseHudSettings settings) =>
+            inner.SaveSettingsForDevice(licenseId, deviceId, settings);
 
         public LicenseHudSettings GetSettingsForDevice(string deviceId) => inner.GetSettingsForDevice(deviceId);
 

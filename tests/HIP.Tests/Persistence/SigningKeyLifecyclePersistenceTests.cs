@@ -42,12 +42,18 @@ public sealed class SigningKeyLifecyclePersistenceTests
     {
         var activatedAt = new DateTimeOffset(2026, 7, 18, 10, 0, 0, TimeSpan.Zero);
         var original = SigningKeyRing.Create("hip:domain:example")
-            .RegisterActiveKey("key-1", "ML-DSA-65", "public-key-1", activatedAt)
+            .RegisterActiveKey(
+                "key-1",
+                "ML-DSA-65",
+                "public-key-1",
+                "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                activatedAt)
             .Rotate(
                 "key-1",
                 "key-2",
                 "ML-DSA-65",
                 "public-key-2",
+                "sha256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
                 activatedAt.AddDays(30));
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {

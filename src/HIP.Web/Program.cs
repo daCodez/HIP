@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading.RateLimiting;
@@ -9,10 +11,12 @@ using HIP.Application.Ai;
 using HIP.Application.Browser;
 using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
+using HIP.Application.Devices;
 using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Performance;
 using HIP.Application.Platforms;
+using HIP.Application.Protocol;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
@@ -29,6 +33,7 @@ using HIP.Domain.Review;
 using HIP.Domain.Reporting;
 using HIP.Domain.Reputation;
 using HIP.Domain.Identity;
+using HIP.Domain.Protocol;
 using HIP.Domain.Rules;
 using HIP.Domain.Safety;
 using HIP.Domain.SelfHealing;
@@ -38,20 +43,32 @@ using HIP.Web;
 using HIP.Web.Components;
 using HIP.Web.Security;
 using Microsoft.AspNetCore.OutputCaching;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 
+const string ConsumerHistoryBackfillOperation = "--maintenance=consumer-history-owner-index-backfill";
+const string ConsumerHistoryBackfillConfirmation = "--confirm=APPLY-CONSUMER-HISTORY-OWNER-INDEX";
+var consumerHistoryBackfillRequested = args.Contains(
+    ConsumerHistoryBackfillOperation,
+    StringComparer.Ordinal);
+var consumerHistoryBackfillConfirmed = args.Contains(
+    ConsumerHistoryBackfillConfirmation,
+    StringComparer.Ordinal);
+
 var builder = WebApplication.CreateBuilder(args);
 const string HipInstanceIdHeader = "X-HIP-Instance-Id";
+const string ConsumerDeviceMutationRateLimitPolicy = "ConsumerDeviceMutationPolicy";
 
 builder.AddServiceDefaults();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton(new DevelopmentHipCryptoProviderOptions(builder.Environment.IsDevelopment()));
-builder.Services.AddHipApplication();
+builder.Services.AddHipApplication(builder.Environment.IsDevelopment());
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
+builder.Services.AddHostedService<DomainVerificationRecheckWorker>();
 builder.Services.AddOptions<HipPerformanceOptions>()
     .Bind(builder.Configuration.GetSection(HipPerformanceOptions.SectionName))
     .Validate(ValidateHipPerformanceOptions, "HIP performance options must use positive cache durations and request limits.")
@@ -72,10 +89,14 @@ builder.Services.AddResponseCompression(options =>
 });
 builder.Services.Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
 builder.Services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
+builder.Services.AddHipWebAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddHipAdminAuthorization();
-builder.Services.Configure<HipAdminLoginOptions>(builder.Configuration.GetSection(HipAdminLoginOptions.SectionName));
-builder.Services.AddSingleton<IPasswordHasher<string>, PasswordHasher<string>>();
-builder.Services.AddHipAdminAuthenticationProvider<LocalPasswordAdminAuthenticationProvider>();
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.Configure<HipAdminLoginOptions>(builder.Configuration.GetSection(HipAdminLoginOptions.SectionName));
+    builder.Services.AddSingleton<IPasswordHasher<string>, PasswordHasher<string>>();
+    builder.Services.AddHipAdminAuthenticationProvider<LocalPasswordAdminAuthenticationProvider>();
+}
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddCors(options =>
 {
@@ -83,6 +104,10 @@ builder.Services.AddCors(options =>
     options.AddPolicy(HipCorsPolicies.PublicRead, policy =>
         policy.AllowAnyOrigin()
             .WithMethods("GET")
+            .AllowAnyHeader());
+    options.AddPolicy(HipCorsPolicies.PublicBadgeVerification, policy =>
+        policy.AllowAnyOrigin()
+            .WithMethods("POST")
             .AllowAnyHeader());
     options.AddPolicy(HipCorsPolicies.ClientWrite, policy =>
         policy.SetIsOriginAllowed(origin => IsAllowedClientWriteOrigin(origin, security))
@@ -99,6 +124,8 @@ builder.Services.AddRateLimiter(options =>
         CreateFixedWindowPartition(httpContext, "feedback", performance.PublicFeedbackRequestsPerMinute));
     options.AddPolicy(RateLimitPolicies.IdentityDevPolicy, httpContext =>
         CreateFixedWindowPartition(httpContext, "identity", performance.IdentityRequestsPerMinute));
+    options.AddPolicy(ConsumerDeviceMutationRateLimitPolicy, CreateConsumerDeviceMutationPartition);
+    ServiceClientManagementEndpoints.AddMutationRateLimitPolicy(options);
     options.AddPolicy(RateLimitPolicies.AdminLoginPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             $"admin-login:{httpContext.Connection.RemoteIpAddress}",
@@ -132,6 +159,32 @@ var databaseInitializationMode = app.Environment.IsDevelopment()
     : HipDatabaseInitializationMode.ValidateMigrations;
 await HipDatabaseInitializer.InitializeAsync(app.Services, databaseInitializationMode);
 
+if (consumerHistoryBackfillRequested)
+{
+    if (!consumerHistoryBackfillConfirmed)
+    {
+        throw new InvalidOperationException(
+            "Consumer-history owner-index maintenance requires the exact confirmation argument.");
+    }
+
+    ConsumerHistoryOwnerIndexBackfillSummary summary;
+    using (var maintenanceScope = app.Services.CreateScope())
+    {
+        var backfillService = maintenanceScope.ServiceProvider
+            .GetRequiredService<ConsumerHistoryOwnerIndexBackfillService>();
+        summary = await backfillService.BackfillAllAsync(batchSize: 100, CancellationToken.None);
+    }
+    Console.WriteLine(
+        "Consumer-history owner-index backfill completed: " +
+        $"processed={summary.ProcessedGlobalRecords}, " +
+        $"created={summary.CreatedOwnerRecords}, " +
+        $"existing={summary.AlreadyIndexedRecords}, " +
+        $"unowned={summary.SkippedWithoutOwner}, " +
+        $"batches={summary.Batches}.");
+    await app.DisposeAsync();
+    return;
+}
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
@@ -148,14 +201,15 @@ if (ShouldUseHttpsRedirection(app))
 }
 app.UseCors(HipCorsPolicies.PublicRead);
 app.UseResponseCompression();
+app.UseAuthentication();
 app.UseRateLimiter();
 app.UseOutputCache();
-app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseAntiforgery();
 
 app.MapHipDevelopmentLogin();
+app.MapHipProductionLogin();
 
 MapPublicApis(app.MapGroup(ApiRoutes.Public));
 MapReportApis(app.MapGroup($"{ApiRoutes.V1}/reports"));
@@ -163,25 +217,40 @@ MapBadgeApis(app.MapGroup(ApiRoutes.Badge));
 MapBrowserApis(app.MapGroup(ApiRoutes.Browser));
 MapSafetyApis(app.MapGroup(ApiRoutes.Safety));
 MapSiteSafetyApis(app.MapGroup(ApiRoutes.SiteSafety));
+MapProtocolApis(app.MapGroup(ApiRoutes.Protocol));
 MapAdminSiteSafetyRuleApis(app.MapGroup($"{ApiRoutes.Admin}/site-safety-rules").RequireAuthorization(AdminPolicies.CanManageRules));
-Program.MapJsonRulesApis(app.MapGroup(ApiRoutes.Rules));
+Program.MapJsonRulesApis(app.MapGroup(ApiRoutes.Rules).RequireAuthorization(AdminPolicies.CanManageRules));
 MapAiApis(app.MapGroup(ApiRoutes.Ai).RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingPatternApis(app.MapGroup(ApiRoutes.SelfHealing).RequireAuthorization(AdminPolicies.CanManageRules));
 MapSecondLifeHudApis(app.MapGroup(ApiRoutes.SecondLifeHud));
-MapLicenseApis(app.MapGroup(ApiRoutes.Licenses).RequireAuthorization(AdminPolicies.CanManageLicenses));
+MapLicenseApis(app.MapGroup(ApiRoutes.Licenses));
 MapRulesApis(app.MapGroup($"{ApiRoutes.Admin}/rules").RequireAuthorization(AdminPolicies.CanManageRules));
 MapSelfHealingApis(app.MapGroup($"{ApiRoutes.Admin}/self-healing").RequireAuthorization(AdminPolicies.CanManageRules));
-MapReviewApis(app.MapGroup($"{ApiRoutes.Admin}/review").RequireAuthorization(AdminPolicies.CanReviewReports));
-MapAdminReviewQueueApis(app.MapGroup($"{ApiRoutes.Admin}/review-queue").RequireAuthorization(AdminPolicies.CanReviewReports));
-MapAppealApis(app.MapGroup($"{ApiRoutes.Admin}/appeals").RequireAuthorization(AdminPolicies.CanReviewReports));
+MapReviewApis(app.MapGroup($"{ApiRoutes.Admin}/review"));
+MapAdminReviewQueueApis(app.MapGroup($"{ApiRoutes.Admin}/review-queue"));
+MapAppealApis(app.MapGroup($"{ApiRoutes.Admin}/appeals"));
 MapReputationOverrideApis(app.MapGroup($"{ApiRoutes.Admin}/reputation-overrides").RequireAuthorization(AdminPolicies.CanApproveOverrides));
 MapReputationApis(app.MapGroup($"{ApiRoutes.Admin}/reputation").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapDashboardApis(app.MapGroup($"{ApiRoutes.Admin}/dashboard").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapAdminScanApis(app.MapGroup($"{ApiRoutes.Admin}/scans").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapPlatformConnectionApis(app.MapGroup($"{ApiRoutes.Admin}/platforms").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
+ServiceClientManagementEndpoints.Map(app.MapGroup($"{ApiRoutes.Admin}/service-clients"));
 MapConsumerApis(app.MapGroup(ApiRoutes.Consumer).RequireAuthorization(ConsumerPolicies.CanUseConsumerPortal));
 MapIdentityApis(app.MapGroup(ApiRoutes.Identity).RequireRateLimiting(RateLimitPolicies.IdentityDevPolicy));
 app.MapGet($"{ApiRoutes.Admin}/audit-logs", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()))
+    .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
+app.MapGet($"{ApiRoutes.Admin}/audit/export", async (
+    HttpContext httpContext,
+    IAuditExportService auditExportService,
+    CancellationToken cancellationToken) =>
+{
+    var export = await auditExportService.ExportAsync(cancellationToken);
+    httpContext.Response.Headers["Cache-Control"] = "no-store";
+    httpContext.Response.Headers["X-HIP-Audit-Sha256"] = export.Sha256;
+    httpContext.Response.Headers["X-HIP-Audit-Entry-Count"] =
+        export.EntryCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    return Results.File(export.JsonLines, "application/x-ndjson", "hip-audit-export.jsonl");
+})
     .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
 app.MapGet($"{ApiRoutes.Admin}/audit", (IAuditLogService auditLogService) => Results.Ok(auditLogService.List()))
     .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
@@ -204,7 +273,7 @@ app.MapGet($"{ApiRoutes.Admin}/reports", async (
     IPrivacySafeReportService reportService,
     CancellationToken cancellationToken) =>
     Results.Ok((await reportService.ListAsync(cancellationToken)).Select(PrivacySafeReportListItem.From).ToArray()))
-    .RequireAuthorization(AdminPolicies.CanReviewReports);
+    .RequireAuthorization(AdminPolicies.CanViewReviews);
 app.MapGet($"{ApiRoutes.Admin}/site-safety/external-providers", async (
     HttpContext httpContext,
     ExternalSiteEvidenceOptions defaultOptions,
@@ -221,19 +290,36 @@ app.MapPost($"{ApiRoutes.Admin}/site-safety/external-providers", async (
     HttpContext httpContext,
     ExternalSiteEvidenceOptions defaultOptions,
     IExternalSiteEvidenceSettingsStore settingsStore,
+    IAuditLogService auditLogService,
     CancellationToken cancellationToken) =>
 {
+    var actor = ResolveAdminActor(httpContext);
     var scopeKey = ResolveProviderSettingsScope(httpContext);
-    var options = defaultOptions.Clone();
+    var options = await settingsStore.GetAsync(scopeKey, cancellationToken) ?? defaultOptions.Clone();
+    var beforeSettings = ExternalProviderSettingsAuditMetadata(options);
     ApplyExternalProviderSettings(options, request);
     var saved = await settingsStore.SaveAsync(scopeKey, options, cancellationToken);
+    auditLogService.Write(
+        actor,
+        "ExternalProviderSettings.Updated",
+        TargetType.Rule,
+        "site-safety-external-providers",
+        "External site-safety provider settings were updated.",
+        AuditSeverity.High,
+        actorRole: httpContext.User.FindFirstValue(ClaimTypes.Role) ?? "Unknown",
+        beforeMetadata: beforeSettings,
+        afterMetadata: ExternalProviderSettingsAuditMetadata(saved),
+        correlationId: httpContext.TraceIdentifier);
     return Results.Ok(ExternalProviderSettingsResponse.From(saved, scopeKey));
 })
-    .RequireAuthorization(AdminPolicies.CanManageRules);
+    .RequireAuthorization(AdminPolicies.CanManageRules)
+    .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 
-app.MapStaticAssets();
+app.MapStaticAssets()
+    .WithMetadata(HipFrameworkGeneratedEndpointMetadata.StaticAssets);
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    .WithMetadata(HipFrameworkGeneratedEndpointMetadata.RazorComponents);
 
 app.MapDefaultEndpoints();
 
@@ -369,6 +455,41 @@ static RateLimitPartition<string> CreateFixedWindowPartition(HttpContext httpCon
             QueueLimit = 0,
             AutoReplenishment = true
         });
+
+/// <summary>
+/// Limits consumer-device mutations by the matched route and authenticated consumer scope.
+/// </summary>
+/// <remarks>
+/// The route template is used instead of the caller-supplied opaque identifier so changing device or challenge IDs
+/// cannot create unbounded limiter partitions. Authentication runs before rate limiting, so a caller cannot exhaust
+/// another consumer's budget merely by sharing its network address. The owner claim is hashed before it becomes an
+/// in-memory partition key; unauthenticated or ambiguous callers use a separate remote-address partition.
+/// </remarks>
+static RateLimitPartition<string> CreateConsumerDeviceMutationPartition(HttpContext httpContext)
+{
+    const int permitLimit = 10;
+    var route = httpContext.GetEndpoint() is RouteEndpoint routeEndpoint
+        ? routeEndpoint.RoutePattern.RawText
+        : null;
+    var routeKey = string.IsNullOrWhiteSpace(route) ? "unknown-route" : route;
+    var callerKey = HipAuthenticatedIdentity.TryResolveUniqueClaim(
+        httpContext.User,
+        HipAuthenticationClaimTypes.ConsumerId,
+        out var consumerId)
+        ? $"owner:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(consumerId)))}"
+        : $"unauthenticated:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-address"}";
+    var partitionKey = $"consumer-device:{httpContext.Request.Method}:{routeKey}:{callerKey}";
+
+    return RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey,
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = permitLimit,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+}
 
 /// <summary>
 /// Resolves a bounded rate-limit partition from API key, HIP signer, browser instance, domain, or client IP.
@@ -627,10 +748,30 @@ static void ApplyProvider(ExternalProviderOptions options, ExternalProviderSetti
 {
     options.Enabled = request.Enabled;
     options.Endpoint = string.IsNullOrWhiteSpace(request.Endpoint) ? null : request.Endpoint.Trim();
-    options.ApiKey = string.IsNullOrWhiteSpace(request.ApiKey) ? null : request.ApiKey.Trim();
+    if (!string.IsNullOrWhiteSpace(request.ApiKey))
+    {
+        options.ApiKey = request.ApiKey.Trim();
+    }
+
     options.AllowFullUrl = request.AllowFullUrl;
     options.CacheDuration = request.CacheDuration is { Ticks: > 0 } ? request.CacheDuration : null;
 }
+
+/// <summary>
+/// Creates an allowlisted audit projection that excludes provider endpoints and credentials.
+/// </summary>
+/// <param name="options">Provider settings to summarize.</param>
+/// <returns>Privacy-safe state metadata for before/after audit evidence.</returns>
+static IReadOnlyDictionary<string, string> ExternalProviderSettingsAuditMetadata(
+    ExternalSiteEvidenceOptions options) =>
+    new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["externalProvidersEnabled"] = options.ExternalProvidersEnabled.ToString(),
+        ["allowFullUrlChecks"] = options.AllowFullUrlChecks.ToString(),
+        ["sslLabsEnabled"] = options.SslLabs.Enabled.ToString(),
+        ["googleWebRiskEnabled"] = options.GoogleWebRisk.Enabled.ToString(),
+        ["virusTotalEnabled"] = options.VirusTotal.Enabled.ToString()
+    };
 
 static void MapPublicApis(RouteGroupBuilder publicApi)
 {
@@ -648,6 +789,7 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .AllowAnonymous()
         .CacheOutput(HipOutputCachePolicies.PublicLookup);
 
     publicApi.MapGet("/lookup/domain/{domain}", async (
@@ -664,6 +806,7 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .AllowAnonymous()
         .CacheOutput(HipOutputCachePolicies.PublicLookup);
 
     publicApi.MapPost("/lookup", async (
@@ -680,6 +823,7 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite);
 
     publicApi.MapGet("/badge/domain/{domain}", async (
@@ -696,7 +840,18 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .AllowAnonymous()
         .CacheOutput(HipOutputCachePolicies.Badge);
+
+    publicApi.MapPost("/badge/verify", async (
+        HipLiveBadgeDocument document,
+        IHipLiveBadgeVerificationService verificationService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await verificationService.VerifyAsync(document, cancellationToken)))
+        .AllowAnonymous()
+        .RequireCors(HipCorsPolicies.PublicBadgeVerification)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(HipLiveBadgeDocument.MaximumDocumentBytes))
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     publicApi.MapPost("/appeals", (
         AppealRequest appeal,
@@ -711,6 +866,7 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 
@@ -724,19 +880,24 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
     {
         try
         {
-            if (await IsDuplicateFeedbackAsync(feedback, duplicateGuard, cancellationToken))
+            var anonymousFeedback = feedback with
+            {
+                ReporterTrustLevel = HIP.Domain.Reputation.ReporterTrustLevel.Anonymous
+            };
+            if (await IsDuplicateFeedbackAsync(anonymousFeedback, duplicateGuard, cancellationToken))
             {
                 return Results.Conflict(new { error = "Duplicate feedback submission ignored." });
             }
 
-            await StoreWeightedFeedbackIfDomainAsync(feedback, weightedFeedbackService, reviewQueueService, cancellationToken);
-            return Results.Ok(await reputationService.SubmitFeedbackAsync(feedback, cancellationToken));
+            await StoreWeightedFeedbackIfDomainAsync(anonymousFeedback, weightedFeedbackService, reviewQueueService, cancellationToken);
+            return Results.Ok(await reputationService.SubmitFeedbackAsync(anonymousFeedback, cancellationToken));
         }
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 
@@ -751,6 +912,12 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
         var consumerId = httpContext.User.FindFirst("hip_consumer_id")?.Value;
         var ownedReport = report with
         {
+            ReportId = $"risk-report-{Guid.NewGuid():N}",
+            SourceClient = SourceClient.Unknown,
+            Platform = ReportPlatform.Unknown,
+            DetectedAtUtc = DateTimeOffset.UtcNow,
+            ReporterTrustLevel = HIP.Domain.SelfHealing.ReporterTrustLevel.Unknown,
+            HipSignature = string.Empty,
             ConsumerScopeHash = string.IsNullOrWhiteSpace(consumerId) ? null : privacyHashingService.Hash(consumerId)
         };
 
@@ -762,6 +929,7 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
         var response = await ingestionService.IngestAsync(ownedReport, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
     })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 }
@@ -782,6 +950,7 @@ static void MapReportApis(RouteGroupBuilder reportApi)
         var result = await reportService.SubmitAsync(report, cancellationToken);
         return result.Accepted ? Results.Ok(result) : Results.BadRequest(result);
     })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 }
@@ -883,6 +1052,7 @@ static void MapPlatformConnectionApis(RouteGroupBuilder platformApi)
         }
     })
     .RequireAuthorization(AdminPolicies.CanManagePlatforms)
+    .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication)
     .WithName("ConnectDiscordPlatform")
     .WithSummary("Connect Discord as a HIP bot platform")
     .WithDescription("Saves Discord bot/OAuth metadata for privacy-safe server-channel ingestion. Optional webhook URLs are treated only as outbound alert destinations; HIP hashes them and records only whether bot credentials are configured.")
@@ -899,6 +1069,7 @@ static void MapPlatformConnectionApis(RouteGroupBuilder platformApi)
             : Results.Ok(connection);
     })
     .RequireAuthorization(AdminPolicies.CanManagePlatforms)
+    .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication)
     .WithName("DisableDiscordPlatform")
     .WithSummary("Disable the Discord platform connection")
     .WithDescription("Disables Discord ingestion without deleting saved admin metadata, preserving history and avoiding accidental data loss.")
@@ -921,7 +1092,18 @@ static void MapBadgeApis(RouteGroupBuilder badgeApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .AllowAnonymous()
         .CacheOutput(HipOutputCachePolicies.Badge);
+
+    badgeApi.MapPost("/verify", async (
+        HipLiveBadgeDocument document,
+        IHipLiveBadgeVerificationService verificationService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await verificationService.VerifyAsync(document, cancellationToken)))
+        .AllowAnonymous()
+        .RequireCors(HipCorsPolicies.PublicBadgeVerification)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(HipLiveBadgeDocument.MaximumDocumentBytes))
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     badgeApi.MapGet("/{domain}/script", (
         string domain) =>
@@ -936,6 +1118,7 @@ static void MapBadgeApis(RouteGroupBuilder badgeApi)
             return Results.Text($"console.warn('HIP badge unavailable: {JavaScriptEncoder.Default.Encode(ex.Message)}');", "application/javascript");
         }
     })
+        .AllowAnonymous()
         .CacheOutput(HipOutputCachePolicies.Badge);
 }
 
@@ -943,6 +1126,39 @@ static void MapBadgeApis(RouteGroupBuilder badgeApi)
 /// Maps browser plugin endpoints for site scoring, link scanning, and privacy-safe scan result persistence.
 /// </summary>
 /// <param name="browserApi">Versioned browser plugin route group.</param>
+static (bool Supplied, DeviceRequestProof? Proof) ReadDeviceRequestProof(HttpRequest request)
+{
+    string? Header(string name) => request.Headers[name].FirstOrDefault();
+    var values = new[]
+    {
+        Header("X-HIP-Device-Id"),
+        Header("X-HIP-Device-Timestamp"),
+        Header("X-HIP-Device-Nonce"),
+        Header("X-HIP-Device-Body-SHA256"),
+        Header("X-HIP-Device-Signature")
+    };
+    if (values.All(string.IsNullOrWhiteSpace))
+    {
+        return (false, null);
+    }
+
+    return values.Any(string.IsNullOrWhiteSpace)
+        ? (true, null)
+        : (true, new DeviceRequestProof(values[0]!, values[1]!, values[2]!, values[3]!, values[4]!));
+}
+
+static IResult InvalidDeviceProofResult(DeviceRequestProofStatus status) => status switch
+{
+    DeviceRequestProofStatus.Replayed => Results.Conflict(
+        new BrowserScanResultErrorResponse("Device request proof was already used.")),
+    DeviceRequestProofStatus.StateUnavailable => Results.Json(
+        new BrowserScanResultErrorResponse("Device request proof is temporarily unavailable."),
+        statusCode: StatusCodes.Status503ServiceUnavailable),
+    _ => Results.Json(
+        new BrowserScanResultErrorResponse("Device request proof is invalid."),
+        statusCode: StatusCodes.Status401Unauthorized)
+};
+
 static void MapBrowserApis(RouteGroupBuilder browserApi)
 {
     browserApi.MapPost("/score-site", async (
@@ -959,6 +1175,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
@@ -976,29 +1193,55 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     browserApi.MapPost("/scan-results", async (
         BrowserScanResultSaveRequest request,
+        HttpContext httpContext,
         IDuplicateSubmissionGuard duplicateGuard,
-        IBrowserScanResultService scanResultService,
+        IUntrustedBrowserScanResultSubmissionService scanResultSubmissionService,
+        IRegisteredDeviceBrowserScanResultSubmissionService registeredSubmissionService,
+        IDeviceRequestProofService deviceProofService,
         CancellationToken cancellationToken) =>
     {
         try
         {
+            var suppliedProof = ReadDeviceRequestProof(httpContext.Request);
+            if (suppliedProof.Supplied)
+            {
+                if (suppliedProof.Proof is null)
+                {
+                    return InvalidDeviceProofResult(DeviceRequestProofStatus.Invalid);
+                }
+                var proofResult = await deviceProofService.ValidateAndReserveAsync(
+                    suppliedProof.Proof,
+                    httpContext.Request.Method,
+                    httpContext.Request.Path.Value ?? "/api/v1/browser/scan-results",
+                    request,
+                    cancellationToken);
+                if (!proofResult.IsAccepted)
+                {
+                    return InvalidDeviceProofResult(proofResult.Status);
+                }
+            }
+
             if (await IsDuplicateBrowserScanResultAsync(request, duplicateGuard, cancellationToken))
             {
                 return Results.Conflict(new BrowserScanResultErrorResponse("Duplicate browser scan result ignored."));
             }
 
-            return Results.Ok(await scanResultService.SaveAsync(request, cancellationToken));
+            return Results.Ok(suppliedProof.Supplied
+                ? await registeredSubmissionService.SaveRegisteredDeviceAsync(request, cancellationToken)
+                : await scanResultSubmissionService.SaveUntrustedAsync(request, cancellationToken));
         }
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new BrowserScanResultErrorResponse(ex.Message));
         }
     })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
@@ -1016,7 +1259,8 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
         {
             return Results.BadRequest(new BrowserScanResultErrorResponse(ex.Message));
         }
-    });
+    })
+        .AllowAnonymous();
 }
 
 static void MapSafetyApis(RouteGroupBuilder safetyApi)
@@ -1034,16 +1278,77 @@ static void MapSafetyApis(RouteGroupBuilder safetyApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
-    safetyApi.MapPost("/report-safe", (SafetyReportRequest request) =>
-        Results.Ok(SafetyReportResponse.CreateAccepted(SafetyUrlDisplay.StripQueryAndFragment(request.Url), request.Source, "Report as safe was accepted for MVP review.")))
+    safetyApi.MapPost("/decisions", async (
+        SafetyDecisionRequest request,
+        ISafetyDecisionService decisionService,
+        CancellationToken cancellationToken) =>
+    {
+        var result = await decisionService.RecordAsync(request, cancellationToken);
+        return result.Status switch
+        {
+            SafetyDecisionStatus.Recorded => Results.Ok(SafetyDecisionApiResponse.From(result)),
+            SafetyDecisionStatus.AdditionalConfirmationRequired => Results.Conflict(SafetyDecisionApiResponse.From(result)),
+            SafetyDecisionStatus.BlockedByPolicy => Results.Json(
+                SafetyDecisionApiResponse.From(result),
+                statusCode: StatusCodes.Status403Forbidden),
+            SafetyDecisionStatus.InvalidRequest => Results.BadRequest(SafetyDecisionApiResponse.From(result)),
+            _ => Results.Json(
+                SafetyDecisionApiResponse.From(result),
+                statusCode: StatusCodes.Status503ServiceUnavailable)
+        };
+    })
+        .AllowAnonymous()
+        .RequireCors(HipCorsPolicies.ClientWrite)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(8_192))
+        .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
+
+    safetyApi.MapPost("/report-safe", async (
+        SafetyReportRequest request,
+        ISafetyDecisionService decisionService,
+        CancellationToken cancellationToken) =>
+    {
+        var result = await decisionService.RecordAsync(
+            new SafetyDecisionRequest(
+                request.Url,
+                request.Source,
+                SafetyDecisionAction.ReportSafe,
+                DangerAcknowledged: false),
+            cancellationToken);
+        return result.IsRecorded
+            ? Results.Ok(SafetyReportResponse.CreateAccepted(
+                SafetyUrlDisplay.StripQueryAndFragment(request.Url),
+                request.Source,
+                "Privacy-safe report as safe was recorded for review."))
+            : Results.Json(new { error = "HIP could not record the report." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 
-    safetyApi.MapPost("/report-dangerous", (SafetyReportRequest request) =>
-        Results.Ok(SafetyReportResponse.CreateAccepted(SafetyUrlDisplay.StripQueryAndFragment(request.Url), request.Source, "Report as dangerous was accepted for MVP review.")))
+    safetyApi.MapPost("/report-dangerous", async (
+        SafetyReportRequest request,
+        ISafetyDecisionService decisionService,
+        CancellationToken cancellationToken) =>
+    {
+        var result = await decisionService.RecordAsync(
+            new SafetyDecisionRequest(
+                request.Url,
+                request.Source,
+                SafetyDecisionAction.ReportDangerous,
+                DangerAcknowledged: false),
+            cancellationToken);
+        return result.IsRecorded
+            ? Results.Ok(SafetyReportResponse.CreateAccepted(
+                SafetyUrlDisplay.StripQueryAndFragment(request.Url),
+                request.Source,
+                "Privacy-safe report as dangerous was recorded for review."))
+            : Results.Json(new { error = "HIP could not record the report." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy);
 }
@@ -1060,9 +1365,8 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
         IDuplicateSubmissionGuard duplicateGuard,
         ExternalSiteEvidenceOptions defaultOptions,
         IExternalSiteEvidenceSettingsStore settingsStore,
-        ISiteSafetyScanner scanner,
+        IUntrustedSiteSafetyScanner scanner,
         ISiteSafetyScanResultStorageService scanResultStorageService,
-        IAdminReviewQueueService reviewQueueService,
         CancellationToken cancellationToken) =>
     {
         try
@@ -1074,9 +1378,8 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
 
             var scopedOptions = await LoadScopedExternalProviderOptionsAsync(httpContext, settingsStore, cancellationToken);
             using var _ = defaultOptions.UseScopedOverride(scopedOptions);
-            var result = await scanner.ScanAsync(request, cancellationToken);
+            var result = await scanner.ScanUntrustedAsync(request, cancellationToken);
             await scanResultStorageService.SaveAsync(request, result, cancellationToken);
-            await reviewQueueService.CreateSignalsFromScanAsync(result, cancellationToken);
             return Results.Ok(ToSiteSafetyScanResponse(result));
         }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
@@ -1084,6 +1387,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
@@ -1114,9 +1418,277 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .RequireAuthorization(AdminPolicies.CanManageRules)
+        .RequireCors(HipCorsPolicies.ClientWrite)
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
+
+    siteSafetyApi.MapPost("/external-evidence/jobs", async (
+        SiteSafetyScanRequest request,
+        HttpContext httpContext,
+        ExternalSiteEvidenceJobService jobService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var scopeKey = ResolveProviderSettingsScope(httpContext);
+            var job = await jobService.QueueAsync(request, scopeKey, scopeKey, cancellationToken);
+            var location = $"/api/v1/site-safety/external-evidence/jobs/{Uri.EscapeDataString(job.JobId)}";
+            return Results.Accepted(location, ToExternalSiteEvidenceJobResponse(job));
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException or UriFormatException)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    })
+        .RequireAuthorization(AdminPolicies.CanManageRules)
+        .RequireCors(HipCorsPolicies.ClientWrite)
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
+
+    siteSafetyApi.MapGet("/external-evidence/jobs/{jobId}", async (
+        string jobId,
+        HttpContext httpContext,
+        ExternalSiteEvidenceJobService jobService,
+        CancellationToken cancellationToken) =>
+    {
+        var job = await jobService.GetForRequesterAsync(
+            jobId,
+            ResolveProviderSettingsScope(httpContext),
+            cancellationToken);
+        return job is null ? Results.NotFound() : Results.Ok(ToExternalSiteEvidenceJobResponse(job));
+    })
+        .RequireAuthorization(AdminPolicies.CanManageRules);
+}
+
+/// <summary>
+/// Maps the public version-one HIP trust receipt issuance, lookup, and verification endpoints.
+/// </summary>
+/// <param name="protocolApi">Versioned HIP protocol route group.</param>
+/// <remarks>
+/// Receipt evaluation treats only the validated URL as caller input. Client observations, plugin metadata, and
+/// client-scoped provider settings are ignored so only server-controlled providers and rules affect a signed receipt.
+/// </remarks>
+static void MapProtocolApis(RouteGroupBuilder protocolApi)
+{
+    protocolApi.MapPost("/issue-receipt", async (
+        HipTrustReceiptIssueRequest request,
+        HttpContext httpContext,
+        IHipTrustReceiptAuthoritativeEvaluationService evaluationService,
+        IHipTrustReceiptIssuanceService issuanceService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var authoritativeEvaluation = await evaluationService.EvaluateAsync(request, cancellationToken);
+            var result = await issuanceService.IssueAsync(authoritativeEvaluation, cancellationToken);
+            return ToTrustReceiptIssueHttpResult(result, httpContext.Response);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is ArgumentException or FluentValidation.ValidationException)
+        {
+            return Results.BadRequest(new ApiErrorResponse(
+                "HIP could not evaluate the supplied site safety request."));
+        }
+        catch (Exception)
+        {
+            return Results.Json(
+                new ApiErrorResponse("HIP site safety evaluation is unavailable."),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    })
+        .WithSummary("Issues a signed HIP trust receipt from a server-authoritative site safety evaluation.")
+        .WithDescription("Validates only the requested URL and evaluates it with server-controlled providers and rules; client observations, plugin metadata, and client-scoped provider settings are ignored.")
+        .Accepts<HipTrustReceiptIssueRequest>("application/json")
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(
+            HipTrustReceiptIssueRequest.MaximumRequestBodyBytes))
+        .AllowAnonymous()
+        .RequireCors(HipCorsPolicies.ClientWrite)
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
+
+    protocolApi.MapGet("/receipts/{receiptId}", async (
+        string receiptId,
+        IHipTrustReceiptRepository repository,
+        CancellationToken cancellationToken) =>
+    {
+        if (!IsValidTrustReceiptId(receiptId))
+        {
+            return Results.BadRequest(new ApiErrorResponse("The trust receipt identifier is invalid."));
+        }
+
+        try
+        {
+            var stored = await repository.GetByIdAsync(receiptId, cancellationToken);
+            return stored is null
+                ? Results.NotFound(new ApiErrorResponse("HIP trust receipt was not found."))
+                : Results.Text(stored.ReceiptJson, "application/json", Encoding.UTF8);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (ArgumentException)
+        {
+            return Results.BadRequest(new ApiErrorResponse("The trust receipt identifier is invalid."));
+        }
+        catch (Exception)
+        {
+            return Results.Json(
+                new ApiErrorResponse("HIP trust receipt storage is unavailable."),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    })
+        .AllowAnonymous();
+
+    protocolApi.MapPost("/receipts/verify", async (
+        HttpRequest request,
+        IHipTrustReceiptVerificationService verificationService,
+        CancellationToken cancellationToken) =>
+    {
+        var body = await ReadBoundedTrustReceiptBodyAsync(request, cancellationToken);
+        if (body.IsTooLarge)
+        {
+            return Results.Json(
+                new ApiErrorResponse("HIP trust receipt request exceeds the maximum allowed size."),
+                statusCode: StatusCodes.Status413PayloadTooLarge);
+        }
+
+        HipTrustReceiptVerificationResult verification;
+        try
+        {
+            verification = await verificationService.VerifyAsync(body.Content, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            verification = new HipTrustReceiptVerificationResult(
+                HipTrustReceiptVerificationStatus.VerificationStateUnavailable);
+        }
+
+        return Results.Json(
+            HipTrustReceiptVerificationApiResponse.From(verification),
+            statusCode: TrustReceiptVerificationStatusCode(verification.Status));
+    })
+        .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite)
         .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 }
+
+/// <summary>Maps a receipt issuance result without reserializing successful signed documents.</summary>
+static IResult ToTrustReceiptIssueHttpResult(
+    HipTrustReceiptIssueResult result,
+    HttpResponse response)
+{
+    if (result.IsSuccess && result.Receipt is not null)
+    {
+        var statusCode = result.Status == HipTrustReceiptIssueStatus.Issued
+            ? StatusCodes.Status201Created
+            : StatusCodes.Status200OK;
+        if (statusCode == StatusCodes.Status201Created)
+        {
+            response.Headers.Location =
+                $"{ApiRoutes.Protocol}/receipts/{Uri.EscapeDataString(result.Receipt.ReceiptId)}";
+        }
+
+        return Results.Text(
+            HipTrustReceiptJson.Serialize(result.Receipt),
+            "application/json",
+            Encoding.UTF8,
+            statusCode);
+    }
+
+    var responseStatus = result.IsSuccess ? HipTrustReceiptIssueStatus.Unspecified : result.Status;
+    var (httpStatus, error) = responseStatus switch
+    {
+        HipTrustReceiptIssueStatus.InvalidEvaluation => (
+            StatusCodes.Status400BadRequest,
+            "HIP could not issue a receipt from the authoritative site safety evaluation."),
+        HipTrustReceiptIssueStatus.Conflict => (
+            StatusCodes.Status409Conflict,
+            "A different trust receipt already exists for this authoritative evaluation."),
+        HipTrustReceiptIssueStatus.SignerUnavailable or
+        HipTrustReceiptIssueStatus.SignerNotAuthorized => (
+            StatusCodes.Status503ServiceUnavailable,
+            "HIP trust receipt signing is unavailable."),
+        HipTrustReceiptIssueStatus.VerificationFailed => (
+            StatusCodes.Status503ServiceUnavailable,
+            "HIP could not verify the newly signed trust receipt."),
+        HipTrustReceiptIssueStatus.PersistenceUnavailable => (
+            StatusCodes.Status503ServiceUnavailable,
+            "HIP trust receipt storage is unavailable."),
+        _ => (
+            StatusCodes.Status503ServiceUnavailable,
+            "HIP trust receipt issuance is unavailable.")
+    };
+    return Results.Json(
+        new ApiErrorResponse(error),
+        statusCode: httpStatus);
+}
+
+/// <summary>Reads an untrusted receipt request with the protocol's strict byte cap.</summary>
+static async Task<BoundedTrustReceiptBody> ReadBoundedTrustReceiptBodyAsync(
+    HttpRequest request,
+    CancellationToken cancellationToken)
+{
+    if (request.ContentLength > HipTrustReceiptJson.MaximumReceiptBytes)
+    {
+        return BoundedTrustReceiptBody.TooLarge;
+    }
+
+    var buffer = new byte[HipTrustReceiptJson.MaximumReceiptBytes + 1];
+    var totalBytesRead = 0;
+    while (totalBytesRead < buffer.Length)
+    {
+        var bytesRead = await request.Body.ReadAsync(
+            buffer.AsMemory(totalBytesRead, buffer.Length - totalBytesRead),
+            cancellationToken);
+        if (bytesRead == 0)
+        {
+            return new BoundedTrustReceiptBody(
+                buffer.AsMemory(0, totalBytesRead),
+                IsTooLarge: false);
+        }
+
+        totalBytesRead += bytesRead;
+    }
+
+    return BoundedTrustReceiptBody.TooLarge;
+}
+
+/// <summary>Maps typed verification outcomes to stable HTTP status codes.</summary>
+static int TrustReceiptVerificationStatusCode(HipTrustReceiptVerificationStatus status) => status switch
+{
+    HipTrustReceiptVerificationStatus.Verified => StatusCodes.Status200OK,
+    HipTrustReceiptVerificationStatus.MalformedReceipt or
+    HipTrustReceiptVerificationStatus.UnsupportedVersion or
+    HipTrustReceiptVerificationStatus.WrongDocumentType => StatusCodes.Status400BadRequest,
+    HipTrustReceiptVerificationStatus.Expired or
+    HipTrustReceiptVerificationStatus.TimestampOutsideTolerance or
+    HipTrustReceiptVerificationStatus.ValidityWindowExceeded or
+    HipTrustReceiptVerificationStatus.IssuerNotAuthorized or
+    HipTrustReceiptVerificationStatus.IssuerNotFound or
+    HipTrustReceiptVerificationStatus.IssuerNotVerified or
+    HipTrustReceiptVerificationStatus.IssuerSuspended or
+    HipTrustReceiptVerificationStatus.IssuerRevoked or
+    HipTrustReceiptVerificationStatus.IssuerBindingMismatch or
+    HipTrustReceiptVerificationStatus.KeyNotFound or
+    HipTrustReceiptVerificationStatus.KeyNotValidAtIssuedTime or
+    HipTrustReceiptVerificationStatus.KeyRevoked or
+    HipTrustReceiptVerificationStatus.SignatureMetadataMismatch or
+    HipTrustReceiptVerificationStatus.InvalidSignature => StatusCodes.Status422UnprocessableEntity,
+    _ => StatusCodes.Status503ServiceUnavailable
+};
+
+/// <summary>Validates receipt identifiers before allowing a persistence query.</summary>
+static bool IsValidTrustReceiptId(string? receiptId) =>
+    !string.IsNullOrWhiteSpace(receiptId) &&
+    receiptId.Length <= HipTrustReceipt.MaximumReceiptIdLength &&
+    receiptId.All(character =>
+        character is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '-' or '_' or '.' or ':');
 
 /// <summary>
 /// Maps protected admin-managed Site Safety rule endpoints.
@@ -1140,18 +1712,30 @@ static void MapAdminSiteSafetyRuleApis(RouteGroupBuilder adminRuleApi)
 
     adminRuleApi.MapPost("/", async (
         AdminSiteSafetyRule rule,
+        HttpContext httpContext,
         AdminSiteSafetyRuleService service,
         CancellationToken cancellationToken) =>
     {
         try
         {
-            return Results.Ok(await service.CreateAsync(rule, cancellationToken));
+            var actor = ResolveAdminActor(httpContext);
+            var actorBoundRule = rule with
+            {
+                CreatedBy = actor,
+                CreatedAtUtc = default,
+                ApprovedBy = null,
+                ApprovedAtUtc = null,
+                UpdatedBy = null,
+                UpdatedAtUtc = null
+            };
+            return Results.Ok(await service.CreateAsync(actorBoundRule, cancellationToken));
         }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 
     adminRuleApi.MapPost("/{ruleId}/simulate", async (
         string ruleId,
@@ -1174,30 +1758,38 @@ static void MapAdminSiteSafetyRuleApis(RouteGroupBuilder adminRuleApi)
     adminRuleApi.MapPost("/{ruleId}/approve", async (
         string ruleId,
         AdminSiteSafetyRuleActionRequest request,
+        HttpContext httpContext,
         AdminSiteSafetyRuleService service,
         CancellationToken cancellationToken) =>
-        await RunRuleActionAsync(() => service.ApproveAsync(ruleId, request.ActorId, cancellationToken)));
+        await RunRuleActionAsync(() => service.ApproveAsync(ruleId, ResolveAdminActor(httpContext), cancellationToken)))
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 
     adminRuleApi.MapPost("/{ruleId}/activate", async (
         string ruleId,
         AdminSiteSafetyRuleActionRequest request,
+        HttpContext httpContext,
         AdminSiteSafetyRuleService service,
         CancellationToken cancellationToken) =>
-        await RunRuleActionAsync(() => service.ActivateAsync(ruleId, request.ActorId, cancellationToken)));
+        await RunRuleActionAsync(() => service.ActivateAsync(ruleId, ResolveAdminActor(httpContext), cancellationToken)))
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 
     adminRuleApi.MapPost("/{ruleId}/disable", async (
         string ruleId,
         AdminSiteSafetyRuleActionRequest request,
+        HttpContext httpContext,
         AdminSiteSafetyRuleService service,
         CancellationToken cancellationToken) =>
-        await RunRuleActionAsync(() => service.DisableAsync(ruleId, request.ActorId, cancellationToken)));
+        await RunRuleActionAsync(() => service.DisableAsync(ruleId, ResolveAdminActor(httpContext), cancellationToken)))
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 
     adminRuleApi.MapPost("/{ruleId}/rollback", async (
         string ruleId,
         AdminSiteSafetyRuleActionRequest request,
+        HttpContext httpContext,
         AdminSiteSafetyRuleService service,
         CancellationToken cancellationToken) =>
-        await RunRuleActionAsync(() => service.RollbackAsync(ruleId, request.ActorId, cancellationToken)));
+        await RunRuleActionAsync(() => service.RollbackAsync(ruleId, ResolveAdminActor(httpContext), cancellationToken)))
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 }
 
 /// <summary>
@@ -1254,7 +1846,42 @@ static object ToSiteSafetyScanResponse(SiteSafetyScanResult result) => new
     result.ContentRiskScore,
     result.FinalHipScore,
     ProviderEvidence = ToSiteSafetyProviderEvidenceResponse(result.ProviderEvidence),
-    result.ScoreImpact
+    result.ScoreImpact,
+    Scoring = result.Scoring is null
+        ? null
+        : new
+        {
+            result.Scoring.ModelVersion,
+            result.Scoring.DomainTrustScore,
+            result.Scoring.PageTrustScore,
+            result.Scoring.ContentRiskScore,
+            result.Scoring.FinalHipScore,
+            FinalStatus = result.Scoring.FinalStatus.ToString(),
+            PresentationStatus = result.Scoring.PresentationStatus.ToString(),
+            Confidence = result.Scoring.Confidence.ToString(),
+            EvidenceFreshness = result.Scoring.EvidenceFreshness.ToString(),
+            TrustAssertionDisposition = result.Scoring.TrustAssertionDisposition.ToString(),
+            result.Scoring.CanAssertPositiveTrust,
+            result.Scoring.FinalScoreHigherMeansMoreTrust,
+            result.Scoring.ContentRiskScoreHigherMeansMoreRisk,
+            result.Scoring.Reasons,
+            result.Scoring.Warnings,
+            ReasonEntries = result.Scoring.ReasonEntries.Select(entry => new
+            {
+                entry.Code,
+                entry.Explanation,
+                entry.WarningCode,
+                entry.Warning,
+                Impact = new
+                {
+                    Kind = entry.Impact.Kind.ToString(),
+                    entry.Impact.Value
+                },
+                entry.EvidenceSourceCode,
+                entry.EvidenceObservedAtUtc,
+                PrivacyClassification = entry.PrivacyClassification.ToString()
+            }).ToArray()
+        }
 };
 
 /// <summary>
@@ -1281,6 +1908,10 @@ static object[] ToSiteSafetyProviderEvidenceResponse(IEnumerable<SiteSafetyEvide
         evidence.Errors,
         evidence.IsAuthoritativeForRisk,
         evidence.IsAuthoritativeForTrust,
+        ResultStatus = evidence.ResultStatus.ToString(),
+        evidence.LatencyMilliseconds,
+        Freshness = evidence.Freshness.ToString(),
+        PrivacyClassification = evidence.PrivacyClassification.ToString(),
         EvidenceItems = evidence.EvidenceItems.Select(item => new
         {
             item.Category,
@@ -1291,6 +1922,21 @@ static object[] ToSiteSafetyProviderEvidenceResponse(IEnumerable<SiteSafetyEvide
             item.Summary
         }).ToArray()
     }).ToArray();
+
+/// <summary>Projects durable provider job state without owner, settings, lease, hash, or observed-signal data.</summary>
+static object ToExternalSiteEvidenceJobResponse(ExternalSiteEvidenceJob job) => new
+{
+    job.JobId,
+    job.Domain,
+    Status = job.Status.ToString(),
+    job.AttemptCount,
+    job.RequestedAtUtc,
+    job.UpdatedAtUtc,
+    job.NextAttemptAtUtc,
+    job.CompletedAtUtc,
+    job.LastError,
+    ProviderEvidence = ToSiteSafetyProviderEvidenceResponse(job.ProviderEvidence)
+};
 
 static void MapAiApis(RouteGroupBuilder aiApi)
 {
@@ -1326,18 +1972,57 @@ static void MapAiApis(RouteGroupBuilder aiApi)
 
     aiApi.MapPost("/suggest-rule", async (
         HipAiRuleSuggestionRequest request,
-        IHipAiRiskAnalyzer analyzer,
+        AiRuleDraftService draftService,
         CancellationToken cancellationToken) =>
     {
         try
         {
-            return Results.Ok(await analyzer.SuggestRuleAsync(request, cancellationToken));
+            var draft = await draftService.CreateAsync(request, cancellationToken);
+            return Results.Created(
+                $"/api/v1/ai/rule-drafts/{Uri.EscapeDataString(draft.DraftId)}",
+                AiRuleDraftApiResponse.From(draft));
         }
-        catch (ArgumentException ex)
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException or InvalidOperationException)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
     });
+
+    aiApi.MapGet("/rule-drafts", async (
+        AiRuleDraftService draftService,
+        CancellationToken cancellationToken) =>
+        Results.Ok((await draftService.ListAsync(cancellationToken)).Select(AiRuleDraftApiResponse.From).ToArray()));
+
+    aiApi.MapGet("/rule-drafts/{draftId}", async (
+        string draftId,
+        AiRuleDraftService draftService,
+        CancellationToken cancellationToken) =>
+    {
+        var draft = await draftService.GetAsync(draftId, cancellationToken);
+        return draft is null ? Results.NotFound() : Results.Ok(AiRuleDraftApiResponse.From(draft));
+    });
+
+    aiApi.MapPost("/rule-drafts/{draftId}/submit-for-approval", async (
+        string draftId,
+        HttpContext httpContext,
+        AiRuleDraftService draftService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var workflow = await draftService.SubmitForApprovalAsync(
+                draftId,
+                HipAuthenticatedIdentity.ResolveRequiredUniqueClaim(
+                    httpContext.User,
+                    HipAuthenticationClaimTypes.ActorId),
+                cancellationToken);
+            return Results.Ok(RuleApprovalWorkflowApiResponse.From(workflow));
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    }).RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 }
 
 static void MapConsumerApis(RouteGroupBuilder consumerApi)
@@ -1375,25 +2060,278 @@ static void MapConsumerApis(RouteGroupBuilder consumerApi)
         return result.Accepted ? Results.Ok(result) : Results.BadRequest(result);
     });
 
-    consumerApi.MapGet("/settings", (
+    consumerApi.MapGet("/settings", async (
         HttpContext httpContext,
-        IConsumerPortalService consumerPortalService) =>
-        Results.Ok(consumerPortalService.GetSettings(ConsumerId(httpContext))));
+        IConsumerPortalService consumerPortalService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await consumerPortalService.GetSettingsAsync(ConsumerId(httpContext), cancellationToken)));
 
-    consumerApi.MapPost("/settings", (
+    consumerApi.MapPost("/settings", async (
         HttpContext httpContext,
         ConsumerSettings settings,
-        IConsumerPortalService consumerPortalService) =>
+        IConsumerPortalService consumerPortalService,
+        CancellationToken cancellationToken) =>
     {
-        var result = consumerPortalService.SaveSettings(ConsumerId(httpContext), settings);
+        var result = await consumerPortalService.SaveSettingsAsync(
+            ConsumerId(httpContext),
+            settings,
+            cancellationToken);
         return result.Saved ? Results.Ok(result) : Results.BadRequest(result);
     });
+
+    MapConsumerDeviceApis(consumerApi.MapGroup("/devices"));
 }
 
+/// <summary>Maps consumer-owned device registration, listing, and revocation endpoints.</summary>
+static void MapConsumerDeviceApis(RouteGroupBuilder deviceApi)
+{
+    const long maximumDeviceMutationBodyBytes = 8 * 1024;
+
+    deviceApi.MapPost("/registration-challenges", async (
+        StartDeviceRegistrationRequest request,
+        HttpContext httpContext,
+        IAntiforgery antiforgery,
+        IDeviceRegistrationService registrationService,
+        CancellationToken cancellationToken) =>
+    {
+        var antiforgeryFailure = await ValidateConsumerDeviceAntiforgeryAsync(httpContext, antiforgery);
+        if (antiforgeryFailure is not null)
+        {
+            return antiforgeryFailure;
+        }
+
+        try
+        {
+            var result = await registrationService.IssueChallengeAsync(
+                ConsumerId(httpContext),
+                request,
+                cancellationToken);
+            return result.Outcome == DeviceRegistrationOutcome.Succeeded && result.Challenge is { } challenge
+                ? Results.Created(
+                    $"{ApiRoutes.Consumer}/devices/registration-challenges/{Uri.EscapeDataString(challenge.ChallengeId)}",
+                    challenge)
+                : DeviceRegistrationFailure(result.Outcome);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return DeviceRegistrationUnavailable();
+        }
+    })
+        .WithName("IssueConsumerDeviceRegistrationChallenge")
+        .WithSummary("Issue a consumer-owned device registration challenge")
+        .WithDescription("Validates bounded public device metadata, derives the owner only from the authenticated HIP consumer claim, and returns a short-lived signing input. Private keys and hardware fingerprints are never accepted.")
+        .Accepts<StartDeviceRegistrationRequest>("application/json")
+        .Produces<DeviceRegistrationChallengeResponse>(StatusCodes.Status201Created)
+        .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status401Unauthorized)
+        .Produces(StatusCodes.Status403Forbidden)
+        .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
+        .Produces(StatusCodes.Status413PayloadTooLarge)
+        .Produces<ApiErrorResponse>(StatusCodes.Status429TooManyRequests)
+        .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
+        .RequireRateLimiting(ConsumerDeviceMutationRateLimitPolicy)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maximumDeviceMutationBodyBytes));
+
+    deviceApi.MapPost("/registration-challenges/{challengeId}/responses", async (
+        string challengeId,
+        CompleteDeviceRegistrationRequest request,
+        HttpContext httpContext,
+        IAntiforgery antiforgery,
+        IDeviceRegistrationService registrationService,
+        CancellationToken cancellationToken) =>
+    {
+        var antiforgeryFailure = await ValidateConsumerDeviceAntiforgeryAsync(httpContext, antiforgery);
+        if (antiforgeryFailure is not null)
+        {
+            return antiforgeryFailure;
+        }
+
+        try
+        {
+            var result = await registrationService.CompleteAsync(
+                ConsumerId(httpContext),
+                challengeId,
+                request,
+                cancellationToken);
+            return result.Outcome == DeviceRegistrationOutcome.Succeeded && result.Device is { } device
+                ? Results.Ok(device)
+                : DeviceRegistrationFailure(result.Outcome);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return DeviceRegistrationUnavailable();
+        }
+    })
+        .WithName("CompleteConsumerDeviceRegistration")
+        .WithSummary("Complete a consumer-owned device registration")
+        .WithDescription("Verifies the exact challenge signing input and a WebCrypto-compatible P-256 proof for the authenticated consumer, then atomically consumes the challenge.")
+        .Accepts<CompleteDeviceRegistrationRequest>("application/json")
+        .Produces<DeviceRegistrationDeviceResponse>(StatusCodes.Status200OK)
+        .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status401Unauthorized)
+        .Produces(StatusCodes.Status403Forbidden)
+        .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
+        .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
+        .Produces<ApiErrorResponse>(StatusCodes.Status410Gone)
+        .Produces(StatusCodes.Status413PayloadTooLarge)
+        .Produces<ApiErrorResponse>(StatusCodes.Status422UnprocessableEntity)
+        .Produces<ApiErrorResponse>(StatusCodes.Status429TooManyRequests)
+        .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
+        .RequireRateLimiting(ConsumerDeviceMutationRateLimitPolicy)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maximumDeviceMutationBodyBytes));
+
+    deviceApi.MapGet("/", async (
+        HttpContext httpContext,
+        IAntiforgery antiforgery,
+        IDeviceRegistrationService registrationService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            AddConsumerDeviceAntiforgeryToken(httpContext, antiforgery);
+            return Results.Ok(await registrationService.ListAsync(ConsumerId(httpContext), cancellationToken));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return DeviceRegistrationUnavailable();
+        }
+    })
+        .WithName("ListConsumerDevices")
+        .WithSummary("List the authenticated consumer's devices")
+        .WithDescription("Returns only privacy-safe device summaries owned by the authenticated HIP consumer. Cookie-session callers also receive an antiforgery request token in the named response header for later mutations.")
+        .Produces<IReadOnlyCollection<DeviceRegistrationDeviceResponse>>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status401Unauthorized)
+        .Produces(StatusCodes.Status403Forbidden)
+        .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable);
+
+    deviceApi.MapPost("/{deviceId}/revoke", async (
+        string deviceId,
+        HttpContext httpContext,
+        IAntiforgery antiforgery,
+        IDeviceRegistrationService registrationService,
+        CancellationToken cancellationToken) =>
+    {
+        var antiforgeryFailure = await ValidateConsumerDeviceAntiforgeryAsync(httpContext, antiforgery);
+        if (antiforgeryFailure is not null)
+        {
+            return antiforgeryFailure;
+        }
+
+        try
+        {
+            var result = await registrationService.RevokeAsync(
+                ConsumerId(httpContext),
+                deviceId,
+                cancellationToken);
+            return result.Outcome == DeviceRegistrationOutcome.Succeeded && result.Device is { } device
+                ? Results.Ok(device)
+                : DeviceRegistrationFailure(result.Outcome);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return DeviceRegistrationUnavailable();
+        }
+    })
+        .WithName("RevokeConsumerDevice")
+        .WithSummary("Revoke a consumer-owned device")
+        .WithDescription("Irreversibly revokes only a device owned by the authenticated HIP consumer. Unknown and wrong-owner device identifiers receive the same non-disclosing response.")
+        .Produces<DeviceRegistrationDeviceResponse>(StatusCodes.Status200OK)
+        .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status401Unauthorized)
+        .Produces(StatusCodes.Status403Forbidden)
+        .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
+        .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
+        .Produces(StatusCodes.Status413PayloadTooLarge)
+        .Produces<ApiErrorResponse>(StatusCodes.Status429TooManyRequests)
+        .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
+        .RequireRateLimiting(ConsumerDeviceMutationRateLimitPolicy)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maximumDeviceMutationBodyBytes));
+}
+
+/// <summary>Maps a typed device-registration failure to a stable, non-sensitive API result.</summary>
+static IResult DeviceRegistrationFailure(DeviceRegistrationOutcome outcome) => outcome switch
+{
+    DeviceRegistrationOutcome.InvalidRequest => Results.BadRequest(
+        new ApiErrorResponse(DeviceRegistrationMessages.InvalidRequest)),
+    DeviceRegistrationOutcome.InvalidProof => Results.Json(
+        new ApiErrorResponse(DeviceRegistrationMessages.InvalidProof),
+        statusCode: StatusCodes.Status422UnprocessableEntity),
+    DeviceRegistrationOutcome.Expired => Results.Json(
+        new ApiErrorResponse(DeviceRegistrationMessages.Expired),
+        statusCode: StatusCodes.Status410Gone),
+    DeviceRegistrationOutcome.Conflict => Results.Conflict(
+        new ApiErrorResponse(DeviceRegistrationMessages.Conflict)),
+    DeviceRegistrationOutcome.NotFound => Results.NotFound(
+        new ApiErrorResponse(DeviceRegistrationMessages.ResourceUnavailable)),
+    _ => DeviceRegistrationUnavailable()
+};
+
+/// <summary>Returns HIP's generic device-registration availability boundary without exception details.</summary>
+static IResult DeviceRegistrationUnavailable() => Results.Json(
+    new ApiErrorResponse(DeviceRegistrationMessages.Unavailable),
+    statusCode: StatusCodes.Status503ServiceUnavailable);
+
+/// <summary>Requires an antiforgery token only when the current request was authenticated by HIP's browser cookie.</summary>
+static async Task<IResult?> ValidateConsumerDeviceAntiforgeryAsync(
+    HttpContext httpContext,
+    IAntiforgery antiforgery)
+{
+    if (!IsHipSessionCookieAuthenticated(httpContext))
+    {
+        return null;
+    }
+
+    return await antiforgery.IsRequestValidAsync(httpContext)
+        ? null
+        : Results.BadRequest(new ApiErrorResponse("The antiforgery token is invalid."));
+}
+
+/// <summary>Adds a same-origin antiforgery request token to an authenticated device-list response.</summary>
+static void AddConsumerDeviceAntiforgeryToken(HttpContext httpContext, IAntiforgery antiforgery)
+{
+    if (!IsHipSessionCookieAuthenticated(httpContext))
+    {
+        return;
+    }
+
+    var tokens = antiforgery.GetAndStoreTokens(httpContext);
+    if (!string.IsNullOrWhiteSpace(tokens.HeaderName) && !string.IsNullOrWhiteSpace(tokens.RequestToken))
+    {
+        httpContext.Response.Headers[tokens.HeaderName] = tokens.RequestToken;
+        httpContext.Response.Headers.CacheControl = "no-store";
+        httpContext.Response.Headers.Pragma = "no-cache";
+    }
+}
+
+static bool IsHipSessionCookieAuthenticated(HttpContext httpContext) =>
+    string.Equals(
+        httpContext.Features.Get<IAuthenticateResultFeature>()
+            ?.AuthenticateResult
+            ?.Ticket
+            ?.AuthenticationScheme,
+        HipAuthenticationSchemes.SessionCookie,
+        StringComparison.Ordinal);
+
 static string ConsumerId(HttpContext httpContext) =>
-    httpContext.User.FindFirst("hip_consumer_id")?.Value
-    ?? httpContext.User.Identity?.Name
-    ?? "development-consumer";
+    HipAuthenticatedIdentity.ResolveRequiredUniqueClaim(
+        httpContext.User,
+        HipAuthenticationClaimTypes.ConsumerId);
 
 /// <summary>
 /// Resolves the current admin actor label for audit-friendly metadata without exposing authentication internals.
@@ -1401,42 +2339,51 @@ static string ConsumerId(HttpContext httpContext) =>
 /// <param name="httpContext">Current HTTP request context.</param>
 /// <returns>Admin actor label suitable for persistence in privacy-safe admin records.</returns>
 static string ResolveAdminActor(HttpContext httpContext) =>
-    httpContext.User.Identity?.Name
-    ?? httpContext.User.FindFirst("name")?.Value
-    ?? "local-admin";
+    HipAuthenticatedIdentity.ResolveRequiredUniqueClaim(
+        httpContext.User,
+        HipAuthenticationClaimTypes.ActorId);
 
 static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
 {
-    const string hudCredentialHeader = "X-HIP-HUD-Credential";
+    const long maximumHudActivationBodyBytes = 16 * 1024;
+    const long maximumHudSettingsBodyBytes = 16 * 1024;
+    const long maximumHudSignalBodyBytes = 64 * 1024;
 
     slHudApi.MapPost("/activate", (
         SecondLifeHudActivationRequest request,
         ISecondLifeHudService hudService) =>
     {
-        var response = hudService.Activate(request);
-        return response.Activated ? Results.Ok(response) : Results.BadRequest(response);
-    });
+        try
+        {
+            var response = hudService.Activate(request);
+            return response.Activated ? Results.Ok(response) : Results.BadRequest(response);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    })
+        .AllowAnonymous()
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maximumHudActivationBodyBytes));
 
     slHudApi.MapPost("/scan", (
         SecondLifeHudScanRequest request,
-        HttpContext httpContext,
-        ISecondLifeHudService hudService,
-        IHudDeviceCredentialService credentialService) =>
+        ISecondLifeHudService hudService) =>
     {
         try
         {
-            if (!credentialService.IsValid(request.DeviceId, httpContext.Request.Headers[hudCredentialHeader].FirstOrDefault()))
-            {
-                return Results.Unauthorized();
-            }
-
             return Results.Ok(hudService.Scan(request));
         }
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireAuthorization(HudPolicies.CanUseActiveDevice)
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maximumHudSignalBodyBytes))
+        .WithMetadata(new HudDeviceAuthorizationMetadata(HudDeviceIdentifierLocation.JsonBody, "deviceId"));
 
     slHudApi.MapPost("/simulate", (
         SecondLifeHudSimulationApiRequest request,
@@ -1450,83 +2397,79 @@ static void MapSecondLifeHudApis(RouteGroupBuilder slHudApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireAuthorization(AdminPolicies.CanSupportLicenses)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maximumHudSignalBodyBytes));
 
     slHudApi.MapGet("/settings/{deviceId}", (
         string deviceId,
         HttpContext httpContext,
-        ISecondLifeHudService hudService,
-        IHudDeviceCredentialService credentialService) =>
+        ISecondLifeHudService hudService) =>
     {
         try
         {
-            if (!credentialService.IsValid(deviceId, httpContext.Request.Headers[hudCredentialHeader].FirstOrDefault()))
-            {
-                return Results.Unauthorized();
-            }
-
-            return Results.Ok(hudService.GetSettings(deviceId));
+            return Results.Ok(hudService.GetSettings(
+                HudDeviceAuthorizationContext.GetRequiredLicenseId(httpContext),
+                deviceId));
         }
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireAuthorization(HudPolicies.CanUseActiveDevice)
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy)
+        .WithMetadata(new HudDeviceAuthorizationMetadata(HudDeviceIdentifierLocation.Route, "deviceId"));
 
     slHudApi.MapPost("/settings/{deviceId}", (
         string deviceId,
         SecondLifeHudSettings settings,
         HttpContext httpContext,
-        ISecondLifeHudService hudService,
-        IHudDeviceCredentialService credentialService) =>
+        ISecondLifeHudService hudService) =>
     {
         try
         {
-            if (!credentialService.IsValid(deviceId, httpContext.Request.Headers[hudCredentialHeader].FirstOrDefault()))
-            {
-                return Results.Unauthorized();
-            }
-
-            var response = hudService.SaveSettings(deviceId, settings);
+            var response = hudService.SaveSettings(
+                HudDeviceAuthorizationContext.GetRequiredLicenseId(httpContext),
+                deviceId,
+                settings);
             return response.Saved ? Results.Ok(response) : Results.BadRequest(response);
         }
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireAuthorization(HudPolicies.CanUseActiveDevice)
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maximumHudSettingsBodyBytes))
+        .WithMetadata(new HudDeviceAuthorizationMetadata(HudDeviceIdentifierLocation.Route, "deviceId"));
 
     slHudApi.MapPost("/report", async (
         SecondLifeHudFindingReport report,
-        HttpContext httpContext,
         ISecondLifeHudService hudService,
-        IHudDeviceCredentialService credentialService,
         CancellationToken cancellationToken) =>
     {
-        if (!credentialService.IsValid(report.HudDeviceId, httpContext.Request.Headers[hudCredentialHeader].FirstOrDefault()))
-        {
-            return Results.Unauthorized();
-        }
-
         var response = await hudService.ReportFindingAsync(report, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
-    });
+    })
+        .RequireAuthorization(HudPolicies.CanUseActiveDevice)
+        .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maximumHudSignalBodyBytes))
+        .WithMetadata(new HudDeviceAuthorizationMetadata(HudDeviceIdentifierLocation.JsonBody, "hudDeviceId"));
 
     slHudApi.MapPost("/report-finding", async (
         SecondLifeHudFindingReport report,
-        HttpContext httpContext,
         ISecondLifeHudService hudService,
-        IHudDeviceCredentialService credentialService,
         CancellationToken cancellationToken) =>
     {
-        if (!credentialService.IsValid(report.HudDeviceId, httpContext.Request.Headers[hudCredentialHeader].FirstOrDefault()))
-        {
-            return Results.Unauthorized();
-        }
-
         var response = await hudService.ReportFindingAsync(report, cancellationToken);
         return response.Accepted ? Results.Ok(response) : Results.BadRequest(response);
-    });
+    })
+        .RequireAuthorization(HudPolicies.CanUseActiveDevice)
+        .RequireRateLimiting(RateLimitPolicies.PublicFeedbackPolicy)
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maximumHudSignalBodyBytes))
+        .WithMetadata(new HudDeviceAuthorizationMetadata(HudDeviceIdentifierLocation.JsonBody, "hudDeviceId"));
 }
 
 /// <summary>
@@ -1537,49 +2480,82 @@ static void MapLicenseApis(RouteGroupBuilder licenseApi)
 {
     licenseApi.MapPost("/setup-codes", (
         CreateSetupCodeRequest request,
+        HttpContext httpContext,
         ISetupCodeLicenseService licenseService) =>
-        Results.Ok(licenseService.CreateSetupCode(request)));
+        Results.Ok(licenseService.CreateSetupCode(request with
+        {
+            CreatedBy = ResolveAdminActor(httpContext)
+        })))
+        .RequireAuthorization(AdminPolicies.CanAdministerLicenses)
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 
     licenseApi.MapGet("/", async (
         ISetupCodeLicenseService licenseService,
         CancellationToken cancellationToken) =>
-        Results.Ok(await licenseService.ListLicensesAsync(cancellationToken)));
+        Results.Ok((await licenseService.ListLicensesAsync(cancellationToken))
+            .Select(ToPrivacySafeLicenseSummary)
+            .ToArray()))
+        .RequireAuthorization(AdminPolicies.CanViewLicenses);
 
     licenseApi.MapGet("/{licenseId}", (
         string licenseId,
         ISetupCodeLicenseService licenseService) =>
         licenseService.GetLicense(licenseId) is { } license
-            ? Results.Ok(license)
-            : Results.NotFound(new { error = "License was not found." }));
+            ? Results.Ok(ToPrivacySafeLicenseSummary(license))
+            : Results.NotFound(new { error = "License was not found." }))
+        .RequireAuthorization(AdminPolicies.CanViewLicenses);
 
     licenseApi.MapPost("/{licenseId}/reset", (
         string licenseId,
         ISetupCodeLicenseService licenseService) =>
         licenseService.ResetActivation(licenseId) is { } license
-            ? Results.Ok(license)
-            : Results.NotFound(new { error = "License was not found." }));
+            ? Results.Ok(ToPrivacySafeLicenseSummary(license))
+            : Results.NotFound(new { error = "License was not found." }))
+        .RequireAuthorization(AdminPolicies.CanSupportLicenses);
 
     licenseApi.MapPost("/{licenseId}/revoke", (
         string licenseId,
         ISetupCodeLicenseService licenseService) =>
         licenseService.SetStatus(licenseId, LicenseStatus.Revoked) is { } license
-            ? Results.Ok(license)
-            : Results.NotFound(new { error = "License was not found." }));
+            ? Results.Ok(ToPrivacySafeLicenseSummary(license))
+            : Results.NotFound(new { error = "License was not found." }))
+        .RequireAuthorization(AdminPolicies.CanAdministerLicenses)
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 
     licenseApi.MapPost("/{licenseId}/suspend", (
         string licenseId,
         ISetupCodeLicenseService licenseService) =>
         licenseService.SetStatus(licenseId, LicenseStatus.Suspended) is { } license
-            ? Results.Ok(license)
-            : Results.NotFound(new { error = "License was not found." }));
+            ? Results.Ok(ToPrivacySafeLicenseSummary(license))
+            : Results.NotFound(new { error = "License was not found." }))
+        .RequireAuthorization(AdminPolicies.CanAdministerLicenses)
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 
     licenseApi.MapPost("/{licenseId}/reactivate", (
         string licenseId,
         ISetupCodeLicenseService licenseService) =>
         licenseService.SetStatus(licenseId, LicenseStatus.Active) is { } license
-            ? Results.Ok(license)
-            : Results.NotFound(new { error = "License was not found." }));
+            ? Results.Ok(ToPrivacySafeLicenseSummary(license))
+            : Results.NotFound(new { error = "License was not found." }))
+        .RequireAuthorization(AdminPolicies.CanAdministerLicenses)
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 }
+
+/// <summary>
+/// Removes stable actor attribution and masks device identifiers before a license summary crosses the admin API boundary.
+/// </summary>
+static LicenseSummary ToPrivacySafeLicenseSummary(LicenseSummary license) =>
+    license with
+    {
+        DeviceIds = license.DeviceIds.Select(MaskLicenseDeviceId).ToArray(),
+        CreatedBy = null
+    };
+
+/// <summary>
+/// Produces the same shortened device reference used by the admin license UI.
+/// </summary>
+static string MaskLicenseDeviceId(string deviceId) =>
+    deviceId.Length <= 8 ? "••••" : $"{deviceId[..6]}••••{deviceId[^4..]}";
 
 static void MapRulesApis(RouteGroupBuilder adminApi)
 {
@@ -1702,37 +2678,79 @@ static void MapSelfHealingPatternApis(RouteGroupBuilder selfHealingApi)
 
 static void MapReviewApis(RouteGroupBuilder reviewApi)
 {
-    reviewApi.MapGet("/", (IReviewQueueService reviewQueueService) => Results.Ok(reviewQueueService.List()));
+    reviewApi.MapGet("/", (IReviewQueueService reviewQueueService) => Results.Ok(reviewQueueService.List()))
+        .RequireAuthorization(AdminPolicies.CanViewReviews);
 
     reviewApi.MapGet("/{id}", (string id, IReviewQueueService reviewQueueService) =>
-        reviewQueueService.Get(id) is { } item ? Results.Ok(item) : Results.NotFound());
+        reviewQueueService.Get(id) is { } item ? Results.Ok(item) : Results.NotFound())
+        .RequireAuthorization(AdminPolicies.CanViewReviews);
 
-    reviewApi.MapPost("/", (ReviewItem item, IReviewQueueService reviewQueueService) =>
+    reviewApi.MapPost("/", (
+        ReviewItem item,
+        HttpContext httpContext,
+        IReviewQueueService reviewQueueService) =>
     {
         try
         {
-            return Results.Ok(reviewQueueService.Create(item));
+            var actorBoundItem = item with
+            {
+                ReviewItemId = string.Empty,
+                Status = ReviewStatus.Submitted,
+                CreatedAtUtc = default,
+                UpdatedAtUtc = default,
+                CreatedBy = ResolveAdminActor(httpContext),
+                AssignedTo = null,
+                Decision = null,
+                DecisionReason = null
+            };
+            return Results.Ok(reviewQueueService.Create(actorBoundItem));
         }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireAuthorization(AdminPolicies.CanDecideReviews);
 
-    reviewApi.MapPost("/{id}/approve", (string id, AdminDecisionRequest request, IReviewQueueService reviewQueueService) =>
-        Results.Ok(reviewQueueService.Approve(id, request.ActorId, request.Reason)));
+    reviewApi.MapPost("/{id}/approve", (
+        string id,
+        AdminDecisionRequest request,
+        HttpContext httpContext,
+        IReviewQueueService reviewQueueService) =>
+        Results.Ok(reviewQueueService.Approve(id, ResolveAdminActor(httpContext), request.Reason)))
+        .RequireAuthorization(AdminPolicies.CanDecideReviews);
 
-    reviewApi.MapPost("/{id}/reject", (string id, AdminDecisionRequest request, IReviewQueueService reviewQueueService) =>
-        Results.Ok(reviewQueueService.Reject(id, request.ActorId, request.Reason)));
+    reviewApi.MapPost("/{id}/reject", (
+        string id,
+        AdminDecisionRequest request,
+        HttpContext httpContext,
+        IReviewQueueService reviewQueueService) =>
+        Results.Ok(reviewQueueService.Reject(id, ResolveAdminActor(httpContext), request.Reason)))
+        .RequireAuthorization(AdminPolicies.CanDecideReviews);
 
-    reviewApi.MapPost("/{id}/needs-more-info", (string id, AdminDecisionRequest request, IReviewQueueService reviewQueueService) =>
-        Results.Ok(reviewQueueService.RequestMoreInfo(id, request.ActorId, request.Reason)));
+    reviewApi.MapPost("/{id}/needs-more-info", (
+        string id,
+        AdminDecisionRequest request,
+        HttpContext httpContext,
+        IReviewQueueService reviewQueueService) =>
+        Results.Ok(reviewQueueService.RequestMoreInfo(id, ResolveAdminActor(httpContext), request.Reason)))
+        .RequireAuthorization(AdminPolicies.CanDecideReviews);
 
-    reviewApi.MapPost("/{id}/decision", (string id, AdminReviewDecisionRequest request, IReviewQueueService reviewQueueService) =>
-        ReviewDecision(id, request, reviewQueueService));
+    reviewApi.MapPost("/{id}/decision", (
+        string id,
+        AdminReviewDecisionRequest request,
+        HttpContext httpContext,
+        IReviewQueueService reviewQueueService) =>
+        ReviewDecision(id, request, ResolveAdminActor(httpContext), reviewQueueService))
+        .RequireAuthorization(AdminPolicies.CanDecideReviews);
 
-    reviewApi.MapPost("/{id}/assign", (string id, AdminAssignRequest request, IReviewQueueService reviewQueueService) =>
-        Results.Ok(reviewQueueService.Assign(id, request.AssignedTo, request.ActorId)));
+    reviewApi.MapPost("/{id}/assign", (
+        string id,
+        AdminAssignRequest request,
+        HttpContext httpContext,
+        IReviewQueueService reviewQueueService) =>
+        Results.Ok(reviewQueueService.Assign(id, request.AssignedTo, ResolveAdminActor(httpContext))))
+        .RequireAuthorization(AdminPolicies.CanDecideReviews);
 }
 
 /// <summary>
@@ -1744,7 +2762,8 @@ static void MapAdminReviewQueueApis(RouteGroupBuilder adminReviewQueueApi)
     adminReviewQueueApi.MapGet("/", async (
         IAdminReviewQueueService adminReviewQueueService,
         CancellationToken cancellationToken) =>
-        Results.Ok(await adminReviewQueueService.ListAsync(cancellationToken)));
+        Results.Ok(await adminReviewQueueService.ListAsync(cancellationToken)))
+        .RequireAuthorization(AdminPolicies.CanViewReviews);
 
     adminReviewQueueApi.MapGet("/{id}", async (
         string id,
@@ -1753,110 +2772,198 @@ static void MapAdminReviewQueueApis(RouteGroupBuilder adminReviewQueueApi)
     {
         var item = await adminReviewQueueService.GetAsync(id, cancellationToken);
         return item is null ? Results.NotFound() : Results.Ok(item);
-    });
+    })
+        .RequireAuthorization(AdminPolicies.CanViewReviews);
 
     adminReviewQueueApi.MapPost("/{id}/assign", async (
         string id,
         AdminReviewQueueAssignRequest request,
+        HttpContext httpContext,
         IAdminReviewQueueService adminReviewQueueService,
         CancellationToken cancellationToken) =>
     {
         try
         {
-            return Results.Ok(await adminReviewQueueService.AssignAsync(id, request.AssignedTo, request.ActorId, cancellationToken));
+            return Results.Ok(await adminReviewQueueService.AssignAsync(
+                id,
+                request.AssignedTo,
+                ResolveAdminActor(httpContext),
+                cancellationToken));
         }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireAuthorization(AdminPolicies.CanDecideReviews);
 
     adminReviewQueueApi.MapPost("/{id}/decision", async (
         string id,
         HIP.Application.Review.AdminReviewDecisionRequest request,
+        HttpContext httpContext,
         IAdminReviewQueueService adminReviewQueueService,
         CancellationToken cancellationToken) =>
     {
         try
         {
-            return Results.Ok(await adminReviewQueueService.RecordDecisionAsync(id, request, cancellationToken));
+            var actorBoundRequest = request with { ReviewedBy = ResolveAdminActor(httpContext) };
+            return Results.Ok(await adminReviewQueueService.RecordDecisionAsync(
+                id,
+                actorBoundRequest,
+                cancellationToken));
         }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireAuthorization(AdminPolicies.CanDecideReviews);
 
     adminReviewQueueApi.MapPost("/{id}/dismiss", async (
         string id,
         AdminReviewQueueDismissRequest request,
+        HttpContext httpContext,
         IAdminReviewQueueService adminReviewQueueService,
         CancellationToken cancellationToken) =>
     {
         try
         {
-            return Results.Ok(await adminReviewQueueService.DismissAsync(id, request.ActorId, request.Reason, cancellationToken));
+            return Results.Ok(await adminReviewQueueService.DismissAsync(
+                id,
+                ResolveAdminActor(httpContext),
+                request.Reason,
+                cancellationToken));
         }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireAuthorization(AdminPolicies.CanDecideReviews);
 }
 
 static void MapAppealApis(RouteGroupBuilder appealApi)
 {
-    appealApi.MapGet("/", (IAppealService appealService) => Results.Ok(appealService.List()));
+    appealApi.MapGet("/", (IAppealService appealService) => Results.Ok(appealService.List()))
+        .RequireAuthorization(AdminPolicies.CanViewAppeals);
     appealApi.MapGet("/{id}", (string id, IAppealService appealService) =>
-        appealService.Get(id) is { } appeal ? Results.Ok(appeal) : Results.NotFound());
-    appealApi.MapPost("/{id}/approve", (string id, AdminDecisionRequest request, IAppealService appealService) =>
-        Results.Ok(appealService.Approve(id, request.ActorId, request.Reason)));
-    appealApi.MapPost("/{id}/reject", (string id, AdminDecisionRequest request, IAppealService appealService) =>
-        Results.Ok(appealService.Reject(id, request.ActorId, request.Reason)));
-    appealApi.MapPost("/{id}/needs-more-info", (string id, AdminDecisionRequest request, IAppealService appealService) =>
-        Results.Ok(appealService.RequestMoreInfo(id, request.ActorId, request.Reason)));
-    appealApi.MapPost("/{id}/decision", (string id, AdminAppealDecisionRequest request, IAppealService appealService) =>
-        AppealDecision(id, request, appealService));
+        appealService.Get(id) is { } appeal ? Results.Ok(appeal) : Results.NotFound())
+        .RequireAuthorization(AdminPolicies.CanViewAppeals);
+    appealApi.MapPost("/{id}/approve", (
+        string id,
+        AdminDecisionRequest request,
+        HttpContext httpContext,
+        IAppealService appealService) =>
+        Results.Ok(appealService.Approve(id, ResolveAdminActor(httpContext), request.Reason)))
+        .RequireAuthorization(AdminPolicies.CanDecideAppeals);
+    appealApi.MapPost("/{id}/reject", (
+        string id,
+        AdminDecisionRequest request,
+        HttpContext httpContext,
+        IAppealService appealService) =>
+        Results.Ok(appealService.Reject(id, ResolveAdminActor(httpContext), request.Reason)))
+        .RequireAuthorization(AdminPolicies.CanDecideAppeals);
+    appealApi.MapPost("/{id}/needs-more-info", (
+        string id,
+        AdminDecisionRequest request,
+        HttpContext httpContext,
+        IAppealService appealService) =>
+        Results.Ok(appealService.RequestMoreInfo(id, ResolveAdminActor(httpContext), request.Reason)))
+        .RequireAuthorization(AdminPolicies.CanDecideAppeals);
+    appealApi.MapPost("/{id}/decision", (
+        string id,
+        AdminAppealDecisionRequest request,
+        HttpContext httpContext,
+        IAppealService appealService) =>
+        AppealDecision(id, request, ResolveAdminActor(httpContext), appealService))
+        .RequireAuthorization(AdminPolicies.CanDecideAppeals);
 }
 
-static IResult ReviewDecision(string id, AdminReviewDecisionRequest request, IReviewQueueService reviewQueueService) =>
+static IResult ReviewDecision(
+    string id,
+    AdminReviewDecisionRequest request,
+    string actorId,
+    IReviewQueueService reviewQueueService) =>
     request.Status switch
     {
-        ReviewStatus.Confirmed or ReviewStatus.Approved => Results.Ok(reviewQueueService.Approve(id, request.ActorId, request.Reason)),
-        ReviewStatus.Rejected => Results.Ok(reviewQueueService.Reject(id, request.ActorId, request.Reason)),
-        ReviewStatus.NeedsMoreInfo => Results.Ok(reviewQueueService.RequestMoreInfo(id, request.ActorId, request.Reason)),
-        ReviewStatus.Closed => Results.Ok(reviewQueueService.Close(id, request.ActorId, request.Reason)),
-        ReviewStatus.InReview => Results.Ok(reviewQueueService.UpdateStatus(id, ReviewStatus.InReview, request.ActorId, request.Reason)),
+        ReviewStatus.Confirmed or ReviewStatus.Approved => Results.Ok(reviewQueueService.Approve(id, actorId, request.Reason)),
+        ReviewStatus.Rejected => Results.Ok(reviewQueueService.Reject(id, actorId, request.Reason)),
+        ReviewStatus.NeedsMoreInfo => Results.Ok(reviewQueueService.RequestMoreInfo(id, actorId, request.Reason)),
+        ReviewStatus.Closed => Results.Ok(reviewQueueService.Close(id, actorId, request.Reason)),
+        ReviewStatus.InReview => Results.Ok(reviewQueueService.UpdateStatus(id, ReviewStatus.InReview, actorId, request.Reason)),
         _ => Results.BadRequest(new { error = "Decision status must be InReview, Confirmed, Rejected, NeedsMoreInfo, or Closed." })
     };
 
-static IResult AppealDecision(string id, AdminAppealDecisionRequest request, IAppealService appealService) =>
+static IResult AppealDecision(
+    string id,
+    AdminAppealDecisionRequest request,
+    string actorId,
+    IAppealService appealService) =>
     request.Status switch
     {
-        AppealStatus.Approved => Results.Ok(appealService.Approve(id, request.ActorId, request.Reason)),
-        AppealStatus.Rejected => Results.Ok(appealService.Reject(id, request.ActorId, request.Reason)),
-        AppealStatus.NeedsMoreInfo => Results.Ok(appealService.RequestMoreInfo(id, request.ActorId, request.Reason)),
+        AppealStatus.Approved => Results.Ok(appealService.Approve(id, actorId, request.Reason)),
+        AppealStatus.Rejected => Results.Ok(appealService.Reject(id, actorId, request.Reason)),
+        AppealStatus.NeedsMoreInfo => Results.Ok(appealService.RequestMoreInfo(id, actorId, request.Reason)),
         _ => Results.BadRequest(new { error = "Decision status must be Approved, Rejected, or NeedsMoreInfo." })
     };
 
 static void MapReputationOverrideApis(RouteGroupBuilder overrideApi)
 {
     overrideApi.MapGet("/", (IReputationOverrideService reputationOverrideService) => Results.Ok(reputationOverrideService.List()));
-    overrideApi.MapPost("/", (ReputationOverrideRequest request, IReputationOverrideService reputationOverrideService) =>
+    overrideApi.MapPost("/", (
+        ReputationOverrideRequest request,
+        HttpContext httpContext,
+        IReputationOverrideService reputationOverrideService) =>
     {
         try
         {
-            return Results.Ok(reputationOverrideService.Request(request));
+            var actorBoundRequest = request with
+            {
+                RequestedBy = ResolveAdminActor(httpContext),
+                Approvals = [],
+                CreatedAtUtc = default,
+                UpdatedAtUtc = default
+            };
+            return Results.Ok(reputationOverrideService.Request(actorBoundRequest));
         }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
-    overrideApi.MapPost("/{id}/approve", (string id, AdminDecisionRequest request, IReputationOverrideService reputationOverrideService) =>
-        Results.Ok(reputationOverrideService.Approve(id, request.ActorId, request.Reason)));
-    overrideApi.MapPost("/{id}/reject", (string id, AdminDecisionRequest request, IReputationOverrideService reputationOverrideService) =>
-        Results.Ok(reputationOverrideService.Reject(id, request.ActorId, request.Reason)));
+    })
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
+    overrideApi.MapPost("/{id}/approve", (
+        string id,
+        AdminDecisionRequest request,
+        HttpContext httpContext,
+        IReputationOverrideService reputationOverrideService) =>
+        RunReputationOverrideAction(() => reputationOverrideService.Approve(
+            id,
+            ResolveAdminActor(httpContext),
+            request.Reason)))
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
+    overrideApi.MapPost("/{id}/reject", (
+        string id,
+        AdminDecisionRequest request,
+        HttpContext httpContext,
+        IReputationOverrideService reputationOverrideService) =>
+        RunReputationOverrideAction(() => reputationOverrideService.Reject(
+            id,
+            ResolveAdminActor(httpContext),
+            request.Reason)))
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
+}
+
+static IResult RunReputationOverrideAction(Func<ReputationOverrideRequest> action)
+{
+    try
+    {
+        return Results.Ok(action());
+    }
+    catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
 }
 
 static void MapReputationApis(RouteGroupBuilder reputationApi)
@@ -1890,7 +2997,9 @@ static void MapReputationApis(RouteGroupBuilder reputationApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireAuthorization(AdminPolicies.CanManageReputation)
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 
     reputationApi.MapPost("/{targetType}/{targetId}/recalculate", async (
         ReputationSubjectType targetType,
@@ -1906,7 +3015,9 @@ static void MapReputationApis(RouteGroupBuilder reputationApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .RequireAuthorization(AdminPolicies.CanManageReputation)
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 }
 
 static void MapIdentityApis(RouteGroupBuilder identityApi)
@@ -1931,16 +3042,26 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .RequireAuthorization(AdminPolicies.CanManageDomainVerifications)
         .RequireRateLimiting(RateLimitPolicies.IdentityDevPolicy);
 
     identityApi.MapPost("/websites/register", async (
         WebsiteIdentityRegistrationRequest request,
+        HttpContext httpContext,
         IWebsiteIdentityService websiteIdentityService,
         CancellationToken cancellationToken) =>
     {
         try
         {
-            return Results.Ok(await websiteIdentityService.RegisterAsync(request, cancellationToken));
+            return Results.Ok(await websiteIdentityService.RegisterAsync(
+                request,
+                ResolveAdminActor(httpContext),
+                httpContext.User.FindFirstValue(ClaimTypes.Role) ?? "Unknown",
+                cancellationToken));
+        }
+        catch (WebsiteIdentityRegistrationConflictException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
         }
         catch (ArgumentException ex)
         {
@@ -1951,16 +3072,29 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
 
     identityApi.MapPost("/websites/verify", async (
         WebsiteVerificationRequest request,
+        HttpContext httpContext,
         IWebsiteIdentityService websiteIdentityService,
         CancellationToken cancellationToken) =>
     {
         try
         {
-            return Results.Ok(await websiteIdentityService.VerifyAsync(request, cancellationToken));
+            return Results.Ok(await websiteIdentityService.VerifyAsync(
+                request,
+                ResolveAdminActor(httpContext),
+                httpContext.User.FindFirstValue(ClaimTypes.Role) ?? "Unknown",
+                cancellationToken));
+        }
+        catch (WebsiteIdentityRegistrationConflictException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
         }
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
         }
     })
         .RequireAuthorization(AdminPolicies.CanManageDomainVerifications);
@@ -1975,7 +3109,7 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
         {
             return Results.Ok(await websiteIdentityService.RetryVerificationAsync(
                 domain,
-                httpContext.User.Identity?.Name ?? "unknown-admin",
+                ResolveAdminActor(httpContext),
                 httpContext.User.FindFirstValue(ClaimTypes.Role) ?? "Unknown",
                 cancellationToken));
         }
@@ -2002,7 +3136,7 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
             return Results.Ok(await websiteIdentityService.RevokeVerificationAsync(
                 domain,
                 request.Reason,
-                httpContext.User.Identity?.Name ?? "unknown-owner",
+                ResolveAdminActor(httpContext),
                 httpContext.User.FindFirstValue(ClaimTypes.Role) ?? "Unknown",
                 cancellationToken));
         }
@@ -2010,17 +3144,52 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
     })
-        .RequireAuthorization(AdminPolicies.CanRevokeDomainVerifications);
+        .RequireAuthorization(AdminPolicies.CanRevokeDomainVerifications)
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
 
-    identityApi.MapGet("/websites/{domain}", async (
+    identityApi.MapGet("/websites/{domain}/well-known-template", async (
         string domain,
+        HttpContext httpContext,
         IWebsiteIdentityService websiteIdentityService,
         CancellationToken cancellationToken) =>
     {
         try
         {
-            return await websiteIdentityService.GetAsync(domain, cancellationToken) is { } website
+            return Results.Ok(await websiteIdentityService.BuildWellKnownDocumentAsync(
+                domain,
+                ResolveAdminActor(httpContext),
+                httpContext.User.FindFirstValue(ClaimTypes.Role) ?? "Unknown",
+                cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
+    })
+        .RequireAuthorization(AdminPolicies.CanManageDomainVerifications);
+
+    identityApi.MapGet("/websites/{domain}", async (
+        string domain,
+        HttpContext httpContext,
+        IWebsiteIdentityService websiteIdentityService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return await websiteIdentityService.GetAsync(
+                domain,
+                ResolveAdminActor(httpContext),
+                httpContext.User.FindFirstValue(ClaimTypes.Role) ?? "Unknown",
+                cancellationToken) is { } website
                 ? Results.Ok(website)
                 : Results.NotFound();
         }
@@ -2028,7 +3197,12 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
+    })
+        .AllowAnonymous();
 
     identityApi.MapPost("/signature/verify", async (
         HipSignatureVerificationRequest request,
@@ -2043,7 +3217,8 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .AllowAnonymous();
 
     identityApi.MapPost("/domain-verification/start", async (
         DomainVerificationApiRequest request,
@@ -2058,7 +3233,37 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
+    })
+        .RequireAuthorization(AdminPolicies.CanManageDomainVerifications);
+
+    identityApi.MapPost("/websites/{domain}/renew", async (
+        string domain,
+        HttpContext httpContext,
+        IWebsiteIdentityService websiteIdentityService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await websiteIdentityService.RenewExpiredVerificationAsync(
+                domain,
+                ResolveAdminActor(httpContext),
+                httpContext.User.FindFirstValue(ClaimTypes.Role) ?? "Unknown",
+                cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
+    })
+        .RequireAuthorization(AdminPolicies.CanManageDomainVerifications);
 
     identityApi.MapPost("/domain-verification/verify", async (
         DomainVerificationApiRequest request,
@@ -2073,7 +3278,12 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
+    })
+        .RequireAuthorization(AdminPolicies.CanManageDomainVerifications);
 
     identityApi.MapPost("/sign", async (
         SignContentRequest request,
@@ -2095,6 +3305,7 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
             return Results.BadRequest(new { error = ex.Message });
         }
     })
+        .RequireAuthorization(AdminPolicies.CanManageDomainVerifications)
         .RequireRateLimiting(RateLimitPolicies.IdentityDevPolicy);
 
     identityApi.MapPost("/verify", async (
@@ -2110,32 +3321,46 @@ static void MapIdentityApis(RouteGroupBuilder identityApi)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    });
+    })
+        .AllowAnonymous();
 }
 
 public sealed record AdminRuleSimulationRequest(
     TrustRule Rule,
     IReadOnlyCollection<RuleSimulationTestCase>? TestCases);
 
+/// <summary>
+/// Carries an administrative decision reason. <paramref name="ActorId"/> is retained for wire compatibility and ignored;
+/// HIP binds attribution to the unique authenticated actor claim.
+/// </summary>
 public sealed record AdminDecisionRequest(string ActorId, string Reason);
 
+/// <summary>
+/// Carries a review status decision. <paramref name="ActorId"/> is compatibility-only and never trusted for attribution.
+/// </summary>
 public sealed record AdminReviewDecisionRequest(string ActorId, ReviewStatus Status, string Reason);
 
+/// <summary>
+/// Carries an appeal status decision. <paramref name="ActorId"/> is compatibility-only and never trusted for attribution.
+/// </summary>
 public sealed record AdminAppealDecisionRequest(string ActorId, AppealStatus Status, string Reason);
 
+/// <summary>
+/// Carries an assignee selection. <paramref name="ActorId"/> is compatibility-only and never trusted for attribution.
+/// </summary>
 public sealed record AdminAssignRequest(string ActorId, string AssignedTo);
 
 /// <summary>
 /// Request used to assign a generated admin review signal to a reviewer without exposing private evidence.
 /// </summary>
-/// <param name="ActorId">Admin actor or service account performing the assignment.</param>
+/// <param name="ActorId">Compatibility-only actor field; HIP ignores it and uses the authenticated actor claim.</param>
 /// <param name="AssignedTo">Reviewer ID, alias, or hash that should handle the review.</param>
 public sealed record AdminReviewQueueAssignRequest(string ActorId, string AssignedTo);
 
 /// <summary>
 /// Request used to dismiss a generated admin review signal while preserving its privacy-safe evidence summary.
 /// </summary>
-/// <param name="ActorId">Admin actor or service account dismissing the review.</param>
+/// <param name="ActorId">Compatibility-only actor field; HIP ignores it and uses the authenticated actor claim.</param>
 /// <param name="Reason">Privacy-safe dismissal reason. Raw page text, credentials, and private messages are rejected by validation.</param>
 public sealed record AdminReviewQueueDismissRequest(string ActorId, string Reason);
 
@@ -2187,7 +3412,12 @@ public sealed record SafetyEvaluateResponse(
     string ReasonSummary,
     string RecommendedAction,
     bool AllowContinue,
-    bool ShouldRouteToSafetyPage)
+    bool ShouldRouteToSafetyPage,
+    int PageTrustScore,
+    int ContentRiskScore,
+    int FinalHipScore,
+    string ContinuationRequirement,
+    bool ContentRiskScoreHigherMeansMoreRisk)
 {
     public static SafetyEvaluateResponse From(SafetyResult result)
     {
@@ -2207,8 +3437,28 @@ public sealed record SafetyEvaluateResponse(
             result.Reason,
             result.RecommendedAction,
             result.AllowContinue,
-            result.ShouldRouteToSafetyPage);
+            result.ShouldRouteToSafetyPage,
+            result.PageTrustScore,
+            result.ContentRiskScore,
+            result.FinalHipScore,
+            result.ContinuationRequirement.ToString(),
+            result.ContentRiskScoreHigherMeansMoreRisk);
     }
+}
+
+public sealed record SafetyDecisionApiResponse(
+    string Status,
+    string? DecisionId,
+    string? Action,
+    string? RiskLevel,
+    DateTimeOffset? RecordedAtUtc)
+{
+    public static SafetyDecisionApiResponse From(SafetyDecisionResult result) => new(
+        result.Status.ToString(),
+        result.DecisionId,
+        result.Action?.ToString(),
+        result.RiskLevel?.ToString(),
+        result.RecordedAtUtc);
 }
 
 public sealed record SafetyReportRequest(string Url, string? Source, string? Reason);
@@ -2232,6 +3482,111 @@ public sealed record RuleSimulationApiRequest(
     TrustRule? Rule,
     IReadOnlyCollection<RuleSimulationTestCase>? TestCases);
 
+public sealed record RuleApprovalWorkflowRequest(string SimulationId);
+
+public sealed record RuleTransitionReasonRequest(string Reason);
+
+public sealed record RuleDeploymentTransitionRequest(long ExpectedVersion, string Reason);
+
+/// <summary>Privacy-safe approval progress; actor identities remain in protected audit evidence.</summary>
+public sealed record RuleApprovalWorkflowApiResponse(
+    string WorkflowId,
+    string RuleId,
+    int RuleVersion,
+    string SimulationId,
+    string ImpactLevel,
+    int RequiredApprovalCount,
+    int ApprovalCount,
+    bool ManualDeploymentRequired,
+    bool RollbackTestRequired,
+    bool RollbackTestCompleted,
+    bool ManualDeploymentAuthorized,
+    string Status,
+    bool CanActivate,
+    DateTimeOffset RequestedAtUtc,
+    DateTimeOffset UpdatedAtUtc)
+{
+    public static RuleApprovalWorkflowApiResponse From(RuleApprovalWorkflowState state) => new(
+        state.WorkflowId,
+        state.RuleId,
+        state.RuleVersion,
+        state.SimulationId,
+        state.ImpactLevel.ToString(),
+        state.RequiredApprovalCount,
+        state.Approvals.Count,
+        state.ManualDeploymentRequired,
+        state.RollbackTestRequired,
+        state.RollbackTestCompleted,
+        state.ManualDeploymentAuthorized,
+        state.Status.ToString(),
+        RuleApprovalWorkflowService.CanActivate(state),
+        state.RequestedAtUtc,
+        state.UpdatedAtUtc);
+}
+
+/// <summary>Privacy-safe deployment projection; actor identities and reason text remain encrypted.</summary>
+public sealed record RuleDeploymentApiResponse(
+    string RuleId,
+    int? ActiveVersion,
+    string Status,
+    int? RollbackVersion,
+    bool UseDisabledRollback,
+    bool RollbackAvailable,
+    string WorkflowId,
+    string LastTransitionId,
+    string LastTransitionType,
+    DateTimeOffset UpdatedAtUtc,
+    long Version)
+{
+    public static RuleDeploymentApiResponse From(RuleDeploymentState state) => new(
+        state.RuleId,
+        state.ActiveRule?.Version,
+        state.Status.ToString(),
+        state.RollbackRule?.Version,
+        state.UseDisabledRollback,
+        state.RollbackAvailable,
+        state.WorkflowId,
+        state.LastTransitionId,
+        state.LastTransitionType,
+        state.UpdatedAtUtc,
+        state.Version);
+}
+
+public sealed record AiRuleDraftApiResponse(
+    string DraftId,
+    RuleApiResponse ProposedRule,
+    IReadOnlyCollection<string> EvidenceSummary,
+    string ExpectedBenefit,
+    IReadOnlyCollection<string> Risks,
+    int Confidence,
+    string ProviderName,
+    bool IsPlaceholder,
+    string SimulationId,
+    bool SimulationPassed,
+    string FixtureSetId,
+    int PassedTestCount,
+    int FailedTestCount,
+    string RollbackPlan,
+    DateTimeOffset CreatedAtUtc)
+{
+    public static AiRuleDraftApiResponse From(AiRuleDraft draft) => new(
+        draft.DraftId,
+        RuleApiResponse.From(draft.ProposedRule),
+        draft.EvidenceSummary,
+        draft.ExpectedBenefit,
+        draft.Risks,
+        draft.Confidence,
+        draft.ProviderName,
+        draft.IsPlaceholder,
+        draft.SimulationId,
+        draft.SimulationPassed,
+        draft.FixtureSetId,
+        draft.PassedTestCount,
+        draft.FailedTestCount,
+        draft.RollbackPlan,
+        draft.CreatedAtUtc);
+}
+
 public sealed record RuleSimulationApiResponse(
     string SimulationId,
     string RuleId,
@@ -2246,7 +3601,15 @@ public sealed record RuleSimulationApiResponse(
     string RecommendedMode,
     string ImpactClassification,
     IReadOnlyCollection<string> MatchedRules,
-    IReadOnlyCollection<RuleSimulationCaseResult> FailedCases)
+    IReadOnlyCollection<RuleSimulationCaseResult> FailedCases,
+    int RuleVersion,
+    string FixtureSetId,
+    int TotalTestCases,
+    int PassedCount,
+    int FailedCount,
+    DateTimeOffset StartedAtUtc,
+    DateTimeOffset CompletedAtUtc,
+    RuleSimulationRollbackPlan RollbackPlan)
 {
     public static RuleSimulationApiResponse From(RuleSimulationResult result) =>
         new(
@@ -2263,7 +3626,15 @@ public sealed record RuleSimulationApiResponse(
             result.RecommendedMode,
             result.ImpactClassification,
             result.MatchedRules,
-            result.FailedCases);
+            result.FailedCases,
+            result.RuleVersion,
+            result.FixtureSetId,
+            result.TotalTestCases,
+            result.PassedCount,
+            result.FailedCount,
+            result.StartedAtUtc,
+            result.CompletedAtUtc,
+            result.RollbackPlan);
 }
 
 public sealed record RuleApiResponse(
@@ -2364,7 +3735,10 @@ public sealed record PublicBadgeApiResponse(
     string IdentityVerificationStatus,
     bool? SignatureValid,
     string VerifiedMeaning,
-    string? ResponseSignature)
+    string? ResponseSignature,
+    HipLiveBadgeDocument? SignedBadge,
+    string SignatureStatus,
+    bool IsAvailable)
 {
     public static PublicBadgeApiResponse From(PublicBadgeResponse badge) =>
         new(
@@ -2381,7 +3755,10 @@ public sealed record PublicBadgeApiResponse(
             badge.IdentityVerificationStatus,
             badge.SignatureValid,
             badge.VerifiedMeaning,
-            badge.ResponseSignature);
+            badge.ResponseSignature,
+            badge.SignedBadge,
+            badge.SignatureStatus,
+            badge.IsAvailable);
 }
 
 public sealed record PublicLookupApiResponse(
@@ -2489,11 +3866,27 @@ public partial class Program
             return rule is null ? Results.NotFound() : Results.Ok(RuleApiResponse.From(rule));
         });
 
-        rulesApi.MapPost("/evaluate", (
+        rulesApi.MapPost("/evaluate", async (
             RuleEvaluationApiRequest request,
-            IRuleEvaluationService evaluationService) =>
+            IRuleEvaluationService evaluationService,
+            IRuleDeploymentRepository deployments,
+            CancellationToken cancellationToken) =>
         {
-            var rules = request.Rules is { Count: > 0 } ? request.Rules : SampleRules();
+            IReadOnlyCollection<TrustRule> rules;
+            if (request.Rules is { Count: > 0 })
+            {
+                rules = request.Rules;
+            }
+            else
+            {
+                var deploymentStates = await deployments.ListAsync(cancellationToken);
+                rules = deploymentStates.Count == 0
+                    ? SampleRules()
+                    : deploymentStates
+                        .Where(state => state.ActiveRule is not null)
+                        .Select(state => state.ActiveRule!)
+                        .ToArray();
+            }
             return Results.Ok(RuleEvaluationApiResponse.From(evaluationService.Evaluate(rules, request.Context)));
         });
 
@@ -2529,6 +3922,193 @@ public partial class Program
             var result = await simulationRepository.GetAsync(id, cancellationToken);
             return result is null ? Results.NotFound() : Results.Ok(RuleSimulationApiResponse.From(result));
         });
+
+        rulesApi.MapPost("/{ruleId}/approval-workflows", async (
+            string ruleId,
+            RuleApprovalWorkflowRequest request,
+            IRuleRepository ruleRepository,
+            RuleApprovalWorkflowService workflowService,
+            CancellationToken cancellationToken) =>
+        {
+            var rule = await ruleRepository.GetByIdAsync(ruleId, cancellationToken) ??
+                       SampleRules().FirstOrDefault(sample => sample.RuleId.Equals(ruleId, StringComparison.OrdinalIgnoreCase));
+            if (rule is null) return Results.NotFound();
+            try
+            {
+                var workflow = await workflowService.RequestAsync(rule, request.SimulationId, cancellationToken);
+                return Results.Created(
+                    $"/api/v1/rules/approval-workflows/{Uri.EscapeDataString(workflow.WorkflowId)}",
+                    RuleApprovalWorkflowApiResponse.From(workflow));
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+        rulesApi.MapGet("/approval-workflows/{workflowId}", async (
+            string workflowId,
+            IRuleApprovalWorkflowRepository repository,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await repository.GetAsync(workflowId, cancellationToken);
+            return workflow is null
+                ? Results.NotFound()
+                : Results.Ok(RuleApprovalWorkflowApiResponse.From(workflow));
+        });
+
+        rulesApi.MapPost("/approval-workflows/{workflowId}/approvals", async (
+            string workflowId,
+            HttpContext httpContext,
+            RuleApprovalWorkflowService workflowService,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var workflow = await workflowService.ApproveAsync(
+                    workflowId,
+                    HipAuthenticatedIdentity.ResolveRequiredUniqueClaim(
+                        httpContext.User,
+                        HipAuthenticationClaimTypes.ActorId),
+                    cancellationToken);
+                return Results.Ok(RuleApprovalWorkflowApiResponse.From(workflow));
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
+
+        rulesApi.MapPost("/approval-workflows/{workflowId}/rollback-test", async (
+            string workflowId,
+            RuleTransitionReasonRequest request,
+            HttpContext httpContext,
+            RuleApprovalWorkflowService workflowService,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var workflow = await workflowService.CompleteRollbackTestAsync(
+                    workflowId,
+                    HipAuthenticatedIdentity.ResolveRequiredUniqueClaim(
+                        httpContext.User,
+                        HipAuthenticationClaimTypes.ActorId),
+                    request.Reason,
+                    cancellationToken);
+                return Results.Ok(RuleApprovalWorkflowApiResponse.From(workflow));
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
+
+        rulesApi.MapPost("/approval-workflows/{workflowId}/manual-deployment", async (
+            string workflowId,
+            RuleTransitionReasonRequest request,
+            HttpContext httpContext,
+            RuleApprovalWorkflowService workflowService,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var workflow = await workflowService.AuthorizeManualDeploymentAsync(
+                    workflowId,
+                    HipAuthenticatedIdentity.ResolveRequiredUniqueClaim(
+                        httpContext.User,
+                        HipAuthenticationClaimTypes.ActorId),
+                    request.Reason,
+                    cancellationToken);
+                return Results.Ok(RuleApprovalWorkflowApiResponse.From(workflow));
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
+
+        rulesApi.MapPost("/approval-workflows/{workflowId}/activate", async (
+            string workflowId,
+            RuleTransitionReasonRequest request,
+            HttpContext httpContext,
+            RuleDeploymentService deploymentService,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var deployment = await deploymentService.ActivateAsync(
+                    workflowId,
+                    HipAuthenticatedIdentity.ResolveRequiredUniqueClaim(
+                        httpContext.User,
+                        HipAuthenticationClaimTypes.ActorId),
+                    request.Reason,
+                    cancellationToken);
+                return Results.Ok(RuleDeploymentApiResponse.From(deployment));
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
+
+        rulesApi.MapGet("/deployments/{ruleId}", async (
+            string ruleId,
+            RuleDeploymentService deploymentService,
+            CancellationToken cancellationToken) =>
+        {
+            var deployment = await deploymentService.GetAsync(ruleId, cancellationToken);
+            return deployment is null ? Results.NotFound() : Results.Ok(RuleDeploymentApiResponse.From(deployment));
+        });
+
+        rulesApi.MapPost("/deployments/{ruleId}/rollback", async (
+            string ruleId,
+            RuleDeploymentTransitionRequest request,
+            HttpContext httpContext,
+            RuleDeploymentService deploymentService,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var deployment = await deploymentService.RollbackAsync(
+                    ruleId,
+                    request.ExpectedVersion,
+                    HipAuthenticatedIdentity.ResolveRequiredUniqueClaim(
+                        httpContext.User,
+                        HipAuthenticationClaimTypes.ActorId),
+                    request.Reason,
+                    cancellationToken);
+                return Results.Ok(RuleDeploymentApiResponse.From(deployment));
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
+
+        rulesApi.MapPost("/deployments/{ruleId}/promote", async (
+            string ruleId,
+            RuleDeploymentTransitionRequest request,
+            HttpContext httpContext,
+            RuleDeploymentService deploymentService,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var deployment = await deploymentService.PromoteAsync(
+                    ruleId,
+                    request.ExpectedVersion,
+                    HipAuthenticatedIdentity.ResolveRequiredUniqueClaim(
+                        httpContext.User,
+                        HipAuthenticationClaimTypes.ActorId),
+                    request.Reason,
+                    cancellationToken);
+                return Results.Ok(RuleDeploymentApiResponse.From(deployment));
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication);
     }
 
     private static async Task<IReadOnlyCollection<TrustRule>> RulesOrSamplesAsync(IRuleRepository repository, CancellationToken cancellationToken)
@@ -2592,6 +4172,7 @@ public partial class Program
       }
       return response.json();
     })
+    .then(verify)
     .then(render)
     .catch(() => {
       container.innerHTML = `<a class="hip-live-badge hip-live-badge-unknown" href="${apiBase}/lookup/${encodeURIComponent(domain)}" target="_blank" rel="noopener noreferrer"><strong>HIP Unavailable</strong><span>Score: unavailable</span><span>Status: Unknown</span></a>`;
@@ -2602,6 +4183,39 @@ public partial class Program
     const checked = badge.lastCheckedUtc ? new Date(badge.lastCheckedUtc).toLocaleDateString() : "Unknown";
     const lookupUrl = new URL(badge.lookupUrl || badge.publicLookupUrl || `/lookup/${badge.domain}`, apiBase).toString();
     container.innerHTML = `<a class="hip-live-badge hip-live-badge-${variant}" href="${escapeAttribute(lookupUrl)}" target="_blank" rel="noopener noreferrer"><strong>${badge.verified ? "HIP Verified" : "HIP Warning"}</strong><span>Score: ${escapeHtml(badge.score)}/100</span><span>Status: ${escapeHtml(badge.status)}</span><span>Verified domain: ${badge.verifiedDomain ? "Yes" : "No"}</span><small>Last checked: ${escapeHtml(checked)}</small><small>Verified identity does not automatically mean safe.</small></a>`;
+  }
+
+  function verify(badge) {
+    const signed = badge && badge.signedBadge;
+    const payload = signed && signed.payload;
+    const expiresAt = payload && Date.parse(payload.expiresAtUtc);
+    if (!badge || badge.isAvailable !== true || badge.signatureStatus !== "Verified" ||
+        !signed || !payload || !signed.signature ||
+        payload.documentType !== "hip-live-badge" || payload.version !== "1.0" ||
+        payload.domain !== domain || badge.domain !== domain ||
+        payload.score !== badge.score || payload.status !== badge.status ||
+        payload.verifiedDomain !== badge.verifiedDomain ||
+        payload.identityVerificationStatus !== badge.identityVerificationStatus ||
+        payload.verifiedMeaning !== badge.verifiedMeaning ||
+        !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      throw new Error("HIP badge signature state is unavailable or inconsistent.");
+    }
+
+    return fetch(`${apiBase}/api/v1/badge/verify`, {
+      method: "POST",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(signed)
+    }).then(response => {
+      if (!response.ok) {
+        throw new Error(`HIP badge verification failed with status ${response.status}`);
+      }
+      return response.json();
+    }).then(result => {
+      if (!result || result.isVerified !== true || result.status !== "Verified") {
+        throw new Error("HIP badge signature did not verify.");
+      }
+      return badge;
+    });
   }
 
   function ensureStyles() {
@@ -2803,4 +4417,39 @@ sealed record SecondLifeHudSimulationApiResponse(
             result.RawPrivateTextExcluded,
             result.OwnerWarningPreview,
             result.PopupPreview);
+}
+
+/// <summary>Public error body that does not expose internal protocol, signer, or persistence details.</summary>
+/// <param name="Error">Safe public error message.</param>
+sealed record ApiErrorResponse(string Error);
+
+/// <summary>Public verification result that intentionally excludes internal trust state and evidence.</summary>
+/// <param name="Status">Typed verification outcome.</param>
+/// <param name="IsVerified">Whether origin and integrity verification succeeded.</param>
+/// <param name="EstablishesSafetyOrReputationBySignatureAlone">Always false because a signature is not a safety verdict.</param>
+/// <param name="VerifiedIssuerId">Verified issuer identifier when successful.</param>
+/// <param name="VerifiedKeyId">Verified signing key identifier when successful.</param>
+sealed record HipTrustReceiptVerificationApiResponse(
+    string Status,
+    bool IsVerified,
+    bool EstablishesSafetyOrReputationBySignatureAlone,
+    string? VerifiedIssuerId,
+    string? VerifiedKeyId)
+{
+    /// <summary>Creates the privacy-safe API projection for an application verification result.</summary>
+    public static HipTrustReceiptVerificationApiResponse From(HipTrustReceiptVerificationResult result) => new(
+        result.Status.ToString(),
+        result.IsVerified,
+        result.EstablishesSafetyOrReputationBySignatureAlone,
+        result.VerifiedIssuerId,
+        result.VerifiedKeyId);
+
+}
+
+/// <summary>Result of reading a request body through the trust receipt byte limit.</summary>
+/// <param name="Content">Receipt bytes when the request was within the limit.</param>
+/// <param name="IsTooLarge">Whether the request exceeded the receipt byte limit.</param>
+readonly record struct BoundedTrustReceiptBody(ReadOnlyMemory<byte> Content, bool IsTooLarge)
+{
+    public static BoundedTrustReceiptBody TooLarge { get; } = new(ReadOnlyMemory<byte>.Empty, true);
 }

@@ -6,5 +6,6 @@ public enum VerificationStatus
     Pending,
     Verified,
     Suspended,
-    Revoked
+    Revoked,
+    Expired
 }

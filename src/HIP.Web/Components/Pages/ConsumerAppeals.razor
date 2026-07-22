@@ -2,27 +2,47 @@
 @attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
 @rendermode InteractiveServer
 @inject IConsumerPortalService ConsumerPortalService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>HIP Consumer Appeals</PageTitle>
 
-<ConsumerTable Title="Appeal Status" Description="Appeal status uses target IDs and privacy-safe summaries. Full private evidence is not shown.">
-    @foreach (var item in _items)
-    {
-        <tr>
-            <td>@item.UpdatedAtUtc.UtcDateTime.ToString("u")</td>
-            <td>@item.TargetType</td>
-            <td>@item.TargetId</td>
-            <td>@item.Status</td>
-            <td>@item.Summary</td>
-        </tr>
-    }
-</ConsumerTable>
+@if (_accessError is not null)
+{
+    <p class="admin-error" role="alert">@_accessError</p>
+}
+else
+{
+    <ConsumerTable Title="Appeal Status" Description="Appeal status uses target IDs and privacy-safe summaries. Full private evidence is not shown."
+                   IsEmpty="@(_items.Count == 0)" EmptyMessage="No appeals are recorded for this consumer account yet.">
+        @foreach (var item in _items)
+        {
+            <tr>
+                <td>@item.UpdatedAtUtc.UtcDateTime.ToString("u")</td>
+                <td>@item.TargetType</td>
+                <td>@item.TargetId</td>
+                <td>@item.Status</td>
+                <td>@item.Summary</td>
+            </tr>
+        }
+    </ConsumerTable>
+}
 
 @code {
     private IReadOnlyCollection<ConsumerAppealItem> _items = [];
+    private string? _accessError;
 
     protected override async Task OnInitializedAsync()
     {
-        _items = await ConsumerPortalService.GetAppealsAsync("development-consumer", CancellationToken.None);
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var result = await HipConsumerPageAccess.ExecuteAsync(
+            authenticationState.User,
+            consumerId => ConsumerPortalService.GetAppealsAsync(consumerId, CancellationToken.None));
+        if (!result.Succeeded)
+        {
+            _accessError = HipConsumerPageAccess.AccessUnavailableMessage;
+            return;
+        }
+
+        _items = result.Value ?? [];
     }
 }

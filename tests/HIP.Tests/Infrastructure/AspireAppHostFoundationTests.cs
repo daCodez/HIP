@@ -41,6 +41,40 @@ public sealed class AspireAppHostFoundationTests
     }
 
     /// <summary>
+    /// Confirms legacy consumer-history indexing is an explicit, idempotent operator action rather than request-time decryption.
+    /// </summary>
+    [Test]
+    public void AppHost_exposes_consumer_history_owner_index_backfill_as_explicit_maintenance()
+    {
+        var appHost = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.AppHost", "Program.cs"));
+        var webProgram = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.Web", "Program.cs"));
+        var launchSettings = File.ReadAllText(Path.Combine(
+            RepositoryRoot(),
+            "src",
+            "HIP.Web",
+            "Properties",
+            "launchSettings.json"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                appHost,
+                Does.Contain("AddProject<Projects.HIP_Web>(\"hip-owner-index-backfill\", launchProfileName: \"maintenance\")"));
+            Assert.That(appHost, Does.Contain(".WithExplicitStart()"));
+            Assert.That(appHost, Does.Contain("ownerIndexBackfill.WithEnvironment"));
+            Assert.That(launchSettings, Does.Contain("\"maintenance\""));
+            Assert.That(
+                launchSettings,
+                Does.Contain("--maintenance=consumer-history-owner-index-backfill"));
+            Assert.That(
+                launchSettings,
+                Does.Contain("--confirm=APPLY-CONSUMER-HISTORY-OWNER-INDEX"));
+            Assert.That(webProgram, Does.Contain("BackfillAllAsync(batchSize: 100"));
+            Assert.That(webProgram, Does.Contain("Consumer-history owner-index backfill completed"));
+        });
+    }
+
+    /// <summary>
     /// Confirms AppHost treats persistence protection material as secret parameters instead of source-controlled values.
     /// </summary>
     [Test]
@@ -51,9 +85,16 @@ public sealed class AspireAppHostFoundationTests
         Assert.Multiple(() =>
         {
             Assert.That(source, Does.Contain("AddParameter(\"hip-record-encryption-key\", secret: true)"));
+            Assert.That(source, Does.Contain("AddParameter(\"hip-legacy-record-encryption-key\", secret: true)"));
             Assert.That(source, Does.Contain("AddParameter(\"hip-privacy-hashing-key\", secret: true)"));
+            Assert.That(source, Does.Contain("AddParameter(\"hip-legacy-privacy-hashing-key\", secret: true)"));
+            Assert.That(source, Does.Contain("Parameters:hip-legacy-privacy-hashing-key"));
+            Assert.That(source, Does.Contain("var legacyPrivacyHashingKey = string.IsNullOrWhiteSpace("));
+            Assert.That(source, Does.Contain("? null"));
             Assert.That(source, Does.Contain(".WithEnvironment(\"HipSecurity__RecordEncryptionKey\", recordEncryptionKey)"));
+            Assert.That(source, Does.Contain(".WithEnvironment(\"HipSecurity__LegacyRecordEncryptionKeys__0\", legacyRecordEncryptionKey)"));
             Assert.That(source, Does.Contain(".WithEnvironment(\"HipSecurity__PrivacyHashingKey\", privacyHashingKey)"));
+            Assert.That(source, Does.Contain(".WithEnvironment(\"HipSecurity__LegacyPrivacyHashingKeys__0\", legacyPrivacyHashingKey)"));
             Assert.That(source, Does.Not.Contain("LocalRecordEncryptionKey"));
             Assert.That(source, Does.Not.Contain("LocalPrivacyHashingKey"));
             Assert.That(source, Does.Not.Contain("hip-local-dev-record-key"));

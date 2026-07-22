@@ -22,6 +22,25 @@ public interface IExternalSiteEvidenceCollector
     Task<IReadOnlyCollection<SiteSafetyEvidence>> CollectAsync(SiteSafetyScanRequest request, CancellationToken cancellationToken);
 }
 
+/// <summary>Privacy-safe durable provider work that excludes the raw URL and all page values.</summary>
+public sealed record ExternalSiteEvidenceWorkItem(
+    string Domain,
+    string UrlHash,
+    SiteSafetyObservedSignals ObservedSignals)
+{
+    /// <summary>Returns a safe operational label without observed-signal details.</summary>
+    public override string ToString() => $"ExternalSiteEvidenceWorkItem {{ Domain = {Domain} }}";
+}
+
+/// <summary>Collects provider evidence from a persisted domain/hash work item outside the request path.</summary>
+public interface IExternalSiteEvidenceWorkCollector
+{
+    /// <summary>Collects normalized evidence without requiring HIP to persist the original URL.</summary>
+    Task<IReadOnlyCollection<SiteSafetyEvidence>> CollectAsync(
+        ExternalSiteEvidenceWorkItem workItem,
+        CancellationToken cancellationToken);
+}
+
 /// <summary>
 /// Default implementation that runs only external evidence providers.
 /// </summary>
@@ -38,7 +57,7 @@ public sealed class ExternalSiteEvidenceCollector(
     IValidator<SiteSafetyScanRequest> validator,
     IEnumerable<ISiteSafetyEvidenceProvider> providers,
     ILogger<ExternalSiteEvidenceCollector> logger,
-    TimeProvider? timeProvider = null) : IExternalSiteEvidenceCollector
+    TimeProvider? timeProvider = null) : IExternalSiteEvidenceCollector, IExternalSiteEvidenceWorkCollector
 {
     private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -51,17 +70,41 @@ public sealed class ExternalSiteEvidenceCollector(
         var uri = new Uri(request.Url, UriKind.Absolute);
         var domain = NormalizeHost(uri.Host);
         var signals = SiteSafetyObservedSignalSanitizer.Sanitize(request.ObservedSignals);
+        return await CollectAsync(
+            new ExternalSiteEvidenceWorkItem(
+                domain,
+                SiteSafetyEvidenceHashing.HashUrl(SanitizeUrl(uri)),
+                signals),
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<SiteSafetyEvidence>> CollectAsync(
+        ExternalSiteEvidenceWorkItem workItem,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(workItem);
+        var normalizedDomain = workItem.Domain.Trim().TrimEnd('.').ToLowerInvariant();
+        if (!string.Equals(workItem.Domain, normalizedDomain, StringComparison.Ordinal) ||
+            !Uri.TryCreate($"https://{normalizedDomain}/", UriKind.Absolute, out var safeUri) ||
+            workItem.UrlHash.Length != 64 ||
+            workItem.UrlHash.Any(character => character is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')))
+        {
+            throw new ArgumentException("Queued provider work is not bound to a normalized public target.", nameof(workItem));
+        }
+
+        await validator.ValidateAndThrowAsync(new SiteSafetyScanRequest(safeUri.ToString()), cancellationToken);
         var context = new SiteSafetyEvidenceContext(
-            uri,
-            domain,
-            SiteSafetyEvidenceHashing.HashUrl(SanitizeUrl(uri)),
-            signals,
+            safeUri,
+            normalizedDomain,
+            workItem.UrlHash,
+            SiteSafetyObservedSignalSanitizer.Sanitize(workItem.ObservedSignals),
             timeProvider.GetUtcNow());
 
         var externalProviders = providers.OfType<IExternalSiteEvidenceProvider>().ToArray();
         if (externalProviders.Length == 0)
         {
-            logger.LogInformation("No external HIP evidence providers are registered for domain {Domain}.", domain);
+            logger.LogInformation("No external HIP evidence providers are registered for domain {Domain}.", normalizedDomain);
             return [];
         }
 
@@ -86,22 +129,30 @@ public sealed class ExternalSiteEvidenceCollector(
         SiteSafetyEvidenceContext context,
         CancellationToken cancellationToken)
     {
+        var startedAt = timeProvider.GetTimestamp();
         try
         {
-            return await provider.CollectEvidenceAsync(context, cancellationToken);
+            var evidence = await provider.CollectEvidenceAsync(context, cancellationToken);
+            return SiteSafetyProviderResultContract.Normalize(
+                evidence,
+                provider.ProviderName,
+                provider.ProviderType,
+                context,
+                timeProvider.GetElapsedTime(startedAt),
+                timeProvider.GetUtcNow());
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return FailedProviderEvidence(provider, context, "Provider timed out.");
+            return FailedProviderEvidence(provider, context, SiteSafetyProviderResultStatus.TimedOut, startedAt, "Provider timed out.");
         }
         catch (TimeoutException)
         {
-            return FailedProviderEvidence(provider, context, "Provider timed out.");
+            return FailedProviderEvidence(provider, context, SiteSafetyProviderResultStatus.TimedOut, startedAt, "Provider timed out.");
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "External HIP evidence provider {ProviderName} failed safely for domain {Domain}.", provider.ProviderName, context.Domain);
-            return FailedProviderEvidence(provider, context, "Provider failed safely.");
+            return FailedProviderEvidence(provider, context, SiteSafetyProviderResultStatus.Failed, startedAt, "Provider failed safely.");
         }
     }
 
@@ -110,22 +161,24 @@ public sealed class ExternalSiteEvidenceCollector(
     /// </summary>
     /// <param name="provider">Provider that failed.</param>
     /// <param name="context">Privacy-safe provider context.</param>
+    /// <param name="status">Normalized timeout or failure status.</param>
+    /// <param name="startedAt">Provider start timestamp from the injected clock.</param>
     /// <param name="error">Plain-English safe error summary.</param>
     /// <returns>A normalized provider failure record.</returns>
-    private static SiteSafetyEvidence FailedProviderEvidence(IExternalSiteEvidenceProvider provider, SiteSafetyEvidenceContext context, string error) =>
-        new(
+    private SiteSafetyEvidence FailedProviderEvidence(
+        IExternalSiteEvidenceProvider provider,
+        SiteSafetyEvidenceContext context,
+        SiteSafetyProviderResultStatus status,
+        long startedAt,
+        string error) =>
+        SiteSafetyProviderResultContract.CreateFailure(
             provider.ProviderName,
             provider.ProviderType,
-            SiteSafetyEvidenceTargetType.Domain,
-            context.Domain,
-            context.UrlHash,
-            [],
-            0,
-            context.CheckedAtUtc,
-            context.CheckedAtUtc.AddMinutes(15),
-            [error],
-            IsAuthoritativeForRisk: false,
-            IsAuthoritativeForTrust: false);
+            context,
+            status,
+            timeProvider.GetElapsedTime(startedAt),
+            timeProvider.GetUtcNow(),
+            error);
 
     /// <summary>
     /// Normalizes a host name for provider cache keys and public-safe evidence.

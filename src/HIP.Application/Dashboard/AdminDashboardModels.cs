@@ -23,7 +23,22 @@ public sealed record AdminDashboardSummary(
     bool HasScanData,
     IReadOnlyCollection<AdminRiskyDomainItem> TopRiskyDomains,
     IReadOnlyCollection<AdminRecentScanItem> RecentScans,
-    IReadOnlyCollection<AdminRecentThreatItem> RecentThreats);
+    IReadOnlyCollection<AdminRecentThreatItem> RecentThreats)
+{
+    /// <summary>
+    /// Reports whether each optional dashboard dependency answered this projection.
+    /// Empty and unavailable are deliberately separate states.
+    /// </summary>
+    public IReadOnlyCollection<AdminDashboardSourceStatus> Sources { get; init; } = [];
+}
+
+/// <summary>
+/// Availability and freshness metadata for one dashboard data source.
+/// </summary>
+/// <param name="Key">Stable source key.</param>
+/// <param name="IsAvailable">Whether the source answered within the dashboard read budget.</param>
+/// <param name="ItemCount">Number of privacy-safe records returned when available.</param>
+public sealed record AdminDashboardSourceStatus(string Key, bool IsAvailable, int ItemCount);
 
 /// <summary>
 /// Dashboard metric card.

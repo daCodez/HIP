@@ -1,0 +1,53 @@
+@page "/step-up"
+@layout AuthLayout
+@attribute [Authorize(Policy = AdminPolicies.CanRequestPrivilegedStepUp)]
+
+<PageTitle>Confirm identity | HIP</PageTitle>
+
+<main class="login-shell" aria-labelledby="step-up-heading">
+    <section class="login-brand-panel">
+        <div>
+            <div class="login-brand-mark" aria-hidden="true">HIP</div>
+            <p class="login-eyebrow">Privileged action</p>
+            <h1 id="step-up-heading">Confirm it is still you.</h1>
+            <p>HIP requires a recent multi-factor sign-in before a high-impact change can continue.</p>
+        </div>
+        <p class="login-privacy-note"><strong>Your credentials stay with the identity provider.</strong> HIP retains only privacy-safe assurance evidence.</p>
+    </section>
+
+    <section class="login-form-panel">
+        <div class="login-card">
+            <div class="login-card-heading">
+                <p class="login-kicker">Security check</p>
+                <h2>Confirm with your identity provider</h2>
+                <p>This confirmation does not extend the hard lifetime of your HIP session.</p>
+            </div>
+
+            @if (string.Equals(Error, "unsatisfied", StringComparison.OrdinalIgnoreCase))
+            {
+                <div class="login-error" role="alert">
+                    <strong>Additional authentication was not confirmed.</strong>
+                    <span>Try again or contact the HIP owner if your provider cannot satisfy the required assurance.</span>
+                </div>
+            }
+
+            <form class="login-form" method="post" action="/auth/step-up">
+                <AntiforgeryToken />
+                <input type="hidden" name="returnUrl" value="@SafeReturnUrl" />
+                <button class="login-submit" type="submit" autofocus>Confirm identity</button>
+            </form>
+
+            <p class="login-help"><a href="@SafeReturnUrl">Cancel and return without making the change</a></p>
+        </div>
+    </section>
+</main>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private string SafeReturnUrl => HipDevelopmentLoginEndpoints.SafeLocalReturnUrl(ReturnUrl);
+}

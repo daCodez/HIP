@@ -21,8 +21,12 @@ public sealed class ConsumerPortalTests
 
         var status = await client.GetFromJsonAsync<ConsumerStatus>("/api/v1/consumer/status");
 
-        Assert.That(status!.ProtectionStatus, Is.EqualTo("Active"));
-        Assert.That(status.Message, Does.Contain("Second Life HUD"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(status!.ProtectionStatus, Is.EqualTo("Active"));
+            Assert.That(status.DeviceStatus, Is.EqualTo("No registered devices"));
+            Assert.That(status.Message, Does.Contain("owned by this consumer account"));
+        });
     }
 
     [Test]
@@ -90,6 +94,32 @@ public sealed class ConsumerPortalTests
     }
 
     [Test]
+    public async Task Settings_are_isolated_between_authenticated_consumers()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var owner = factory.CreateClient();
+        owner.DefaultRequestHeaders.Add("X-HIP-Consumer-Id", "consumer-owner-A");
+        using var other = factory.CreateClient();
+        other.DefaultRequestHeaders.Add("X-HIP-Consumer-Id", "consumer-owner-B");
+
+        var save = await owner.PostAsJsonAsync("/api/v1/consumer/settings", new ConsumerSettings(
+            EnablePopupAlerts: false,
+            EnablePrivateWarnings: false,
+            EnableSafetyPageRouting: true,
+            ScanMode: "Paranoid"));
+        var ownerSettings = await owner.GetFromJsonAsync<ConsumerSettings>("/api/v1/consumer/settings");
+        var otherSettings = await other.GetFromJsonAsync<ConsumerSettings>("/api/v1/consumer/settings");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(save.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(ownerSettings!.ScanMode, Is.EqualTo("Paranoid"));
+            Assert.That(otherSettings!.ScanMode, Is.EqualTo("Normal"));
+            Assert.That(otherSettings.EnablePopupAlerts, Is.True);
+        });
+    }
+
+    [Test]
     public async Task Invalid_scan_mode_is_rejected()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
@@ -124,6 +154,49 @@ public sealed class ConsumerPortalTests
         var response = await client.GetAsync("/consumer");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [TestCase("/consumer")]
+    [TestCase("/consumer/scans")]
+    [TestCase("/consumer/reports")]
+    [TestCase("/consumer/appeals")]
+    [TestCase("/consumer/alerts")]
+    [TestCase("/consumer/devices")]
+    [TestCase("/consumer/licenses")]
+    [TestCase("/consumer/security")]
+    public async Task Completed_consumer_routes_require_and_accept_the_consumer_policy(string route)
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var anonymous = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var consumer = ConsumerClient(factory);
+
+        var denied = await anonymous.GetAsync(route);
+        var allowed = await consumer.GetAsync(route);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(denied.StatusCode, Is.EqualTo(HttpStatusCode.NotFound), route);
+            Assert.That(allowed.StatusCode, Is.EqualTo(HttpStatusCode.OK), route);
+        });
+    }
+
+    [Test]
+    public async Task Consumer_home_uses_live_owner_status_and_has_no_future_placeholder_cards()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = ConsumerClient(factory);
+
+        var html = await client.GetStringAsync("/consumer");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(html, Does.Contain("No registered devices"));
+            Assert.That(html, Does.Contain("Not linked"));
+            Assert.That(html, Does.Contain("/consumer/licenses"));
+            Assert.That(html, Does.Contain("/consumer/security"));
+            Assert.That(html, Does.Not.Contain("<strong>Dev</strong>"));
+            Assert.That(html, Does.Not.Contain("<strong>Later</strong>"));
+        });
     }
 
     private static HttpClient ConsumerClient(WebApplicationFactory<Program> factory)

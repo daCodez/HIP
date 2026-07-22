@@ -221,6 +221,25 @@ public sealed class AdminDashboardTests
     }
 
     [Test]
+    public async Task Dashboard_distinguishes_an_unavailable_optional_source_from_an_empty_source()
+    {
+        var service = Dashboard(
+            new InMemoryBrowserScanResultRepository(),
+            weightedFeedbackRepository: new FailingWeightedFeedbackRepository());
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+        var feedbackSource = summary.Sources.Single(source => source.Key == "weightedFeedback");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(feedbackSource.IsAvailable, Is.False);
+            Assert.That(feedbackSource.ItemCount, Is.Zero);
+            Assert.That(Card(summary, "feedbackReceived").Status, Is.EqualTo("Unavailable"));
+            Assert.That(Card(summary, "feedbackReceived").IsPlaceholder, Is.True);
+        });
+    }
+
+    [Test]
     public async Task Dashboard_external_provider_errors_use_stored_scan_metadata()
     {
         var repository = new InMemoryBrowserScanResultRepository();
@@ -938,6 +957,21 @@ public sealed class AdminDashboardTests
                 []));
     }
 
+    private sealed class FailingWeightedFeedbackRepository : IWeightedFeedbackRepository
+    {
+        public Task SaveAsync(WeightedFeedbackSubmission submission, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Unavailable");
+
+        public Task<IReadOnlyCollection<WeightedFeedbackSubmission>> ListRecentAsync(
+            string domain,
+            DateTimeOffset sinceUtc,
+            CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Unavailable");
+
+        public Task<IReadOnlyCollection<WeightedFeedbackSubmission>> ListAsync(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Unavailable");
+    }
+
     /// <summary>
     /// Creates a dashboard service seeded with representative browser scan data.
     /// </summary>
@@ -1031,10 +1065,23 @@ public sealed class AdminDashboardTests
             dangerousLinks,
             lastCheckedUtc,
             dangerousLinks > 0 ? "RouteToSafetyPage" : "Allow",
-            metadata ?? new Dictionary<string, string>
+            AuthoritativeMetadata(metadata));
+
+    /// <summary>
+    /// Adds the server-owned provenance required for a scan to participate in dashboard trust projections.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> AuthoritativeMetadata(
+        IReadOnlyDictionary<string, string>? metadata)
+    {
+        var result = metadata is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["scanMode"] = "Normal"
-            });
+            }
+            : new Dictionary<string, string>(metadata, StringComparer.OrdinalIgnoreCase);
+        result[BrowserScanResultProvenance.MetadataKey] = BrowserScanResultProvenance.ServerAuthoritative;
+        return result;
+    }
 
     /// <summary>
     /// Creates a generated admin review queue item with privacy-safe summary fields.

@@ -10,6 +10,7 @@ public sealed class TrustRuleValidator : AbstractValidator<TrustRule>
         RuleFor(rule => rule.Name).NotEmpty();
         RuleFor(rule => rule.Mode).IsInEnum();
         RuleFor(rule => rule.Severity).IsInEnum();
+        RuleFor(rule => rule.CreatorType).IsInEnum();
         RuleFor(rule => rule.Conditions).NotEmpty();
         RuleFor(rule => rule.Actions).NotEmpty();
         RuleFor(rule => rule.ConfidenceScore).InclusiveBetween(0, 100);
@@ -34,5 +35,10 @@ public sealed class TrustRuleValidator : AbstractValidator<TrustRule>
             .Equal(true)
             .When(RuleValidationConstants.IsHighImpact)
             .WithMessage("High-impact rules require approval.");
+        RuleFor(rule => rule)
+            .Must(rule => rule.CreatorType is not HipRuleCreatorType.AiSuggested ||
+                          (!rule.Enabled && rule.Mode is RuleMode.Disabled && rule.RequiresApproval &&
+                           rule.SimulationRequired && rule.ApprovalStatus is ApprovalStatus.Pending))
+            .WithMessage("AI-suggested rules must remain disabled approval-pending drafts.");
     }
 }

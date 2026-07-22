@@ -1,75 +1,201 @@
 @page "/admin/api"
-@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@attribute [Authorize(Policy = AdminPolicies.CanViewServiceClients)]
 @rendermode InteractiveServer
-@inject IAdminDashboardService DashboardService
+@using HIP.Application.ServiceClients
+@using HIP.Domain.ServiceClients
 
-<PageTitle>HIP API & Developer</PageTitle>
+<PageTitle>Service Clients | HIP Admin</PageTitle>
 
-<section class="hip-page-heading compact">
-    <div>
-        <h1>API & Developer <span class="hip-pill info">MVP</span></h1>
-        <p>Integrate HIP into your own tools and workflows.</p>
-    </div>
-    <button class="hip-primary-action" type="button" disabled>+ New API Key</button>
-</section>
-
-@if (_summary is null)
-{
-    <section class="hip-panel padded narrow">
-        <h2>Loading API data</h2>
-        <p>HIP is reading live scan and submission summaries.</p>
-    </section>
-}
-else
-{
-    <section class="hip-two-column">
-        <article class="hip-panel padded">
-            <h2>API Activity</h2>
-            <p>HIP does not have API key usage telemetry connected yet.</p>
-            <div class="hip-stat-pair">
-                <strong>@CardValue("totalScans")<small>Stored scan submissions</small></strong>
-                <strong>@CardValue("scansToday")<small>Scans today</small></strong>
-            </div>
-        </article>
-
-        <article class="hip-panel padded">
-            <h2>Rate Limits</h2>
-            <p>Production rate-limit counters are not connected yet.</p>
-            <div class="hip-progress-row">
-                <span>Plugin/API submissions</span>
-                <strong>Development placeholder</strong>
-                <i style="--value:0%"></i>
-            </div>
-        </article>
+<main class="service-clients-page" aria-busy="@(_isLoading || _isBusy)">
+    <section class="hip-page-heading service-client-heading">
+        <div>
+            <span class="hip-eyebrow">HIP Admin · service access</span>
+            <h1>API &amp; Developer</h1>
+            <p>Integrate HIP into your own tools with owner-bound, least privilege service clients.</p>
+        </div>
+        <button class="hip-secondary-action" type="button" @onclick="LoadClientsAsync" disabled="@(_isLoading || _isBusy)">
+            @(_isLoading ? "Loading…" : "Refresh")
+        </button>
     </section>
 
-    <section class="hip-panel padded narrow">
-        <h2>API Keys</h2>
-        <p>API key storage is not connected yet, so HIP is not showing fake tokens or fake usage.</p>
-        <article class="hip-key-row">
+    <section class="service-client-trust-note" aria-label="Service-client trust boundary">
+        <strong>Authorization is narrow, not a safety verdict.</strong>
+        <p>A credential permits one operation for exact domain grants. Successful authorization does not prove safety, reputation, or trustworthiness.</p>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_oneTimeCredential))
+    {
+        <section class="service-client-credential" role="status" aria-live="polite">
             <div>
-                <h3>No API keys yet <span>0 calls</span></h3>
-                <code>API key management not connected</code>
-                <small>Use this page after real API key persistence and auditing are added.</small>
+                <span>One-time credential</span>
+                <h2>Copy this credential now</h2>
+                <p>HIP stores only a slow verifier. This full credential will not be shown again after you dismiss it or leave this page.</p>
             </div>
+            <code>@_oneTimeCredential</code>
+            <button class="credential-dismiss" type="button" @onclick="DismissCredential">Dismiss credential</button>
+        </section>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <section class="service-client-message error" role="alert">
+            <strong>Service clients unavailable</strong>
+            <p>@_errorMessage</p>
+            @if (_requiresStepUp)
+            {
+                <a class="hip-secondary-action" href="@StepUpHref">Confirm identity</a>
+            }
+        </section>
+    }
+    else if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <p class="service-client-message success" role="status" aria-live="polite">@_statusMessage</p>
+    }
+
+    <section class="service-client-layout">
+        <article class="hip-panel padded service-client-create">
+            <header>
+                <span class="service-client-section-label">New registration</span>
+                <h2>Create service client</h2>
+                <p>Choose one exact scope and only the domains this integration needs.</p>
+            </header>
+
+            <label for="service-client-name">
+                <span>Display name</span>
+                <small>Use a recognizable workload or integration name.</small>
+            </label>
+            <input id="service-client-name"
+                   maxlength="128"
+                   autocomplete="off"
+                   @bind="_displayName"
+                   @bind:event="oninput"
+                   disabled="@_isBusy" />
+
+            <label for="service-client-scope">
+                <span>Exact scope</span>
+                <small>One service client cannot combine privileged operations.</small>
+            </label>
+            <select id="service-client-scope" @bind="_selectedScope" disabled="@_isBusy">
+                <option value="@ServiceClientScopeValues.DomainVerificationCheck">@ServiceClientScopeValues.DomainVerificationCheck</option>
+                <option value="@ServiceClientScopeValues.SiteSafetyExternalEvidenceCheck">@ServiceClientScopeValues.SiteSafetyExternalEvidenceCheck</option>
+            </select>
+
+            <label for="service-client-domains">
+                <span>Exact domain grants</span>
+                <small>Enter 1–16 domains separated by commas or new lines. Wildcards and suffix grants are rejected.</small>
+            </label>
+            <textarea id="service-client-domains"
+                      rows="5"
+                      maxlength="4096"
+                      autocomplete="off"
+                      @bind="_domainGrantsText"
+                      @bind:event="oninput"
+                      disabled="@_isBusy"></textarea>
+
+            <label for="service-client-lifetime">
+                <span>Credential lifetime (days)</span>
+                <small>Choose 1–365 days. Rotation does not extend this expiry.</small>
+            </label>
+            <input id="service-client-lifetime"
+                   type="number"
+                   min="1"
+                   max="365"
+                   @bind="_lifetimeDays"
+                   disabled="@_isBusy" />
+
+            <button class="hip-primary-action" type="button" @onclick="CreateClientAsync" disabled="@CreateDisabled">
+                @(_isBusy ? "Working…" : "Create service client")
+            </button>
         </article>
+
+        <section class="hip-panel padded service-client-inventory">
+            <header>
+                <div>
+                    <span class="service-client-section-label">Owner-scoped inventory</span>
+                    <h2>Service clients</h2>
+                    <p>Only registrations owned by the authenticated HIP actor are shown.</p>
+                </div>
+                <span class="service-client-count">@_clients.Count</span>
+            </header>
+
+            @if (_isLoading && _clients.Count == 0)
+            {
+                <div class="service-client-empty" role="status">
+                    <h3>Loading service clients</h3>
+                    <p>HIP is reading this owner's bounded registration page.</p>
+                </div>
+            }
+            else if (_clients.Count == 0)
+            {
+                <div class="service-client-empty" role="status">
+                    <h3>No service clients</h3>
+                    <p>Create the first least-privilege credential using the form.</p>
+                </div>
+            }
+            else
+            {
+                <div class="service-client-list">
+                    @foreach (var client in _clients)
+                    {
+                        <article class="service-client-card" @key="client.ClientId">
+                            <header>
+                                <div>
+                                    <h3>@client.DisplayName</h3>
+                                    <code>@client.ClientId</code>
+                                </div>
+                                <span class="service-client-status @StatusTone(client)">@StatusLabel(client)</span>
+                            </header>
+
+                            <dl>
+                                <div><dt>Scope</dt><dd><code>@client.Scope</code></dd></div>
+                                <div><dt>Created</dt><dd>@FormatDate(client.CreatedAtUtc)</dd></div>
+                                <div><dt>Expires</dt><dd>@FormatDate(client.ExpiresAtUtc)</dd></div>
+                                <div><dt>Credential version</dt><dd>@client.CredentialVersion</dd></div>
+                            </dl>
+
+                            <div class="service-client-grants">
+                                <strong>Exact domain grants</strong>
+                                <ul>
+                                    @foreach (var domain in client.DomainGrants)
+                                    {
+                                        <li><code>@domain</code></li>
+                                    }
+                                </ul>
+                            </div>
+
+                            @if (client.Status == ServiceClientStatus.Active)
+                            {
+                                <div class="service-client-actions">
+                                    <button type="button"
+                                            class="hip-secondary-action"
+                                            @onclick="() => RotateAsync(client)"
+                                            disabled="@(_isBusy || IsExpired(client))">
+                                        Rotate credential
+                                    </button>
+                                    @if (_confirmingClientId == client.ClientId)
+                                    {
+                                        <button type="button" class="service-client-danger" @onclick="() => RevokeAsync(client)" disabled="@_isBusy">Confirm revoke</button>
+                                        <button type="button" class="service-client-cancel" @onclick="CancelRevoke" disabled="@_isBusy">Keep client</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="service-client-danger" @onclick="() => BeginRevoke(client.ClientId)" disabled="@_isBusy">Revoke</button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="service-client-revoked">Revoked @FormatDate(client.RevokedAtUtc)</p>
+                            }
+                        </article>
+                    }
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_nextCursor))
+            {
+                <button class="hip-secondary-action load-more" type="button" @onclick="LoadMoreAsync" disabled="@(_isLoading || _isBusy)">Load more</button>
+            }
+        </section>
     </section>
-}
-
-@code {
-    private AdminDashboardSummary? _summary;
-
-    /// <summary>
-    /// Loads live dashboard counters for API-adjacent activity.
-    /// </summary>
-    protected override async Task OnInitializedAsync() =>
-        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
-
-    /// <summary>
-    /// Gets a live dashboard card value.
-    /// </summary>
-    /// <param name="key">Dashboard card key.</param>
-    /// <returns>Card value or zero.</returns>
-    private int CardValue(string key) =>
-        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
-}
+</main>

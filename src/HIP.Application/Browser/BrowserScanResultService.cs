@@ -8,7 +8,12 @@ namespace HIP.Application.Browser;
 /// <summary>
 /// Validates and stores browser plugin scan summaries while preserving HIP privacy boundaries.
 /// </summary>
-public sealed class BrowserScanResultService : IBrowserScanResultService, IBrowserScanResultWriteService, IBrowserScanResultQueryService
+public sealed class BrowserScanResultService :
+    IBrowserScanResultService,
+    IUntrustedBrowserScanResultSubmissionService,
+    IRegisteredDeviceBrowserScanResultSubmissionService,
+    IBrowserScanResultWriteService,
+    IBrowserScanResultQueryService
 {
     private const int MaxReasonLength = 300;
     private const int MaxMetadataKeyLength = 80;
@@ -69,15 +74,62 @@ public sealed class BrowserScanResultService : IBrowserScanResultService, IBrows
     /// <param name="request">Browser plugin scan result request.</param>
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
     /// <returns>Save confirmation with the normalized domain and assigned timestamp.</returns>
-    public async Task<BrowserScanResultSaveResponse> SaveAsync(BrowserScanResultSaveRequest request, CancellationToken cancellationToken)
+    public Task<BrowserScanResultSaveResponse> SaveAsync(
+        BrowserScanResultSaveRequest request,
+        CancellationToken cancellationToken) =>
+        SaveCoreAsync(
+            request,
+            BrowserScanResultProvenance.ServerAuthoritative,
+            acceptRequestedTimestamp: true,
+            cancellationToken);
+
+    /// <inheritdoc />
+    public Task<BrowserScanResultSaveResponse> SaveUntrustedAsync(
+        BrowserScanResultSaveRequest request,
+        CancellationToken cancellationToken) =>
+        SaveCoreAsync(
+            request,
+            BrowserScanResultProvenance.UntrustedClient,
+            acceptRequestedTimestamp: false,
+            cancellationToken);
+
+    /// <inheritdoc />
+    public Task<BrowserScanResultSaveResponse> SaveRegisteredDeviceAsync(
+        BrowserScanResultSaveRequest request,
+        CancellationToken cancellationToken) =>
+        SaveCoreAsync(
+            request,
+            BrowserScanResultProvenance.RegisteredDevice,
+            acceptRequestedTimestamp: false,
+            cancellationToken);
+
+    /// <summary>
+    /// Performs the shared validation and persistence work after the caller trust boundary has been selected.
+    /// </summary>
+    /// <param name="request">Scan result request.</param>
+    /// <param name="submissionTrust">Server-owned provenance value.</param>
+    /// <param name="acceptRequestedTimestamp">Whether the timestamp came from a HIP-owned evaluation path.</param>
+    /// <param name="cancellationToken">Token used to cancel persistence work.</param>
+    /// <returns>Save confirmation with the normalized domain and assigned timestamp.</returns>
+    private async Task<BrowserScanResultSaveResponse> SaveCoreAsync(
+        BrowserScanResultSaveRequest request,
+        string submissionTrust,
+        bool acceptRequestedTimestamp,
+        CancellationToken cancellationToken)
     {
         var domain = DomainInputValidator.ValidateAndNormalize(request.Domain);
         ValidateScore(request.Score);
         ValidateCounts(request);
         var pageUrlHash = ResolvePageUrlHash(request);
 
-        var now = request.ScannedAtUtc ?? DateTimeOffset.UtcNow;
-        var metadata = AddScalabilityMetadata(AddPluginVersion(ValidateMetadata(request.PrivacySafeMetadata), request.PluginVersion), request);
+        var now = acceptRequestedTimestamp
+            ? request.ScannedAtUtc ?? DateTimeOffset.UtcNow
+            : DateTimeOffset.UtcNow;
+        var metadata = AddSubmissionTrust(
+            AddScalabilityMetadata(
+                AddPluginVersion(ValidateMetadata(request.PrivacySafeMetadata), request.PluginVersion),
+                request),
+            submissionTrust);
         var reasons = NormalizeReasons(request.Reasons);
         var record = new BrowserScanResultRecord(
             $"browser-scan:{domain}:{Guid.NewGuid():N}",
@@ -98,9 +150,13 @@ public sealed class BrowserScanResultService : IBrowserScanResultService, IBrows
             metadata);
 
         await repository.SaveAsync(record, cancellationToken);
-        await scanResultCache.StoreAsync(record, HotPathCacheDuration, cancellationToken);
-        await dashboardAggregateStore.UpdateAsync(record, cancellationToken);
-        await EnqueueScanStoredEventAsync(record, cancellationToken);
+        if (BrowserScanResultProvenance.IsServerAuthoritative(record))
+        {
+            await scanResultCache.StoreAsync(record, HotPathCacheDuration, cancellationToken);
+            await dashboardAggregateStore.UpdateAsync(record, cancellationToken);
+            await EnqueueScanStoredEventAsync(record, cancellationToken);
+        }
+
         return new BrowserScanResultSaveResponse(true, domain, now);
     }
 
@@ -113,14 +169,19 @@ public sealed class BrowserScanResultService : IBrowserScanResultService, IBrows
     public async Task<BrowserScanResultResponse?> GetLatestByDomainAsync(string domain, CancellationToken cancellationToken)
     {
         var normalizedDomain = DomainInputValidator.ValidateAndNormalize(domain);
+        var record = await repository.GetLatestByDomainAsync(normalizedDomain, cancellationToken);
+        if (record is not null)
+        {
+            return BrowserScanResultResponse.From(record);
+        }
+
         var cached = await scanResultCache.GetFreshAsync(normalizedDomain, cancellationToken);
-        if (cached is not null)
+        if (cached is not null && BrowserScanResultProvenance.IsServerAuthoritative(cached.Result))
         {
             return BrowserScanResultResponse.From(cached.Result);
         }
 
-        var record = await repository.GetLatestByDomainAsync(normalizedDomain, cancellationToken);
-        return record is null ? null : BrowserScanResultResponse.From(record);
+        return null;
     }
 
     /// <inheritdoc />
@@ -129,6 +190,7 @@ public sealed class BrowserScanResultService : IBrowserScanResultService, IBrows
         var boundedMax = Math.Clamp(maxCount, 0, 200);
         var records = await repository.ListAsync(cancellationToken);
         return records
+            .Where(BrowserScanResultProvenance.IsServerAuthoritative)
             .OrderByDescending(record => record.LastCheckedUtc)
             .Take(boundedMax)
             .Select(BrowserScanResultResponse.From)
@@ -319,6 +381,24 @@ public sealed class BrowserScanResultService : IBrowserScanResultService, IBrows
                 ? safeVersion[..MaxPluginVersionLength]
                 : safeVersion;
         }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Replaces any caller-supplied trust claim with the provenance selected by the server entry point.
+    /// </summary>
+    /// <param name="metadata">Validated privacy-safe metadata.</param>
+    /// <param name="submissionTrust">Server-owned provenance value.</param>
+    /// <returns>Metadata with an authoritative server-selected trust marker.</returns>
+    private static IReadOnlyDictionary<string, string> AddSubmissionTrust(
+        IReadOnlyDictionary<string, string> metadata,
+        string submissionTrust)
+    {
+        var result = new Dictionary<string, string>(metadata, StringComparer.OrdinalIgnoreCase)
+        {
+            [BrowserScanResultProvenance.MetadataKey] = submissionTrust
+        };
 
         return result;
     }

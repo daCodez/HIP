@@ -28,6 +28,11 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
     public DbSet<HipDashboardScanAggregateEntity> DashboardScanAggregates => Set<HipDashboardScanAggregateEntity>();
 
     /// <summary>
+    /// Gets immutable signed trust receipts and their indexed authoritative-evaluation identities.
+    /// </summary>
+    public DbSet<HipTrustReceiptEntity> TrustReceipts => Set<HipTrustReceiptEntity>();
+
+    /// <summary>
     /// Configures table names, keys, lengths, and indexes for HIP persistence.
     /// </summary>
     /// <param name="modelBuilder">EF Core model builder.</param>
@@ -40,7 +45,9 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
             entity.Property(record => record.Partition).HasMaxLength(160);
             entity.Property(record => record.Id).HasMaxLength(220);
             entity.Property(record => record.Json).IsRequired();
-            entity.Property(record => record.AggregateVersion).HasDefaultValue(0L);
+            entity.Property(record => record.AggregateVersion)
+                .HasDefaultValue(0L)
+                .IsConcurrencyToken();
             entity.HasIndex(record => record.UpdatedAtUtc);
         });
 
@@ -72,6 +79,31 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
             entity.HasKey(aggregate => aggregate.Id);
             entity.Property(aggregate => aggregate.Id).HasMaxLength(80);
             entity.HasIndex(aggregate => aggregate.UpdatedAtUtc);
+        });
+
+        modelBuilder.Entity<HipTrustReceiptEntity>(entity =>
+        {
+            entity.ToTable("hip_trust_receipts");
+            entity.HasKey(receipt => receipt.ReceiptId);
+            entity.Property(receipt => receipt.ReceiptId).HasMaxLength(128);
+            entity.Property(receipt => receipt.RelatedEvaluationId).HasMaxLength(256).IsRequired();
+            entity.Property(receipt => receipt.ReceiptJson).IsRequired();
+            entity.Property(receipt => receipt.ReceiptDigest).HasMaxLength(71).IsRequired();
+            entity.Property(receipt => receipt.SourceEvaluationDigest).HasMaxLength(71).IsRequired();
+            entity.Property(receipt => receipt.DocumentType).HasMaxLength(64).IsRequired();
+            entity.Property(receipt => receipt.ProtocolVersion).HasMaxLength(32).IsRequired();
+            entity.Property(receipt => receipt.SubjectType).HasMaxLength(64).IsRequired();
+            entity.Property(receipt => receipt.SubjectId).HasMaxLength(512).IsRequired();
+            entity.Property(receipt => receipt.PolicyVersion).HasMaxLength(128).IsRequired();
+            entity.Property(receipt => receipt.RuleSetVersion).HasMaxLength(128).IsRequired();
+            entity.Property(receipt => receipt.EvidenceDigest).HasMaxLength(71).IsRequired();
+            entity.Property(receipt => receipt.IssuerId).HasMaxLength(256).IsRequired();
+            entity.Property(receipt => receipt.KeyId).HasMaxLength(128).IsRequired();
+            entity.Property(receipt => receipt.Algorithm).HasMaxLength(128).IsRequired();
+            entity.HasIndex(receipt => receipt.RelatedEvaluationId).IsUnique();
+            entity.HasIndex(receipt => receipt.SubjectId);
+            entity.HasIndex(receipt => receipt.ExpiresAtUtc);
+            entity.HasIndex(receipt => receipt.IssuerId);
         });
     }
 }

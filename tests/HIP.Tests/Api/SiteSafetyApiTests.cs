@@ -4,6 +4,9 @@ using System.Text.Json;
 using HIP.Application.Dashboard;
 using HIP.Application.SiteSafety;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace HIP.Tests.Api;
 
@@ -26,10 +29,32 @@ public sealed class SiteSafetyApiTests
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var scoring = json.RootElement.GetProperty("scoring");
+        var reasonEntries = scoring.GetProperty("reasonEntries");
+        var providerEvidence = json.RootElement.GetProperty("providerEvidence");
         Assert.Multiple(() =>
         {
             Assert.That(json.RootElement.GetProperty("domain").GetString(), Is.EqualTo("example.com"));
             Assert.That(json.RootElement.GetProperty("status").GetString(), Is.EqualTo("LimitedData"));
+            Assert.That(scoring.GetProperty("modelVersion").GetString(), Is.EqualTo("hip-0301-v1"));
+            Assert.That(scoring.GetProperty("contentRiskScoreHigherMeansMoreRisk").GetBoolean(), Is.True);
+            Assert.That(scoring.GetProperty("canAssertPositiveTrust").GetBoolean(), Is.False);
+            Assert.That(scoring.GetProperty("presentationStatus").GetString(), Is.EqualTo("LimitedTrustData"));
+            Assert.That(reasonEntries.GetArrayLength(), Is.GreaterThan(0));
+            Assert.That(reasonEntries.EnumerateArray().All(entry =>
+                entry.GetProperty("code").GetString() is { Length: > 0 } code &&
+                code == code.ToLowerInvariant()), Is.True);
+            Assert.That(reasonEntries.EnumerateArray().All(entry =>
+                entry.GetProperty("privacyClassification").GetString() is "PublicMetadata" or "DerivedMetadata"), Is.True);
+            Assert.That(providerEvidence.GetArrayLength(), Is.GreaterThan(0));
+            Assert.That(providerEvidence.EnumerateArray().All(entry =>
+                entry.GetProperty("resultStatus").GetString() is "Succeeded" or "Partial" or "TimedOut" or "Failed"), Is.True);
+            Assert.That(providerEvidence.EnumerateArray().All(entry =>
+                entry.GetProperty("latencyMilliseconds").GetInt64() >= 0), Is.True);
+            Assert.That(providerEvidence.EnumerateArray().All(entry =>
+                entry.GetProperty("freshness").GetString() is "Fresh" or "Stale" or "Expired"), Is.True);
+            Assert.That(providerEvidence.EnumerateArray().All(entry =>
+                entry.GetProperty("privacyClassification").GetString() is "PublicDomainMetadata" or "HashedUrlMetadata" or "PrivacySafeObservedSignals"), Is.True);
             Assert.That(json.RootElement.TryGetProperty("pageText", out _), Is.False);
             Assert.That(json.RootElement.TryGetProperty("formValues", out _), Is.False);
         });
@@ -47,6 +72,69 @@ public sealed class SiteSafetyApiTests
         var response = await client.PostAsJsonAsync("/api/v1/site-safety/scan", new SiteSafetyScanRequest("http://localhost:5123"));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    /// <summary>
+    /// Verifies a local rules administrator can run the protected external-evidence operation.
+    /// </summary>
+    [Test]
+    public async Task External_evidence_check_allows_local_rules_admin()
+    {
+        await using var baseFactory = new HipWebApplicationFactory<Program>();
+        await using var factory = baseFactory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IExternalSiteEvidenceCollector>();
+                services.AddSingleton<IExternalSiteEvidenceCollector, EmptyExternalSiteEvidenceCollector>();
+            }));
+        using var client = factory.CreateClient();
+        AddRole(client, "Admin");
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/site-safety/external-evidence/check",
+            new SiteSafetyScanRequest("https://external-evidence.example/path?private=value"));
+        var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(json.RootElement.GetProperty("domain").GetString(), Is.EqualTo("external-evidence.example"));
+            Assert.That(json.RootElement.GetProperty("providerEvidence").GetArrayLength(), Is.Zero);
+        });
+    }
+
+    /// <summary>
+    /// Verifies durable provider work is accepted immediately and can be read only by its requester.
+    /// </summary>
+    [Test]
+    public async Task External_evidence_job_returns_accepted_privacy_safe_owner_scoped_status()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        AddRole(client, "Admin");
+
+        var accepted = await client.PostAsJsonAsync(
+            "/api/v1/site-safety/external-evidence/jobs",
+            new SiteSafetyScanRequest("https://queued-api.example/private?password=secret"));
+        using var acceptedJson = await JsonDocument.ParseAsync(await accepted.Content.ReadAsStreamAsync());
+        var jobId = acceptedJson.RootElement.GetProperty("jobId").GetString();
+        var location = accepted.Headers.Location;
+        var owned = await client.GetAsync(location);
+        AddRole(client, "Owner");
+        var otherOwner = await client.GetAsync(location);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(accepted.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+            Assert.That(jobId, Does.StartWith("provider-job:"));
+            Assert.That(acceptedJson.RootElement.GetProperty("status").GetString(), Is.EqualTo("Pending"));
+            Assert.That(acceptedJson.RootElement.GetProperty("domain").GetString(), Is.EqualTo("queued-api.example"));
+            Assert.That(acceptedJson.RootElement.TryGetProperty("urlHash", out _), Is.False);
+            Assert.That(acceptedJson.RootElement.TryGetProperty("requesterKeyDigest", out _), Is.False);
+            Assert.That(acceptedJson.RootElement.ToString(), Does.Not.Contain("password=secret"));
+            Assert.That(owned.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(otherOwner.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        });
     }
 
     /// <summary>
@@ -81,14 +169,15 @@ public sealed class SiteSafetyApiTests
             Assert.That(metadata.GetProperty("providerNames").GetString(), Does.Contain("BrowserObservedSignalProvider"));
             Assert.That(metadata.GetProperty("matchedRuleIds").GetString(), Is.Not.Empty);
             Assert.That(metadata.GetProperty("scannedAtUtc").GetString(), Is.Not.Empty);
+            Assert.That(metadata.GetProperty("submissionTrust").GetString(), Is.EqualTo("untrusted-client"));
         });
     }
 
     /// <summary>
-    /// Verifies saved Site Safety scans flow into the Admin Dashboard live-data cards.
+    /// Verifies anonymous Site Safety observations do not flow into authoritative Admin Dashboard cards.
     /// </summary>
     [Test]
-    public async Task Site_safety_scan_is_available_to_admin_dashboard()
+    public async Task Anonymous_site_safety_scan_is_excluded_from_admin_dashboard()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
@@ -106,12 +195,10 @@ public sealed class SiteSafetyApiTests
 
         var summary = await dashboard.Content.ReadFromJsonAsync<AdminDashboardSummary>();
         Assert.That(summary, Is.Not.Null);
-        Assert.Multiple(() =>
-        {
-            Assert.That(summary!.HasScanData, Is.True);
-            Assert.That(Card(summary, "totalScans").Value, Is.GreaterThanOrEqualTo(1));
-            Assert.That(summary.RecentScans.Any(recent => recent.Domain == domain), Is.True);
-        });
+        Assert.That(
+            summary!.RecentScans.Any(recent => recent.Domain == domain),
+            Is.False,
+            "Anonymous observations must not alter authoritative dashboard aggregates.");
     }
 
     /// <summary>
@@ -174,12 +261,21 @@ public sealed class SiteSafetyApiTests
         client.DefaultRequestHeaders.Add("X-HIP-Admin-User", $"{role.ToLowerInvariant()}-site-safety-test");
     }
 
+    private sealed class EmptyExternalSiteEvidenceCollector : IExternalSiteEvidenceCollector
+    {
+        public Task<IReadOnlyCollection<SiteSafetyEvidence>> CollectAsync(
+            SiteSafetyScanRequest request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<IReadOnlyCollection<SiteSafetyEvidence>>([]);
+        }
+    }
+
     /// <summary>
     /// Finds one dashboard card by key.
     /// </summary>
     /// <param name="summary">Dashboard summary.</param>
     /// <param name="key">Card key.</param>
     /// <returns>Matching dashboard card.</returns>
-    private static AdminDashboardCard Card(AdminDashboardSummary summary, string key) =>
-        summary.Cards.Single(card => card.Key == key);
 }

@@ -1,17 +1,28 @@
-using System.Collections.Concurrent;
+using HIP.Application.Devices;
 using HIP.Application.Reporting;
 using HIP.Application.Review;
+using HIP.Domain.Devices;
 using HIP.Domain.Risk;
 using HIP.Domain.Review;
+using Microsoft.Extensions.Logging;
 
 namespace HIP.Application.Consumer;
 
 public sealed class ConsumerPortalService(
     IRiskFindingReportRepository riskFindingRepository,
     IAppealService appealService,
-    IPrivacyHashingService privacyHashingService) : IConsumerPortalService
+    IPrivacyHashingService privacyHashingService,
+    IDeviceRegistrationService deviceRegistrationService,
+    IAppealRepository appealRepository,
+    ILogger<ConsumerPortalService>? logger = null,
+    IConsumerSettingsRepository? settingsRepository = null,
+    TimeProvider? timeProvider = null) : IConsumerPortalService
 {
-    private static readonly ConcurrentDictionary<string, ConsumerSettings> SettingsByConsumer = new(StringComparer.OrdinalIgnoreCase);
+    private const int MaximumHistoryItems = 100;
+    private const int MaximumSettingsSaveAttempts = 3;
+    private readonly IConsumerSettingsRepository settings =
+        settingsRepository ?? new InMemoryConsumerSettingsRepository();
+    private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
     private static readonly HashSet<string> SupportedScanModes = new(StringComparer.OrdinalIgnoreCase)
     {
         "Quiet",
@@ -20,20 +31,71 @@ public sealed class ConsumerPortalService(
         "Paranoid"
     };
 
-    public Task<ConsumerStatus> GetStatusAsync(string consumerId, CancellationToken cancellationToken) =>
-        Task.FromResult(new ConsumerStatus(
+    public async Task<ConsumerStatus> GetStatusAsync(string consumerId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(consumerId))
+        {
+            return new ConsumerStatus(
+                "Unknown",
+                "Not linked",
+                "Device status unavailable",
+                "HIP could not bind device status to a consumer account.");
+        }
+
+        IReadOnlyCollection<DeviceRegistrationDeviceResponse> devices;
+        try
+        {
+            devices = await deviceRegistrationService.ListAsync(consumerId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger?.LogWarning(
+                "Consumer device status lookup failed with {FailureType}.",
+                exception.GetType().Name);
+            return new ConsumerStatus(
+                "Unavailable",
+                "Not linked",
+                "Device status unavailable",
+                "Device registration status is temporarily unavailable. Try again shortly.");
+        }
+
+        var activeDevices = devices.Count(device => device.RevocationState == DeviceRevocationState.Active);
+        var revokedDevices = devices.Count - activeDevices;
+        var deviceStatus = activeDevices switch
+        {
+            0 when revokedDevices == 0 => "No registered devices",
+            0 => $"No active devices · {revokedDevices} revoked",
+            1 => revokedDevices == 0 ? "1 active device" : $"1 active device · {revokedDevices} revoked",
+            _ => revokedDevices == 0
+                ? $"{activeDevices} active devices"
+                : $"{activeDevices} active devices · {revokedDevices} revoked"
+        };
+
+        return new ConsumerStatus(
             "Active",
-            "Development",
-            string.IsNullOrWhiteSpace(consumerId) ? "Unknown device" : "Known development device",
-            "Consumer portal is an optional MVP. Second Life HUD still works without web login."));
+            "Not linked",
+            deviceStatus,
+            "Device status is derived from proof-of-possession registrations owned by this consumer account.");
+    }
 
     public async Task<IReadOnlyCollection<ConsumerScanHistoryItem>> GetScansAsync(string consumerId, CancellationToken cancellationToken)
     {
-        var consumerScopeHash = ConsumerScopeHash(consumerId);
-        var findings = await riskFindingRepository.ListAsync(cancellationToken);
+        var consumerScopeHashes = ConsumerScopeHashes(consumerId);
+        var findings = await riskFindingRepository.ListByConsumerScopeHashesAsync(
+            consumerScopeHashes,
+            MaximumHistoryItems,
+            cancellationToken).ConfigureAwait(false);
         return findings
-            .Where(finding => string.Equals(finding.ConsumerScopeHash, consumerScopeHash, StringComparison.Ordinal))
+            .Where(finding =>
+                finding.ConsumerScopeHash is not null &&
+                consumerScopeHashes.Contains(finding.ConsumerScopeHash))
             .OrderByDescending(finding => finding.DetectedAtUtc)
+            .ThenBy(finding => finding.ReportId, StringComparer.Ordinal)
+            .Take(MaximumHistoryItems)
             .Select(finding => new ConsumerScanHistoryItem(
                 finding.DetectedAtUtc,
                 finding.Domain,
@@ -45,11 +107,18 @@ public sealed class ConsumerPortalService(
 
     public async Task<IReadOnlyCollection<ConsumerReportHistoryItem>> GetReportsAsync(string consumerId, CancellationToken cancellationToken)
     {
-        var consumerScopeHash = ConsumerScopeHash(consumerId);
-        var findings = await riskFindingRepository.ListAsync(cancellationToken);
+        var consumerScopeHashes = ConsumerScopeHashes(consumerId);
+        var findings = await riskFindingRepository.ListByConsumerScopeHashesAsync(
+            consumerScopeHashes,
+            MaximumHistoryItems,
+            cancellationToken).ConfigureAwait(false);
         return findings
-            .Where(finding => string.Equals(finding.ConsumerScopeHash, consumerScopeHash, StringComparison.Ordinal))
+            .Where(finding =>
+                finding.ConsumerScopeHash is not null &&
+                consumerScopeHashes.Contains(finding.ConsumerScopeHash))
             .OrderByDescending(finding => finding.DetectedAtUtc)
+            .ThenBy(finding => finding.ReportId, StringComparer.Ordinal)
+            .Take(MaximumHistoryItems)
             .Select(finding => new ConsumerReportHistoryItem(
                 string.IsNullOrWhiteSpace(finding.ReportId) ? "pending-report-id" : finding.ReportId,
                 finding.DetectedAtUtc,
@@ -60,12 +129,20 @@ public sealed class ConsumerPortalService(
             .ToArray();
     }
 
-    public Task<IReadOnlyCollection<ConsumerAppealItem>> GetAppealsAsync(string consumerId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyCollection<ConsumerAppealItem>> GetAppealsAsync(
+        string consumerId,
+        CancellationToken cancellationToken)
     {
-        var consumerScopeHash = ConsumerScopeHash(consumerId);
-        var appeals = appealService.List()
-            .Where(appeal => string.Equals(appeal.SubmittedByHash, consumerScopeHash, StringComparison.Ordinal))
+        var consumerScopeHashes = ConsumerScopeHashes(consumerId);
+        var storedAppeals = await appealRepository.ListBySubmitterHashesAsync(
+            consumerScopeHashes,
+            MaximumHistoryItems,
+            cancellationToken).ConfigureAwait(false);
+        return storedAppeals
+            .Where(appeal => consumerScopeHashes.Contains(appeal.SubmittedByHash))
             .OrderByDescending(appeal => appeal.UpdatedAtUtc)
+            .ThenBy(appeal => appeal.AppealId, StringComparer.Ordinal)
+            .Take(MaximumHistoryItems)
             .Select(appeal => new ConsumerAppealItem(
                 appeal.AppealId,
                 appeal.TargetType,
@@ -74,8 +151,6 @@ public sealed class ConsumerPortalService(
                 appeal.UpdatedAtUtc,
                 appeal.Reason))
             .ToArray();
-
-        return Task.FromResult<IReadOnlyCollection<ConsumerAppealItem>>(appeals);
     }
 
     public ConsumerAppealSubmissionResult SubmitAppeal(string consumerId, ConsumerAppealSubmissionRequest request)
@@ -102,19 +177,46 @@ public sealed class ConsumerPortalService(
         return new ConsumerAppealSubmissionResult(true, appeal.AppealId, appeal.TargetType, appeal.TargetId, appeal.Status, "Appeal submitted for HIP review.");
     }
 
-    public ConsumerSettings GetSettings(string consumerId) =>
-        SettingsByConsumer.GetOrAdd(NormalizeConsumerId(consumerId), _ => DefaultSettings());
-
-    public ConsumerSettingsSaveResult SaveSettings(string consumerId, ConsumerSettings settings)
+    public async Task<ConsumerSettings> GetSettingsAsync(
+        string consumerId,
+        CancellationToken cancellationToken)
     {
-        if (!SupportedScanModes.Contains(settings.ScanMode))
+        var consumerScopeHash = ConsumerScopeHash(consumerId);
+        var stored = await settings.GetAsync(consumerScopeHash, cancellationToken).ConfigureAwait(false);
+        return stored?.Settings ?? DefaultSettings();
+    }
+
+    public async Task<ConsumerSettingsSaveResult> SaveSettingsAsync(
+        string consumerId,
+        ConsumerSettings requestedSettings,
+        CancellationToken cancellationToken)
+    {
+        if (requestedSettings is null || !SupportedScanModes.Contains(requestedSettings.ScanMode))
         {
             return new ConsumerSettingsSaveResult(false, null, "Scan mode must be Quiet, Normal, Strict, or Paranoid.");
         }
 
-        var normalized = settings with { ScanMode = NormalizeScanMode(settings.ScanMode) };
-        SettingsByConsumer[NormalizeConsumerId(consumerId)] = normalized;
-        return new ConsumerSettingsSaveResult(true, normalized, "Settings saved.");
+        var normalized = requestedSettings with { ScanMode = NormalizeScanMode(requestedSettings.ScanMode) };
+        var consumerScopeHash = ConsumerScopeHash(consumerId);
+        for (var attempt = 0; attempt < MaximumSettingsSaveAttempts; attempt++)
+        {
+            var current = await settings.GetAsync(consumerScopeHash, cancellationToken).ConfigureAwait(false);
+            var expectedVersion = current?.Version ?? 0;
+            var record = new ConsumerSettingsRecord(
+                consumerScopeHash,
+                normalized,
+                clock.GetUtcNow(),
+                expectedVersion + 1);
+            if (await settings.TrySaveAsync(record, expectedVersion, cancellationToken).ConfigureAwait(false))
+            {
+                return new ConsumerSettingsSaveResult(true, normalized, "Settings saved.");
+            }
+        }
+
+        return new ConsumerSettingsSaveResult(
+            false,
+            null,
+            "Settings changed concurrently. Reload and try again.");
     }
 
     private static ConsumerSettings DefaultSettings() =>
@@ -140,4 +242,10 @@ public sealed class ConsumerPortalService(
 
     private string ConsumerScopeHash(string consumerId) =>
         privacyHashingService.Hash(NormalizeConsumerId(consumerId));
+
+    private IReadOnlyCollection<string> ConsumerScopeHashes(string consumerId) =>
+        privacyHashingService
+            .HashCandidates(NormalizeConsumerId(consumerId))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 }

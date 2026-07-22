@@ -29,6 +29,8 @@
   const pendingScanSubmissions = new Set();
   const privacyGuards = window.HipBrowserPrivacyGuards;
   const scanAssessment = window.HipBrowserScanAssessment;
+  const formalScoring = globalThis.HipFormalScoring;
+  const contentMessageContracts = globalThis.HipContentMessageContracts;
 
   if (!privacyGuards) {
     throw new Error("HIP browser privacy guard module did not load.");
@@ -55,15 +57,30 @@
     throw new Error("HIP browser scan assessment module did not load.");
   }
 
+  if (!formalScoring) {
+    throw new Error("HIP formal scoring module did not load.");
+  }
+
+  if (!contentMessageContracts) {
+    throw new Error("HIP content message contract module did not load.");
+  }
+
   const {
     browserScanAssessment,
     recommendedSiteAction
   } = scanAssessment;
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    const validation = contentMessageContracts.validate(message, _sender, chrome.runtime.id);
+    if (!validation.ok) {
+      sendResponse({ ok: false, error: validation.error });
+      return false;
+    }
+    message = validation.message;
+
     if (message?.type === "HIP_REFRESH_SCAN") {
       initialize()
-        .then(() => sendResponse({ ok: true, result: lastSummary }))
+        .then(() => sendResponse({ ok: true, result: contentMessageContracts.safeSummary(lastSummary) }))
         .catch(error => {
           handleInitializationError(error);
           sendResponse({ ok: false, error: error.message });
@@ -72,14 +89,81 @@
     }
 
     if (message?.type === "HIP_GET_CONTENT_SUMMARY") {
-      sendResponse({ ok: true, result: lastSummary });
+      sendResponse({ ok: true, result: contentMessageContracts.safeSummary(lastSummary) });
       return false;
     }
 
     return false;
   });
 
+  window.addEventListener("message", event => {
+    void handleDeviceRegistrationBridgeMessage(event);
+  });
+
   initialize().catch(handleInitializationError);
+
+  /**
+   * Bridges the authenticated HIP consumer-device page to extension-owned key
+   * operations. Public keys, challenge bytes, and signatures may cross this
+   * bridge; private CryptoKeys never leave the extension service worker.
+   */
+  async function handleDeviceRegistrationBridgeMessage(event) {
+    const request = event?.data;
+    if (event.source !== window ||
+        !request ||
+        request.source !== "hip-web-device-registration" ||
+        request.type !== "request" ||
+        typeof request.requestId !== "string" ||
+        request.requestId.length > 100 ||
+        typeof request.operation !== "string") {
+      return;
+    }
+
+    const activeSettings = settings || await loadSettings();
+    if (!isHipOwnedPage(window.location.href, activeSettings)) {
+      return;
+    }
+
+    const message = bridgeRuntimeMessage(request.operation, request.payload);
+    if (!message) {
+      postDeviceBridgeResponse(request.requestId, false, null, "Unsupported extension registration operation.");
+      return;
+    }
+
+    try {
+      const response = await chrome.runtime.sendMessage(message);
+      postDeviceBridgeResponse(
+        request.requestId,
+        response?.ok === true,
+        response?.result || null,
+        response?.ok === true ? null : "HIP extension registration unavailable.");
+    } catch {
+      postDeviceBridgeResponse(request.requestId, false, null, "HIP extension registration unavailable.");
+    }
+  }
+
+  function bridgeRuntimeMessage(operation, payload = {}) {
+    switch (operation) {
+      case "prepare": return { type: "HIP_DEVICE_PREPARE" };
+      case "stage": return { type: "HIP_DEVICE_STAGE", handle: payload.handle, deviceId: payload.deviceId };
+      case "sign": return { type: "HIP_DEVICE_SIGN_CHALLENGE", deviceId: payload.deviceId, signingInput: payload.signingInput };
+      case "activate": return { type: "HIP_DEVICE_ACTIVATE", deviceId: payload.deviceId };
+      case "remove": return { type: "HIP_DEVICE_REMOVE", deviceId: payload.deviceId };
+      case "reconcile": return { type: "HIP_DEVICE_RECONCILE", activeDeviceIds: payload.activeDeviceIds };
+      default: return null;
+    }
+  }
+
+  function postDeviceBridgeResponse(requestId, ok, result, error) {
+    window.postMessage({
+      source: "hip-extension-device-registration",
+      type: "response",
+      requestId,
+      ok,
+      result,
+      error
+    }, window.location.origin);
+  }
 
   /**
    * Runs the privacy-safe page scan and publishes a summary for the popup.
@@ -432,6 +516,7 @@
       domain: currentDomain,
       pageUrl: settings.allowRawPageUrlSubmission === true ? stripQueryAndFragment(window.location.href) : null,
       pageUrlHash: lastSummary.pageUrlHash,
+      scannedAtUtc: null,
       pluginVersion,
       score: assessment.score,
       riskLevel: assessment.status,
@@ -463,6 +548,10 @@
         siteSafetyDataSource: lastSummary.siteSafetyDataSource,
         siteSafetyStatus: lastSummary.siteSafetyStatus,
         confidence: lastSummary.confidenceLevel,
+        hipScoringModelVersion: lastSummary.hipScoringModelVersion || "",
+        hipPresentationStatus: lastSummary.hipPresentationStatus || "",
+        evidenceFreshness: lastSummary.evidenceFreshness,
+        trustAssertionDisposition: lastSummary.trustAssertionDisposition,
         domainTrustScore: String(lastSummary.domainTrustScore ?? ""),
         pageTrustScore: String(lastSummary.pageTrustScore ?? ""),
         contentRiskScore: String(lastSummary.contentRiskScore ?? ""),
@@ -549,18 +638,24 @@
       return null;
     }
 
+    const compactResult = compactSiteSafetyResult(response.result);
+    const scoreProjection = formalScoring.projectSiteSafetyScores(response.result);
     lastSummary.siteSafetyStatus = response.result?.status || "Unknown";
     lastSummary.siteSafetyDataSource = "SiteSafetyScan";
     lastSummary.siteSafetyScannedAtUtc = response.result?.scannedAtUtc || new Date().toISOString();
-    lastSummary.domainTrustScore = response.result?.domainTrustScore ?? null;
-    lastSummary.pageTrustScore = response.result?.pageTrustScore ?? null;
-    lastSummary.contentRiskScore = response.result?.contentRiskScore ?? null;
-    lastSummary.finalHipScore = response.result?.finalHipScore ?? null;
-    lastSummary.confidenceLevel = response.result?.confidenceLevel || "Unknown";
+    lastSummary.domainTrustScore = scoreProjection?.domainTrustScore ?? null;
+    lastSummary.pageTrustScore = scoreProjection?.pageTrustScore ?? null;
+    lastSummary.contentRiskScore = scoreProjection?.contentRiskScore ?? null;
+    lastSummary.finalHipScore = scoreProjection?.finalHipScore ?? null;
+    lastSummary.confidenceLevel = scoreProjection?.confidence || response.result?.confidenceLevel || "Unknown";
+    lastSummary.hipScoringModelVersion = scoreProjection?.modelVersion || null;
+    lastSummary.hipPresentationStatus = scoreProjection?.presentationStatus || null;
+    lastSummary.evidenceFreshness = scoreProjection?.evidenceFreshness || "Unknown";
+    lastSummary.trustAssertionDisposition = scoreProjection?.trustAssertionDisposition || "Unknown";
     lastSummary.providerEvidenceCount = Array.isArray(response.result?.providerEvidence)
       ? response.result.providerEvidence.length
       : 0;
-    lastSummary.siteSafety = compactSiteSafetyResult(response.result);
+    lastSummary.siteSafety = compactResult;
     return response.result;
   }
 
@@ -576,6 +671,8 @@
       return null;
     }
 
+    const scoring = formalScoring.normalizeFormalScoring(result.scoring || result.Scoring);
+
     return {
       status: safeText(result.status, "Unknown"),
       summary: safeText(result.summary, "HIP finished checking page safety signals."),
@@ -589,6 +686,7 @@
       pageTrustScore: safeNumber(result.pageTrustScore),
       contentRiskScore: safeNumber(result.contentRiskScore),
       finalHipScore: safeNumber(result.finalHipScore),
+      scoring,
       warnings: safeTextList(result.warnings),
       providerEvidence: safeProviderEvidence(result.providerEvidence),
       scannedAtUtc: safeText(result.scannedAtUtc, new Date().toISOString())
@@ -1057,6 +1155,10 @@
       contentRiskScore: null,
       finalHipScore: null,
       confidenceLevel: "Unknown",
+      hipScoringModelVersion: null,
+      hipPresentationStatus: null,
+      evidenceFreshness: "Unknown",
+      trustAssertionDisposition: "Unknown",
       providerEvidenceCount: 0,
       siteSafety: null,
       scanResultSubmission: "Pending",

@@ -12,7 +12,10 @@ public interface IConsumerPortalService
 
     ConsumerAppealSubmissionResult SubmitAppeal(string consumerId, ConsumerAppealSubmissionRequest request);
 
-    ConsumerSettings GetSettings(string consumerId);
+    Task<ConsumerSettings> GetSettingsAsync(string consumerId, CancellationToken cancellationToken);
 
-    ConsumerSettingsSaveResult SaveSettings(string consumerId, ConsumerSettings settings);
+    Task<ConsumerSettingsSaveResult> SaveSettingsAsync(
+        string consumerId,
+        ConsumerSettings settings,
+        CancellationToken cancellationToken);
 }

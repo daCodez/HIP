@@ -1,0 +1,45 @@
+.consumer-devices-page { display: grid; gap: 1.25rem; }
+.devices-heading { align-items: end; }
+.device-key-note { display: inline-flex; align-items: center; min-height: 2.5rem; padding: .55rem .8rem; border: 1px solid color-mix(in srgb, var(--success) 35%, var(--line)); border-radius: .65rem; background: color-mix(in srgb, var(--success) 10%, transparent); color: var(--success); font-size: .8rem; font-weight: 800; }
+.devices-loading, .device-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.devices-loading div { min-height: 9.5rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--panel); animation: device-pulse 1.4s ease-in-out infinite; }
+.device-summary-card { position: relative; min-height: 10rem; padding: 1.3rem 1.4rem; overflow: hidden; border: 1px solid var(--line); border-radius: 1rem; background: var(--panel); }
+.device-summary-card::before { position: absolute; inset: 1.2rem auto 1.2rem 0; width: 3px; border-radius: 0 3px 3px 0; background: var(--primary); content: ""; }
+.device-summary-card.revoked::before { background: var(--danger); }
+.device-summary-card.assurance::before { background: var(--secondary); }
+.device-summary-card span, .device-section-label { color: var(--text-secondary); font-size: .75rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.device-summary-card strong { display: block; margin: .7rem 0 .35rem; color: var(--ink); font-size: clamp(2rem, 4vw, 2.6rem); line-height: 1; }
+.device-summary-card p, .device-registration-copy p, .device-inventory-heading p { margin: .5rem 0 0; color: var(--text-secondary); }
+.device-registration-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, .8fr); align-items: end; gap: 2rem; }
+.device-registration-copy h2, .device-inventory-heading h2 { margin: .25rem 0 0; }
+.device-registration-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem .75rem; }
+.device-registration-form label { grid-column: 1 / -1; font-size: .82rem; font-weight: 800; }
+.device-registration-form input { min-height: 2.8rem; }
+.device-registration-form small { grid-column: 1 / -1; color: var(--warn); }
+.device-message { padding: .8rem 1rem; border: 1px solid var(--line); border-radius: .7rem; font-weight: 700; }
+.device-message.success { border-color: color-mix(in srgb, var(--success) 35%, var(--line)); background: color-mix(in srgb, var(--success) 9%, transparent); color: var(--success); }
+.device-message.error, .devices-error { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
+.device-message.error { background: color-mix(in srgb, var(--danger) 9%, transparent); color: var(--danger); }
+.device-inventory { display: grid; gap: 1.25rem; min-width: 0; }
+.device-inventory-heading { display: flex; align-items: end; justify-content: space-between; gap: 1.5rem; }
+.device-table-wrap { max-width: 100%; overflow-x: auto; }
+.device-activity-note { margin: 0 0 .65rem; color: var(--text-secondary); font-size: .78rem; }
+.device-table { width: 100%; min-width: 68rem; }
+.device-name, .device-proof { display: grid; gap: .25rem; }
+.device-name small, .device-proof code, .device-revoked-at { color: var(--text-secondary); font-size: .75rem; }
+.device-proof span { font-size: .8rem; font-weight: 750; }
+.device-status { display: inline-flex; width: max-content; padding: .3rem .6rem; border: 1px solid transparent; border-radius: 999px; font-size: .78rem; font-weight: 800; }
+.device-status.active { border-color: color-mix(in srgb, var(--success) 35%, transparent); background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--success); }
+.device-status.revoked { border-color: color-mix(in srgb, var(--danger) 35%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); }
+.device-revoke-action, .device-cancel-action, .device-danger-action { min-height: 2.25rem; padding: .4rem .65rem; border: 1px solid var(--line); background: transparent; color: var(--ink); font-size: .8rem; font-weight: 800; }
+.device-revoke-action:hover, .device-cancel-action:hover { border-color: var(--primary); background: var(--hover); color: var(--primary); }
+.device-danger-action { border-color: var(--danger); background: var(--danger); color: #fff; }
+.device-danger-action:hover { filter: brightness(.92); }
+.device-confirm-actions { display: flex; gap: .4rem; }
+.device-empty { padding: 2.75rem 1rem; text-align: center; border: 1px dashed var(--line); border-radius: .8rem; }
+.device-empty h3, .device-empty p { margin: 0; }
+.device-empty p { margin-top: .4rem; color: var(--text-secondary); }
+@keyframes device-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .devices-loading div { animation: none; } }
+@media (max-width: 900px) { .device-summary-grid, .devices-loading { grid-template-columns: 1fr; } .device-registration-panel { grid-template-columns: 1fr; gap: 1.25rem; } }
+@media (max-width: 680px) { .devices-heading, .device-inventory-heading { align-items: stretch; flex-direction: column; } .device-key-note { width: max-content; max-width: 100%; } .device-registration-form { grid-template-columns: 1fr; } .device-registration-form label, .device-registration-form small { grid-column: auto; } }

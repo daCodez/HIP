@@ -9,5 +9,6 @@ public enum TargetType
     ContentPattern = 4,
     Rule = 5,
     Url = 6,
-    Website = 7
+    Website = 7,
+    ServiceClient = 8
 }

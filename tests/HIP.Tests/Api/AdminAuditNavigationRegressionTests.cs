@@ -41,6 +41,12 @@ public sealed class AdminAuditNavigationRegressionTests
             await Task.Yield();
         }
 
+        public async Task<bool> TryCreateAsync(AuditLogEntry entry, CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            return true;
+        }
+
         public async Task<IReadOnlyCollection<AuditLogEntry>> ListAsync(CancellationToken cancellationToken)
         {
             await Task.Delay(25, cancellationToken);

@@ -30,6 +30,14 @@
     }
     else if (_detail is not null)
     {
+        @if (!_detail.IsAuthoritative)
+        {
+            <section class="hip-panel padded narrow">
+                <h2>Untrusted Client Telemetry</h2>
+                <p>This record came from an anonymous or otherwise unattested client. HIP displays it for investigation, but does not treat it as authoritative trust evidence or queue privileged scan work from this page.</p>
+            </section>
+        }
+
         <section class="hip-panel padded narrow">
             <div class="hip-panel-heading flush">
                 <div>
@@ -41,6 +49,7 @@
 
             <dl class="scan-detail-list">
                 <div><dt>Scanned</dt><dd>@_detail.ScannedAtUtc.UtcDateTime.ToString("u")</dd></div>
+                <div><dt>Submission trust</dt><dd>@_detail.SubmissionTrust</dd></div>
                 <div><dt>Final status</dt><dd>@DisplayStatus(_detail.FinalStatus)</dd></div>
                 <div><dt>Site Safety status</dt><dd>@DisplayStatus(_detail.SiteSafetyStatus)</dd></div>
                 <div><dt>Confidence</dt><dd>@_detail.ConfidenceLevel</dd></div>

@@ -81,6 +81,10 @@ public sealed class SiteSafetyEvidenceProviderTests
         {
             Assert.That(result.Status, Is.Not.EqualTo(SiteSafetyScanStatus.ScanFailed));
             Assert.That(result.ProviderEvidence.SelectMany(evidence => evidence.Errors), Has.Some.Contains("timed out"));
+            Assert.That(result.ProviderEvidence.Single().ResultStatus, Is.EqualTo(SiteSafetyProviderResultStatus.TimedOut));
+            Assert.That(result.ProviderEvidence.Single().LatencyMilliseconds, Is.GreaterThanOrEqualTo(0));
+            Assert.That(result.ProviderEvidence.Single().IsAuthoritativeForRisk, Is.False);
+            Assert.That(result.ProviderEvidence.Single().IsAuthoritativeForTrust, Is.False);
             Assert.That(result.ConfidenceLevel, Is.Not.EqualTo("High"));
         });
     }
@@ -311,7 +315,40 @@ public sealed class SiteSafetyEvidenceProviderTests
             Assert.That(provider.ExternalCallCount, Is.EqualTo(1));
             Assert.That(evidence.Single().ProviderName, Is.EqualTo("TestExternalProvider"));
             Assert.That(evidence.Single().Domain, Is.EqualTo("example.com"));
+            Assert.That(evidence.Single().ResultStatus, Is.EqualTo(SiteSafetyProviderResultStatus.Succeeded));
+            Assert.That(evidence.Single().Freshness, Is.EqualTo(SiteSafetyProviderFreshness.Fresh));
+            Assert.That(evidence.Single().PrivacyClassification, Is.EqualTo(SiteSafetyProviderPrivacyClassification.HashedUrlMetadata));
             Assert.That(evidence.Single().ToString(), Does.Not.Contain("token=secret"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies anonymous observations cannot execute stateful external providers while authoritative scans still can.
+    /// </summary>
+    [Test]
+    public async Task Untrusted_scan_skips_enabled_external_provider_but_authoritative_scan_uses_it()
+    {
+        var provider = new RecordingExternalProvider();
+        var scanner = CreateScanner(provider);
+
+        await ((IUntrustedSiteSafetyScanner)scanner).ScanUntrustedAsync(
+            new SiteSafetyScanRequest("https://untrusted-provider-boundary.example/login"),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(provider.OptionsReadCount, Is.Zero, "Untrusted scans must filter external providers before consulting their runtime state.");
+            Assert.That(provider.CollectCallCount, Is.Zero, "Untrusted scans must not touch provider cache, circuit state, or external networks.");
+        });
+
+        await scanner.ScanAsync(
+            new SiteSafetyScanRequest("https://authoritative-provider-boundary.example/login"),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(provider.OptionsReadCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(provider.CollectCallCount, Is.EqualTo(1));
         });
     }
 
@@ -330,9 +367,37 @@ public sealed class SiteSafetyEvidenceProviderTests
         {
             Assert.That(failure.ProviderName, Is.EqualTo("ThrowingExternalProvider"));
             Assert.That(failure.Errors, Has.Some.EqualTo("Provider failed safely."));
+            Assert.That(failure.ResultStatus, Is.EqualTo(SiteSafetyProviderResultStatus.Failed));
+            Assert.That(failure.LatencyMilliseconds, Is.GreaterThanOrEqualTo(0));
+            Assert.That(failure.Freshness, Is.EqualTo(SiteSafetyProviderFreshness.Fresh));
+            Assert.That(failure.PrivacyClassification, Is.EqualTo(SiteSafetyProviderPrivacyClassification.HashedUrlMetadata));
             Assert.That(failure.IsAuthoritativeForRisk, Is.False);
             Assert.That(failure.IsAuthoritativeForTrust, Is.False);
             Assert.That(failure.ToString(), Does.Not.Contain("password=secret"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies malformed provider identity data is rejected at the collector boundary and cannot reach scoring.
+    /// </summary>
+    [Test]
+    public async Task External_collector_converts_malformed_provider_result_to_safe_failure()
+    {
+        var collector = CreateExternalCollector(new MismatchedExternalProvider());
+
+        var evidence = await collector.CollectAsync(
+            new SiteSafetyScanRequest("https://example.com/login"),
+            CancellationToken.None);
+
+        var failure = evidence.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(failure.ProviderName, Is.EqualTo("MismatchedExternalProvider"));
+            Assert.That(failure.ResultStatus, Is.EqualTo(SiteSafetyProviderResultStatus.Failed));
+            Assert.That(failure.EvidenceItems, Is.Empty);
+            Assert.That(failure.Errors, Has.Some.EqualTo("Provider failed safely."));
+            Assert.That(failure.IsAuthoritativeForRisk, Is.False);
+            Assert.That(failure.IsAuthoritativeForTrust, Is.False);
         });
     }
 
@@ -787,6 +852,53 @@ public sealed class SiteSafetyEvidenceProviderTests
     }
 
     /// <summary>
+    /// Records every interaction with an external provider boundary without making a network call.
+    /// </summary>
+    private sealed class RecordingExternalProvider : IExternalSiteEvidenceProvider
+    {
+        /// <summary>Gets how many times scanner selection consulted provider runtime options.</summary>
+        public int OptionsReadCount { get; private set; }
+
+        /// <summary>Gets how many times evidence collection entered the external provider.</summary>
+        public int CollectCallCount { get; private set; }
+
+        /// <inheritdoc />
+        public string ProviderName => "RecordingExternalProvider";
+
+        /// <inheritdoc />
+        public SiteSafetyEvidenceProviderType ProviderType => SiteSafetyEvidenceProviderType.ThreatIntel;
+
+        /// <inheritdoc />
+        public ExternalSiteEvidenceOptions CurrentOptions
+        {
+            get
+            {
+                OptionsReadCount++;
+                return new ExternalSiteEvidenceOptions
+                {
+                    ExternalProvidersEnabled = true,
+                    RunExternalProvidersOnRequestPath = true
+                };
+            }
+        }
+
+        /// <inheritdoc />
+        public Task<SiteSafetyEvidence> CollectEvidenceAsync(
+            SiteSafetyEvidenceContext context,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CollectCallCount++;
+            return Task.FromResult(ThreatIntelEvidence("PhishingMatch", SiteSafetyEvidenceStatus.Dangerous, 95) with
+            {
+                ProviderName = ProviderName,
+                Domain = context.Domain,
+                UrlHash = context.UrlHash
+            });
+        }
+    }
+
+    /// <summary>
     /// Test provider that simulates an external timeout.
     /// </summary>
     private sealed class TimeoutEvidenceProvider : ISiteSafetyEvidenceProvider
@@ -855,6 +967,37 @@ public sealed class SiteSafetyEvidenceProviderTests
         /// <inheritdoc />
         public Task<SiteSafetyEvidence> CollectEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Simulated provider failure.");
+    }
+
+    /// <summary>
+    /// Test provider that attempts to return evidence under another provider identity.
+    /// </summary>
+    private sealed class MismatchedExternalProvider : IExternalSiteEvidenceProvider
+    {
+        /// <inheritdoc />
+        public string ProviderName => "MismatchedExternalProvider";
+
+        /// <inheritdoc />
+        public SiteSafetyEvidenceProviderType ProviderType => SiteSafetyEvidenceProviderType.ThreatIntel;
+
+        /// <inheritdoc />
+        public ExternalSiteEvidenceOptions CurrentOptions => new();
+
+        /// <inheritdoc />
+        public Task<SiteSafetyEvidence> CollectEvidenceAsync(SiteSafetyEvidenceContext context, CancellationToken cancellationToken) =>
+            Task.FromResult(new SiteSafetyEvidence(
+                "ImpersonatedProvider",
+                ProviderType,
+                SiteSafetyEvidenceTargetType.Domain,
+                context.Domain,
+                context.UrlHash,
+                [new SiteSafetyEvidenceItem("Threat", "Hit", SiteSafetyEvidenceStatus.Dangerous, 100, 0, "Untrusted result.")],
+                100,
+                context.CheckedAtUtc,
+                context.CheckedAtUtc.AddHours(1),
+                [],
+                IsAuthoritativeForRisk: true,
+                IsAuthoritativeForTrust: true));
     }
 
     /// <summary>

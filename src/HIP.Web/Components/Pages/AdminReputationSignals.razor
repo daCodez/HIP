@@ -130,7 +130,12 @@
     /// Finds a dashboard card value without exposing unavailable data as fake data.
     /// </summary>
     /// <param name="cardId">The dashboard card identifier.</param>
-    /// <returns>The card value when present; otherwise zero.</returns>
-    private string CardValue(string cardId) =>
-        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(cardId, StringComparison.OrdinalIgnoreCase))?.Value.ToString() ?? "0";
+    /// <returns>The card value when available; otherwise an unavailable marker.</returns>
+    private string CardValue(string cardId)
+    {
+        var card = _summary?.Cards.FirstOrDefault(card => card.Key.Equals(cardId, StringComparison.OrdinalIgnoreCase));
+        return card is null || card.IsPlaceholder
+            ? "—"
+            : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
 }

@@ -1,5 +1,7 @@
 @page "/admin/privacy"
 
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+
 <PageTitle>HIP Privacy & Safety</PageTitle>
 
 <section class="hip-page-heading compact">

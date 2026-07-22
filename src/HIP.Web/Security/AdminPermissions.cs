@@ -26,6 +26,11 @@ public static class AdminPermissions
     public const string ReputationView = "Reputation.View";
 
     /// <summary>
+    /// Allows an administrator to append reputation events and recalculate reputation profiles.
+    /// </summary>
+    public const string ReputationManage = "Reputation.Manage";
+
+    /// <summary>
     /// Allows an admin user to request reputation overrides that still require the approval flow.
     /// </summary>
     public const string ReputationOverrideRequest = "Reputation.OverrideRequest";
@@ -56,7 +61,12 @@ public static class AdminPermissions
     public const string LicensesView = "Licenses.View";
 
     /// <summary>
-    /// Allows an admin user to manage license support actions such as reset or revoke flows.
+    /// Allows an operator to perform reversible license support actions such as resetting device activation.
+    /// </summary>
+    public const string LicensesSupport = "Licenses.Support";
+
+    /// <summary>
+    /// Allows an administrator to create licenses or change license status.
     /// </summary>
     public const string LicensesManage = "Licenses.Manage";
 
@@ -64,6 +74,16 @@ public static class AdminPermissions
     /// Allows an admin user to view audit log entries.
     /// </summary>
     public const string AuditView = "Audit.View";
+
+    /// <summary>
+    /// Allows an administrator to view service-client registrations without exposing credential secrets.
+    /// </summary>
+    public const string ServiceClientsView = "ServiceClients.View";
+
+    /// <summary>
+    /// Allows an administrator to create, rotate, or revoke service-client registrations.
+    /// </summary>
+    public const string ServiceClientsManage = "ServiceClients.Manage";
 
     /// <summary>
     /// Allows an owner-level user to manage admin accounts and role assignments.
@@ -103,14 +123,18 @@ public static class AdminRoleCatalog
             AdminPermissions.RulesEdit,
             AdminPermissions.RulesSimulate,
             AdminPermissions.ReputationView,
+            AdminPermissions.ReputationManage,
             AdminPermissions.ReputationOverrideRequest,
             AdminPermissions.ReviewView,
             AdminPermissions.ReviewDecide,
             AdminPermissions.AppealsView,
             AdminPermissions.AppealsDecide,
             AdminPermissions.LicensesView,
+            AdminPermissions.LicensesSupport,
             AdminPermissions.LicensesManage,
-            AdminPermissions.AuditView
+            AdminPermissions.AuditView,
+            AdminPermissions.ServiceClientsView,
+            AdminPermissions.ServiceClientsManage
         ]),
         new(AdminRoles.Moderator, "Review reports, handle appeals, mark false positives, and suggest reputation changes.", [
             AdminPermissions.ReviewView,
@@ -121,7 +145,7 @@ public static class AdminRoleCatalog
         ]),
         new(AdminRoles.Support, "Look up license status, reset setup codes, help activation, and escalate issues.", [
             AdminPermissions.LicensesView,
-            AdminPermissions.LicensesManage,
+            AdminPermissions.LicensesSupport,
             AdminPermissions.ReviewView
         ]),
         new(AdminRoles.ReadOnly, "View dashboards, reports, reputation, and audit logs only.", [
@@ -154,14 +178,18 @@ public static class AdminRoleCatalog
         AdminPermissions.RulesEdit,
         AdminPermissions.RulesSimulate,
         AdminPermissions.ReputationView,
+        AdminPermissions.ReputationManage,
         AdminPermissions.ReputationOverrideRequest,
         AdminPermissions.ReviewView,
         AdminPermissions.ReviewDecide,
         AdminPermissions.AppealsView,
         AdminPermissions.AppealsDecide,
         AdminPermissions.LicensesView,
+        AdminPermissions.LicensesSupport,
         AdminPermissions.LicensesManage,
         AdminPermissions.AuditView,
+        AdminPermissions.ServiceClientsView,
+        AdminPermissions.ServiceClientsManage,
         AdminPermissions.AdminsManage,
         AdminPermissions.SystemManage
     ];

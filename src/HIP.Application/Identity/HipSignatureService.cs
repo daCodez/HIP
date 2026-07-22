@@ -16,6 +16,7 @@ public sealed class HipSignatureService(
         ArgumentNullException.ThrowIfNull(request);
         var identity = await GetIdentity(request.IdentityId, cancellationToken);
         var keyId = RequireManagedKeyId(request.KeyId, nameof(request));
+        await EnsureInitialKeyAsync(identity, cancellationToken);
         var managedKey = await signingKeyLifecycleService.GetRequiredSigningKeyAsync(
             identity.IdentityId,
             keyId,
@@ -46,6 +47,7 @@ public sealed class HipSignatureService(
         ArgumentNullException.ThrowIfNull(request);
         var identity = await GetIdentity(request.IdentityId, cancellationToken);
         var keyId = RequireManagedKeyId(request.KeyId, nameof(request));
+        await EnsureInitialKeyAsync(identity, cancellationToken);
         var reputation = string.IsNullOrWhiteSpace(request.SignerReputationStatus) ? "Unknown" : request.SignerReputationStatus.Trim();
         ManagedSigningKey managedKey;
         try
@@ -55,13 +57,14 @@ public sealed class HipSignatureService(
                 keyId,
                 cancellationToken);
         }
-        catch (InvalidOperationException exception)
+        catch (Exception exception) when (
+            exception is InvalidOperationException or KeyNotFoundException)
         {
             return PolicyRejected(identity, reputation, exception.Message);
         }
 
         EnsureProviderSupports(managedKey);
-        var policyReason = HistoricalPolicyFailure(managedKey, request.TrustedSignedAtUtc);
+        var policyReason = ActiveVerificationPolicyFailure(managedKey);
         if (policyReason is not null)
         {
             return PolicyRejected(identity, reputation, policyReason);
@@ -92,12 +95,24 @@ public sealed class HipSignatureService(
     public async Task<SigningKey> GetPublicKeyAsync(string identityId, CancellationToken cancellationToken)
     {
         var identity = await GetIdentity(identityId, cancellationToken);
-        var managedKey = await signingKeyLifecycleService.GetRequiredHistoricalVerificationKeyAsync(
-            identity.IdentityId,
-            HipIdentityService.InitialSigningKeyId,
-            cancellationToken);
+        var keyRing = await EnsureInitialKeyAsync(identity, cancellationToken);
+        var managedKey = keyRing.Keys.Single(key => key.Status == SigningKeyStatus.Active);
         return new SigningKey(managedKey.KeyId, managedKey.Algorithm, managedKey.PublicKey);
     }
+
+    private Task<SigningKeyRing> EnsureInitialKeyAsync(
+        HipIdentity identity,
+        CancellationToken cancellationToken) =>
+        signingKeyLifecycleService.EnsureKeyRingAsync(
+            new RegisterSigningKeyRequest(
+                identity.IdentityId,
+                HipIdentityService.InitialSigningKeyId,
+                identity.KeyAlgorithm,
+                identity.PublicKey,
+                "system:legacy-signature-key-bootstrap",
+                "Backfill managed signing-key lifecycle for an existing identity.",
+                identity.CreatedAtUtc),
+            cancellationToken);
 
     private async Task<HipIdentity> GetIdentity(string identityId, CancellationToken cancellationToken) =>
         await identityRepository.GetAsync(identityId, cancellationToken) ??
@@ -124,21 +139,11 @@ public sealed class HipSignatureService(
         return keyId.Trim();
     }
 
-    private static string? HistoricalPolicyFailure(
-        ManagedSigningKey managedKey,
-        DateTimeOffset? trustedSignedAtUtc)
-    {
-        if (trustedSignedAtUtc is not null)
-        {
-            return managedKey.CanVerifySignatureIssuedAt(trustedSignedAtUtc.Value)
-                ? null
-                : $"Trusted signing time is outside the signing window for managed key '{managedKey.KeyId}'.";
-        }
-
-        return managedKey.Status == SigningKeyStatus.Active
+    private static string? ActiveVerificationPolicyFailure(ManagedSigningKey managedKey) =>
+        managedKey.Status == SigningKeyStatus.Active
             ? null
-            : $"Managed key '{managedKey.KeyId}' is {managedKey.Status}; a trusted signing time is required for historical verification.";
-    }
+            : $"Managed key '{managedKey.KeyId}' is {managedKey.Status}; this legacy verification contract accepts only Active keys. " +
+              "Retiring and Retired keys require cryptographically trusted envelope evidence, which this request cannot supply.";
 
     private static SignatureVerificationResult PolicyRejected(
         HipIdentity identity,

@@ -115,7 +115,7 @@ public sealed class Rfc8785CanonicalJsonServiceTests
             RepositoryRoot(), "tests", "HIP.Tests", "Protocol", "Fixtures", "hip-envelope-v1.canonical.json");
         var input = File.ReadAllBytes(fixturePath);
         var reordered = ReverseObjectProperties(input);
-        var expected = File.ReadAllBytes(canonicalPath);
+        var expected = Encoding.UTF8.GetBytes(File.ReadAllText(canonicalPath).TrimEnd('\r', '\n'));
 
         var first = service.Canonicalize(input);
         var second = service.Canonicalize(input);

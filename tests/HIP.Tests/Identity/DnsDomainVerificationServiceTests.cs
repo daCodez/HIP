@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using HIP.Application.Identity;
 using HIP.Domain.Identity;
 using Microsoft.Extensions.Logging;
@@ -48,6 +49,52 @@ public sealed class DnsDomainVerificationServiceTests
         var result = await service.CheckDnsTxtAsync("bad.test", "good-token", CancellationToken.None);
 
         Assert.That(result.Status, Is.EqualTo(DomainVerificationCheckStatus.Invalid));
+    }
+
+    [Test]
+    public async Task CheckDnsTxtAsync_accepts_the_exact_token_among_multiple_provider_records()
+    {
+        var service = Service(
+        [
+            "unrelated-provider=value",
+            "hip-site-verification=wrong-token",
+            "hip-site-verification=multi-token"
+        ]);
+
+        var result = await service.CheckDnsTxtAsync("multi.test", "multi-token", CancellationToken.None);
+
+        Assert.That(result.Status, Is.EqualTo(DomainVerificationCheckStatus.Verified));
+    }
+
+    [Test]
+    public async Task CheckDnsTxtAsync_normalizes_a_quoted_txt_value()
+    {
+        var service = Service(["\"hip-site-verification=quoted-token\""]);
+
+        var result = await service.CheckDnsTxtAsync("quoted.test", "quoted-token", CancellationToken.None);
+
+        Assert.That(result.Status, Is.EqualTo(DomainVerificationCheckStatus.Verified));
+    }
+
+    [Test]
+    public async Task CheckDnsTxtAsync_queries_the_normalized_punycode_record_name()
+    {
+        string? queriedName = null;
+        var service = Service(recordName =>
+        {
+            queriedName = recordName;
+            return Task.FromResult<IReadOnlyCollection<string>>(
+                ["hip-site-verification=punycode-token"]);
+        });
+
+        var result = await service.CheckDnsTxtAsync("bücher.test", "punycode-token", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(queriedName, Is.EqualTo("_hip.xn--bcher-kva.test"));
+            Assert.That(result.Domain, Is.EqualTo("xn--bcher-kva.test"));
+            Assert.That(result.Status, Is.EqualTo(DomainVerificationCheckStatus.Verified));
+        });
     }
 
     /// <summary>
@@ -111,12 +158,35 @@ public sealed class DnsDomainVerificationServiceTests
     [Test]
     public async Task VerifyAsync_marks_dns_challenge_verified_when_record_matches()
     {
-        var service = Service(["hip-site-verification=good-token"]);
-        await service.StartAsync("good.test", VerificationMethod.DnsTxt, CancellationToken.None);
+        string? issuedToken = null;
+        var service = Service(_ => Task.FromResult<IReadOnlyCollection<string>>(
+            [$"hip-site-verification={issuedToken}"]));
+        var issued = await service.StartAsync("good.test", VerificationMethod.DnsTxt, CancellationToken.None);
+        issuedToken = issued.Token;
 
-        var result = await service.VerifyAsync("good.test", VerificationMethod.DnsTxt, "good-token", CancellationToken.None);
+        var result = await service.VerifyAsync(
+            "good.test",
+            VerificationMethod.DnsTxt,
+            issued.Token,
+            CancellationToken.None);
 
         Assert.That(result.Status, Is.EqualTo(VerificationStatus.Verified));
+    }
+
+    [Test]
+    public async Task VerifyAsync_does_not_accept_a_dns_value_that_is_not_the_issued_challenge()
+    {
+        var service = Service(["hip-site-verification=attacker-selected-token"]);
+        var issued = await service.StartAsync("bound.test", VerificationMethod.DnsTxt, CancellationToken.None);
+
+        var result = await service.VerifyAsync(
+            "bound.test",
+            VerificationMethod.DnsTxt,
+            "attacker-selected-token",
+            CancellationToken.None);
+
+        Assert.That(result.Token, Is.EqualTo(issued.Token));
+        Assert.That(result.Status, Is.EqualTo(VerificationStatus.Unverified));
     }
 
     [Test]
@@ -146,6 +216,96 @@ public sealed class DnsDomainVerificationServiceTests
         Assert.That(result.VerifiedAtUtc, Is.Null);
     }
 
+    [Test]
+    public async Task StartAsync_cannot_replace_an_existing_revoked_challenge()
+    {
+        var service = Service([]);
+        var issued = await service.StartAsync("terminal.test", VerificationMethod.DnsTxt, CancellationToken.None);
+        await service.RevokeAsync("terminal.test", VerificationMethod.DnsTxt, CancellationToken.None);
+
+        Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.StartAsync("terminal.test", VerificationMethod.DnsTxt, CancellationToken.None));
+        var current = await service.GetAsync("terminal.test", VerificationMethod.DnsTxt, CancellationToken.None);
+
+        Assert.That(current!.Token, Is.EqualTo(issued.Token));
+        Assert.That(current.Status, Is.EqualTo(VerificationStatus.Revoked));
+    }
+
+    [Test]
+    public async Task Slow_verify_cannot_overwrite_concurrent_revocation()
+    {
+        var repository = new TestDomainVerificationRequestRepository();
+        var lookupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseLookup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? issuedToken = null;
+        var service = new DnsDomainVerificationService(
+            new StubDnsTxtRecordResolver(async _ =>
+            {
+                lookupStarted.SetResult();
+                await releaseLookup.Task;
+                return [$"hip-site-verification={issuedToken}"];
+            }),
+            repository,
+            new CapturingLogger<DnsDomainVerificationService>());
+        var issued = await service.StartAsync("race.test", VerificationMethod.DnsTxt, CancellationToken.None);
+        issuedToken = issued.Token;
+
+        var verifyTask = service.VerifyAsync(
+            "race.test",
+            VerificationMethod.DnsTxt,
+            issued.Token,
+            CancellationToken.None);
+        await lookupStarted.Task;
+        var revoked = await service.RevokeAsync("race.test", VerificationMethod.DnsTxt, CancellationToken.None);
+        releaseLookup.SetResult();
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await verifyTask);
+        var current = await service.GetAsync("race.test", VerificationMethod.DnsTxt, CancellationToken.None);
+        Assert.That(revoked.Status, Is.EqualTo(VerificationStatus.Revoked));
+        Assert.That(current!.Status, Is.EqualTo(VerificationStatus.Revoked));
+    }
+
+    [Test]
+    public async Task GetOrStartAsync_reuses_the_existing_challenge_without_rotating_its_token()
+    {
+        var repository = new TestDomainVerificationRequestRepository();
+        var service = new DnsDomainVerificationService(
+            new StubDnsTxtRecordResolver(_ => Task.FromResult<IReadOnlyCollection<string>>([])),
+            repository,
+            new CapturingLogger<DnsDomainVerificationService>());
+
+        var first = await service.GetOrStartAsync(
+            "stable.test",
+            VerificationMethod.DnsTxt,
+            CancellationToken.None);
+        var second = await service.GetOrStartAsync(
+            "stable.test",
+            VerificationMethod.DnsTxt,
+            CancellationToken.None);
+
+        Assert.That(second, Is.EqualTo(first));
+    }
+
+    [Test]
+    public async Task Concurrent_GetOrStartAsync_calls_elect_one_durable_challenge()
+    {
+        var repository = new TestDomainVerificationRequestRepository();
+        var service = new DnsDomainVerificationService(
+            new StubDnsTxtRecordResolver(_ => Task.FromResult<IReadOnlyCollection<string>>([])),
+            repository,
+            new CapturingLogger<DnsDomainVerificationService>());
+        var attempts = Enumerable.Range(0, 8)
+            .Select(_ => service.GetOrStartAsync(
+                "concurrent.test",
+                VerificationMethod.WellKnownHipJson,
+                CancellationToken.None))
+            .ToArray();
+
+        var results = await Task.WhenAll(attempts);
+
+        Assert.That(results.Distinct().ToArray(), Has.Length.EqualTo(1));
+    }
+
     /// <summary>
     /// Creates a DNS verification service backed by static TXT records.
     /// </summary>
@@ -173,7 +333,32 @@ public sealed class DnsDomainVerificationServiceTests
     /// </summary>
     private sealed class TestDomainVerificationRequestRepository : IDomainVerificationRequestRepository
     {
-        private readonly Dictionary<string, DomainVerificationRequest> requests = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, DomainVerificationRequest> requests =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        /// <inheritdoc />
+        public Task<bool> TryCreateAsync(
+            DomainVerificationRequest request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(requests.TryAdd(Key(request.Domain, request.Method), request));
+        }
+
+        public Task<bool> TryUpdateAsync(
+            DomainVerificationRequest expected,
+            DomainVerificationRequest updated,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var key = Key(expected.Domain, expected.Method);
+            if (!requests.TryGetValue(key, out var current) || !Equals(current, expected))
+            {
+                return Task.FromResult(false);
+            }
+
+            return Task.FromResult(requests.TryUpdate(key, updated, current));
+        }
 
         /// <summary>
         /// Saves a verification challenge for later assertions.

@@ -126,6 +126,9 @@ public sealed class PersistenceRepositoryTests
                 services.Single(descriptor => descriptor.ServiceType == typeof(IDuplicateSubmissionGuard)).ImplementationType,
                 Is.EqualTo(typeof(RedisDuplicateSubmissionGuard)));
             Assert.That(
+                services.Single(descriptor => descriptor.ServiceType == typeof(IReplayMessageIdStore)).ImplementationType,
+                Is.EqualTo(typeof(RedisReplayMessageIdStore)));
+            Assert.That(
                 services.Single(descriptor => descriptor.ServiceType == typeof(IReplayNonceStore)).ImplementationType,
                 Is.EqualTo(typeof(RedisReplayNonceStore)));
         });
@@ -202,6 +205,92 @@ public sealed class PersistenceRepositoryTests
 
         Assert.Throws<InvalidOperationException>(() =>
             services.AddHipInfrastructure(configuration, isLocalDevelopment: false));
+    }
+
+    /// <summary>
+    /// Confirms former privacy keys are bound in stable unique order without replacing the current write key.
+    /// </summary>
+    [Test]
+    public void Infrastructure_registration_binds_unique_legacy_privacy_hashing_keys()
+    {
+        const string currentKey = "test-current-privacy-hashing-key-material-32";
+        const string legacyKey = "test-legacy-privacy-hashing-key-material-32";
+        var services = new ServiceCollection();
+        var configuration = ProductionConfiguration(new Dictionary<string, string?>
+        {
+            ["HipSecurity:RecordEncryptionKey"] = "test-record-encryption-key-material-32",
+            ["HipSecurity:PrivacyHashingKey"] = currentKey,
+            ["HipSecurity:LegacyPrivacyHashingKeys:0"] = legacyKey,
+            ["HipSecurity:LegacyPrivacyHashingKeys:1"] = currentKey,
+            ["HipSecurity:LegacyPrivacyHashingKeys:2"] = legacyKey
+        });
+
+        services.AddHipInfrastructure(configuration, isLocalDevelopment: false);
+        var options = (PrivacyHashingOptions)services.Single(descriptor =>
+            descriptor.ServiceType == typeof(PrivacyHashingOptions)).ImplementationInstance!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(options.SecretKey, Is.EqualTo(currentKey));
+            Assert.That(options.LegacyKeys, Is.EqualTo(new[] { legacyKey }));
+        });
+    }
+
+    /// <summary>Confirms unsafe former privacy keys fail startup validation outside Development.</summary>
+    [Test]
+    public void Infrastructure_registration_rejects_unsafe_legacy_privacy_keys_in_production()
+    {
+        var services = new ServiceCollection();
+        var configuration = ProductionConfiguration(new Dictionary<string, string?>
+        {
+            ["HipSecurity:RecordEncryptionKey"] = "test-record-encryption-key-material-32",
+            ["HipSecurity:PrivacyHashingKey"] = "test-current-privacy-hashing-key-material-32",
+            ["HipSecurity:LegacyPrivacyHashingKeys:0"] = Sha256PrivacyHashingService.DevelopmentOnlyKey
+        });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            services.AddHipInfrastructure(configuration, isLocalDevelopment: false));
+    }
+
+    /// <summary>Confirms a former privacy key cannot reuse current record-encryption material.</summary>
+    [Test]
+    public void Infrastructure_registration_rejects_cross_purpose_legacy_privacy_keys()
+    {
+        const string recordKey = "test-record-encryption-key-material-32";
+        var services = new ServiceCollection();
+        var configuration = ProductionConfiguration(new Dictionary<string, string?>
+        {
+            ["HipSecurity:RecordEncryptionKey"] = recordKey,
+            ["HipSecurity:PrivacyHashingKey"] = "test-current-privacy-hashing-key-material-32",
+            ["HipSecurity:LegacyPrivacyHashingKeys:0"] = recordKey
+        });
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddHipInfrastructure(configuration, isLocalDevelopment: false));
+
+        Assert.That(exception!.Message, Does.Contain("must be different"));
+    }
+
+    /// <summary>Confirms configured privacy-key history cannot cause unbounded rotation reads.</summary>
+    [Test]
+    public void Infrastructure_registration_rejects_too_many_legacy_privacy_keys()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:HipDatabase"] = "Host=localhost;Database=hip_tests;Username=hip",
+            ["ConnectionStrings:redis"] = "localhost:6379,abortConnect=false",
+            ["HipInfrastructure:DatabaseProvider"] = "PostgreSQL"
+        };
+        for (var index = 0; index <= PrivacyHashingOptions.MaximumLegacyKeyCount; index++)
+        {
+            values[$"HipSecurity:LegacyPrivacyHashingKeys:{index}"] =
+                $"test-legacy-privacy-hashing-key-material-{index:D2}";
+        }
+
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddHipInfrastructure(configuration));
     }
 
     /// <summary>

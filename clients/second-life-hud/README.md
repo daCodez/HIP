@@ -15,6 +15,7 @@ This MVP foundation includes:
 - on-screen HUD status text concept
 - safety page routing response support
 - privacy-safe reporting to HIP
+- local-only marketplace demo mode that sends no network requests
 
 ## Structure
 
@@ -23,6 +24,7 @@ This MVP foundation includes:
 - `scripts/hip_link_detector.lsl`: reusable link detection helper reference.
 - `scripts/hip_config.example.lsl`: configuration example.
 - `docs/setup.md`: setup and activation notes.
+- `docs/marketplace-setup.md`: merchant packaging and buyer handoff checklist.
 - `docs/privacy.md`: privacy rules.
 - `docs/limitations.md`: Second Life platform limitations.
 
@@ -51,11 +53,15 @@ This MVP foundation includes:
 
 `/report-finding` is a compatibility alias. New HUD scripts should use `/report`.
 
+Activation returns an opaque v2 `X-HIP-HUD-Credential` bound to both the license and device. The scan, settings, and reporting endpoints require that credential and reject it as soon as the linked license is suspended, revoked, expired, or reset. Resetting and later reassigning the same device ID issues a different credential. The separate `/simulate` endpoint is an administrator/support tool and requires HIP admin authorization.
+
 ## MVP Script Behavior
 
 `HIP_HUD_MVP.lsl` listens to local chat, runs local suspicious-link checks first, and calls HIP only when it sees a risky signal. It looks for normal URLs, shortened URLs, `hxxp`/`hxxps`, broken-up `dot` domains, simple obfuscation, and reward/prize wording near link-like text.
 
 The HUD does not claim browser-style blocking. When HIP returns a risky result, it warns the owner privately and opens the official HIP safety page when the owner chooses `Open Safety`.
+
+Set `HIP_DEMO_MODE = TRUE` only in a clearly labeled marketplace preview copy. Demo mode performs local suspicious-pattern detection and owner-only warnings, but deliberately skips activation, remote scanning, settings synchronization, safety routing, and reporting. The normal licensed product must ship with demo mode disabled.
 
 ## Privacy
 

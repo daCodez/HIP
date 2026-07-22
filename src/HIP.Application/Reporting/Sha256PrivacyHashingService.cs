@@ -8,9 +8,27 @@ namespace HIP.Application.Reporting;
 /// </summary>
 /// <param name="SecretKey">Secret HMAC key. Production must supply a strong non-demo value from configuration.</param>
 /// <param name="AllowDevelopmentKey">Whether the built-in development key may be used.</param>
+/// <param name="LegacyKeys">Previous privacy HMAC keys retained only for explicitly supported rotation lookups.</param>
 public sealed record PrivacyHashingOptions(
     string SecretKey = Sha256PrivacyHashingService.DevelopmentOnlyKey,
-    bool AllowDevelopmentKey = true);
+    bool AllowDevelopmentKey = true,
+    IReadOnlyCollection<string>? LegacyKeys = null)
+{
+    /// <summary>Maximum explicitly configured former privacy HMAC keys.</summary>
+    public const int MaximumLegacyKeyCount = 8;
+
+    /// <summary>Maximum current-plus-legacy privacy HMAC keys.</summary>
+    public const int MaximumKeyCount = MaximumLegacyKeyCount + 1;
+
+    /// <summary>
+    /// Preserves the original version-one constructor contract for already compiled callers while
+    /// selecting an empty legacy key ring.
+    /// </summary>
+    public PrivacyHashingOptions(string SecretKey, bool AllowDevelopmentKey)
+        : this(SecretKey, AllowDevelopmentKey, LegacyKeys: null)
+    {
+    }
+}
 
 /// <summary>
 /// Provides stable keyed HMAC-SHA256 hashes for privacy-sensitive HIP identifiers.
@@ -27,7 +45,7 @@ public sealed class Sha256PrivacyHashingService : IPrivacyHashingService
     /// </summary>
     public const string DevelopmentOnlyKey = "HIP-DEV-ONLY-HMAC-KEY-CHANGE-BEFORE-PRODUCTION";
 
-    private readonly byte[] keyBytes;
+    private readonly IReadOnlyList<byte[]> keyBytes;
 
     /// <summary>
     /// Creates the keyed privacy hashing service and refuses demo keys when the host disables them.
@@ -37,20 +55,56 @@ public sealed class Sha256PrivacyHashingService : IPrivacyHashingService
     public Sha256PrivacyHashingService(PrivacyHashingOptions? options = null)
     {
         var resolved = options ?? new PrivacyHashingOptions();
-        if (!resolved.AllowDevelopmentKey && IsDevelopmentKey(resolved.SecretKey))
+        var legacyKeys = resolved.LegacyKeys?.ToArray() ?? [];
+        if (legacyKeys.Length > PrivacyHashingOptions.MaximumLegacyKeyCount)
         {
-            throw new InvalidOperationException("HIP Privacy hashing key requires a non-default HMAC key outside local Development.");
+            throw new InvalidOperationException(
+                $"HIP privacy hashing supports at most {PrivacyHashingOptions.MaximumLegacyKeyCount} legacy keys.");
         }
 
-        keyBytes = Encoding.UTF8.GetBytes(resolved.SecretKey);
+        var uniqueKeys = new HashSet<string>(StringComparer.Ordinal);
+        var resolvedKeys = new List<byte[]>(PrivacyHashingOptions.MaximumKeyCount);
+        AddKey(resolved.SecretKey, resolved.AllowDevelopmentKey, uniqueKeys, resolvedKeys);
+        foreach (var legacyKey in legacyKeys)
+        {
+            AddKey(legacyKey, resolved.AllowDevelopmentKey, uniqueKeys, resolvedKeys);
+        }
+
+        keyBytes = Array.AsReadOnly(resolvedKeys.ToArray());
     }
 
     /// <inheritdoc />
-    public string Hash(string value)
+    public string Hash(string value) => Hash(value, keyBytes[0]);
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> HashCandidates(string value) =>
+        Array.AsReadOnly(keyBytes.Select(candidate => Hash(value, candidate)).ToArray());
+
+    private static string Hash(string value, byte[] candidateKey)
     {
-        using var hmac = new HMACSHA256(keyBytes);
-        var bytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(Normalize(value)));
+        var bytes = HMACSHA256.HashData(
+            candidateKey,
+            Encoding.UTF8.GetBytes(Normalize(value)));
         return $"sha256:{Convert.ToHexString(bytes).ToLowerInvariant()}";
+    }
+
+    private static void AddKey(
+        string? candidate,
+        bool allowDevelopmentKey,
+        ISet<string> uniqueKeys,
+        ICollection<byte[]> resolvedKeys)
+    {
+        if (string.IsNullOrWhiteSpace(candidate) ||
+            (!allowDevelopmentKey && IsDevelopmentKey(candidate)))
+        {
+            throw new InvalidOperationException(
+                "HIP Privacy hashing key requires configured non-development key material.");
+        }
+
+        if (uniqueKeys.Add(candidate))
+        {
+            resolvedKeys.Add(Encoding.UTF8.GetBytes(candidate));
+        }
     }
 
     /// <summary>
@@ -67,5 +121,5 @@ public sealed class Sha256PrivacyHashingService : IPrivacyHashingService
     /// <returns>True when the key is missing or the built-in development key.</returns>
     private static bool IsDevelopmentKey(string? key) =>
         string.IsNullOrWhiteSpace(key) ||
-        key.Equals(DevelopmentOnlyKey, StringComparison.Ordinal);
+        string.Equals(key, DevelopmentOnlyKey, StringComparison.Ordinal);
 }

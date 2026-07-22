@@ -59,6 +59,8 @@ public sealed record LicenseHudSettings(
 /// <param name="LastSeenAtUtc">Most recent activation/settings touch time.</param>
 /// <param name="HudVersion">Most recent HUD version reported by a client.</param>
 /// <param name="Settings">HUD alert and scan settings.</param>
+/// <param name="CreatedBy">Privacy-safe HIP actor that created the license, or null for legacy records.</param>
+/// <param name="Version">Authenticated aggregate version used to reject stale persistent writes.</param>
 public sealed record SetupCodeLicense(
     string LicenseId,
     string SetupCode,
@@ -69,7 +71,11 @@ public sealed record SetupCodeLicense(
     DateTimeOffset? ActivatedAtUtc,
     DateTimeOffset? LastSeenAtUtc,
     string? HudVersion,
-    LicenseHudSettings Settings);
+    LicenseHudSettings Settings,
+    string? CreatedBy = null,
+    long Version = 0,
+    DateTimeOffset? SetupCodeExpiresAtUtc = null,
+    DateTimeOffset? SetupCodeConsumedAtUtc = null);
 
 /// <summary>
 /// Request used by support/admin staff to create a hard-to-guess setup code.
@@ -80,7 +86,8 @@ public sealed record SetupCodeLicense(
 public sealed record CreateSetupCodeRequest(
     int? AllowedDeviceCount,
     string? CreatedBy,
-    string? InitialScanMode);
+    string? InitialScanMode,
+    int? ValidForHours = null);
 
 /// <summary>
 /// Response returned immediately after setup code creation. It is the only list-safe response that may include the raw code.
@@ -95,7 +102,8 @@ public sealed record CreateSetupCodeResponse(
     string SetupCode,
     string MaskedSetupCode,
     LicenseStatus Status,
-    int AllowedDeviceCount);
+    int AllowedDeviceCount,
+    DateTimeOffset? SetupCodeExpiresAtUtc = null);
 
 /// <summary>
 /// List/detail DTO that masks setup codes by default to avoid exposing secrets in admin screens.
@@ -110,6 +118,7 @@ public sealed record CreateSetupCodeResponse(
 /// <param name="LastSeenAtUtc">Most recent activity time, if present.</param>
 /// <param name="HudVersion">Most recent HUD version, if present.</param>
 /// <param name="Settings">Current HUD settings.</param>
+/// <param name="CreatedBy">Privacy-safe HIP actor that created the license, or null for legacy records.</param>
 public sealed record LicenseSummary(
     string LicenseId,
     string MaskedSetupCode,
@@ -120,7 +129,10 @@ public sealed record LicenseSummary(
     DateTimeOffset? ActivatedAtUtc,
     DateTimeOffset? LastSeenAtUtc,
     string? HudVersion,
-    LicenseHudSettings Settings);
+    LicenseHudSettings Settings,
+    string? CreatedBy = null,
+    DateTimeOffset? SetupCodeExpiresAtUtc = null,
+    DateTimeOffset? SetupCodeConsumedAtUtc = null);
 
 /// <summary>
 /// Result of activating a Second Life HUD with a setup code.
@@ -199,6 +211,28 @@ public interface ISetupCodeLicenseService
     LicenseSummary? SetStatus(string licenseId, LicenseStatus status);
 
     /// <summary>
+    /// Determines whether a HUD device is still linked to an active license.
+    /// </summary>
+    /// <param name="licenseId">License ID embedded in the validated credential.</param>
+    /// <param name="deviceId">HUD device ID presented by the client.</param>
+    /// <param name="cancellationToken">Token used to cancel the storage query.</param>
+    /// <returns>True only when the device is linked to a currently active license.</returns>
+    Task<bool> IsActiveDeviceAsync(string licenseId, string deviceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets HUD settings for one exact active license/device binding.
+    /// </summary>
+    LicenseHudSettings GetSettingsForDevice(string licenseId, string deviceId);
+
+    /// <summary>
+    /// Saves HUD settings for one exact active license/device binding.
+    /// </summary>
+    (bool Saved, string Message, LicenseHudSettings Settings) SaveSettingsForDevice(
+        string licenseId,
+        string deviceId,
+        LicenseHudSettings settings);
+
+    /// <summary>
     /// Gets HUD settings by linked device ID using safe defaults when the device is unknown.
     /// </summary>
     /// <param name="deviceId">HUD device ID.</param>
@@ -219,17 +253,23 @@ public interface ISetupCodeLicenseService
 /// </summary>
 public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
 {
-    private static readonly object Gate = new();
-    private static readonly Dictionary<string, SetupCodeLicense> LicensesById = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, string> LicenseIdsBySetupCode = new(StringComparer.Ordinal);
+    private readonly object Gate = new();
+    private readonly Dictionary<string, SetupCodeLicense> LicensesById = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> LicenseIdsBySetupCode = new(StringComparer.Ordinal);
     private static readonly HashSet<string> ValidModes = new(StringComparer.OrdinalIgnoreCase) { "Quiet", "Normal", "Strict", "Paranoid" };
     private static readonly LicenseHudSettings DefaultSettings = new("Normal", true, true, true);
+    private readonly TimeProvider clock;
 
     /// <summary>
     /// Initializes the MVP service and seeds a development setup code used by existing local HUD scripts.
     /// </summary>
-    public InMemorySetupCodeLicenseService()
+    public InMemorySetupCodeLicenseService() : this(null)
     {
+    }
+
+    public InMemorySetupCodeLicenseService(TimeProvider? timeProvider)
+    {
+        clock = timeProvider ?? TimeProvider.System;
         EnsureDevelopmentCode();
     }
 
@@ -237,12 +277,14 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
     public CreateSetupCodeResponse CreateSetupCode(CreateSetupCodeRequest request)
     {
         var allowedDevices = request.AllowedDeviceCount is > 0 and <= 25 ? request.AllowedDeviceCount.Value : 1;
+        var validForHours = request.ValidForHours is > 0 and <= 168 ? request.ValidForHours.Value : 24;
         var mode = IsValidMode(request.InitialScanMode) ? request.InitialScanMode! : DefaultSettings.ScanMode;
         var settings = DefaultSettings with { ScanMode = mode };
 
         lock (Gate)
         {
             var setupCode = GenerateUniqueSetupCode();
+            var now = clock.GetUtcNow();
             var license = new SetupCodeLicense(
                 $"lic-{Guid.NewGuid():N}",
                 setupCode,
@@ -253,12 +295,20 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
                 null,
                 null,
                 null,
-                settings);
+                settings,
+                string.IsNullOrWhiteSpace(request.CreatedBy) ? null : request.CreatedBy.Trim(),
+                SetupCodeExpiresAtUtc: now.AddHours(validForHours));
 
             LicensesById[license.LicenseId] = license;
             LicenseIdsBySetupCode[setupCode] = license.LicenseId;
 
-            return new CreateSetupCodeResponse(license.LicenseId, setupCode, MaskSetupCode(setupCode), license.Status, allowedDevices);
+            return new CreateSetupCodeResponse(
+                license.LicenseId,
+                setupCode,
+                MaskSetupCode(setupCode),
+                license.Status,
+                allowedDevices,
+                license.SetupCodeExpiresAtUtc);
         }
     }
 
@@ -295,6 +345,12 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
             return FailedActivation(LicenseStatus.Pending, "Setup code is required.");
         }
 
+        var requestedDeviceId = string.IsNullOrWhiteSpace(hudDeviceId) ? null : hudDeviceId.Trim();
+        if (requestedDeviceId?.Length > 128)
+        {
+            return FailedActivation(LicenseStatus.Pending, "HUD device ID must contain 1 to 128 characters.");
+        }
+
         lock (Gate)
         {
             if (!LicenseIdsBySetupCode.TryGetValue(setupCode.Trim(), out var licenseId) ||
@@ -308,10 +364,32 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
                 return FailedActivation(license.Status, "This setup code is not active.");
             }
 
+            var now = clock.GetUtcNow();
+            if (license.SetupCodeConsumedAtUtc is not null)
+            {
+                return FailedActivation(license.Status, "Setup code was not accepted.");
+            }
+            if (license.SetupCodeExpiresAtUtc is { } expiresAtUtc && expiresAtUtc <= now)
+            {
+                LicensesById[license.LicenseId] = license with
+                {
+                    Status = LicenseStatus.Expired,
+                    LastSeenAtUtc = now
+                };
+                return FailedActivation(LicenseStatus.Expired, "This setup code has expired.");
+            }
+
             var deviceIds = license.DeviceIds.ToList();
-            var deviceId = string.IsNullOrWhiteSpace(hudDeviceId)
+            var deviceId = requestedDeviceId is null
                 ? $"sl-hud-{Convert.ToHexString(RandomNumberGenerator.GetBytes(9)).ToLowerInvariant()}"
-                : hudDeviceId.Trim();
+                : requestedDeviceId;
+
+            if (LicensesById.Values.Any(candidate =>
+                    !string.Equals(candidate.LicenseId, license.LicenseId, StringComparison.OrdinalIgnoreCase) &&
+                    candidate.DeviceIds.Contains(deviceId, StringComparer.OrdinalIgnoreCase)))
+            {
+                return FailedActivation(license.Status, "This HUD device is already linked to another license.");
+            }
 
             if (!deviceIds.Contains(deviceId, StringComparer.OrdinalIgnoreCase))
             {
@@ -323,7 +401,6 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
                 deviceIds.Add(deviceId);
             }
 
-            var now = DateTimeOffset.UtcNow;
             var updated = license with
             {
                 Status = LicenseStatus.Active,
@@ -331,7 +408,8 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
                 AvatarIdHash = string.IsNullOrWhiteSpace(avatarIdHash) ? license.AvatarIdHash : avatarIdHash.Trim(),
                 ActivatedAtUtc = license.ActivatedAtUtc ?? now,
                 LastSeenAtUtc = now,
-                HudVersion = string.IsNullOrWhiteSpace(hudVersion) ? license.HudVersion : hudVersion.Trim()
+                HudVersion = string.IsNullOrWhiteSpace(hudVersion) ? license.HudVersion : hudVersion.Trim(),
+                SetupCodeConsumedAtUtc = deviceIds.Count >= license.AllowedDeviceCount ? now : null
             };
 
             LicensesById[updated.LicenseId] = updated;
@@ -380,11 +458,72 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
     }
 
     /// <inheritdoc />
+    public Task<bool> IsActiveDeviceAsync(
+        string licenseId,
+        string deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(licenseId) || string.IsNullOrWhiteSpace(deviceId))
+        {
+            return Task.FromResult(false);
+        }
+
+        lock (Gate)
+        {
+            return Task.FromResult(LicensesById.TryGetValue(licenseId.Trim(), out var license) &&
+                license.Status == LicenseStatus.Active &&
+                license.DeviceIds.Contains(deviceId.Trim(), StringComparer.OrdinalIgnoreCase));
+        }
+    }
+
+    /// <inheritdoc />
+    public LicenseHudSettings GetSettingsForDevice(string licenseId, string deviceId)
+    {
+        lock (Gate)
+        {
+            return LicensesById.TryGetValue(licenseId.Trim(), out var license) &&
+                   license.Status == LicenseStatus.Active &&
+                   license.DeviceIds.Contains(deviceId.Trim(), StringComparer.OrdinalIgnoreCase)
+                ? license.Settings
+                : DefaultSettings;
+        }
+    }
+
+    /// <inheritdoc />
+    public (bool Saved, string Message, LicenseHudSettings Settings) SaveSettingsForDevice(
+        string licenseId,
+        string deviceId,
+        LicenseHudSettings settings)
+    {
+        if (!IsValidMode(settings.ScanMode))
+        {
+            return (false, "Invalid HUD mode.", GetSettingsForDevice(licenseId, deviceId));
+        }
+
+        lock (Gate)
+        {
+            if (!LicensesById.TryGetValue(licenseId.Trim(), out var license) ||
+                license.Status != LicenseStatus.Active ||
+                !license.DeviceIds.Contains(deviceId.Trim(), StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, "The HUD license/device binding is not active.", DefaultSettings);
+            }
+
+            var updated = license with { Settings = settings, LastSeenAtUtc = DateTimeOffset.UtcNow };
+            LicensesById[updated.LicenseId] = updated;
+            return (true, "HUD settings saved.", settings);
+        }
+    }
+
+    /// <inheritdoc />
     public LicenseHudSettings GetSettingsForDevice(string deviceId)
     {
         lock (Gate)
         {
-            return LicensesById.Values.FirstOrDefault(license => license.DeviceIds.Contains(deviceId, StringComparer.OrdinalIgnoreCase))?.Settings
+            return LicensesById.Values.FirstOrDefault(license =>
+                    license.Status == LicenseStatus.Active &&
+                    license.DeviceIds.Contains(deviceId, StringComparer.OrdinalIgnoreCase))?.Settings
                 ?? DefaultSettings;
         }
     }
@@ -405,6 +544,11 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
                 return (true, "HUD settings saved for development device.", settings);
             }
 
+            if (license.Status != LicenseStatus.Active)
+            {
+                return (false, "The HUD license/device binding is not active.", DefaultSettings);
+            }
+
             var updated = license with { Settings = settings, LastSeenAtUtc = DateTimeOffset.UtcNow };
             LicensesById[updated.LicenseId] = updated;
             return (true, "HUD settings saved.", settings);
@@ -414,7 +558,7 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
     /// <summary>
     /// Seeds a non-production setup code so existing local HUD docs and tests keep working.
     /// </summary>
-    private static void EnsureDevelopmentCode()
+    private void EnsureDevelopmentCode()
     {
         lock (Gate)
         {
@@ -443,7 +587,7 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
     /// Generates a unique, random setup code using cryptographic randomness instead of sequential IDs.
     /// </summary>
     /// <returns>A setup code grouped for human entry.</returns>
-    private static string GenerateUniqueSetupCode()
+    private string GenerateUniqueSetupCode()
     {
         string setupCode;
         do
@@ -483,7 +627,10 @@ public sealed class InMemorySetupCodeLicenseService : ISetupCodeLicenseService
             license.ActivatedAtUtc,
             license.LastSeenAtUtc,
             license.HudVersion,
-            license.Settings);
+            license.Settings,
+            license.CreatedBy,
+            license.SetupCodeExpiresAtUtc,
+            license.SetupCodeConsumedAtUtc);
 
     /// <summary>
     /// Masks setup codes for list/detail screens while retaining enough characters for support identification.

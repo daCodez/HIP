@@ -60,6 +60,31 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
             .FirstOrDefault();
     }
 
+    /// <inheritdoc />
+    public async Task<BrowserScanResultRecord?> GetLatestAuthoritativeByDomainAsync(
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        var normalizedDomain = domain.Trim().ToLowerInvariant();
+        var entity = await dbContext.BrowserScanResults.AsNoTracking()
+            .Where(result => result.Domain == normalizedDomain)
+            .Where(result => result.PrivacySafeMetadataJson.Contains(
+                BrowserScanResultProvenance.ServerAuthoritativeJsonFragment))
+            .OrderByDescending(result => result.LastCheckedUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (entity is not null)
+        {
+            return FromEntity(entity);
+        }
+
+        return (await ListLegacyAsync(cancellationToken))
+            .Where(result => result.Domain.Equals(normalizedDomain, StringComparison.OrdinalIgnoreCase))
+            .Where(BrowserScanResultProvenance.IsServerAuthoritative)
+            .OrderByDescending(result => result.LastCheckedUtc)
+            .FirstOrDefault();
+    }
+
     /// <summary>
     /// Lists stored browser plugin scan results for privacy-safe dashboard aggregation.
     /// </summary>
@@ -81,13 +106,15 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
     }
 
     /// <summary>
-    /// Counts distinct normalized domains across the full stored browser scan history.
+    /// Counts distinct normalized domains across the authoritative browser scan history.
     /// </summary>
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
     /// <returns>The number of distinct stored scan domains.</returns>
     public async Task<int> CountDistinctDomainsAsync(CancellationToken cancellationToken)
     {
         var typedCount = await dbContext.BrowserScanResults.AsNoTracking()
+            .Where(result => result.PrivacySafeMetadataJson.Contains(
+                BrowserScanResultProvenance.ServerAuthoritativeJsonFragment))
             .Select(result => result.Domain)
             .Distinct()
             .CountAsync(cancellationToken);
@@ -97,13 +124,14 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
         }
 
         return (await ListLegacyAsync(cancellationToken))
+            .Where(BrowserScanResultProvenance.IsServerAuthoritative)
             .Select(result => result.Domain)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
     }
 
     /// <summary>
-    /// Lists recent browser scan results for dashboard read models without requiring dashboard code to process every scan.
+    /// Lists recent authoritative browser scan results for dashboard read models.
     /// </summary>
     /// <param name="maxCount">Maximum number of recent scans to return.</param>
     /// <param name="cancellationToken">Token used to cancel persistence work.</param>
@@ -117,6 +145,8 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
         }
 
         var typedResults = await dbContext.BrowserScanResults.AsNoTracking()
+            .Where(result => result.PrivacySafeMetadataJson.Contains(
+                BrowserScanResultProvenance.ServerAuthoritativeJsonFragment))
             .OrderByDescending(result => result.LastCheckedUtc)
             .Take(boundedMax)
             .ToArrayAsync(cancellationToken);
@@ -125,8 +155,10 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
             return typedResults.Select(FromEntity).ToArray();
         }
 
-        return (await ListRecentLegacyAsync(boundedMax, cancellationToken))
+        return (await ListLegacyAsync(cancellationToken))
+            .Where(BrowserScanResultProvenance.IsServerAuthoritative)
             .OrderByDescending(result => result.LastCheckedUtc)
+            .Take(boundedMax)
             .ToArray();
     }
 
@@ -145,25 +177,6 @@ public sealed class EfBrowserScanResultRepository(HipDbContext dbContext, HipRec
         {
             // The generic encrypted table is only a migration fallback for older local scan data. If a partial local
             // database is missing that table, public lookup should return "no scan yet" instead of failing the request.
-            return Array.Empty<BrowserScanResultRecord>();
-        }
-    }
-
-    /// <summary>
-    /// Lists bounded legacy scan rows only when the optional generic fallback table exists.
-    /// </summary>
-    /// <param name="maxCount">Maximum number of legacy scan rows to read.</param>
-    /// <param name="cancellationToken">Token used to cancel fallback reads.</param>
-    /// <returns>Legacy scan records, or an empty result when the legacy table is absent.</returns>
-    private async Task<IReadOnlyCollection<BrowserScanResultRecord>> ListRecentLegacyAsync(int maxCount, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await legacyStore.ListRecentAsync<BrowserScanResultRecord>(Partition, maxCount, cancellationToken);
-        }
-        catch (Exception exception) when (RelationalExceptionClassifier.IsMissingRelation(exception))
-        {
-            // Missing legacy storage should not break live dashboard reads; typed scan rows are the current source.
             return Array.Empty<BrowserScanResultRecord>();
         }
     }

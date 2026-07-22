@@ -36,6 +36,77 @@ internal static class HipProtocolValidation
         return token;
     }
 
+    public static string RequiredCanonicalBase64Url(
+        string? value,
+        string parameterName,
+        int minimumBytes,
+        int maximumBytes)
+    {
+        if (minimumBytes < 1 || maximumBytes < minimumBytes)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maximumBytes),
+                "Canonical base64url byte bounds are invalid.");
+        }
+
+        if (string.IsNullOrEmpty(value) ||
+            value.Length > ((maximumBytes * 4) + 2) / 3 ||
+            value.Any(character =>
+                character is not (>= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '-' or '_')))
+        {
+            throw new ArgumentException(
+                "HIP protocol nonces must use canonical unpadded base64url.",
+                parameterName);
+        }
+
+        var remainder = value.Length % 4;
+        if (remainder == 1)
+        {
+            throw new ArgumentException(
+                "HIP protocol nonces must use canonical unpadded base64url.",
+                parameterName);
+        }
+
+        byte[] decoded;
+        try
+        {
+            var base64 = value.Replace('-', '+').Replace('_', '/');
+            if (remainder != 0)
+            {
+                base64 = base64.PadRight(base64.Length + (4 - remainder), '=');
+            }
+
+            decoded = Convert.FromBase64String(base64);
+        }
+        catch (FormatException exception)
+        {
+            throw new ArgumentException(
+                "HIP protocol nonces must use canonical unpadded base64url.",
+                parameterName,
+                exception);
+        }
+
+        if (decoded.Length < minimumBytes || decoded.Length > maximumBytes)
+        {
+            throw new ArgumentException(
+                $"HIP protocol nonces must decode to between {minimumBytes} and {maximumBytes} bytes.",
+                parameterName);
+        }
+
+        var canonical = Convert.ToBase64String(decoded)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+        if (!string.Equals(canonical, value, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "HIP protocol nonces must use canonical unpadded base64url.",
+                parameterName);
+        }
+
+        return value;
+    }
+
     public static JsonElement RequiredJsonValue(JsonElement value, string parameterName, int maximumBytes)
     {
         if (value.ValueKind is JsonValueKind.Undefined)

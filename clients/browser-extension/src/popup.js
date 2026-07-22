@@ -54,6 +54,17 @@ const elements = {
   siteSafetyStatus: document.getElementById("siteSafetyStatus"),
   siteSafetyConfidence: document.getElementById("siteSafetyConfidence"),
   siteSafetySummary: document.getElementById("siteSafetySummary"),
+  hipScoringPanel: document.getElementById("hipScoringPanel"),
+  hipScoringModelVersion: document.getElementById("hipScoringModelVersion"),
+  hipPresentationStatus: document.getElementById("hipPresentationStatus"),
+  hipFinalScore: document.getElementById("hipFinalScore"),
+  hipDomainTrustScore: document.getElementById("hipDomainTrustScore"),
+  hipPageTrustScore: document.getElementById("hipPageTrustScore"),
+  hipContentRiskScore: document.getElementById("hipContentRiskScore"),
+  hipEvidenceFreshness: document.getElementById("hipEvidenceFreshness"),
+  hipTrustAssertion: document.getElementById("hipTrustAssertion"),
+  hipScoringReasonsPanel: document.getElementById("hipScoringReasonsPanel"),
+  hipScoringReasons: document.getElementById("hipScoringReasons"),
   malwareRisk: document.getElementById("malwareRisk"),
   phishingRisk: document.getElementById("phishingRisk"),
   redirectRisk: document.getElementById("redirectRisk"),
@@ -186,6 +197,9 @@ function renderLoadingSummary(stage = "Checking") {
   elements.siteSafetyStatus.dataset.status = "Unknown";
   elements.siteSafetyConfidence.textContent = "Checking...";
   elements.siteSafetySummary.textContent = "HIP is checking page safety signals.";
+  elements.hipScoringPanel.hidden = true;
+  elements.hipScoringReasonsPanel.hidden = true;
+  elements.hipScoringReasons.replaceChildren();
   elements.malwareRisk.textContent = "Checking...";
   elements.phishingRisk.textContent = "Checking...";
   elements.redirectRisk.textContent = "Checking...";
@@ -295,6 +309,8 @@ async function injectContentScanner(tabId) {
       "src/safetyPageRouter.js",
       "src/browserPrivacyGuards.js",
       "src/browserScanAssessment.js",
+      "src/formalScoring.js",
+      "src/contentMessageContracts.js",
       "src/content.js"
     ]
   });
@@ -355,6 +371,17 @@ function renderSiteSafetyResult(result) {
   elements.siteSafetyStatus.dataset.status = viewModel.status;
   elements.siteSafetyConfidence.textContent = viewModel.confidenceLevelText;
   elements.siteSafetySummary.textContent = viewModel.summary;
+  elements.hipScoringPanel.hidden = !viewModel.hasScoringProjection;
+  elements.hipScoringModelVersion.textContent = viewModel.scoringModelVersionText;
+  elements.hipPresentationStatus.textContent = viewModel.presentationStatusText;
+  elements.hipPresentationStatus.dataset.status = viewModel.status;
+  elements.hipFinalScore.textContent = viewModel.finalHipScoreText;
+  elements.hipDomainTrustScore.textContent = viewModel.domainTrustScoreText;
+  elements.hipPageTrustScore.textContent = viewModel.pageTrustScoreText;
+  elements.hipContentRiskScore.textContent = viewModel.contentRiskScoreText;
+  elements.hipEvidenceFreshness.textContent = viewModel.evidenceFreshnessText;
+  elements.hipTrustAssertion.textContent = viewModel.trustAssertionText;
+  renderHipScoringReasons(viewModel.scoringReasons);
   elements.malwareRisk.textContent = viewModel.malwareRiskText;
   elements.phishingRisk.textContent = viewModel.phishingRiskText;
   elements.redirectRisk.textContent = viewModel.redirectRiskText;
@@ -428,6 +455,18 @@ function renderWarnings(warnings = []) {
   elements.warnings.replaceChildren(...warnings.map(warning => {
     const item = document.createElement("li");
     item.textContent = warning;
+    return item;
+  }));
+}
+
+/**
+ * Renders only the bounded, public-safe explanations from the formal scoring projection.
+ */
+function renderHipScoringReasons(reasons = []) {
+  elements.hipScoringReasonsPanel.hidden = reasons.length === 0;
+  elements.hipScoringReasons.replaceChildren(...reasons.map(reason => {
+    const item = document.createElement("li");
+    item.textContent = reason;
     return item;
   }));
 }
@@ -548,6 +587,8 @@ function handleSiteSafetyUnavailable(_error) {
   elements.siteSafetyStatus.dataset.status = "Unknown";
   elements.siteSafetyConfidence.textContent = "Unknown";
   elements.siteSafetySummary.textContent = "HIP could not complete the page safety scan right now.";
+  elements.hipScoringPanel.hidden = true;
+  renderHipScoringReasons([]);
   elements.malwareRisk.textContent = "Unknown";
   elements.phishingRisk.textContent = "Unknown";
   elements.redirectRisk.textContent = "Unknown";

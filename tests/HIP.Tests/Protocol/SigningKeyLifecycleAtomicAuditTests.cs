@@ -12,13 +12,17 @@ public sealed class SigningKeyLifecycleAtomicAuditTests
 {
     private static readonly DateTimeOffset InitialTime =
         new(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
+    private const string FirstFingerprint = "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    private const string SecondFingerprint = "sha256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+    private const string ThirdFingerprint = "sha256:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
 
     [Test]
     public async Task Stale_compare_and_swap_writes_zero_audit_facts()
     {
         var repository = new InMemorySigningKeyLifecycleRepository();
         var registered = SigningKeyRing.Create("hip:domain:example")
-            .RegisterActiveKey("key-1", "ML-DSA-65", "public-key-1", InitialTime);
+            .RegisterActiveKey(
+                "key-1", "ML-DSA-65", "public-key-1", FirstFingerprint, InitialTime);
         var registrationAudit = CreateAudit("audit-register", "SigningKeyActivated", "key-1");
         Assert.That(
             await repository.TrySaveAsync(
@@ -31,6 +35,7 @@ public sealed class SigningKeyLifecycleAtomicAuditTests
             "key-2",
             "ML-DSA-65",
             "public-key-2",
+            SecondFingerprint,
             InitialTime.AddMinutes(1));
         Assert.That(
             await repository.TrySaveAsync(
@@ -49,6 +54,7 @@ public sealed class SigningKeyLifecycleAtomicAuditTests
             "key-3",
             "ML-DSA-65",
             "public-key-3",
+            ThirdFingerprint,
             InitialTime.AddMinutes(2));
         var staleSaved = await repository.TrySaveAsync(
             new SigningKeyLifecycleTransitionBatch(
@@ -78,7 +84,8 @@ public sealed class SigningKeyLifecycleAtomicAuditTests
     {
         var repository = new InMemorySigningKeyLifecycleRepository();
         var registered = SigningKeyRing.Create("hip:domain:example")
-            .RegisterActiveKey("key-1", "ML-DSA-65", "public-key-1", InitialTime);
+            .RegisterActiveKey(
+                "key-1", "ML-DSA-65", "public-key-1", FirstFingerprint, InitialTime);
         var registrationAudit = CreateAudit("audit-existing", "SigningKeyActivated", "key-1");
         Assert.That(
             await repository.TrySaveAsync(
@@ -91,6 +98,7 @@ public sealed class SigningKeyLifecycleAtomicAuditTests
             "key-2",
             "ML-DSA-65",
             "public-key-2",
+            SecondFingerprint,
             InitialTime.AddMinutes(1));
 
         var saved = await repository.TrySaveAsync(

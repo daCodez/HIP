@@ -1,16 +1,22 @@
 using System.IO.Compression;
 using System.Globalization;
+using System.Text;
 using System.Threading.RateLimiting;
+using HIP.ApiService.Security;
 using HIP.Application;
 using HIP.Application.Browser;
+using HIP.Application.Devices;
 using HIP.Application.Identity;
 using HIP.Application.Performance;
+using HIP.Application.Protocol;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Security;
 using HIP.Application.SiteSafety;
+using HIP.Domain.Protocol;
 using HIP.Domain.Reputation;
+using HIP.Domain.Scoring;
 using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
 using Microsoft.AspNetCore.OutputCaching;
@@ -26,8 +32,8 @@ const string HipInstanceIdHeader = "X-HIP-Instance-Id";
 
 builder.AddServiceDefaults();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton(new DevelopmentHipCryptoProviderOptions(builder.Environment.IsDevelopment()));
-builder.Services.AddHipApplication();
+builder.Services.AddHipApiServiceAuthorization();
+builder.Services.AddHipApplication(builder.Environment.IsDevelopment());
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddOptions<HipPerformanceOptions>()
@@ -103,6 +109,10 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+// Generate the unknown-client verifier at startup so every canonical unknown identifier performs
+// the same deliberately slow verification work without deriving a verifier on the request path.
+_ = app.Services.GetRequiredService<ApiServiceClientDummyVerifier>();
+
 var databaseInitializationMode = app.Environment.IsDevelopment()
     ? HipDatabaseInitializationMode.CreateDevelopmentSchema
     : HipDatabaseInitializationMode.ValidateMigrations;
@@ -110,7 +120,7 @@ await HipDatabaseInitializer.InitializeAsync(app.Services, databaseInitializatio
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
@@ -126,7 +136,9 @@ if (ShouldUseHttpsRedirection(app))
 }
 app.UseCors(HipCorsPolicies.PublicRead);
 app.UseResponseCompression();
+app.UseAuthentication();
 app.UseRateLimiter();
+app.UseAuthorization();
 app.UseOutputCache();
 app.MapDefaultEndpoints();
 
@@ -140,21 +152,34 @@ app.MapGet("/", () => Results.Ok(new ApiServiceInfoResponse(
 .WithName("ApiServiceInfo")
 .WithSummary("Returns local HIP API service information.")
 .WithDescription("Provides a safe, non-sensitive API root response for local development and service discovery.")
-.Produces<ApiServiceInfoResponse>();
+.Produces<ApiServiceInfoResponse>()
+.AllowAnonymous();
 
 var publicApi = app.MapGroup("/api/v1/public").WithTags("Public Lookup and Feedback");
 var browserApi = app.MapGroup("/api/v1/browser").WithTags("Browser Plugin");
 var siteSafetyApi = app.MapGroup("/api/v1/site-safety").WithTags("Site Safety");
 var domainVerificationApi = app.MapGroup("/api/v1/domain-verification").WithTags("Domain Verification");
+var protocolApi = app.MapGroup("/api/v1/protocol").WithTags("HIP Protocol");
 
 domainVerificationApi.MapPost("/check", async (
     DomainVerificationCheckApiRequest request,
+    HttpContext httpContext,
     IDomainVerificationService domainVerificationService,
     CancellationToken cancellationToken) =>
 {
     try
     {
-        var result = await domainVerificationService.CheckDnsTxtAsync(request.Domain, request.ExpectedToken, cancellationToken);
+        var normalizedDomain = DomainInputValidator.ValidateAndNormalize(request.Domain);
+        if (ApiServiceServiceClientPrincipal.HasServiceIdentity(httpContext.User) &&
+            !ApiServiceServiceClientPrincipal.HasExactDomainGrant(httpContext.User, normalizedDomain))
+        {
+            return Results.Forbid();
+        }
+
+        var result = await domainVerificationService.CheckDnsTxtAsync(
+            normalizedDomain,
+            request.ExpectedToken,
+            cancellationToken);
         return Results.Ok(DomainVerificationCheckApiResponse.FromResult(result));
     }
     catch (ArgumentException ex)
@@ -168,9 +193,14 @@ domainVerificationApi.MapPost("/check", async (
 Checks _hip.{domain} for a TXT record in the format hip-site-verification={token}.
 This endpoint proves domain-control evidence only; it does not mark a website safe or trusted.
 The expected token is accepted only for this verification check and is never returned in the response.
+Callers may use the existing privileged administrator policy or a HIP-Service credential with the exact
+domain-verification:check scope and an exact normalized domain grant. Parent and child domains are not implied.
 """)
 .Produces<DomainVerificationCheckApiResponse>()
 .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+.Produces(StatusCodes.Status401Unauthorized)
+.Produces(StatusCodes.Status403Forbidden)
+.RequireAuthorization(ApiServiceAdminPolicies.CanCheckDomainVerification)
 .RequireCors(HipCorsPolicies.ClientWrite)
 .RequireRateLimiting(PublicScanPolicy);
 
@@ -193,6 +223,7 @@ publicApi.MapGet("/lookup/domain/{domain}", async (
 .WithDescription(GetPublicDomainLookupDescription())
 .Produces<PublicDomainLookupResponse>()
 .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+.AllowAnonymous()
 .CacheOutput(HipOutputCachePolicies.PublicLookup);
 
 publicApi.MapGet("/badge/domain/{domain}", async (
@@ -214,7 +245,21 @@ publicApi.MapGet("/badge/domain/{domain}", async (
 .WithDescription(GetPublicDomainBadgeDescription())
 .Produces<PublicBadgeResponse>()
 .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+.AllowAnonymous()
 .CacheOutput(HipOutputCachePolicies.Badge);
+
+publicApi.MapPost("/badge/verify", async (
+    HipLiveBadgeDocument document,
+    IHipLiveBadgeVerificationService verificationService,
+    CancellationToken cancellationToken) =>
+    Results.Ok(await verificationService.VerifyAsync(document, cancellationToken)))
+.WithName("VerifyPublicDomainBadge")
+.WithSummary("Verifies a signed HIP live badge against current issuer and key state.")
+.Produces<HipLiveBadgeVerificationResult>()
+.AllowAnonymous()
+.RequireCors(HipCorsPolicies.ClientWrite)
+.WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(HipLiveBadgeDocument.MaximumDocumentBytes))
+.RequireRateLimiting(PublicScanPolicy);
 
 publicApi.MapPost("/feedback", async (
     ReputationFeedbackRequest feedback,
@@ -223,34 +268,40 @@ publicApi.MapPost("/feedback", async (
     IWeightedFeedbackAggregationService weightedFeedbackService,
     IAdminReviewQueueService reviewQueueService,
     CancellationToken cancellationToken) =>
-{
-    try
     {
-        if (await IsDuplicateFeedbackAsync(feedback, duplicateGuard, cancellationToken))
+        try
         {
-            // Duplicate suppression is an abuse-control decision, not a user-facing failure.
-            // Returning OK keeps the browser plugin UX stable when a user double-clicks or retries a submitted signal.
-            return Results.Ok(new { accepted = true, duplicateSuppressed = true, message = "Duplicate feedback submission already accepted recently." });
-        }
+            var anonymousFeedback = feedback with
+            {
+                ReporterTrustLevel = HIP.Domain.Reputation.ReporterTrustLevel.Anonymous
+            };
+            if (await IsDuplicateFeedbackAsync(anonymousFeedback, duplicateGuard, cancellationToken))
+            {
+                // Duplicate suppression is an abuse-control decision, not a user-facing failure.
+                // Returning OK keeps the browser plugin UX stable when a user double-clicks or retries a submitted signal.
+                return Results.Ok(new { accepted = true, duplicateSuppressed = true, message = "Duplicate feedback submission already accepted recently." });
+            }
 
-        await StoreWeightedFeedbackIfDomainAsync(feedback, weightedFeedbackService, reviewQueueService, cancellationToken);
-        return Results.Ok(await reputationService.SubmitFeedbackAsync(feedback, cancellationToken));
-    }
-    catch (ArgumentException ex)
-    {
-        return Results.BadRequest(new ApiErrorResponse(ex.Message));
-    }
-})
+            await StoreWeightedFeedbackIfDomainAsync(anonymousFeedback, weightedFeedbackService, reviewQueueService, cancellationToken);
+            return Results.Ok(await reputationService.SubmitFeedbackAsync(anonymousFeedback, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new ApiErrorResponse(ex.Message));
+        }
+    })
 .WithName("PublicFeedback")
 .WithSummary("Submits weighted trust feedback for a domain.")
 .WithDescription(GetPublicFeedbackDescription())
 .Produces<ReputationProfile>()
 .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+.AllowAnonymous()
 .RequireCors(HipCorsPolicies.ClientWrite)
 .RequireRateLimiting(PublicFeedbackPolicy);
 
 MapBrowserApis(browserApi);
 MapSiteSafetyApis(siteSafetyApi);
+MapHipProtocolApis(protocolApi);
 
 app.Run();
 
@@ -415,6 +466,19 @@ static string ResolveProviderSettingsScope(HttpContext httpContext)
     return $"instance:{instanceId}";
 }
 
+/// <summary>Resolves a stable requester scope for owner-isolated durable provider jobs.</summary>
+static string ResolveExternalEvidenceJobRequesterScope(HttpContext httpContext)
+{
+    if (ApiServiceServiceClientPrincipal.HasServiceIdentity(httpContext.User))
+    {
+        var clientId = httpContext.User.FindFirst(ApiServiceClientClaimTypes.ClientId)?.Value
+            ?? throw new InvalidOperationException("Authenticated service client is missing its canonical identifier.");
+        return $"service-client:{clientId}";
+    }
+
+    return $"admin:{NormalizeSettingsScopeSegment(httpContext.User.Identity?.Name)}:{ResolveProviderSettingsScope(httpContext)}";
+}
+
 /// <summary>
 /// Normalizes a user or instance settings scope so untrusted header values cannot affect storage keys.
 /// </summary>
@@ -574,6 +638,39 @@ static ExternalSiteEvidenceOptions BindExternalSiteEvidenceOptions(IConfiguratio
 /// Requests remain privacy-safe: they accept URLs, domains, link lists, and scan counts, but not page text,
 /// form values, passwords, or private message content.
 /// </remarks>
+static (bool Supplied, DeviceRequestProof? Proof) ReadDeviceRequestProof(HttpRequest request)
+{
+    string? Header(string name) => request.Headers[name].FirstOrDefault();
+    var values = new[]
+    {
+        Header("X-HIP-Device-Id"),
+        Header("X-HIP-Device-Timestamp"),
+        Header("X-HIP-Device-Nonce"),
+        Header("X-HIP-Device-Body-SHA256"),
+        Header("X-HIP-Device-Signature")
+    };
+    if (values.All(string.IsNullOrWhiteSpace))
+    {
+        return (false, null);
+    }
+
+    return values.Any(string.IsNullOrWhiteSpace)
+        ? (true, null)
+        : (true, new DeviceRequestProof(values[0]!, values[1]!, values[2]!, values[3]!, values[4]!));
+}
+
+static IResult InvalidDeviceProofResult(DeviceRequestProofStatus status) => status switch
+{
+    DeviceRequestProofStatus.Replayed => Results.Conflict(
+        new BrowserScanResultErrorResponse("Device request proof was already used.")),
+    DeviceRequestProofStatus.StateUnavailable => Results.Json(
+        new BrowserScanResultErrorResponse("Device request proof is temporarily unavailable."),
+        statusCode: StatusCodes.Status503ServiceUnavailable),
+    _ => Results.Json(
+        new BrowserScanResultErrorResponse("Device request proof is invalid."),
+        statusCode: StatusCodes.Status401Unauthorized)
+};
+
 static void MapBrowserApis(RouteGroupBuilder browserApi)
 {
     browserApi.MapPost("/score-site", async (
@@ -595,6 +692,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
     .WithDescription(GetBrowserScoreSiteDescription())
     .Produces<BrowserScoreSiteResponse>()
     .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+    .AllowAnonymous()
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
@@ -617,23 +715,48 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
     .WithDescription(GetBrowserScanLinksDescription())
     .Produces<BrowserScanLinksResponse>()
     .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+    .AllowAnonymous()
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
     browserApi.MapPost("/scan-results", async (
         BrowserScanResultSaveRequest request,
+        HttpContext httpContext,
         IDuplicateSubmissionGuard duplicateGuard,
-        IBrowserScanResultService scanResultService,
+        IUntrustedBrowserScanResultSubmissionService scanResultSubmissionService,
+        IRegisteredDeviceBrowserScanResultSubmissionService registeredSubmissionService,
+        IDeviceRequestProofService deviceProofService,
         CancellationToken cancellationToken) =>
     {
         try
         {
+            var suppliedProof = ReadDeviceRequestProof(httpContext.Request);
+            if (suppliedProof.Supplied)
+            {
+                if (suppliedProof.Proof is null)
+                {
+                    return InvalidDeviceProofResult(DeviceRequestProofStatus.Invalid);
+                }
+                var proofResult = await deviceProofService.ValidateAndReserveAsync(
+                    suppliedProof.Proof,
+                    httpContext.Request.Method,
+                    httpContext.Request.Path.Value ?? "/api/v1/browser/scan-results",
+                    request,
+                    cancellationToken);
+                if (!proofResult.IsAccepted)
+                {
+                    return InvalidDeviceProofResult(proofResult.Status);
+                }
+            }
+
             if (await IsDuplicateBrowserScanResultAsync(request, duplicateGuard, cancellationToken))
             {
                 return Results.Conflict(new BrowserScanResultErrorResponse("Duplicate browser scan result ignored."));
             }
 
-            return Results.Ok(await scanResultService.SaveAsync(request, cancellationToken));
+            return Results.Ok(suppliedProof.Supplied
+                ? await registeredSubmissionService.SaveRegisteredDeviceAsync(request, cancellationToken)
+                : await scanResultSubmissionService.SaveUntrustedAsync(request, cancellationToken));
         }
         catch (ArgumentException ex)
         {
@@ -646,6 +769,7 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
     .Produces<BrowserScanResultSaveResponse>()
     .Produces<BrowserScanResultErrorResponse>(StatusCodes.Status400BadRequest)
     .Produces<BrowserScanResultErrorResponse>(StatusCodes.Status409Conflict)
+    .AllowAnonymous()
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
@@ -669,7 +793,8 @@ static void MapBrowserApis(RouteGroupBuilder browserApi)
     .WithDescription(GetBrowserGetScanResultDescription())
     .Produces<BrowserScanResultResponse>()
     .Produces(StatusCodes.Status404NotFound)
-    .Produces<BrowserScanResultErrorResponse>(StatusCodes.Status400BadRequest);
+    .Produces<BrowserScanResultErrorResponse>(StatusCodes.Status400BadRequest)
+    .AllowAnonymous();
 }
 
 /// <summary>
@@ -695,7 +820,8 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     .WithName("ApiServiceGetExternalProviderPreferences")
     .WithSummary("Gets external provider preferences for the current HIP client scope.")
     .WithDescription(GetExternalProviderPreferencesDescription())
-    .Produces<ExternalProviderSettingsResponse>();
+    .Produces<ExternalProviderSettingsResponse>()
+    .RequireAuthorization(ApiServiceAdminPolicies.CanViewAdminDashboard);
 
     siteSafetyApi.MapPost("/external-providers", async (
         ExternalProviderSettingsUpdateRequest request,
@@ -721,6 +847,8 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     .WithDescription(GetUpdateExternalProviderPreferencesDescription())
     .Produces<ExternalProviderSettingsResponse>()
     .Produces<ApiErrorResponse>(StatusCodes.Status403Forbidden)
+    .RequireAuthorization(ApiServiceAdminPolicies.CanManageRules)
+    .RequireAuthorization(ApiServiceAdminPolicies.RecentPrivilegedAuthentication)
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
@@ -730,9 +858,8 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
         IDuplicateSubmissionGuard duplicateGuard,
         ExternalSiteEvidenceOptions defaultOptions,
         IExternalSiteEvidenceSettingsStore settingsStore,
-        ISiteSafetyScanner scanner,
+        IUntrustedSiteSafetyScanner scanner,
         ISiteSafetyScanResultStorageService scanResultStorageService,
-        IAdminReviewQueueService reviewQueueService,
         CancellationToken cancellationToken) =>
     {
         try
@@ -744,9 +871,8 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
 
             var scopedOptions = await LoadScopedExternalProviderOptionsAsync(httpContext, settingsStore, cancellationToken);
             using var _ = defaultOptions.UseScopedOverride(scopedOptions);
-            var result = await scanner.ScanAsync(request, cancellationToken);
+            var result = await scanner.ScanUntrustedAsync(request, cancellationToken);
             await scanResultStorageService.SaveAsync(request, result, cancellationToken);
-            await reviewQueueService.CreateSignalsFromScanAsync(result, cancellationToken);
             return Results.Ok(ToSiteSafetyScanResponse(result));
         }
         catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
@@ -760,6 +886,7 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     .Produces<SiteSafetyScanApiResponse>()
     .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
     .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
+    .AllowAnonymous()
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 
@@ -773,10 +900,26 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     {
         try
         {
-            var scopedOptions = await LoadScopedExternalProviderOptionsAsync(httpContext, settingsStore, cancellationToken);
+            var targetUri = new Uri(request.Url, UriKind.Absolute);
+            if (!string.Equals(targetUri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(targetUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException("Site safety checks require an absolute HTTP or HTTPS URL.", nameof(request));
+            }
+
+            var normalizedDomain = DomainInputValidator.ValidateAndNormalize(targetUri.Host);
+            if (ApiServiceServiceClientPrincipal.HasServiceIdentity(httpContext.User) &&
+                !ApiServiceServiceClientPrincipal.HasExactDomainGrant(httpContext.User, normalizedDomain))
+            {
+                return Results.Forbid();
+            }
+
+            var scopedOptions = ApiServiceServiceClientPrincipal.HasServiceIdentity(httpContext.User)
+                ? null
+                : await LoadScopedExternalProviderOptionsAsync(httpContext, settingsStore, cancellationToken);
             using var _ = defaultOptions.UseScopedOverride(scopedOptions);
             var evidence = await collector.CollectAsync(request, cancellationToken);
-            var domain = evidence.FirstOrDefault()?.Domain ?? new Uri(request.Url, UriKind.Absolute).Host.Trim().TrimEnd('.').ToLowerInvariant();
+            var domain = evidence.FirstOrDefault()?.Domain ?? normalizedDomain;
             var checkedAtUtc = evidence.FirstOrDefault()?.CheckedAtUtc ?? DateTimeOffset.UtcNow;
             return Results.Ok(new ExternalSiteEvidenceCheckResponse(domain, checkedAtUtc, ToSiteSafetyProviderEvidenceResponses(evidence)));
         }
@@ -790,9 +933,382 @@ static void MapSiteSafetyApis(RouteGroupBuilder siteSafetyApi)
     .WithDescription(GetExternalSiteEvidenceCheckDescription())
     .Produces<ExternalSiteEvidenceCheckResponse>()
     .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+    .Produces(StatusCodes.Status401Unauthorized)
+    .Produces(StatusCodes.Status403Forbidden)
+    .RequireAuthorization(ApiServiceAdminPolicies.CanCheckExternalSiteEvidence)
+    .RequireCors(HipCorsPolicies.ClientWrite)
+    .RequireRateLimiting(PublicScanPolicy);
+
+    siteSafetyApi.MapPost("/external-evidence/jobs", async (
+        SiteSafetyScanRequest request,
+        HttpContext httpContext,
+        ExternalSiteEvidenceJobService jobService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var targetUri = new Uri(request.Url, UriKind.Absolute);
+            var normalizedDomain = DomainInputValidator.ValidateAndNormalize(targetUri.Host);
+            var serviceClient = ApiServiceServiceClientPrincipal.HasServiceIdentity(httpContext.User);
+            if (serviceClient && !ApiServiceServiceClientPrincipal.HasExactDomainGrant(httpContext.User, normalizedDomain))
+            {
+                return Results.Forbid();
+            }
+
+            var job = await jobService.QueueAsync(
+                request,
+                ResolveExternalEvidenceJobRequesterScope(httpContext),
+                serviceClient ? null : ResolveProviderSettingsScope(httpContext),
+                cancellationToken);
+            var location = $"/api/v1/site-safety/external-evidence/jobs/{Uri.EscapeDataString(job.JobId)}";
+            return Results.Accepted(location, ToExternalSiteEvidenceJobApiResponse(job));
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException or UriFormatException)
+        {
+            return Results.BadRequest(new ApiErrorResponse(ex.Message));
+        }
+    })
+    .WithName("ApiServiceQueueExternalSiteEvidence")
+    .WithSummary("Queues external site evidence work outside the request path.")
+    .Produces<ExternalSiteEvidenceJobApiResponse>(StatusCodes.Status202Accepted)
+    .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+    .Produces(StatusCodes.Status401Unauthorized)
+    .Produces(StatusCodes.Status403Forbidden)
+    .RequireAuthorization(ApiServiceAdminPolicies.CanCheckExternalSiteEvidence)
+    .RequireCors(HipCorsPolicies.ClientWrite)
+    .RequireRateLimiting(PublicScanPolicy);
+
+    siteSafetyApi.MapGet("/external-evidence/jobs/{jobId}", async (
+        string jobId,
+        HttpContext httpContext,
+        ExternalSiteEvidenceJobService jobService,
+        CancellationToken cancellationToken) =>
+    {
+        var job = await jobService.GetForRequesterAsync(
+            jobId,
+            ResolveExternalEvidenceJobRequesterScope(httpContext),
+            cancellationToken);
+        if (job is null ||
+            ApiServiceServiceClientPrincipal.HasServiceIdentity(httpContext.User) &&
+            !ApiServiceServiceClientPrincipal.HasExactDomainGrant(httpContext.User, job.Domain))
+        {
+            return Results.NotFound();
+        }
+
+        return Results.Ok(ToExternalSiteEvidenceJobApiResponse(job));
+    })
+    .WithName("ApiServiceGetExternalSiteEvidenceJob")
+    .WithSummary("Gets owner-scoped external site evidence job status and normalized results.")
+    .Produces<ExternalSiteEvidenceJobApiResponse>()
+    .Produces(StatusCodes.Status401Unauthorized)
+    .Produces(StatusCodes.Status404NotFound)
+    .RequireAuthorization(ApiServiceAdminPolicies.CanCheckExternalSiteEvidence);
+}
+
+/// <summary>
+/// Maps the version-one trust-receipt issuance, retrieval, and verification surface.
+/// </summary>
+/// <param name="protocolApi">The versioned HIP protocol route group.</param>
+/// <remarks>
+/// Receipt issuance accepts only the requested URL as authoritative input. Client observations, plugin settings,
+/// provider settings, scores, evidence digests, issuer metadata, and signatures cannot influence the server-controlled
+/// evaluation boundary. A valid signature proves origin and integrity; it does not establish safety or reputation by itself.
+/// </remarks>
+static void MapHipProtocolApis(RouteGroupBuilder protocolApi)
+{
+    protocolApi.MapPost("/issue-receipt", async (
+        HipTrustReceiptIssueRequest request,
+        HttpContext httpContext,
+        IHipTrustReceiptAuthoritativeEvaluationService evaluationService,
+        IHipTrustReceiptIssuanceService issuanceService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var authoritativeEvaluation = await evaluationService.EvaluateAsync(request, cancellationToken);
+            var issueResult = await issuanceService.IssueAsync(authoritativeEvaluation, cancellationToken);
+            return ToHipTrustReceiptIssueApiResult(issueResult, httpContext.Response);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException or FluentValidation.ValidationException)
+        {
+            return Results.BadRequest(new ApiErrorResponse(
+                "HIP could not evaluate the supplied site safety request."));
+        }
+        catch (Exception)
+        {
+            return Results.Json(
+                new ApiErrorResponse("HIP site safety evaluation is unavailable."),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    })
+    .WithName("ApiServiceIssueHipTrustReceipt")
+    .WithSummary("Issues a signed HIP trust receipt from a server-authoritative site safety evaluation.")
+    .WithDescription("""
+Validates the target URL, ignores client observations, plugin metadata, and client-scoped provider settings, then
+runs HIP's Site Safety evaluator with server-controlled providers and rules and stores an immutable signed version-one
+trust receipt. Callers cannot supply evidence, scores, issuer metadata, signing keys, or signatures. Receipt signatures
+prove issuer origin and document integrity; the bounded evidence and scores carry the separate trust result.
+""")
+    .Accepts<HipTrustReceiptIssueRequest>("application/json")
+    .Produces<HipTrustReceipt>(StatusCodes.Status201Created, "application/json")
+    .Produces<HipTrustReceipt>(StatusCodes.Status200OK, "application/json")
+    .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+    .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
+    .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
+    .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(
+        HipTrustReceiptIssueRequest.MaximumRequestBodyBytes))
+    .AllowAnonymous()
+    .RequireCors(HipCorsPolicies.ClientWrite)
+    .RequireRateLimiting(PublicScanPolicy);
+
+    protocolApi.MapGet("/receipts/{receiptId}", async (
+        string receiptId,
+        IHipTrustReceiptRepository receiptRepository,
+        CancellationToken cancellationToken) =>
+    {
+        string validatedReceiptId;
+        try
+        {
+            validatedReceiptId = ValidateHipTrustReceiptId(receiptId);
+        }
+        catch (ArgumentException)
+        {
+            return Results.BadRequest(new ApiErrorResponse("The trust receipt identifier is invalid."));
+        }
+
+        try
+        {
+            var stored = await receiptRepository.GetByIdAsync(validatedReceiptId, cancellationToken);
+            return stored is null
+                ? Results.NotFound(new ApiErrorResponse("HIP trust receipt was not found."))
+                : Results.Text(
+                    stored.ReceiptJson,
+                    contentType: "application/json",
+                    contentEncoding: Encoding.UTF8,
+                    statusCode: StatusCodes.Status200OK);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return Results.Json(
+                new ApiErrorResponse("HIP trust receipt storage is unavailable."),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    })
+    .WithName("ApiServiceGetHipTrustReceipt")
+    .WithSummary("Returns one immutable signed HIP trust receipt.")
+    .WithDescription("Returns the exact stored version-one receipt JSON so signatures and canonical wire evidence remain unchanged.")
+    .Produces<HipTrustReceipt>(StatusCodes.Status200OK, "application/json")
+    .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+    .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
+    .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
+    .AllowAnonymous();
+
+    protocolApi.MapPost("/receipts/verify", async (
+        HttpRequest request,
+        IHipTrustReceiptVerificationService verificationService,
+        CancellationToken cancellationToken) =>
+    {
+        var requestBody = await ReadHipTrustReceiptRequestAsync(request, cancellationToken);
+        if (requestBody.IsTooLarge)
+        {
+            return Results.Json(
+                new ApiErrorResponse("HIP trust receipt request exceeds the maximum allowed size."),
+                statusCode: StatusCodes.Status413PayloadTooLarge);
+        }
+
+        HipTrustReceiptVerificationResult verification;
+        try
+        {
+            verification = await verificationService.VerifyAsync(requestBody.Utf8Receipt, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            verification = new HipTrustReceiptVerificationResult(
+                HipTrustReceiptVerificationStatus.VerificationStateUnavailable);
+        }
+
+        return Results.Json(
+            HipTrustReceiptVerificationApiResponse.FromResult(verification),
+            statusCode: HipTrustReceiptVerificationHttpStatus(verification.Status));
+    })
+    .WithName("ApiServiceVerifyHipTrustReceipt")
+    .WithSummary("Verifies the signature and current issuer/key state of a HIP trust receipt.")
+    .WithDescription("""
+Strictly parses and verifies a version-one trust receipt without consuming replay state. A Verified result proves the
+named issuer signed the unchanged receipt with a valid key at issuance time; it does not independently prove safety or reputation.
+""")
+    .Accepts<HipTrustReceipt>("application/json")
+    .Produces<HipTrustReceiptVerificationApiResponse>(StatusCodes.Status200OK)
+    .Produces<HipTrustReceiptVerificationApiResponse>(StatusCodes.Status400BadRequest)
+    .Produces<HipTrustReceiptVerificationApiResponse>(StatusCodes.Status422UnprocessableEntity)
+    .Produces<HipTrustReceiptVerificationApiResponse>(StatusCodes.Status503ServiceUnavailable)
+    .Produces<ApiErrorResponse>(StatusCodes.Status413PayloadTooLarge)
+    .AllowAnonymous()
     .RequireCors(HipCorsPolicies.ClientWrite)
     .RequireRateLimiting(PublicScanPolicy);
 }
+
+/// <summary>
+/// Converts a typed receipt-issuance outcome to a stable HTTP response without reserializing successful receipts
+/// through the host's general-purpose JSON settings.
+/// </summary>
+/// <param name="issueResult">Application-layer issuance outcome.</param>
+/// <param name="response">Current response used to add the created-resource location.</param>
+/// <returns>Exact receipt JSON on success, or a safe typed error response.</returns>
+static IResult ToHipTrustReceiptIssueApiResult(
+    HipTrustReceiptIssueResult issueResult,
+    HttpResponse response)
+{
+    if (issueResult.Status is HipTrustReceiptIssueStatus.Issued or HipTrustReceiptIssueStatus.Existing)
+    {
+        if (issueResult.Receipt is null)
+        {
+            return Results.Json(
+                new ApiErrorResponse("HIP trust receipt issuance is unavailable."),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        string receiptJson;
+        try
+        {
+            receiptJson = HipTrustReceiptJson.Serialize(issueResult.Receipt);
+        }
+        catch (Exception exception) when (exception is ArgumentException or System.Text.Json.JsonException)
+        {
+            return Results.Json(
+                new ApiErrorResponse("HIP trust receipt issuance is unavailable."),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        var statusCode = issueResult.Status == HipTrustReceiptIssueStatus.Issued
+            ? StatusCodes.Status201Created
+            : StatusCodes.Status200OK;
+        if (statusCode == StatusCodes.Status201Created)
+        {
+            response.Headers.Location =
+                $"/api/v1/protocol/receipts/{Uri.EscapeDataString(issueResult.Receipt.ReceiptId)}";
+        }
+
+        return Results.Text(
+            receiptJson,
+            contentType: "application/json",
+            contentEncoding: Encoding.UTF8,
+            statusCode: statusCode);
+    }
+
+    return issueResult.Status switch
+    {
+        HipTrustReceiptIssueStatus.InvalidEvaluation => Results.BadRequest(
+            new ApiErrorResponse("HIP could not issue a receipt from the authoritative site safety evaluation.")),
+        HipTrustReceiptIssueStatus.Conflict => Results.Conflict(
+            new ApiErrorResponse("A different trust receipt already exists for this authoritative evaluation.")),
+        HipTrustReceiptIssueStatus.SignerUnavailable or
+        HipTrustReceiptIssueStatus.SignerNotAuthorized => Results.Json(
+            new ApiErrorResponse("HIP trust receipt signing is unavailable."),
+            statusCode: StatusCodes.Status503ServiceUnavailable),
+        HipTrustReceiptIssueStatus.VerificationFailed => Results.Json(
+            new ApiErrorResponse("HIP could not verify the newly signed trust receipt."),
+            statusCode: StatusCodes.Status503ServiceUnavailable),
+        HipTrustReceiptIssueStatus.PersistenceUnavailable => Results.Json(
+            new ApiErrorResponse("HIP trust receipt storage is unavailable."),
+            statusCode: StatusCodes.Status503ServiceUnavailable),
+        _ => Results.Json(
+            new ApiErrorResponse("HIP trust receipt issuance is unavailable."),
+            statusCode: StatusCodes.Status503ServiceUnavailable)
+    };
+}
+
+/// <summary>
+/// Reads at most one bounded receipt document so chunked requests cannot force unbounded buffering before verification.
+/// </summary>
+/// <param name="request">HTTP request containing raw receipt JSON.</param>
+/// <param name="cancellationToken">Token used to cancel request-body reads.</param>
+/// <returns>The exact submitted bytes or an oversized marker.</returns>
+static async Task<HipTrustReceiptRequestBody> ReadHipTrustReceiptRequestAsync(
+    HttpRequest request,
+    CancellationToken cancellationToken)
+{
+    if (request.ContentLength > HipTrustReceiptJson.MaximumReceiptBytes)
+    {
+        return new HipTrustReceiptRequestBody(ReadOnlyMemory<byte>.Empty, IsTooLarge: true);
+    }
+
+    var buffer = new byte[HipTrustReceiptJson.MaximumReceiptBytes + 1];
+    var bytesRead = 0;
+    while (bytesRead < buffer.Length)
+    {
+        var read = await request.Body.ReadAsync(buffer.AsMemory(bytesRead), cancellationToken);
+        if (read == 0)
+        {
+            break;
+        }
+
+        bytesRead += read;
+    }
+
+    return bytesRead > HipTrustReceiptJson.MaximumReceiptBytes
+        ? new HipTrustReceiptRequestBody(ReadOnlyMemory<byte>.Empty, IsTooLarge: true)
+        : new HipTrustReceiptRequestBody(buffer.AsMemory(0, bytesRead).ToArray(), IsTooLarge: false);
+}
+
+/// <summary>
+/// Validates an untrusted receipt path segment before it reaches persistence.
+/// </summary>
+/// <param name="receiptId">Receipt identifier supplied in the route.</param>
+/// <returns>The validated identifier.</returns>
+static string ValidateHipTrustReceiptId(string? receiptId)
+{
+    if (string.IsNullOrWhiteSpace(receiptId) ||
+        receiptId.Length > HipTrustReceipt.MaximumReceiptIdLength ||
+        !receiptId.All(character =>
+            character is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '-' or '_' or '.' or ':'))
+    {
+        throw new ArgumentException("The trust receipt identifier is invalid.", nameof(receiptId));
+    }
+
+    return receiptId;
+}
+
+/// <summary>
+/// Maps verification outcomes to HTTP semantics without treating document verification as request authentication.
+/// </summary>
+/// <param name="status">Typed trust receipt verification outcome.</param>
+/// <returns>HTTP status representing success, invalid input/evidence, or unavailable verification state.</returns>
+static int HipTrustReceiptVerificationHttpStatus(HipTrustReceiptVerificationStatus status) => status switch
+{
+    HipTrustReceiptVerificationStatus.Verified => StatusCodes.Status200OK,
+    HipTrustReceiptVerificationStatus.MalformedReceipt or
+    HipTrustReceiptVerificationStatus.UnsupportedVersion or
+    HipTrustReceiptVerificationStatus.WrongDocumentType => StatusCodes.Status400BadRequest,
+    HipTrustReceiptVerificationStatus.Expired or
+    HipTrustReceiptVerificationStatus.TimestampOutsideTolerance or
+    HipTrustReceiptVerificationStatus.ValidityWindowExceeded or
+    HipTrustReceiptVerificationStatus.IssuerNotAuthorized or
+    HipTrustReceiptVerificationStatus.IssuerNotFound or
+    HipTrustReceiptVerificationStatus.IssuerNotVerified or
+    HipTrustReceiptVerificationStatus.IssuerSuspended or
+    HipTrustReceiptVerificationStatus.IssuerRevoked or
+    HipTrustReceiptVerificationStatus.IssuerBindingMismatch or
+    HipTrustReceiptVerificationStatus.KeyNotFound or
+    HipTrustReceiptVerificationStatus.KeyNotValidAtIssuedTime or
+    HipTrustReceiptVerificationStatus.KeyRevoked or
+    HipTrustReceiptVerificationStatus.SignatureMetadataMismatch or
+    HipTrustReceiptVerificationStatus.InvalidSignature => StatusCodes.Status422UnprocessableEntity,
+    _ => StatusCodes.Status503ServiceUnavailable
+};
 
 /// <summary>
 /// Applies browser-instance provider preferences without accepting endpoints, API keys, or full-URL permission.
@@ -841,7 +1357,37 @@ static SiteSafetyScanApiResponse ToSiteSafetyScanResponse(SiteSafetyScanResult r
         result.ContentRiskScore,
         result.FinalHipScore,
         ToSiteSafetyProviderEvidenceResponses(result.ProviderEvidence),
-        result.ScoreImpact);
+        result.ScoreImpact,
+        ToHipScoringResponse(result.Scoring));
+
+/// <summary>Projects the typed formal score without exposing implementation-only stage objects.</summary>
+static HipScoringApiResponse? ToHipScoringResponse(HipScoringResult? result) => result is null
+    ? null
+    : new HipScoringApiResponse(
+        result.ModelVersion,
+        result.DomainTrustScore,
+        result.PageTrustScore,
+        result.ContentRiskScore,
+        result.FinalHipScore,
+        result.FinalStatus.ToString(),
+        result.PresentationStatus.ToString(),
+        result.Confidence.ToString(),
+        result.EvidenceFreshness.ToString(),
+        result.TrustAssertionDisposition.ToString(),
+        result.CanAssertPositiveTrust,
+        result.FinalScoreHigherMeansMoreTrust,
+        result.ContentRiskScoreHigherMeansMoreRisk,
+        result.Reasons,
+        result.Warnings,
+        result.ReasonEntries.Select(entry => new HipScoringReasonApiResponse(
+            entry.Code,
+            entry.Explanation,
+            entry.WarningCode,
+            entry.Warning,
+            new HipScoreImpactApiResponse(entry.Impact.Kind.ToString(), entry.Impact.Value),
+            entry.EvidenceSourceCode,
+            entry.EvidenceObservedAtUtc,
+            entry.PrivacyClassification.ToString())).ToArray());
 
 /// <summary>
 /// Converts normalized provider evidence to public-safe API DTOs.
@@ -866,6 +1412,10 @@ static IReadOnlyList<SiteSafetyProviderEvidenceApiResponse> ToSiteSafetyProvider
             evidence.Errors,
             evidence.IsAuthoritativeForRisk,
             evidence.IsAuthoritativeForTrust,
+            evidence.ResultStatus.ToString(),
+            evidence.LatencyMilliseconds,
+            evidence.Freshness.ToString(),
+            evidence.PrivacyClassification.ToString(),
             evidence.EvidenceItems.Select(item => new SiteSafetyProviderEvidenceItemApiResponse(
                 item.Category,
                 item.Value,
@@ -873,6 +1423,19 @@ static IReadOnlyList<SiteSafetyProviderEvidenceApiResponse> ToSiteSafetyProvider
                 item.RiskImpact,
                 item.TrustImpact,
                 item.Summary)).ToArray())).ToArray();
+
+/// <summary>Projects a durable provider job without owner, settings, lease, hash, or observed-signal data.</summary>
+static ExternalSiteEvidenceJobApiResponse ToExternalSiteEvidenceJobApiResponse(ExternalSiteEvidenceJob job) => new(
+    job.JobId,
+    job.Domain,
+    job.Status.ToString(),
+    job.AttemptCount,
+    job.RequestedAtUtc,
+    job.UpdatedAtUtc,
+    job.NextAttemptAtUtc,
+    job.CompletedAtUtc,
+    job.LastError,
+    ToSiteSafetyProviderEvidenceResponses(job.ProviderEvidence));
 
 /// <summary>
 /// Provides detailed Swagger text for explicitly requested external evidence checks.
@@ -887,6 +1450,9 @@ static string GetExternalSiteEvidenceCheckDescription() => """
     - You need normalized external provider results without changing the live score directly.
 
     Important behavior:
+    - Callers may use the existing privileged administrator policy or a HIP-Service credential with the exact
+      site-safety:external-evidence:check scope and an exact normalized domain grant.
+    - Domain grants do not imply parent domains, child domains, or wildcard access.
     - This endpoint returns evidence only. HIP scoring still decides final trust and risk labels.
     - Provider failures return safe evidence errors instead of crashing the API.
     - Clean provider results do not automatically make an unknown domain trusted.
@@ -1151,10 +1717,10 @@ static string GetSiteSafetyScanDescription() => """
     Expected flow:
     1. Browser plugin observes the current page locally.
     2. Plugin sends only privacy-safe signals to HIP.
-    3. HIP checks cached/history data and evidence providers.
-    4. Built-in and admin-managed rules evaluate the signals.
-    5. HIP calculates malware, phishing, redirect, script, download, form, reputation, domain trust, page trust, content risk, and final HIP score.
-    6. HIP stores a safe scan result and creates admin review signals when needed.
+    3. HIP evaluates configured evidence providers and built-in/admin-managed rules.
+    4. HIP calculates malware, phishing, redirect, script, download, form, reputation, domain trust, page trust, content risk, and final HIP score.
+    5. HIP returns the immediate result to the requesting client.
+    6. HIP stores the summary as untrusted client telemetry. It does not publish anonymous observations to authoritative lookup, dashboard, admin-review, sandbox, or outbox workflows.
 
     Request may include:
     - Current URL and normalized domain.
@@ -1214,6 +1780,7 @@ static string GetSiteSafetyScanDescription() => """
 /// <param name="FinalHipScore">Final user-facing HIP score.</param>
 /// <param name="ProviderEvidence">Normalized provider evidence used by the scan.</param>
 /// <param name="ScoreImpact">Rule and evidence score impact details.</param>
+/// <param name="Scoring">Versioned direction-explicit formal HIP score.</param>
 sealed record SiteSafetyScanApiResponse(
     string ScanId,
     string Url,
@@ -1239,7 +1806,43 @@ sealed record SiteSafetyScanApiResponse(
     int ContentRiskScore,
     int FinalHipScore,
     IReadOnlyList<SiteSafetyProviderEvidenceApiResponse> ProviderEvidence,
-    object? ScoreImpact);
+    object? ScoreImpact,
+    HipScoringApiResponse? Scoring);
+
+/// <summary>Public-safe projection of the formal HIP-0301 score pipeline.</summary>
+sealed record HipScoringApiResponse(
+    string ModelVersion,
+    int DomainTrustScore,
+    int? PageTrustScore,
+    int ContentRiskScore,
+    int FinalHipScore,
+    string FinalStatus,
+    string PresentationStatus,
+    string Confidence,
+    string EvidenceFreshness,
+    string TrustAssertionDisposition,
+    bool CanAssertPositiveTrust,
+    bool FinalScoreHigherMeansMoreTrust,
+    bool ContentRiskScoreHigherMeansMoreRisk,
+    IReadOnlyCollection<string> Reasons,
+    IReadOnlyCollection<string> Warnings,
+    IReadOnlyCollection<HipScoringReasonApiResponse> ReasonEntries);
+
+/// <summary>Public-safe stable code, explanation, warning, impact, and evidence metadata for one scoring reason.</summary>
+sealed record HipScoringReasonApiResponse(
+    string Code,
+    string Explanation,
+    string? WarningCode,
+    string? Warning,
+    HipScoreImpactApiResponse Impact,
+    string EvidenceSourceCode,
+    DateTimeOffset? EvidenceObservedAtUtc,
+    string PrivacyClassification);
+
+/// <summary>Public-safe typed score impact associated with a stable scoring reason.</summary>
+sealed record HipScoreImpactApiResponse(
+    string Kind,
+    int? Value);
 
 /// <summary>
 /// Response returned when HIP explicitly checks external site safety evidence providers.
@@ -1257,6 +1860,19 @@ sealed record ExternalSiteEvidenceCheckResponse(
     DateTimeOffset CheckedAtUtc,
     IReadOnlyList<SiteSafetyProviderEvidenceApiResponse> ProviderEvidence);
 
+/// <summary>Owner-scoped status and normalized result projection for one durable provider job.</summary>
+sealed record ExternalSiteEvidenceJobApiResponse(
+    string JobId,
+    string Domain,
+    string Status,
+    int AttemptCount,
+    DateTimeOffset RequestedAtUtc,
+    DateTimeOffset UpdatedAtUtc,
+    DateTimeOffset? NextAttemptAtUtc,
+    DateTimeOffset? CompletedAtUtc,
+    string? LastError,
+    IReadOnlyList<SiteSafetyProviderEvidenceApiResponse> ProviderEvidence);
+
 /// <summary>
 /// Detailed Swagger response for one normalized evidence provider result.
 /// </summary>
@@ -1271,6 +1887,10 @@ sealed record ExternalSiteEvidenceCheckResponse(
 /// <param name="Errors">Safe provider errors or timeout notes.</param>
 /// <param name="IsAuthoritativeForRisk">Whether this provider can force high-risk outcomes for known-bad evidence.</param>
 /// <param name="IsAuthoritativeForTrust">Whether this provider can contribute positive trust evidence.</param>
+/// <param name="ResultStatus">Normalized provider completion status.</param>
+/// <param name="LatencyMilliseconds">Bounded provider collection latency in milliseconds.</param>
+/// <param name="Freshness">Normalized fresh, stale, or expired classification.</param>
+/// <param name="PrivacyClassification">Most sensitive privacy-safe metadata class retained by the result.</param>
 /// <param name="EvidenceItems">Normalized evidence items returned by the provider.</param>
 sealed record SiteSafetyProviderEvidenceApiResponse(
     string ProviderName,
@@ -1284,6 +1904,10 @@ sealed record SiteSafetyProviderEvidenceApiResponse(
     IReadOnlyCollection<string> Errors,
     bool IsAuthoritativeForRisk,
     bool IsAuthoritativeForTrust,
+    string ResultStatus,
+    long LatencyMilliseconds,
+    string Freshness,
+    string PrivacyClassification,
     IReadOnlyList<SiteSafetyProviderEvidenceItemApiResponse> EvidenceItems);
 
 /// <summary>
@@ -1414,6 +2038,44 @@ sealed record DomainVerificationCheckApiResponse(
     /// <returns>Public-safe API response.</returns>
     public static DomainVerificationCheckApiResponse FromResult(DomainVerificationCheckResult result) =>
         new(result.Domain, result.RecordName, result.Status.ToString(), result.CheckedAtUtc, result.Message);
+}
+
+/// <summary>
+/// Bounded raw request body supplied to strict trust receipt verification.
+/// </summary>
+/// <param name="Utf8Receipt">Exact submitted UTF-8 bytes when the body is within the protocol limit.</param>
+/// <param name="IsTooLarge">Whether the body exceeded the protocol's maximum receipt size.</param>
+readonly record struct HipTrustReceiptRequestBody(
+    ReadOnlyMemory<byte> Utf8Receipt,
+    bool IsTooLarge);
+
+/// <summary>
+/// Public-safe verification result for a signed HIP trust receipt.
+/// </summary>
+/// <param name="Status">Typed verification status.</param>
+/// <param name="IsVerified">Whether origin and integrity verification succeeded.</param>
+/// <param name="EstablishesSafetyOrReputationBySignatureAlone">Always false because a signature does not itself prove safety.</param>
+/// <param name="VerifiedIssuerId">Verified issuer identifier on success.</param>
+/// <param name="VerifiedKeyId">Verified signing key identifier on success.</param>
+sealed record HipTrustReceiptVerificationApiResponse(
+    string Status,
+    bool IsVerified,
+    bool EstablishesSafetyOrReputationBySignatureAlone,
+    string? VerifiedIssuerId,
+    string? VerifiedKeyId)
+{
+    /// <summary>
+    /// Converts the application result without exposing receipt contents or internal verification details.
+    /// </summary>
+    /// <param name="result">Application-layer verification result.</param>
+    /// <returns>Stable API response.</returns>
+    public static HipTrustReceiptVerificationApiResponse FromResult(
+        HipTrustReceiptVerificationResult result) => new(
+        result.Status.ToString(),
+        result.IsVerified,
+        result.EstablishesSafetyOrReputationBySignatureAlone,
+        result.VerifiedIssuerId,
+        result.VerifiedKeyId);
 }
 
 /// <summary>

@@ -25,10 +25,10 @@ public sealed class LicenseApiTests
     }
 
     /// <summary>
-    /// Confirms support users can create setup codes through the protected API.
+    /// Confirms support users cannot create setup codes reserved for administrators.
     /// </summary>
     [Test]
-    public async Task Support_can_create_setup_code()
+    public async Task Support_cannot_create_setup_code()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
@@ -41,9 +41,7 @@ public sealed class LicenseApiTests
             initialScanMode = "Normal"
         });
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var payload = await response.Content.ReadFromJsonAsync<CreateSetupCodeApiResponse>();
-        Assert.That(payload?.SetupCode, Does.StartWith("HIP-"));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
     }
 
     /// <summary>
@@ -53,17 +51,21 @@ public sealed class LicenseApiTests
     public async Task License_list_masks_setup_codes()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
-        using var client = factory.CreateClient();
-        AddRole(client, "Support");
+        using var adminClient = factory.CreateClient();
+        AddRole(adminClient, "Admin");
+        using var supportClient = factory.CreateClient();
+        AddRole(supportClient, "Support");
 
-        var created = await (await client.PostAsJsonAsync("/api/v1/licenses/setup-codes", new
+        using var creationResponse = await adminClient.PostAsJsonAsync("/api/v1/licenses/setup-codes", new
         {
             allowedDeviceCount = 1,
-            createdBy = "support-test",
+            createdBy = "admin-test",
             initialScanMode = "Normal"
-        })).Content.ReadFromJsonAsync<CreateSetupCodeApiResponse>();
+        });
+        creationResponse.EnsureSuccessStatusCode();
+        var created = await creationResponse.Content.ReadFromJsonAsync<CreateSetupCodeApiResponse>();
 
-        var list = await client.GetFromJsonAsync<LicenseSummaryApiResponse[]>("/api/v1/licenses/");
+        var list = await supportClient.GetFromJsonAsync<LicenseSummaryApiResponse[]>("/api/v1/licenses/");
         var listed = list!.Single(license => license.LicenseId == created!.LicenseId);
 
         Assert.That(listed.MaskedSetupCode, Is.Not.EqualTo(created!.SetupCode));

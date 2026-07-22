@@ -170,6 +170,7 @@ namespace HIP.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(220)");
 
                     b.Property<long>("AggregateVersion")
+                        .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasDefaultValue(0L);

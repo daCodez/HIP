@@ -1,6 +1,8 @@
 @page "/consumer"
 @attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
 @rendermode InteractiveServer
+@inject IConsumerPortalService ConsumerPortalService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>HIP Consumer Portal</PageTitle>
 
@@ -9,30 +11,41 @@
         <div>
             <p class="eyebrow">HIP Consumer</p>
             <h1>Consumer Portal</h1>
-            <p>Optional control center for protection status, scan history, reports, appeals, settings, and devices.</p>
+            <p>Your owner-isolated protection, history, reports, alerts, devices, licenses, and account security.</p>
         </div>
     </section>
 
-    <section class="dashboard-grid">
-        <article class="score-card">
-            <span>Protection</span>
-            <strong>Active</strong>
-            <h3>Status</h3>
-            <p>HIP protection is available through connected clients.</p>
-        </article>
-        <article class="score-card">
-            <span>License</span>
-            <strong>Dev</strong>
-            <h3>Device Status</h3>
-            <p>Second Life HUD can still work without web login.</p>
-        </article>
-        <article class="score-card">
-            <span>Future</span>
-            <strong>Later</strong>
-            <h3>Trusted Identities</h3>
-            <p>Trusted identity controls will be added after identity accounts are mature.</p>
-        </article>
-    </section>
+    @if (_accessError is not null)
+    {
+        <p class="admin-error" role="alert">@_accessError</p>
+    }
+    else if (_status is null)
+    {
+        <p class="admin-message" role="status">Loading your HIP protection state…</p>
+    }
+    else
+    {
+        <section class="dashboard-grid">
+            <article class="score-card">
+                <span>Protection</span>
+                <strong>@_status.ProtectionStatus</strong>
+                <h3>Current status</h3>
+                <p>@_status.Message</p>
+            </article>
+            <article class="score-card">
+                <span>Devices</span>
+                <strong>@_status.DeviceStatus</strong>
+                <h3>Proof-of-possession clients</h3>
+                <p>Only devices registered to this authenticated consumer are shown.</p>
+            </article>
+            <article class="score-card">
+                <span>Licenses</span>
+                <strong>@_status.LicenseStatus</strong>
+                <h3>Account-linked licenses</h3>
+                <p>HUD licenses remain separate until explicitly linked to this web account.</p>
+            </article>
+        </section>
+    }
 
     <section class="lookup-result">
         <h2>Portal Sections</h2>
@@ -40,9 +53,31 @@
             <a href="/consumer/scans">Scan History</a>
             <a href="/consumer/reports">Report History</a>
             <a href="/consumer/appeals">Appeals</a>
-            <a href="/consumer/settings">Alert Settings</a>
+            <a href="/consumer/alerts">Alert Settings</a>
             <a href="/consumer/devices">Devices</a>
+            <a href="/consumer/licenses">Licenses</a>
+            <a href="/consumer/security">Account Security</a>
             <a href="/lookup">Public Lookup</a>
         </div>
     </section>
 </main>
+
+@code {
+    private ConsumerStatus? _status;
+    private string? _accessError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var access = await HipConsumerPageAccess.ExecuteAsync(
+            authenticationState.User,
+            consumerId => ConsumerPortalService.GetStatusAsync(consumerId, CancellationToken.None));
+        if (!access.Succeeded || access.Value is null)
+        {
+            _accessError = HipConsumerPageAccess.AccessUnavailableMessage;
+            return;
+        }
+
+        _status = access.Value;
+    }
+}

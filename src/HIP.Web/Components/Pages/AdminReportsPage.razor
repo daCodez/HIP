@@ -1,5 +1,5 @@
 @page "/admin/reports"
-@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@attribute [Authorize(Policy = AdminPolicies.CanViewReviews)]
 @rendermode InteractiveServer
 @inject IAdminDashboardService DashboardService
 
@@ -50,7 +50,7 @@ else
 
         <article class="hip-panel padded">
             <h2>Live Signal Sources</h2>
-            <p>Missing integrations show as zero instead of fake activity.</p>
+            <p>Empty connected sources show zero; unavailable or unconnected sources show —.</p>
             <div class="hip-risk-bars">
                 <label>Feedback <strong>@CardValue("feedbackReceived")</strong><span><i style="@BarStyle("feedbackReceived")"></i></span></label>
                 <label>Open Reviews <strong>@CardValue("openReviewItems")</strong><span><i style="@BarStyle("openReviewItems")"></i></span></label>
@@ -101,9 +101,14 @@ else
     /// Gets a dashboard card value by key.
     /// </summary>
     /// <param name="key">Dashboard card key.</param>
-    /// <returns>Card value or zero when missing.</returns>
-    private int CardValue(string key) =>
-        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
+    /// <returns>Card value, or an unavailable marker when the source did not answer.</returns>
+    private string CardValue(string key)
+    {
+        var card = Card(key);
+        return card is null || card.IsPlaceholder
+            ? "—"
+            : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     /// <summary>
     /// Creates a bounded bar width from a live dashboard card value.
@@ -112,10 +117,20 @@ else
     /// <returns>Inline CSS custom property.</returns>
     private string BarStyle(string key)
     {
-        var total = Math.Max(1, CardValue("totalScans"));
-        var percent = Math.Clamp((int)Math.Round(CardValue(key) * 100m / total), 0, 100);
+        var card = Card(key);
+        var totalCard = Card("totalScans");
+        if (card is null || card.IsPlaceholder || totalCard is null || totalCard.IsPlaceholder)
+        {
+            return "--value:0%";
+        }
+
+        var total = Math.Max(1, totalCard.Value);
+        var percent = Math.Clamp((int)Math.Round(card.Value * 100m / total), 0, 100);
         return $"--value:{percent}%";
     }
+
+    private AdminDashboardCard? Card(string key) =>
+        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Maps live severity labels to HIP visual tones.

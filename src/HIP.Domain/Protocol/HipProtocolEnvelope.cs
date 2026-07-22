@@ -4,9 +4,15 @@ namespace HIP.Domain.Protocol;
 
 public sealed record HipProtocolEnvelope
 {
+    public const int MaximumMessageIdLength = 128;
+    public const int MinimumNonceBytes = 16;
+    public const int MaximumNonceBytes = 64;
+
     [JsonConstructor]
     public HipProtocolEnvelope(
         HipProtocolVersion version,
+        string messageId,
+        string nonce,
         HipProtocolIssuer issuer,
         HipProtocolSubject subject,
         HipContentDigest contentDigest,
@@ -21,6 +27,15 @@ public sealed record HipProtocolEnvelope
         }
 
         Version = version;
+        MessageId = HipProtocolValidation.RequiredToken(
+            messageId,
+            nameof(messageId),
+            MaximumMessageIdLength);
+        Nonce = HipProtocolValidation.RequiredCanonicalBase64Url(
+            nonce,
+            nameof(nonce),
+            MinimumNonceBytes,
+            MaximumNonceBytes);
         Issuer = issuer ?? throw new ArgumentNullException(nameof(issuer));
         Subject = subject ?? throw new ArgumentNullException(nameof(subject));
         ContentDigest = contentDigest ?? throw new ArgumentNullException(nameof(contentDigest));
@@ -39,31 +54,39 @@ public sealed record HipProtocolEnvelope
     [JsonPropertyOrder(0)]
     public HipProtocolVersion Version { get; }
 
-    [JsonPropertyName("issuer")]
+    [JsonPropertyName("messageId")]
     [JsonPropertyOrder(1)]
+    public string MessageId { get; }
+
+    [JsonPropertyName("nonce")]
+    [JsonPropertyOrder(2)]
+    public string Nonce { get; }
+
+    [JsonPropertyName("issuer")]
+    [JsonPropertyOrder(3)]
     public HipProtocolIssuer Issuer { get; }
 
     [JsonPropertyName("subject")]
-    [JsonPropertyOrder(2)]
+    [JsonPropertyOrder(4)]
     public HipProtocolSubject Subject { get; }
 
     [JsonPropertyName("contentDigest")]
-    [JsonPropertyOrder(3)]
+    [JsonPropertyOrder(5)]
     public HipContentDigest ContentDigest { get; }
 
     [JsonPropertyName("claims")]
-    [JsonPropertyOrder(4)]
+    [JsonPropertyOrder(6)]
     public HipProtocolClaims Claims { get; }
 
     [JsonPropertyName("signature")]
-    [JsonPropertyOrder(5)]
+    [JsonPropertyOrder(7)]
     public HipProtocolSignature Signature { get; }
 
     [JsonPropertyName("issuedAtUtc")]
-    [JsonPropertyOrder(6)]
+    [JsonPropertyOrder(8)]
     public DateTimeOffset IssuedAtUtc { get; }
 
     [JsonPropertyName("expiresAtUtc")]
-    [JsonPropertyOrder(7)]
+    [JsonPropertyOrder(9)]
     public DateTimeOffset ExpiresAtUtc { get; }
 }

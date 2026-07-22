@@ -1,3 +1,5 @@
+import "./formalScoring.js";
+
 export const SCORE_BANDS = Object.freeze([
   { min: 85, max: 100, status: "Trusted", label: "Trusted" },
   { min: 70, max: 84, status: "MostlyTrusted", label: "Mostly Trusted" },
@@ -89,6 +91,9 @@ export function statusLabel(status) {
     HighRisk: "High Risk",
     Dangerous: "Dangerous",
     Critical: "Critical",
+    Clean: "Clean",
+    LimitedData: "Limited Data",
+    ScanFailed: "Scan Failed",
     Unknown: "Unknown"
   }[status] || "Unknown";
 }
@@ -107,6 +112,9 @@ export function statusClass(status) {
     HighRisk: "high-risk",
     Dangerous: "dangerous",
     Critical: "critical",
+    Clean: "clean",
+    LimitedData: "unknown",
+    ScanFailed: "unknown",
     Unknown: "unknown"
   }[status] || "unknown";
 }
@@ -242,16 +250,35 @@ export function loadingSummaryViewModel(stage = "Checking") {
  * Only score summaries, confidence, and warnings are displayed; raw page content is intentionally excluded.
  */
 export function buildSiteSafetyViewModel(result = {}) {
-  const status = result?.status || "Unknown";
-  const warnings = warningsFor(result);
+  const scoring = formalScoringProjection(result);
+  const status = scoring?.presentationStatus || result?.status || "Unknown";
+  const warnings = uniqueDisplayText([
+    ...warningsFor(result),
+    ...(scoring?.warnings || [])
+  ]);
+  const scoringReasons = uniqueDisplayText(scoring?.reasons || []);
   return {
     status,
     statusLabel: statusLabel(status),
     statusDescription: statusDescription(status),
-    confidenceLevelText: result?.confidenceLevel || "Unknown",
+    confidenceLevelText: scoring?.confidence || result?.confidenceLevel || "Unknown",
     summary: safeDisplayText(result?.summary || "HIP has limited site safety data for this page."),
     warnings,
     hasWarnings: warnings.length > 0,
+    hasScoringProjection: scoring !== null,
+    scoringModelVersionText: scoring?.isFormal
+      ? scoring.modelVersion
+      : scoring
+        ? "Legacy compatibility projection"
+        : "Unavailable",
+    presentationStatusText: statusLabel(scoring?.presentationStatus || status),
+    finalHipScoreText: scoreText(scoring?.finalHipScore),
+    domainTrustScoreText: scoreText(scoring?.domainTrustScore),
+    pageTrustScoreText: scoreText(scoring?.pageTrustScore),
+    contentRiskScoreText: riskScoreText(scoring?.contentRiskScore),
+    evidenceFreshnessText: scoring?.evidenceFreshness || "Unknown",
+    trustAssertionText: trustAssertionText(scoring),
+    scoringReasons,
     malwareRiskText: riskLabel(result?.malwareRiskScore),
     phishingRiskText: riskLabel(result?.phishingRiskScore),
     redirectRiskText: riskLabel(result?.redirectRiskScore),
@@ -259,6 +286,13 @@ export function buildSiteSafetyViewModel(result = {}) {
     scriptRiskText: riskLabel(result?.scriptRiskScore),
     externalEvidence: externalEvidenceFor(result)
   };
+}
+
+/**
+ * Returns the validated formal score, or the explicit legacy compatibility projection.
+ */
+export function formalScoringProjection(result = {}) {
+  return globalThis.HipFormalScoring?.projectSiteSafetyScores(result) || null;
 }
 
 /**
@@ -361,7 +395,11 @@ function statusLabelForProvider(status) {
  * Returns useful warning text from Site Safety output while avoiding raw private content.
  */
 export function warningsFor(siteSafety = {}) {
-  const warnings = Array.isArray(siteSafety?.warnings) ? siteSafety.warnings : [];
+  const warnings = Array.isArray(siteSafety?.warnings)
+    ? siteSafety.warnings
+    : Array.isArray(siteSafety?.Warnings)
+      ? siteSafety.Warnings
+      : [];
   return warnings.slice(0, 5).map(safeDisplayText).filter(Boolean);
 }
 
@@ -425,6 +463,41 @@ function formatDate(value) {
  */
 function scoreText(score) {
   return score !== null && score !== undefined && Number.isFinite(Number(score)) ? `${score}/100` : "--/100";
+}
+
+/**
+ * Formats a direction-explicit content risk score so users do not confuse it with trust.
+ */
+function riskScoreText(score) {
+  return score !== null && score !== undefined && Number.isFinite(Number(score))
+    ? `${score}/100 risk`
+    : "--/100 risk";
+}
+
+/**
+ * Explains whether formal evidence permits a positive trust assertion.
+ */
+function trustAssertionText(scoring) {
+  if (!scoring?.isFormal) {
+    return "Not available";
+  }
+
+  if (scoring.canAssertPositiveTrust) {
+    return "Allowed";
+  }
+
+  return {
+    Allowed: "Not asserted",
+    WithheldInsufficientEvidence: "Withheld: insufficient evidence",
+    WithheldConflictingEvidence: "Withheld: conflicting evidence"
+  }[scoring.trustAssertionDisposition] || "Withheld";
+}
+
+/**
+ * Redacts, deduplicates, and bounds plain-language scoring explanations.
+ */
+function uniqueDisplayText(values) {
+  return [...new Set(values.map(safeDisplayText).filter(Boolean))].slice(0, 5);
 }
 
 /**

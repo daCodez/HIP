@@ -115,6 +115,44 @@ public sealed class SecondLifeHudLslMvpTests
     }
 
     /// <summary>
+    /// Confirms the marketplace demo is explicitly local-only and guards every network-producing operation.
+    /// </summary>
+    [Test]
+    public void Lsl_mvp_demo_mode_is_local_only()
+    {
+        var script = ReadHudScript();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(script, Does.Contain("integer HIP_DEMO_MODE = FALSE"));
+            Assert.That(script, Does.Contain("Demo (local-only)"));
+            Assert.That(script, Does.Contain("does not contact HIP or upload chat, URLs, identifiers, or reports"));
+            Assert.That(CountOccurrences(script, "if (HIP_DEMO_MODE)"), Is.GreaterThanOrEqualTo(6));
+            Assert.That(script, Does.Contain("WarnOwner(\"Medium\", gPendingRiskReason, \"PrivateWarning\", \"\")"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies buyer and merchant setup guidance covers safe setup-code handling and honest demo limitations.
+    /// </summary>
+    [Test]
+    public void Marketplace_setup_documents_safe_activation_and_demo_packaging()
+    {
+        var root = FindRepositoryRoot();
+        var setup = File.ReadAllText(Path.Combine(root, "clients", "second-life-hud", "docs", "setup.md"));
+        var marketplace = File.ReadAllText(Path.Combine(root, "clients", "second-life-hud", "docs", "marketplace-setup.md"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(setup, Does.Contain("one-time setup code"));
+            Assert.That(setup, Does.Contain("does not upload full chat or IM logs"));
+            Assert.That(marketplace, Does.Contain("HIP Shield Demo - Local Only"));
+            Assert.That(marketplace, Does.Contain("Do not ship development hostnames"));
+            Assert.That(marketplace, Does.Contain("Marketplace billing and entitlement verification remain external"));
+        });
+    }
+
+    /// <summary>
     /// Confirms the HUD documentation states the actual platform limits for local chat, group chat, and IM scanning.
     /// </summary>
     [Test]
@@ -139,6 +177,9 @@ public sealed class SecondLifeHudLslMvpTests
     {
         return File.ReadAllText(Path.Combine(FindRepositoryRoot(), "clients", "second-life-hud", "scripts", "HIP_HUD_MVP.lsl"));
     }
+
+    private static int CountOccurrences(string value, string search) =>
+        value.Split(search, StringSplitOptions.None).Length - 1;
 
     /// <summary>
     /// Finds the repository root from the test output directory without relying on a fixed machine path.

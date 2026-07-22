@@ -16,13 +16,16 @@ public sealed record SandboxWorkerOptions(
     int BatchSize = 5,
     int IdleDelayMilliseconds = 5000,
     bool ExecuteBrowserSandbox = false,
-    int MaxExecutionSeconds = 15)
+    int MaxExecutionSeconds = 15,
+    int LeaseSeconds = 30,
+    int MaxAttempts = 3,
+    int RetryDelaySeconds = 30)
 {
     /// <summary>
     /// Creates default options for .NET configuration binding, which requires a parameterless constructor.
     /// </summary>
     public SandboxWorkerOptions()
-        : this(true, 5, 5000, false, 15)
+        : this(true, 5, 5000, false, 15, 30, 3, 30)
     {
     }
 
@@ -39,7 +42,11 @@ public sealed record SandboxWorkerOptions(
     public static bool Validate(SandboxWorkerOptions options) =>
         options.BatchSize is >= 1 and <= 50
         && options.IdleDelayMilliseconds is >= 250 and <= 60000
-        && options.MaxExecutionSeconds is >= 1 and <= 120;
+        && options.MaxExecutionSeconds is >= 1 and <= 120
+        && options.LeaseSeconds >= options.MaxExecutionSeconds
+        && options.LeaseSeconds <= 600
+        && options.MaxAttempts is >= 1 and <= 10
+        && options.RetryDelaySeconds is >= 1 and <= 3600;
 }
 
 /// <summary>
@@ -91,14 +98,46 @@ public sealed class SandboxLinkScanWorker(
     {
         using var scope = scopeFactory.CreateScope();
         var queue = scope.ServiceProvider.GetRequiredService<ISandboxLinkScanQueue>();
-        var requests = await queue.DequeueBatchAsync(currentOptions.BatchSize, cancellationToken);
-
-        foreach (var request in requests)
+        var processed = 0;
+        var workerId = $"sandbox-worker:{Environment.MachineName}";
+        while (processed < currentOptions.BatchSize)
         {
+            var nowUtc = DateTimeOffset.UtcNow;
+            var request = await queue.TryClaimNextAsync(
+                workerId,
+                nowUtc,
+                TimeSpan.FromSeconds(currentOptions.LeaseSeconds),
+                currentOptions.MaxAttempts,
+                cancellationToken);
+            if (request is null)
+            {
+                break;
+            }
+
             LogSafeSandboxRequest(request, currentOptions);
+            if (!currentOptions.ExecuteBrowserSandbox)
+            {
+                await queue.TryCompleteAsync(request.RequestId, request.LeaseToken!, DateTimeOffset.UtcNow, cancellationToken);
+            }
+            else
+            {
+                var failedAtUtc = DateTimeOffset.UtcNow;
+                DateTimeOffset? retryAtUtc = request.AttemptCount < currentOptions.MaxAttempts
+                    ? failedAtUtc.AddSeconds(currentOptions.RetryDelaySeconds)
+                    : null;
+                await queue.TryFailAsync(
+                    request.RequestId,
+                    request.LeaseToken!,
+                    "Hardened browser sandbox runner is not configured.",
+                    failedAtUtc,
+                    retryAtUtc,
+                    cancellationToken);
+            }
+
+            processed++;
         }
 
-        return requests.Count;
+        return processed;
     }
 
     /// <summary>

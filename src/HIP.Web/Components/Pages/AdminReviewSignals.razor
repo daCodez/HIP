@@ -1,5 +1,5 @@
 @page "/admin/review-queue"
-@attribute [Authorize(Policy = AdminPolicies.CanReviewReports)]
+@attribute [Authorize(Policy = AdminPolicies.CanViewReviews)]
 @rendermode InteractiveServer
 @using HIP.Application.Review
 @inject IAdminReviewQueueService AdminReviewQueueService

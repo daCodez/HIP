@@ -1,6 +1,7 @@
 using HIP.Application;
 using HIP.Application.Identity;
 using HIP.Application.Protocol;
+using HIP.Application.Security;
 using HIP.Domain.Identity;
 using HIP.Domain.Protocol;
 using Microsoft.Extensions.DependencyInjection;
@@ -152,7 +153,7 @@ public sealed class HipSignatureProviderFactoryTests
     public void Application_registration_exposes_factory_and_development_provider_interfaces()
     {
         var services = new ServiceCollection();
-        services.AddHipApplication();
+        services.AddHipApplication(allowDevelopmentCryptoProvider: true);
         using var provider = services.BuildServiceProvider();
 
         var factory = provider.GetRequiredService<IHipSignatureProviderFactory>();
@@ -163,6 +164,39 @@ public sealed class HipSignatureProviderFactoryTests
         {
             Assert.That(factory, Is.TypeOf<HipSignatureProviderFactory>());
             Assert.That(signatureProvider, Is.SameAs(cryptoProvider));
+        });
+    }
+
+    [Test]
+    public void Production_application_registration_resolves_verifier_without_constructing_placeholder_crypto()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<ISigningKeyLifecycleRepository, InMemorySigningKeyLifecycleRepository>();
+        services.AddSingleton<IReplayMessageIdStore, InMemoryReplayMessageIdStore>();
+        services.AddSingleton<IReplayNonceStore, InMemoryReplayNonceStore>();
+        services.AddHipApplication(allowDevelopmentCryptoProvider: false);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var factory = provider.GetRequiredService<IHipSignatureProviderFactory>();
+        var policy = provider.GetRequiredService<SignatureProviderRuntimePolicy>();
+        var registeredAlgorithms = provider.GetServices<IHipSignatureProvider>()
+            .Select(item => item.Capabilities.Algorithm)
+            .ToArray();
+        var timeProvider = provider.GetRequiredService<TimeProvider>();
+        var verifier = scope.ServiceProvider.GetRequiredService<IHipEnvelopeVerificationService>();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(factory, Is.TypeOf<HipSignatureProviderFactory>());
+            Assert.That(policy.Environment, Is.EqualTo(SignatureProviderRuntimeEnvironment.Production));
+            Assert.That(registeredAlgorithms, Is.EqualTo(new[] { MlDsa65SignatureProvider.Algorithm }));
+            Assert.That(timeProvider, Is.SameAs(TimeProvider.System));
+            Assert.That(verifier, Is.TypeOf<HipEnvelopeVerificationService>());
+            Assert.Throws<InvalidOperationException>(() => factory.GetRequiredProvider(
+                DevelopmentHipCryptoProvider.Algorithm,
+                SignatureProviderOperations.Verify,
+                policy));
         });
     }
 

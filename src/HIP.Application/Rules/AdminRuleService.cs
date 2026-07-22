@@ -9,7 +9,10 @@ namespace HIP.Application.Rules;
 
 public interface IAdminRuleService
 {
-    Task<TrustRule> SaveAsync(TrustRule rule, CancellationToken cancellationToken);
+    /// <summary>
+    /// Saves a rule while binding protected workflow metadata to the authenticated administrator.
+    /// </summary>
+    Task<TrustRule> SaveAsync(TrustRule rule, string actorId, CancellationToken cancellationToken);
 
     Task<IReadOnlyCollection<TrustRule>> ListAsync(CancellationToken cancellationToken);
 
@@ -22,17 +25,36 @@ public sealed class AdminRuleService(
     IRuleSimulationService simulationService,
     IAuditLogService auditLogService) : IAdminRuleService
 {
-    public async Task<TrustRule> SaveAsync(TrustRule rule, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async Task<TrustRule> SaveAsync(
+        TrustRule rule,
+        string actorId,
+        CancellationToken cancellationToken)
     {
-        var validation = await validator.ValidateAsync(rule, cancellationToken);
+        ArgumentNullException.ThrowIfNull(rule);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorId);
+        var actor = actorId.Trim();
+        var current = string.IsNullOrWhiteSpace(rule.RuleId)
+            ? null
+            : await repository.GetByIdAsync(rule.RuleId, cancellationToken);
+        var requiresApproval = rule.RequiresApproval || RuleValidationConstants.IsHighImpact(rule);
+        var protectedRule = rule with
+        {
+            CreatedBy = current is null || string.IsNullOrWhiteSpace(current.CreatedBy) ? actor : current.CreatedBy,
+            RequiresApproval = requiresApproval,
+            ApprovalStatus = requiresApproval ? ApprovalStatus.Pending : ApprovalStatus.NotRequired,
+            Version = current is null ? 1 : checked(current.Version + 1)
+        };
+
+        var validation = await validator.ValidateAsync(protectedRule, cancellationToken);
         if (!validation.IsValid)
         {
             throw new ValidationException(validation.Errors);
         }
 
-        var saved = await repository.SaveAsync(rule, cancellationToken);
+        var saved = await repository.SaveAsync(protectedRule, cancellationToken);
         auditLogService.Write(
-            "admin-rule-service",
+            actor,
             "Rule changed",
             TargetType.Rule,
             saved.RuleId,

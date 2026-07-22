@@ -15,6 +15,7 @@ string HIP_SETUP_CODE = "HIP-DEV-SETUP";
 string HIP_HUD_DEVICE_ID = "";
 string gDeviceCredential = "";
 string HIP_HUD_VERSION = "0.1.0";
+integer HIP_DEMO_MODE = FALSE; // Local-only marketplace preview. Never sends data to HIP.
 string HIP_MODE = "Normal"; // Quiet, Normal, Strict, Paranoid.
 integer HIP_POPUP_ALERTS_ENABLED = TRUE;
 integer HIP_PRIVATE_WARNINGS_ENABLED = TRUE;
@@ -50,6 +51,16 @@ default
 
         gListenHandle = llListen(0, "", NULL_KEY, "");
         gDialogListenHandle = llListen(HIP_DIALOG_CHANNEL, "", llGetOwner(), "");
+
+        if (HIP_DEMO_MODE)
+        {
+            gActivated = TRUE;
+            gLicenseStatus = "Demo (local-only)";
+            UpdateHudStatus("Local demo ready", "Low");
+            llOwnerSay("HIP demo mode is local-only. It does not contact HIP or upload chat, URLs, identifiers, or reports.");
+            return;
+        }
+
         UpdateHudStatus("Starting", "Low");
         ActivateHud();
     }
@@ -84,7 +95,10 @@ default
     touch_start(integer totalNumber)
     {
         llOwnerSay("HIP Shield status: " + gLicenseStatus + " | Mode: " + HIP_MODE + " | Last risk: " + gLastRisk);
-        LoadSettings();
+        if (!HIP_DEMO_MODE)
+        {
+            LoadSettings();
+        }
     }
 
     http_response(key requestId, integer status, list metadata, string body)
@@ -125,6 +139,11 @@ default
 // Activates the HUD with HIP using a setup code rather than web login.
 ActivateHud()
 {
+    if (HIP_DEMO_MODE)
+    {
+        return;
+    }
+
     string payload = "{" +
         JsonPair("setupCode", HIP_SETUP_CODE) + "," +
         JsonPair("hudDeviceId", HIP_HUD_DEVICE_ID) + "," +
@@ -140,6 +159,11 @@ ActivateHud()
 // Loads device-specific settings from HIP when the owner touches the HUD.
 LoadSettings()
 {
+    if (HIP_DEMO_MODE)
+    {
+        return;
+    }
+
     gSettingsGetRequest = llHTTPRequest(HIP_API_BASE_URL + "/api/v1/sl-hud/settings/" + llEscapeURL(HIP_HUD_DEVICE_ID),
         [HTTP_METHOD, "GET", HTTP_CUSTOM_HEADER, "X-HIP-HUD-Credential", gDeviceCredential],
         "");
@@ -148,6 +172,12 @@ LoadSettings()
 // Saves the current local HUD settings back to HIP.
 SaveSettings()
 {
+    if (HIP_DEMO_MODE)
+    {
+        llOwnerSay("HIP demo mode keeps settings local and sends no network requests.");
+        return;
+    }
+
     if (!IsValidMode(HIP_MODE))
     {
         llOwnerSay("HIP settings not saved: invalid mode " + HIP_MODE + ".");
@@ -185,6 +215,14 @@ ScanLocalChat(string senderName, key senderId, string message)
 
     gPendingRiskUrl = url;
     gPendingSenderHash = llSHA256String((string)senderId);
+    gPendingRiskReason = HipRiskReason(message);
+
+    if (HIP_DEMO_MODE)
+    {
+        UpdateHudStatus(gPendingRiskReason, "Medium");
+        WarnOwner("Medium", gPendingRiskReason, "PrivateWarning", "");
+        return;
+    }
 
     string payload = "{" +
         JsonPair("deviceId", HIP_HUD_DEVICE_ID) + "," +
@@ -194,7 +232,6 @@ ScanLocalChat(string senderName, key senderId, string message)
         JsonPair("senderHash", gPendingSenderHash) +
         "}";
 
-    gPendingRiskReason = HipRiskReason(message);
     gScanRequest = llHTTPRequest(HIP_API_BASE_URL + "/api/v1/sl-hud/scan",
         [HTTP_METHOD, "POST", HTTP_MIMETYPE, "application/json",
          HTTP_CUSTOM_HEADER, "X-HIP-HUD-Credential", gDeviceCredential],
@@ -204,6 +241,11 @@ ScanLocalChat(string senderName, key senderId, string message)
 // Sends a privacy-safe finding report after HIP confirms a risky scan.
 ReportFinding(string senderHash, string risk, string reason, string url)
 {
+    if (HIP_DEMO_MODE)
+    {
+        return;
+    }
+
     string domain = BestEffortDomain(url);
     string payload = "{" +
         JsonPair("hudDeviceId", HIP_HUD_DEVICE_ID) + "," +
@@ -300,7 +342,7 @@ HandleScanResponse(integer status, string body)
 // Warns only the HUD owner. This avoids exposing risk decisions in public chat.
 WarnOwner(string risk, string reason, string action, string safetyPageUrl)
 {
-    if (!HIP_PRIVATE_WARNINGS_ENABLED && risk != "Critical")
+    if (!HIP_PRIVATE_WARNINGS_ENABLED)
     {
         return;
     }

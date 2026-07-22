@@ -7,9 +7,11 @@ namespace HIP.Application.Reporting;
 
 public sealed class PrivacySafeReportService(
     IValidator<PrivacySafeReport> validator,
-    IPrivacyHashingService hashingService) : IPrivacySafeReportService
+    IPrivacyHashingService hashingService,
+    IReportRetentionPolicyService? retentionPolicyService = null) : IPrivacySafeReportService
 {
     private readonly ConcurrentDictionary<string, PrivacySafeReport> _reports = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IReportRetentionPolicyService retentionPolicy = retentionPolicyService ?? new ReportRetentionPolicyService();
 
     public async Task<PrivacySafeReportResponse> SubmitAsync(PrivacySafeReport report, CancellationToken cancellationToken)
     {
@@ -36,6 +38,19 @@ public sealed class PrivacySafeReportService(
 
     public Task<IReadOnlyCollection<PrivacySafeReport>> ListAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<PrivacySafeReport>>(_reports.Values.OrderByDescending(report => report.ReportedAtUtc).ToArray());
+
+    public Task<int> DeleteExpiredAsync(DateTimeOffset nowUtc, int maximumDeletes, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (maximumDeletes is < 1 or > 1000) throw new ArgumentOutOfRangeException(nameof(maximumDeletes));
+        var expired = _reports.Values
+            .Where(report => retentionPolicy.GetPolicy(report).RetentionPeriod is { } period && report.ReportedAtUtc <= nowUtc.Subtract(period))
+            .OrderBy(report => report.ReportedAtUtc)
+            .Take(maximumDeletes)
+            .Select(report => report.ReportId)
+            .ToArray();
+        return Task.FromResult(expired.Count(id => _reports.TryRemove(id, out _)));
+    }
 
     private PrivacySafeReport Normalize(PrivacySafeReport report)
     {

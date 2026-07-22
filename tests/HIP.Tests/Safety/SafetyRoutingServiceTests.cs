@@ -45,6 +45,25 @@ public sealed class SafetyRoutingServiceTests
     }
 
     [Test]
+    public void Safety_results_reject_embedded_credentials_and_non_http_final_destinations()
+    {
+        var service = new SafetyRoutingService();
+
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<ArgumentException>(() => service.EvaluateUrl(
+                "https://user:password@example.com/pay",
+                "browser"));
+            Assert.Throws<ArgumentException>(() => service.CreateUrlSafetyResult(
+                "https://example.com/start",
+                "javascript:alert(1)",
+                35,
+                null,
+                ["Unsafe redirect scheme test."]));
+        });
+    }
+
+    [Test]
     public void EvaluateUrl_marks_shortened_url_as_suspicious()
     {
         var result = new SafetyRoutingService().EvaluateUrl("https://bit.ly/example", "browser");

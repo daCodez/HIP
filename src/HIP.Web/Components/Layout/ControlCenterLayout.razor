@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
+@inject NavigationManager Navigation
 
-<div class="app">
+<div class="app @(IsAdminPortal ? "admin-portal" : null)">
     <aside class="sidebar">
         <ControlCenterNav />
     </aside>
@@ -30,6 +31,24 @@
         </div>
     </main>
 </div>
+
+@code {
+    // The consumer portal shares this shell and some legacy CSS class names.
+    // Route-scoping prevents the admin visual system from leaking across portals.
+    private bool IsAdminPortal
+    {
+        get
+        {
+            var route = Navigation.ToBaseRelativePath(Navigation.Uri)
+                .Split('?', '#')[0]
+                .Trim('/');
+
+            return string.IsNullOrEmpty(route)
+                || route.Equals("admin", StringComparison.OrdinalIgnoreCase)
+                || route.StartsWith("admin/", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+}
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.

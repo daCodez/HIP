@@ -131,24 +131,25 @@ public sealed class DevelopmentHipAiRiskAnalyzer : IHipAiRiskAnalyzer
             ruleId,
             BuildRuleName(request.Analysis),
             "AI-assisted MVP rule suggestion. This rule must be simulated and reviewed before enforcement.",
-            Enabled: true,
-            highImpact ? RuleMode.Watch : RuleMode.Active,
+            Enabled: false,
+            RuleMode.Disabled,
             severity,
             conditions,
             actions,
-            RequiresApproval: highImpact,
+            RequiresApproval: true,
             SimulationRequired: true,
-            CreatedBy: "HIP AI Risk Analyzer MVP",
+            CreatedBy: AiRuleIdentity.ProviderActor(ProviderName),
             CreatedReason: "Generated from privacy-safe risk patterns. AI suggestions do not punish users without rules, simulation, and review.",
-            highImpact ? ApprovalStatus.Pending : ApprovalStatus.NotRequired,
+            ApprovalStatus.Pending,
             request.Analysis.Confidence,
-            Version: 1);
+            Version: 1,
+            HipRuleCreatorType.AiSuggested);
 
         return Task.FromResult(new HipAiRuleSuggestionResult(
             rule,
             SimulationRequired: true,
-            RequiresApproval: rule.RequiresApproval,
-            RecommendedMode: rule.Mode,
+            RequiresApproval: true,
+            RecommendedMode: highImpact ? RuleMode.Watch : RuleMode.Active,
             IsPlaceholder: true,
             ProviderName));
     }

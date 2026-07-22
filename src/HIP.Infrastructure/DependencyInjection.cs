@@ -1,12 +1,18 @@
+using HIP.Application.Ai;
 using HIP.Application.Browser;
+using HIP.Application.Consumer;
+using HIP.Application.Devices;
 using HIP.Application.Identity;
 using HIP.Application.Platforms;
+using HIP.Application.Protocol;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
 using HIP.Application.Rules;
+using HIP.Application.Safety;
 using HIP.Application.Scalability;
 using HIP.Application.Security;
+using HIP.Application.ServiceClients;
 using HIP.Application.SecondLife;
 using HIP.Application.SelfHealing;
 using HIP.Application.SiteSafety;
@@ -40,7 +46,8 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException("HIP requires ConnectionStrings:HipDatabase. Run HIP.AppHost to use Aspire-managed PostgreSQL, or set ConnectionStrings__HipDatabase explicitly for direct project runs.");
         var databaseProvider = configuration["HipInfrastructure:DatabaseProvider"];
         var redisConnectionString = configuration.GetConnectionString("redis")
-            ?? throw new InvalidOperationException("HIP requires ConnectionStrings:redis for distributed duplicate and replay protection.");
+            ?? throw new InvalidOperationException(
+                "HIP requires ConnectionStrings:redis for distributed duplicate, replay, service-client authentication-attempt, and management-mutation protection.");
 
         services.AddDbContext<HipDbContext>(options => ConfigureDatabaseProvider(options, connectionString, databaseProvider));
         var recordEncryptionOptions = BindRecordEncryptionOptions(configuration, isLocalDevelopment);
@@ -50,16 +57,35 @@ public static class DependencyInjection
         services.AddSingleton(privacyHashingOptions);
         services.AddSingleton<IHipRecordEncryptor, DevelopmentHipRecordEncryptor>();
         services.AddScoped<HipRecordStore>();
+        services.AddScoped<ConsumerHistoryOwnerIndexBackfillService>();
         services.AddOptions<DnsVerificationOptions>()
             .Bind(configuration.GetSection(DnsVerificationOptions.SectionName))
             .Validate(ValidateDnsVerificationOptions, "DNS verification options must use a valid port and timeout.")
             .ValidateOnStart();
+        services.AddOptions<ServiceClientAuthenticationAttemptLimiterOptions>()
+            .Bind(configuration.GetSection(ServiceClientAuthenticationAttemptLimiterOptions.SectionName))
+            .Validate(
+                options => options.Validate() is null,
+                "Service-client authentication attempt limiting options are invalid.")
+            .ValidateOnStart();
+        services.AddOptions<ServiceClientManagementMutationLimiterOptions>()
+            .Bind(configuration.GetSection(ServiceClientManagementMutationLimiterOptions.SectionName))
+            .Validate(
+                options => options.Validate() is null,
+                "Service-client management mutation limiting options are invalid.")
+            .ValidateOnStart();
         services.AddSingleton<IDnsTxtRecordResolver, DnsClientTxtRecordResolver>();
+        services.AddSingleton(WellKnownHipDocumentFetchOptions.Default);
+        services.AddSingleton<IWellKnownHipDocumentFetcher, SafeWellKnownHipDocumentFetcher>();
 
         services.AddScoped<IHipIdentityRepository, EfHipIdentityRepository>();
+        services.AddScoped<IDeviceRegistrationRepository, EfDeviceRegistrationRepository>();
+        services.AddScoped<IServiceClientRepository, EfServiceClientRepository>();
         services.AddScoped<ISigningKeyLifecycleRepository, EfSigningKeyLifecycleRepository>();
+        services.AddScoped<IHipTrustReceiptRepository, EfHipTrustReceiptRepository>();
         services.AddScoped<IDomainVerificationRequestRepository, EfDomainVerificationRequestRepository>();
         services.AddScoped<IWebsiteIdentityRepository, EfWebsiteIdentityRepository>();
+        services.AddScoped<IWebsiteOwnershipClaimRepository, EfWebsiteOwnershipClaimRepository>();
         services.AddScoped<IReputationProfileRepository, EfReputationProfileRepository>();
         services.AddScoped<IReputationEventRepository, EfReputationEventRepository>();
         services.AddScoped<IRuleRepository, EfRuleRepository>();
@@ -69,6 +95,11 @@ public static class DependencyInjection
         services.AddScoped<IAppealRepository, EfAppealRepository>();
         services.AddScoped<IReputationOverrideRequestRepository, EfReputationOverrideRequestRepository>();
         services.AddScoped<IRuleSimulationResultRepository, EfRuleSimulationResultRepository>();
+        services.AddScoped<IRuleApprovalWorkflowRepository, EfRuleApprovalWorkflowRepository>();
+        services.AddScoped<IRuleDeploymentRepository, EfRuleDeploymentRepository>();
+        services.AddScoped<IAiRuleDraftRepository, EfAiRuleDraftRepository>();
+        services.AddScoped<IConsumerSettingsRepository, EfConsumerSettingsRepository>();
+        services.AddScoped<ISafetyDecisionRepository, EfSafetyDecisionRepository>();
         services.AddScoped<IGeneratedRuleCandidateRepository, EfGeneratedRuleCandidateRepository>();
         services.AddScoped<IBrowserScanResultRepository, EfBrowserScanResultRepository>();
         services.AddScoped<IAdminSiteSafetyRuleRepository, EfAdminSiteSafetyRuleRepository>();
@@ -76,9 +107,14 @@ public static class DependencyInjection
         services.AddScoped<IAdminReviewQueueRepository, EfAdminReviewQueueRepository>();
         services.AddScoped<IOutboxEventRepository, EfOutboxEventRepository>();
         services.AddScoped<IInboxEventRepository, EfInboxEventRepository>();
+        services.AddScoped<IExternalSiteEvidenceJobRepository, EfExternalSiteEvidenceJobRepository>();
         services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
         services.AddSingleton<IAtomicExpiryStore, RedisAtomicExpiryStore>();
+        services.AddSingleton<IAtomicFixedWindowCounterStore, RedisAtomicFixedWindowCounterStore>();
+        services.AddSingleton<IServiceClientAuthenticationAttemptLimiter, DistributedServiceClientAuthenticationAttemptLimiter>();
+        services.AddSingleton<IServiceClientManagementMutationLimiter, DistributedServiceClientManagementMutationLimiter>();
         services.AddSingleton<IDuplicateSubmissionGuard, RedisDuplicateSubmissionGuard>();
+        services.AddSingleton<IReplayMessageIdStore, RedisReplayMessageIdStore>();
         services.AddSingleton<IReplayNonceStore, RedisReplayNonceStore>();
         services.AddScoped<ISetupCodeLicenseService, EfSetupCodeLicenseService>();
         services.AddScoped<IExternalSiteEvidenceCache, EfExternalSiteEvidenceCache>();
@@ -191,14 +227,61 @@ public static class DependencyInjection
     /// <param name="configuration">Application configuration.</param>
     /// <param name="isLocalDevelopment">Whether the host is a local Development process.</param>
     /// <returns>Privacy hashing options.</returns>
-    private static PrivacyHashingOptions BindPrivacyHashingOptions(IConfiguration configuration, bool isLocalDevelopment) =>
-        new(
-            ResolveSecurityKey(
-                configuration,
-                "HipSecurity:PrivacyHashingKey",
-                Sha256PrivacyHashingService.DevelopmentOnlyKey,
-                isLocalDevelopment),
-            AllowDevelopmentKey: isLocalDevelopment);
+    private static PrivacyHashingOptions BindPrivacyHashingOptions(
+        IConfiguration configuration,
+        bool isLocalDevelopment)
+    {
+        var currentKey = ResolveSecurityKey(
+            configuration,
+            "HipSecurity:PrivacyHashingKey",
+            Sha256PrivacyHashingService.DevelopmentOnlyKey,
+            isLocalDevelopment);
+        return new PrivacyHashingOptions(
+            currentKey,
+            AllowDevelopmentKey: isLocalDevelopment,
+            LegacyKeys: BindLegacyPrivacyHashingKeys(configuration, currentKey, isLocalDevelopment));
+    }
+
+    /// <summary>
+    /// Binds a small explicit set of former privacy HMAC keys used by owner-partitioned features
+    /// during key rotation. New hashes and owner partitions always use the current key.
+    /// </summary>
+    private static IReadOnlyCollection<string> BindLegacyPrivacyHashingKeys(
+        IConfiguration configuration,
+        string currentKey,
+        bool isLocalDevelopment)
+    {
+        var configured = configuration
+            .GetSection("HipSecurity:LegacyPrivacyHashingKeys")
+            .Get<string[]>() ?? [];
+        if (configured.Length > PrivacyHashingOptions.MaximumLegacyKeyCount)
+        {
+            throw new InvalidOperationException(
+                $"HipSecurity:LegacyPrivacyHashingKeys supports at most {PrivacyHashingOptions.MaximumLegacyKeyCount} values.");
+        }
+
+        foreach (var legacyKey in configured)
+        {
+            if (string.IsNullOrWhiteSpace(legacyKey))
+            {
+                throw new InvalidOperationException(
+                    "HipSecurity:LegacyPrivacyHashingKeys cannot contain empty key material.");
+            }
+
+            if (!isLocalDevelopment)
+            {
+                EnsureProductionSecurityKey(
+                    legacyKey,
+                    "HipSecurity:LegacyPrivacyHashingKeys",
+                    Sha256PrivacyHashingService.DevelopmentOnlyKey);
+            }
+        }
+
+        return configured
+            .Where(key => !string.Equals(key, currentKey, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
 
     /// <summary>
     /// Resolves one security key and rejects missing, shared, weak, or placeholder material outside Development.
@@ -260,11 +343,20 @@ public static class DependencyInjection
         PrivacyHashingOptions privacyHashingOptions,
         bool isLocalDevelopment)
     {
-        if (!isLocalDevelopment
-            && string.Equals(recordEncryptionOptions.Key, privacyHashingOptions.SecretKey, StringComparison.Ordinal))
+        if (isLocalDevelopment)
+        {
+            return;
+        }
+
+        var recordKeys = new HashSet<string>(
+            (recordEncryptionOptions.LegacyKeys ?? []).Append(recordEncryptionOptions.Key),
+            StringComparer.Ordinal);
+        var privacyKeys = (privacyHashingOptions.LegacyKeys ?? [])
+            .Append(privacyHashingOptions.SecretKey);
+        if (privacyKeys.Any(recordKeys.Contains))
         {
             throw new InvalidOperationException(
-                "HipSecurity:RecordEncryptionKey and HipSecurity:PrivacyHashingKey must be different outside local Development.");
+                "HIP record-encryption and privacy-hashing keys, including legacy keys, must be different outside local Development.");
         }
     }
 

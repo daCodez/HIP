@@ -1,6 +1,6 @@
 @page "/admin/licenses"
 @rendermode InteractiveServer
-@attribute [Authorize(Policy = AdminPolicies.CanManageLicenses)]
+@attribute [Authorize(Policy = AdminPolicies.CanViewLicenses)]
 @inject ISetupCodeLicenseService LicenseService
 
 <PageTitle>Licenses | HIP Admin</PageTitle>
@@ -8,7 +8,11 @@
 <main class="license-page">
     <section class="hip-page-heading license-heading">
         <div><span class="hip-eyebrow">HIP Admin · licenses</span><h1>Licenses</h1><p>Manage access to the HIP HUD in Second Life.</p></div>
-        <a class="hip-primary-action" href="/admin/licenses/new">Create a license</a>
+        <AuthorizeView Policy="@AdminPolicies.CanAdministerLicenses">
+            <Authorized>
+                <a class="hip-primary-action" href="/admin/licenses/new">Create a license</a>
+            </Authorized>
+        </AuthorizeView>
     </section>
     <section class="license-summary-grid" aria-label="License summary">
         <article class="license-summary-card in-use"><span>In use</span><strong>@Licenses.Count(x => x.Status == LicenseStatus.Active)</strong><p>Licenses connected to at least one HUD.</p></article>
@@ -28,18 +32,19 @@
                     <th aria-sort="@SortDirectionFor("devices")"><button class="license-sort-button" @onclick='() => SetSort("devices")'>Devices <span>@SortMark("devices")</span></button></th>
                     <th aria-sort="@SortDirectionFor("version")"><button class="license-sort-button" @onclick='() => SetSort("version")'>HUD version <span>@SortMark("version")</span></button></th>
                     <th aria-sort="@SortDirectionFor("activity")"><button class="license-sort-button" @onclick='() => SetSort("activity")'>Last used <span>@SortMark("activity")</span></button></th>
-                    <th>Manage</th>
+                    <th>Setup code</th>
+                    <th>Details</th>
                 </tr></thead>
                 <tbody>
                 @if (VisibleLicenses.Count == 0)
                 {
-                    <tr><td colspan="6"><div class="license-empty"><h3>No licenses found</h3><p>Try a different search, or create a new license.</p></div></td></tr>
+                    <tr><td colspan="7"><div class="license-empty"><h3>No licenses found</h3><p>Try a different search.</p></div></td></tr>
                 }
                 else
                 {
                     @foreach (var license in VisibleLicenses)
                     {
-                        <tr><td><div class="license-code"><code>@license.MaskedSetupCode</code><small>@license.LicenseId</small></div></td><td><span class="license-status @StatusTone(license.Status)">@StatusLabel(license.Status)</span></td><td>@license.ActivationCount of @license.AllowedDeviceCount</td><td>@(license.HudVersion ?? "Not connected")</td><td>@FormatDate(license.LastSeenAtUtc)</td><td><a class="license-manage-link" href="@($"/admin/licenses/{license.LicenseId}")">Manage</a></td></tr>
+                        <tr><td><div class="license-code"><code>@license.MaskedSetupCode</code><small>@license.LicenseId</small></div></td><td><span class="license-status @StatusTone(license.Status)">@StatusLabel(license.Status)</span></td><td>@license.ActivationCount of @license.AllowedDeviceCount</td><td>@(license.HudVersion ?? "Not connected")</td><td>@FormatDate(license.LastSeenAtUtc)</td><td>@SetupCodeState(license)</td><td><a class="license-manage-link" href="@($"/admin/licenses/{license.LicenseId}")">View</a></td></tr>
                     }
                 }
                 </tbody>
@@ -72,4 +77,9 @@
     private static string StatusLabel(LicenseStatus status) => status switch { LicenseStatus.Pending => "Ready to use", LicenseStatus.Active => "In use", LicenseStatus.Suspended => "Paused", LicenseStatus.Revoked => "Cancelled", LicenseStatus.Expired => "Expired", _ => "Unknown" };
     private static string StatusTone(LicenseStatus status) => status switch { LicenseStatus.Active => "safe", LicenseStatus.Pending => "ready", LicenseStatus.Suspended => "warning", _ => "danger" };
     private static string FormatDate(DateTimeOffset? value) => value is null ? "Never" : value.Value.UtcDateTime.ToString("MMM d, yyyy · HH:mm 'UTC'");
+    private static string SetupCodeState(LicenseSummary license) => license.SetupCodeConsumedAtUtc is not null
+        ? "Consumed"
+        : license.SetupCodeExpiresAtUtc is { } expiresAtUtc
+            ? $"Expires {expiresAtUtc.UtcDateTime:MMM d, HH:mm} UTC"
+            : "Legacy code";
 }

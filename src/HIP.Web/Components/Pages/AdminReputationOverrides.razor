@@ -2,15 +2,25 @@
 @attribute [Authorize(Policy = AdminPolicies.CanApproveOverrides)]
 @rendermode InteractiveServer
 @inject IReputationOverrideService ReputationOverrideService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IWebHostEnvironment HostEnvironment
 
 <PageTitle>HIP Reputation Overrides</PageTitle>
 
 <main class="admin-rule-page">
     <section class="admin-rule-header">
-        <p class="eyebrow">Dev-only MVP</p>
+        <p class="eyebrow">Admin MVP</p>
         <h1>Reputation Overrides</h1>
         <p>Request and approve manual reputation changes. Overrides do not apply until required approvals are met.</p>
-        <button type="button" @onclick="CreateSample">Create Sample Override</button>
+        @if (HostEnvironment.IsDevelopment())
+        {
+            <button type="button" @onclick="CreateSampleAsync">Create Sample Override</button>
+        }
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <p class="admin-message" role="status">@_message</p>
+        }
     </section>
 
     <section class="rule-builder-panel">
@@ -31,8 +41,8 @@
                         <td>@request.Status</td>
                         <td>@request.Approvals.Count</td>
                         <td>
-                            <button type="button" @onclick="() => Approve(request.OverrideRequestId)">Approve</button>
-                            <button type="button" @onclick="() => Reject(request.OverrideRequestId)">Reject</button>
+                            <button type="button" @onclick="() => ApproveAsync(request.OverrideRequestId)">Approve</button>
+                            <button type="button" @onclick="() => RejectAsync(request.OverrideRequestId)">Reject</button>
                         </td>
                     </tr>
                 }
@@ -43,40 +53,115 @@
 
 @code {
     private IReadOnlyCollection<ReputationOverrideRequest> _requests = [];
-    private int _approvalIndex;
+    private string? _message;
 
     protected override void OnInitialized() => Refresh();
 
     private void Refresh() => _requests = ReputationOverrideService.List();
 
-    private void CreateSample()
+    private async Task CreateSampleAsync()
     {
-        ReputationOverrideService.Request(new ReputationOverrideRequest(
-            "",
-            TargetType.Domain,
-            "override-example.com",
-            28,
-            86,
-            "Manual trusted recovery request after public remediation.",
-            "admin-dev",
-            OverrideRequestStatus.Pending,
-            1,
-            [],
-            DateTimeOffset.UtcNow,
-            DateTimeOffset.UtcNow));
-        Refresh();
+        if (!HostEnvironment.IsDevelopment())
+        {
+            _message = "Sample override creation is available only in Development.";
+            return;
+        }
+
+        var actor = await RequireRecentActorAsync();
+        if (actor is null)
+        {
+            return;
+        }
+
+        try
+        {
+            ReputationOverrideService.Request(new ReputationOverrideRequest(
+                "",
+                TargetType.Domain,
+                "override-example.com",
+                28,
+                86,
+                "Manual trusted recovery request after public remediation.",
+                actor,
+                OverrideRequestStatus.Pending,
+                1,
+                [],
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow));
+            _message = "Sample override created.";
+            Refresh();
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+        {
+            _message = ex.Message;
+        }
     }
 
-    private void Approve(string id)
+    private async Task ApproveAsync(string id)
     {
-        _approvalIndex++;
-        ReputationOverrideService.Approve(id, $"admin-dev-{_approvalIndex}", "Approved with audit trail.");
-        Refresh();
+        var actor = await RequireRecentActorAsync();
+        if (actor is null)
+        {
+            return;
+        }
+
+        try
+        {
+            ReputationOverrideService.Approve(id, actor, "Approved with audit trail.");
+            _message = "Override approval recorded.";
+            Refresh();
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+        {
+            _message = ex.Message;
+        }
     }
 
-    private void Reject(string id)
+    private async Task RejectAsync(string id)
     {
-        ReputationOverrideService.Reject(id, "admin-dev", "Rejected after review.");
-        Refresh();
+        var actor = await RequireRecentActorAsync();
+        if (actor is null)
+        {
+            return;
+        }
+
+        try
+        {
+            ReputationOverrideService.Reject(id, actor, "Rejected after review.");
+            _message = "Override rejected.";
+            Refresh();
+        }
+        catch (Exception ex) when (ex is ArgumentException or FluentValidation.ValidationException)
+        {
+            _message = ex.Message;
+        }
+    }
+
+    private async Task<string?> RequireRecentActorAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var authorization = await AuthorizationService.AuthorizeAsync(
+            authenticationState.User,
+            null,
+            AdminPolicies.RecentPrivilegedAuthentication);
+        if (!authorization.Succeeded)
+        {
+            _message = "Sign in again before changing a reputation override.";
+            return null;
+        }
+
+        var actor = authenticationState.User.FindFirst(HipAuthenticationClaimTypes.ActorId)?.Value;
+        if (string.IsNullOrWhiteSpace(actor) && HostEnvironment.IsDevelopment())
+        {
+            actor = authenticationState.User.Identity?.Name;
+        }
+
+        if (string.IsNullOrWhiteSpace(actor))
+        {
+            _message = "The authenticated HIP actor identity is unavailable.";
+            return null;
+        }
+
+        return actor;
     }
 }

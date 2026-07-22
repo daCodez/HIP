@@ -100,6 +100,26 @@ p {
   line-height: 1.4;
 }
 
+.formal-scoring-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #1d4f73;
+  border-radius: 8px;
+  background: #081827;
+}
+
+.formal-scoring-panel h2,
+.formal-scoring-reasons h2 {
+  margin: 0;
+  font-size: 13px;
+  color: #dbeafe;
+}
+
+.formal-scoring-reasons ul {
+  margin-bottom: 0;
+}
+
 .score-explanation {
   margin: 0;
   padding: 8px 10px;

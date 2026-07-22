@@ -20,7 +20,16 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @ChildContent
+                    @if (IsEmpty)
+                    {
+                        <tr>
+                            <td colspan="5">@EmptyMessage</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @ChildContent
+                    }
                 </tbody>
             </table>
         </div>
@@ -36,4 +45,10 @@
 
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public bool IsEmpty { get; set; }
+
+    [Parameter]
+    public string EmptyMessage { get; set; } = "No owner-scoped records are available yet.";
 }

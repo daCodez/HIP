@@ -5,67 +5,290 @@
 @inject IAdminDashboardService DashboardService
 
 <PageTitle>HIP Admin Overview</PageTitle>
+
 <main class="admin-rule-page hip-dashboard overview-command">
- <header class="admin-rule-header"><div><p class="eyebrow">HIP Admin · dashboard</p><h1>Overview</h1><p>Monitor identity signals, investigate risk, and keep HIP healthy.</p><small>@HipWebBuildInfo.DashboardDisplayVersion</small></div><button class="primary-button" @onclick="LoadAsync" disabled="@_loading">@(_loading?"Refreshing…":"Refresh")</button></header>
- @if(_error is not null){<div class="overview-state danger" role="alert"><b>Overview unavailable</b><span>@_error</span></div>}
- else if(_summary is null){<div class="overview-state" aria-busy="true">Loading HIP security signals…</div>}
- else {
-  <section class="overview-hero" aria-label="HIP protection summary">
-   <article class="overview-panel protection-card"><div class="score-gauge" style="--score:@ProtectionScore"><strong>@ProtectionScore</strong><span>/ 100</span></div><div><p class="kicker">Overall HIP protection</p><h2>@ProtectionLabel</h2><p>@ProtectionExplanation</p><a href="/admin/review">View related problems →</a></div></article>
-   <div class="overview-stats">
-    @Metric("scansToday","Scans today","scan") @Metric("suspiciousResults","Threats detected","alert") @Metric("dangerousLinksFound","Items blocked","shield") @Metric("pendingReviewItems","Awaiting review","review") @Metric("domainsScanned","Domains scanned","domain")
-   </div>
-  </section>
-  <section class="overview-middle">
-   <article class="overview-panel activity-chart"><header><div><p class="kicker">Scan activity</p><h2>Risk activity</h2></div><div class="range-tabs" aria-label="Chart date range">@foreach(var days in new[]{7,30,90}){<button class="@(days==_rangeDays?"active":null)" @onclick="()=>_rangeDays=days">@days days</button>}</div></header>
-    @if(RangeScans.Count==0){@Empty("No scans in this period","Activity will appear after HIP receives stored browser scans.")}
-    else {<div class="spark-bars" role="img" aria-label="Scan risk activity by result"><i class="safe" style="--h:@Percent(SafeCount)"><span>Safe @SafeCount</span></i><i class="caution" style="--h:@Percent(CautionCount)"><span>Caution @CautionCount</span></i><i class="risk" style="--h:@Percent(HighRiskCount)"><span>High risk @HighRiskCount</span></i><i class="critical" style="--h:@Percent(CriticalCount)"><span>Critical @CriticalCount</span></i></div>}
-   </article>
-   <article class="overview-panel risk-breakdown"><p class="kicker">Current distribution</p><h2>Risk breakdown</h2><div class="donut" style="--safe:@SafePercent;--caution:@CautionPercent;--risk:@RiskPercent"><div><strong>@RangeScans.Count</strong><span>scans</span></div></div><ul><li>Safe <b>@SafeCount</b></li><li>Caution <b>@CautionCount</b></li><li>High risk <b>@HighRiskCount</b></li><li>Critical <b>@CriticalCount</b></li></ul></article>
-  </section>
-  <section class="overview-panel" aria-labelledby="recent-scans-heading">
-   <header><div><p class="kicker">Stored evidence</p><h2 id="recent-scans-heading">Recent Scans</h2></div><a href="/admin/scans">View all</a></header>
-   @if(_summary.RecentScans.Count==0){@Empty("No scans yet.","Scan history not connected yet. Run the browser extension to submit a privacy-safe scan summary.")}
-   else {
-    <div class="hip-table-wrap">
-     <table class="hip-data-table">
-      <thead><tr><th>Domain</th><th>Status</th><th>Domain Trust</th><th>Page Trust</th><th>Content Risk</th><th>Final Score</th><th>Confidence</th><th>Last checked</th></tr></thead>
-      <tbody>@foreach(var scan in _summary.RecentScans.Take(10)){<tr><td><a href="@ScanLink(scan)">@scan.Domain</a></td><td>@scan.Status</td><td>@Score(scan.DomainTrustScore)</td><td>@Score(scan.PageTrustScore)</td><td>@Score(scan.ContentRiskScore)</td><td><strong>@scan.Score</strong></td><td>@scan.ConfidenceLevel</td><td>@Relative(scan.LastCheckedUtc)</td></tr>}</tbody>
-     </table>
-    </div>
-   }
-  </section>
-  <section class="overview-grid three">
-   <article class="overview-panel"><header><div><p class="kicker">Priority response</p><h2>Recent threats</h2></div><a href="/admin/review">Review all</a></header>@if(_summary.RecentThreats.Count==0){@Empty("No active threats","No high-risk evidence is present in connected data.")}else{@foreach(var t in _summary.RecentThreats.Take(4)){<a class="threat-card" href="@ThreatLink(t)"><span class="risk-dot"></span><div><b>@t.Domain</b><small>@t.ReasonSummary</small><em>@t.Severity · @t.Source · @Relative(t.CreatedAtUtc)</em></div><strong>@(t.FinalHipScore?.ToString()??"—")</strong></a>}}</article>
-   <article class="overview-panel"><p class="kicker">Human decisions</p><h2>Review queue</h2>@QueueRow("Appeals","pendingAppeals") @QueueRow("Uncertain scans","pendingReviewItems") @QueueRow("Rule approvals","selfHealingCandidates") @QueueRow("Reputation overrides","pendingReputationOverrides")</article>
-   <article class="overview-panel"><p class="kicker">Stored evidence</p><h2>Top risk categories</h2>@RiskBar("Suspicious links","suspiciousLinksFound") @RiskBar("Dangerous links","dangerousLinksFound") @RiskBar("Risk findings","riskyFindings") @RiskBar("Feedback spikes","suspiciousFeedbackSpikes")</article>
-  </section>
-  <section class="overview-grid three lower">
-   <article class="overview-panel"><p class="kicker">Infrastructure</p><h2>Provider health</h2>@Health("HIP API",_summary.ApiHealth,"Connected") @Health("External providers",Card("externalProviderErrors")?.Status??"Unavailable",Card("externalProviderErrors")?.IsPlaceholder==true?"Not configured":"Evidence received") @Health("Browser scanner",_summary.HasScanData?"Online":"Waiting",_summary.DataSource)</article>
-   <article class="overview-panel"><p class="kicker">Detection logic</p><h2>Rule performance</h2>@RuleRow("Active rules","activeRules") @RuleRow("Simulation rules","simulationRules") @RuleRow("Watch-only rules","watchOnlyRules") @RuleRow("Awaiting approval","selfHealingCandidates")<small class="data-note">Trigger and false-positive metrics are not yet exposed by the dashboard service.</small></article>
-   <article class="overview-panel"><p class="kicker">Audit stream</p><h2>System activity</h2>@if(_summary.RecentActivity.Count==0){@Empty("No recent activity","Events will appear as HIP records system changes.")}else{<div class="activity-timeline">@foreach(var a in _summary.RecentActivity.Take(6)){<div><i></i><span><b>@a.ActivityType</b><small>@a.Summary</small><em>@Relative(a.CreatedAtUtc)</em></span></div>}</div>}</article>
-  </section>
- }
+    <header class="editorial-topbar">
+        <div class="editorial-topbar-title">
+            <b>Operations dashboard</b>
+            <small>Human Interactive Protocol</small>
+        </div>
+        @if (_summary is not null)
+        {
+            <span class="system-status @SystemStatusTone"><i></i>@SystemStatusLabel</span>
+            <time datetime="@_summary.GeneratedAtUtc.ToString("O")">Updated @_summary.GeneratedAtUtc.UtcDateTime.ToString("HH:mm") UTC</time>
+        }
+        <button class="editorial-theme-button" type="button" data-hip-theme-toggle aria-label="Switch to light mode">Light mode</button>
+        <button class="editorial-refresh-button" type="button" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
+    </header>
+
+    @if (_error is not null)
+    {
+        <div class="overview-state danger" role="alert"><b>Overview unavailable</b><span>@_error</span></div>
+    }
+    else if (_summary is null)
+    {
+        <div class="overview-state" aria-busy="true">Loading HIP security signals…</div>
+    }
+    else
+    {
+        <header class="editorial-intro">
+            <div>
+                <p class="kicker">Today's protection posture</p>
+                <h1>@DashboardHeading</h1>
+            </div>
+            <p>@DashboardSummary</p>
+            <small>@HipWebBuildInfo.DashboardDisplayVersion · Snapshot @_summary.GeneratedAtUtc.UtcDateTime.ToString("u") · @_summary.DataSource</small>
+        </header>
+
+        <section class="editorial-hero" aria-label="HIP protection summary">
+            <article class="trust-panel">
+                <div class="editorial-score" aria-label="Protection score @ProtectionScore out of 100">
+                    <div class="editorial-score-line">
+                        <strong>@ProtectionScore</strong><span>/100</span>
+                    </div>
+                    <b>@ProtectionStatus</b>
+                </div>
+                <div class="trust-copy">
+                    <p class="kicker">Overall HIP protection</p>
+                    <h2>@ProtectionHeading</h2>
+                    <p>@ProtectionExplanation</p>
+                    <div class="trust-distribution" aria-label="@OutcomeDistributionLabel">
+                        <i class="trusted" style="@SegmentStyle(TrustedPercent)"></i>
+                        <i class="caution" style="@SegmentStyle(CautionPercent)"></i>
+                        <i class="risk" style="@SegmentStyle(RiskPercent)"></i>
+                    </div>
+                    <footer class="trust-legend">
+                        <span><i class="trusted"></i><b>@TrustedPercent%</b> Trusted</span>
+                        <span><i class="caution"></i><b>@CautionPercent%</b> Caution</span>
+                        <span><i class="risk"></i><b>@RiskPercent%</b> Risk</span>
+                    </footer>
+                </div>
+            </article>
+
+            <aside class="priority-case">
+                @if (PriorityThreat is not null)
+                {
+                    <header><span class="severity @PrioritySeverityTone">@PriorityThreat.Severity</span><small>@Relative(PriorityThreat.CreatedAtUtc)</small></header>
+                    <h2>@PriorityThreat.ReasonSummary</h2>
+                    <p class="priority-domain">@PriorityThreat.Domain</p>
+                    <div class="priority-facts">
+                        <span>Final HIP score<b>@(PriorityThreat.FinalHipScore?.ToString() ?? "—")</b></span>
+                        <span>Evidence source<b>@PriorityThreat.Source</b></span>
+                    </div>
+                    <a class="review-case" href="@ThreatLink(PriorityThreat)">Review case</a>
+                }
+                else
+                {
+                    <header><span class="severity clear">Clear</span><small>Current snapshot</small></header>
+                    <h2>No active priority case.</h2>
+                    <p class="priority-domain">Connected evidence contains no recent high-risk case.</p>
+                    <div class="priority-facts">
+                        <span>High-risk scans<b>@HighRiskCount</b></span>
+                        <span>Critical scans<b>@CriticalCount</b></span>
+                    </div>
+                    <a class="review-case" href="/admin/review">Open review queue</a>
+                }
+            </aside>
+        </section>
+
+        <section class="editorial-metrics" aria-label="Current operational metrics">
+            @Metric("scansToday", "Scans today", "Stored scans received today")
+            @Metric("suspiciousResults", "Threats identified", "Suspicious or caution results")
+            @Metric("activeRules", "Active rules", "Rules currently enforcing behavior")
+            @Metric("domainsScanned", "Domains scanned", "Distinct domains with stored scans")
+        </section>
+
+        <section class="editorial-lower">
+            <article class="outcomes-panel">
+                <header class="section-heading">
+                    <div><p class="kicker">Evidence mix</p><h2>Protection outcomes by day</h2><p>Daily volume and classification from stored browser scan summaries.</p></div>
+                    <div class="range-tabs" aria-label="Chart date range">
+                        @foreach (var days in new[] { 7, 30, 90 })
+                        {
+                            <button class="@(days == _rangeDays ? "active" : null)" @onclick="() => _rangeDays = days">@days days</button>
+                        }
+                    </div>
+                </header>
+                <div class="chart-legend" aria-label="Chart legend"><span><i class="trusted"></i>Trusted</span><span><i class="caution"></i>Caution</span><span><i class="risk"></i>Risk</span></div>
+                @if (RangeScans.Count == 0)
+                {
+                    @Empty("No scans in this period", "Activity will appear after HIP receives stored browser scans.")
+                }
+                else
+                {
+                    <div class="outcome-chart" aria-label="Protection outcomes across seven time buckets">
+                        @foreach (var bucket in DailyOutcomes)
+                        {
+                            <div class="outcome-day" tabindex="0" role="img" aria-label="@BucketAriaLabel(bucket)">
+                                <span class="chart-tooltip"><b>@bucket.Label · @bucket.Total.ToString("N0") scans</b><small>@bucket.Trusted trusted · @bucket.Caution caution · @bucket.Risk risk</small></span>
+                                <div class="outcome-stack" style="@VolumeStyle(bucket.Total)">
+                                    <i class="trusted" style="@SegmentStyle(BucketPercent(bucket.Trusted, bucket.Classified))"></i>
+                                    <i class="caution" style="@SegmentStyle(BucketPercent(bucket.Caution, bucket.Classified))"></i>
+                                    <i class="risk" style="@SegmentStyle(BucketPercent(bucket.Risk, bucket.Classified))"></i>
+                                </div>
+                                <span class="outcome-date">@bucket.Label</span>
+                            </div>
+                        }
+                    </div>
+                    <p class="chart-note">Bar height shows stored scan volume. Color segments show the share classified as trusted, caution, or risk.</p>
+                }
+            </article>
+
+            <aside class="judgments-panel">
+                <p class="kicker">Decisions, not data</p>
+                <h2>@JudgmentHeading</h2>
+                <p>Ordered by operator impact.</p>
+                @JudgmentRow("Uncertain scans", "Provider evidence requires review", "pendingReviewItems", "/admin/review")
+                @JudgmentRow("Rule approvals", "Generated candidates await approval", "selfHealingCandidates", "/admin/self-healing")
+                @JudgmentRow("Appeals", "Submitted cases await a decision", "pendingAppeals", "/admin/appeals")
+            </aside>
+        </section>
+
+        <section class="overview-panel evidence-table" aria-labelledby="recent-scans-heading">
+            <header><div><p class="kicker">Stored evidence</p><h2 id="recent-scans-heading">Recent scans</h2></div><a href="/admin/scans">View all</a></header>
+            @if (_summary.RecentScans.Count == 0)
+            {
+                @Empty("No scans yet", "Scan history is not connected yet. Run the browser extension to submit a privacy-safe scan summary.")
+            }
+            else
+            {
+                <div class="hip-table-wrap">
+                    <table class="hip-data-table">
+                        <thead><tr><th>Domain</th><th>Status</th><th>Domain trust</th><th>Page trust</th><th>Content risk</th><th>Final score</th><th>Confidence</th><th>Last checked</th></tr></thead>
+                        <tbody>
+                            @foreach (var scan in _summary.RecentScans.Take(10))
+                            {
+                                <tr><td><a href="@ScanLink(scan)">@scan.Domain</a></td><td>@scan.Status</td><td>@Score(scan.DomainTrustScore)</td><td>@Score(scan.PageTrustScore)</td><td>@Score(scan.ContentRiskScore)</td><td><strong>@scan.Score</strong></td><td>@scan.ConfidenceLevel</td><td>@Relative(scan.LastCheckedUtc)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="editorial-details" aria-label="Supporting operational evidence">
+            <article class="overview-panel"><header><div><p class="kicker">Priority response</p><h2>Recent threat cases</h2></div><a href="/admin/review">Review all</a></header>@if (_summary.RecentThreats.Count == 0) { @Empty("No active threats", "No high-risk evidence is present in connected data.") } else { @foreach (var threat in _summary.RecentThreats.Take(4)) { <a class="threat-card" href="@ThreatLink(threat)"><span class="risk-dot"></span><div><b>@threat.Domain</b><small>@threat.ReasonSummary</small><em>@threat.Severity · @threat.Source · @Relative(threat.CreatedAtUtc)</em></div><strong>@(threat.FinalHipScore?.ToString() ?? "—")</strong></a> } }</article>
+            <article class="overview-panel"><p class="kicker">Stored evidence</p><h2>Top risk categories</h2>@RiskBar("Suspicious links", "suspiciousLinksFound") @RiskBar("Dangerous links", "dangerousLinksFound") @RiskBar("Risk findings", "riskyFindings") @RiskBar("Feedback spikes", "suspiciousFeedbackSpikes")</article>
+            <article class="overview-panel"><p class="kicker">Infrastructure</p><h2>Provider health</h2>@Health("HIP API", _summary.ApiHealth, "Dashboard request completed") @Health("Optional data sources", UnavailableSourceCount == 0 ? "Available" : "Degraded", UnavailableSourceCount == 0 ? "All dashboard dependencies answered" : $"{UnavailableSourceCount} source(s) unavailable") @Health("External providers", Card("externalProviderErrors")?.Status ?? "Unavailable", Card("externalProviderErrors")?.IsPlaceholder == true ? "No provider evidence" : "Evidence received") @Health("Browser scanner", _summary.HasScanData ? "Evidence" : "Waiting", _summary.DataSource)</article>
+            <article class="overview-panel"><p class="kicker">Detection logic</p><h2>Rule performance</h2>@RuleRow("Active rules", "activeRules") @RuleRow("Simulation rules", "simulationRules") @RuleRow("Watch-only rules", "watchOnlyRules") @RuleRow("Awaiting approval", "selfHealingCandidates")<small class="data-note">Trigger and false-positive metrics are not yet exposed by the dashboard service.</small></article>
+            <article class="overview-panel activity-panel"><p class="kicker">Audit stream</p><h2>System activity</h2>@if (_summary.RecentActivity.Count == 0) { @Empty("No recent activity", "Events will appear as HIP records system changes.") } else { <div class="activity-timeline">@foreach (var activity in _summary.RecentActivity.Take(6)) { <div><i></i><span><b>@activity.ActivityType</b><small>@activity.Summary</small><em>@Relative(activity.CreatedAtUtc)</em></span></div> }</div> }</article>
+        </section>
+    }
 </main>
-@code{
- AdminDashboardSummary? _summary; string? _error; bool _loading; int _rangeDays=7;
- protected override Task OnInitializedAsync()=>LoadAsync();
- async Task LoadAsync(){if(_loading)return;_loading=true;_error=null;try{_summary=await DashboardService.GetSummaryAsync(CancellationToken.None);}catch{_error="HIP could not load the privacy-safe dashboard summary. Try again.";}finally{_loading=false;}}
- AdminDashboardCard? Card(string key)=>_summary?.Cards.FirstOrDefault(c=>c.Key==key);
- RenderFragment Metric(string key,string label,string icon)=>b=>{var c=Card(key);var formattedValue=(c?.Value??0).ToString("N0",System.Globalization.CultureInfo.InvariantCulture);b.OpenElement(0,"article");b.AddAttribute(1,"class","metric-tile");b.AddMarkupContent(2,$"<span aria-hidden='true'>{icon}</span><strong>{formattedValue}</strong><b>{label}</b><small>{(c?.IsPlaceholder==true?"No connected data":c?.Status)}</small>");b.CloseElement();};
- RenderFragment Empty(string title,string text)=>b=>b.AddMarkupContent(0,$"<div class='visual-empty'><b>{title}</b><span>{text}</span></div>");
- RenderFragment QueueRow(string label,string key)=>b=>b.AddMarkupContent(0,$"<a class='queue-row' href='/admin/review'><span>{label}</span><b>{Card(key)?.Value??0}</b></a>");
- RenderFragment RiskBar(string label,string key)=>b=>{var v=Card(key)?.Value??0;b.AddMarkupContent(0,$"<div class='risk-bar'><span>{label}<b>{v}</b></span><i style='--w:{Math.Min(100,v*10)}'></i></div>");};
- RenderFragment Health(string name,string status,string note)=>b=>b.AddMarkupContent(0,$"<div class='health-row'><i class='{status.ToLowerInvariant()}'></i><span><b>{name}</b><small>{note}</small></span><strong>{status}</strong></div>");
- RenderFragment RuleRow(string label,string key)=>b=>b.AddMarkupContent(0,$"<div class='rule-row'><span>{label}</span><b>{Card(key)?.Value??0}</b></div>");
- IReadOnlyList<AdminRecentScanItem> RangeScans=>_summary?.RecentScans.Where(s=>s.LastCheckedUtc>=DateTimeOffset.UtcNow.AddDays(-_rangeDays)).ToArray()??[];
- int Count(params string[] values)=>RangeScans.Count(s=>values.Any(v=>s.Status.Contains(v,StringComparison.OrdinalIgnoreCase)));
- int SafeCount=>Count("Trusted","Safe"); int CautionCount=>Count("Limited","Unknown","Caution"); int HighRiskCount=>Count("Suspicious","HighRisk"); int CriticalCount=>Count("Dangerous","Critical");
- int Percent(int n)=>RangeScans.Count==0?0:Math.Max(8,n*100/RangeScans.Count); int SafePercent=>Percent(SafeCount);int CautionPercent=>Percent(CautionCount);int RiskPercent=>Percent(HighRiskCount);
- int ProtectionScore=>Math.Clamp(Card("averageHipScore")?.Value??0,0,100); string ProtectionLabel=>ProtectionScore>=85?"Protected":ProtectionScore>=60?"Caution":ProtectionScore>=30?"High Risk":"Critical";
- string ProtectionExplanation=>_summary?.HasScanData==true?$"Average HIP score across stored scan data. Activity panels show {_summary.RecentScans.Count} recent privacy-safe summaries.":"HIP needs stored scan evidence before it can calculate protection.";
- static string Relative(DateTimeOffset value){var age=DateTimeOffset.UtcNow-value;return age.TotalMinutes<60?$"{Math.Max(1,(int)age.TotalMinutes)}m ago":age.TotalHours<24?$"{(int)age.TotalHours}h ago":$"{(int)age.TotalDays}d ago";}
- static string ThreatLink(AdminRecentThreatItem t)=>string.IsNullOrWhiteSpace(t.RelatedScanId)?"/admin/review":$"/admin/scans/{Uri.EscapeDataString(t.RelatedScanId)}";
- static string ScanLink(AdminRecentScanItem scan)=>$"/admin/scans/{Uri.EscapeDataString(scan.ScanResultId)}";
- static string Score(int? value)=>value?.ToString(System.Globalization.CultureInfo.InvariantCulture)??"—";
+
+@code {
+    private AdminDashboardSummary? _summary;
+    private string? _error;
+    private bool _loading;
+    private int _rangeDays = 7;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (_loading) return;
+        _loading = true;
+        _error = null;
+        try { _summary = await DashboardService.GetSummaryAsync(CancellationToken.None); }
+        catch { _error = "HIP could not load the privacy-safe dashboard summary. Try again."; }
+        finally { _loading = false; }
+    }
+
+    private AdminDashboardCard? Card(string key) => _summary?.Cards.FirstOrDefault(card => card.Key == key);
+
+    private RenderFragment Metric(string key, string label, string description) => builder =>
+    {
+        var card = Card(key);
+        var value = card is null || card.IsPlaceholder ? "—" : card.Value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+        builder.OpenElement(0, "article"); builder.AddAttribute(1, "class", "editorial-metric");
+        builder.OpenElement(2, "span"); builder.AddContent(3, label); builder.CloseElement();
+        builder.OpenElement(4, "strong"); builder.AddContent(5, value); builder.CloseElement();
+        builder.OpenElement(6, "small"); builder.AddContent(7, card is null || card.IsPlaceholder ? card?.Status ?? "Unavailable" : description); builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    private RenderFragment JudgmentRow(string label, string description, string key, string href) => builder =>
+    {
+        var card = Card(key);
+        var value = card is null || card.IsPlaceholder ? "—" : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        builder.OpenElement(0, "a"); builder.AddAttribute(1, "class", "judgment-row"); builder.AddAttribute(2, "href", href);
+        builder.OpenElement(3, "strong"); builder.AddContent(4, value); builder.CloseElement();
+        builder.OpenElement(5, "span"); builder.OpenElement(6, "b"); builder.AddContent(7, label); builder.CloseElement(); builder.OpenElement(8, "small"); builder.AddContent(9, card is null || card.IsPlaceholder ? card?.Status ?? "Unavailable" : description); builder.CloseElement(); builder.CloseElement();
+        builder.OpenElement(10, "em"); builder.AddContent(11, "Review"); builder.CloseElement(); builder.CloseElement();
+    };
+
+    private RenderFragment Empty(string title, string text) => builder =>
+    {
+        builder.OpenElement(0, "div"); builder.AddAttribute(1, "class", "visual-empty"); builder.OpenElement(2, "b"); builder.AddContent(3, title); builder.CloseElement(); builder.OpenElement(4, "span"); builder.AddContent(5, text); builder.CloseElement(); builder.CloseElement();
+    };
+
+    private RenderFragment RiskBar(string label, string key) => builder =>
+    {
+        var card = Card(key); var value = card is null || card.IsPlaceholder ? "—" : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture); var width = card is null || card.IsPlaceholder ? 0 : Math.Min(100, card.Value * 10);
+        builder.AddMarkupContent(0, $"<div class='risk-bar'><span>{label}<b>{value}</b></span><i style='--w:{width}'></i></div>");
+    };
+
+    private RenderFragment Health(string name, string status, string note) => builder => builder.AddMarkupContent(0, $"<div class='health-row'><i class='{HealthTone(status)}'></i><span><b>{name}</b><small>{note}</small></span><strong>{status}</strong></div>");
+    private RenderFragment RuleRow(string label, string key) => builder => { var card = Card(key); builder.AddMarkupContent(0, $"<div class='rule-row'><span>{label}</span><b>{(card is null || card.IsPlaceholder ? "—" : card.Value)}</b></div>"); };
+
+    private int UnavailableSourceCount => _summary?.Sources.Count(source => !source.IsAvailable) ?? 0;
+    private IReadOnlyList<AdminRecentScanItem> RangeScans => _summary?.RecentScans.Where(scan => scan.LastCheckedUtc >= DateTimeOffset.UtcNow.AddDays(-_rangeDays)).ToArray() ?? [];
+    private int Count(params string[] values) => RangeScans.Count(scan => values.Any(value => scan.Status.Contains(value, StringComparison.OrdinalIgnoreCase)));
+    private int SafeCount => Count("Trusted", "Safe");
+    private int CautionCount => Count("Limited", "Unknown", "Caution");
+    private int HighRiskCount => Count("Suspicious", "HighRisk");
+    private int CriticalCount => Count("Dangerous", "Critical");
+    private int ClassifiedCount => SafeCount + CautionCount + HighRiskCount + CriticalCount;
+    private int TrustedPercent => OutcomePercent(SafeCount, ClassifiedCount);
+    private int CautionPercent => OutcomePercent(CautionCount, ClassifiedCount);
+    private int RiskPercent => OutcomePercent(HighRiskCount + CriticalCount, ClassifiedCount);
+    private int ProtectionScore => Math.Clamp(Card("averageHipScore")?.Value ?? 0, 0, 100);
+    private int JudgmentCount => CountCard("pendingReviewItems") + CountCard("selfHealingCandidates") + CountCard("pendingAppeals");
+    private AdminRecentThreatItem? PriorityThreat => _summary?.RecentThreats.FirstOrDefault();
+    private int MaxBucketTotal => Math.Max(1, DailyOutcomes.Max(bucket => bucket.Total));
+
+    private string ProtectionLabel => ProtectionScore >= 85 ? "Protected" : ProtectionScore >= 60 ? "Caution" : ProtectionScore >= 30 ? "High risk" : "Critical";
+    private string ProtectionStatus => _summary?.HasScanData != true ? "Awaiting evidence" : JudgmentCount > 0 ? "Protection pending review" : ProtectionLabel;
+    private string ProtectionHeading => _summary?.HasScanData != true ? "Protection needs evidence." : JudgmentCount > 0 ? "Strong evidence, incomplete judgment." : "Current evidence is fully reviewed.";
+    private string ProtectionExplanation => _summary?.HasScanData == true ? JudgmentCount > 0 ? $"{JudgmentCount} {Pluralize(JudgmentCount, "decision", "decisions")} require review before protection status can be confirmed." : $"Average HIP score across {_summary.RecentScans.Count} recent privacy-safe scan summaries." : "HIP needs stored scan evidence before it can calculate protection.";
+    private string DashboardHeading => _summary?.HasScanData == true && (ProtectionScore < 85 || JudgmentCount > 0) ? "Trust needs attention." : "Trust is operating normally.";
+    private string DashboardSummary => ProtectionExplanation;
+    private string JudgmentHeading => JudgmentCount == 0 ? "No judgments remain." : $"{JudgmentCount} {Pluralize(JudgmentCount, "judgment", "judgments")} remain.";
+    private string OutcomeDistributionLabel => $"{TrustedPercent}% trusted, {CautionPercent}% caution, {RiskPercent}% risk";
+    private string SystemStatusLabel => UnavailableSourceCount == 0 ? "Systems operational" : $"{UnavailableSourceCount} sources degraded";
+    private string SystemStatusTone => UnavailableSourceCount == 0 ? "operational" : "degraded";
+    private string PrioritySeverityTone => SeverityTone(PriorityThreat?.Severity);
+
+    private IReadOnlyList<DailyOutcome> DailyOutcomes
+    {
+        get
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow); var firstDay = today.AddDays(-(_rangeDays - 1));
+            return Enumerable.Range(0, 7).Select(index =>
+            {
+                var startOffset = (int)Math.Floor(index * _rangeDays / 7d); var endOffset = (int)Math.Floor((index + 1) * _rangeDays / 7d); var start = firstDay.AddDays(startOffset); var end = firstDay.AddDays(Math.Max(startOffset + 1, endOffset));
+                var scans = RangeScans.Where(scan => { var date = DateOnly.FromDateTime(scan.LastCheckedUtc.UtcDateTime); return date >= start && date < end; }).ToArray();
+                var trusted = CountStatuses(scans, "Trusted", "Safe"); var caution = CountStatuses(scans, "Limited", "Unknown", "Caution"); var risk = CountStatuses(scans, "Suspicious", "HighRisk", "Dangerous", "Critical");
+                var label = _rangeDays == 7 ? start.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture) : $"{start.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture)}–{end.AddDays(-1).ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture)}";
+                return new DailyOutcome(label, trusted, caution, risk, scans.Length);
+            }).ToArray();
+        }
+    }
+
+    private int CountCard(string key) { var card = Card(key); return card is null || card.IsPlaceholder ? 0 : card.Value; }
+    private static int CountStatuses(IEnumerable<AdminRecentScanItem> scans, params string[] values) => scans.Count(scan => values.Any(value => scan.Status.Contains(value, StringComparison.OrdinalIgnoreCase)));
+    private static int OutcomePercent(int value, int total) => total == 0 ? 0 : (int)Math.Round(value * 100d / total);
+    private static int BucketPercent(int value, int total) => total == 0 ? 0 : Math.Max(3, (int)Math.Round(value * 100d / total));
+    private int VolumePercent(int total) => total == 0 ? 0 : Math.Max(10, (int)Math.Round(total * 100d / MaxBucketTotal));
+    private static string SegmentStyle(int percent) => $"--segment:{percent}";
+    private string VolumeStyle(int total) => $"--volume:{VolumePercent(total)}";
+    private static string BucketAriaLabel(DailyOutcome bucket) => $"{bucket.Label}: {bucket.Total} scans, {bucket.Trusted} trusted, {bucket.Caution} caution, {bucket.Risk} risk";
+    private static string Pluralize(int value, string singular, string plural) => value == 1 ? singular : plural;
+    private static string SeverityTone(string? severity) => severity?.ToLowerInvariant() switch { "critical" => "critical", "dangerous" or "high" or "highrisk" or "high risk" => "danger", "caution" or "warning" => "caution", _ => "neutral" };
+    private static string HealthTone(string status) => status.ToLowerInvariant() switch { "healthy" or "online" or "available" or "evidence" => "healthy", "waiting" or "degraded" or "partial" => "waiting", _ => "unavailable" };
+    private static string Relative(DateTimeOffset value) { var age = DateTimeOffset.UtcNow - value; return age.TotalMinutes < 60 ? $"{Math.Max(1, (int)age.TotalMinutes)}m ago" : age.TotalHours < 24 ? $"{(int)age.TotalHours}h ago" : $"{(int)age.TotalDays}d ago"; }
+    private static string ThreatLink(AdminRecentThreatItem threat) => string.IsNullOrWhiteSpace(threat.RelatedScanId) ? "/admin/review" : $"/admin/scans/{Uri.EscapeDataString(threat.RelatedScanId)}";
+    private static string ScanLink(AdminRecentScanItem scan) => $"/admin/scans/{Uri.EscapeDataString(scan.ScanResultId)}";
+    private static string Score(int? value) => value?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "—";
+    private sealed record DailyOutcome(string Label, int Trusted, int Caution, int Risk, int Total) { public int Classified => Trusted + Caution + Risk; }
 }

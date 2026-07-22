@@ -1,7 +1,9 @@
 @page "/admin/licenses/{LicenseId}"
 @rendermode InteractiveServer
-@attribute [Authorize(Policy = AdminPolicies.CanManageLicenses)]
+@attribute [Authorize(Policy = AdminPolicies.CanViewLicenses)]
 @inject ISetupCodeLicenseService LicenseService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 <PageTitle>Manage License | HIP Admin</PageTitle>
 <main class="license-detail-page">
     <section class="hip-page-heading license-heading"><div><span class="hip-eyebrow">HIP Admin · licenses</span><h1>Manage license</h1><p>Review access, connected devices, and safety preferences.</p></div><a class="hip-secondary-action" href="/admin/licenses">Back to licenses</a></section>
@@ -12,21 +14,38 @@
     else
     {
         @if (!string.IsNullOrWhiteSpace(_message)) { <div class="license-notice success" role="status">@_message</div> }
-        @if (!string.IsNullOrWhiteSpace(_error)) { <div class="license-notice error" role="alert">@_error</div> }
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="license-notice error" role="alert">
+                @_error
+                @if (_requiresStepUp)
+                {
+                    <a href="@StepUpHref">Confirm identity</a>
+                }
+            </div>
+        }
         <section class="license-overview-grid">
             <article class="hip-panel padded license-overview"><div class="license-overview-title"><div><span class="license-label">License code</span><h2><code>@License.MaskedSetupCode</code></h2></div><span class="license-status @StatusTone(License.Status)">@StatusLabel(License.Status)</span></div><p class="license-status-explanation">@StatusExplanation(License.Status)</p><dl class="license-facts"><div><dt>Connected devices</dt><dd>@License.ActivationCount of @License.AllowedDeviceCount</dd></div><div><dt>First used</dt><dd>@FormatDate(License.ActivatedAtUtc)</dd></div><div><dt>Last used</dt><dd>@FormatDate(License.LastSeenAtUtc)</dd></div><div><dt>HUD version</dt><dd>@(License.HudVersion ?? "Not connected")</dd></div></dl></article>
             <article class="hip-panel padded license-preferences"><span class="license-label">Safety preferences</span><h2>@ProtectionLabel(License.Settings.ScanMode)</h2><p>@ProtectionDescription(License.Settings.ScanMode)</p><ul><li><span>On-screen alerts</span><strong>@OnOrOff(License.Settings.PopupAlertsEnabled)</strong></li><li><span>Private warnings</span><strong>@OnOrOff(License.Settings.PrivateWarningsEnabled)</strong></li><li><span>Safer page routing</span><strong>@OnOrOff(License.Settings.SafetyPageRoutingEnabled)</strong></li></ul></article>
         </section>
-        <section class="hip-panel padded license-actions-panel">
-            <div><span class="license-label">Available actions</span><h2>License access</h2><p>Changes take effect the next time the HUD contacts HIP.</p></div>
-            <div class="license-actions">
-                @if (License.Status == LicenseStatus.Suspended) { <button class="hip-primary-action" type="button" @onclick="RestoreAccess">Restore access</button> }
-                else if (License.Status is not LicenseStatus.Revoked and not LicenseStatus.Expired) { <button class="hip-secondary-action" type="button" @onclick="PauseAccess">Pause access</button> }
-                @if (License.Status is not LicenseStatus.Revoked and not LicenseStatus.Expired) { <button class="hip-secondary-action" type="button" @onclick="ShowDeviceConfirmation">Allow a new device</button><button class="hip-secondary-action danger-button" type="button" @onclick="ShowCancellation">Cancel this license</button> }
-            </div>
-            @if (_confirmingDeviceReset) { <div class="license-confirmation" role="alert"><div><h3>Allow a different device?</h3><p>This removes the current device connections. The owner can then connect the HUD again with the same license code.</p></div><div><button class="hip-primary-action" type="button" @onclick="AllowNewDevice">Yes, allow a new device</button><button class="hip-secondary-action" type="button" @onclick="CloseConfirmations">Keep current devices</button></div></div> }
-            @if (_confirmingCancellation) { <div class="license-confirmation danger" role="alert"><div><h3>Cancel this license?</h3><p>The HUD will lose access to HIP. This should only be used when access must end.</p></div><div><button class="hip-primary-action danger-fill" type="button" @onclick="CancelLicense">Yes, cancel the license</button><button class="hip-secondary-action" type="button" @onclick="CloseConfirmations">Keep the license</button></div></div> }
-        </section>
+        @if (_canSupportLicenses || _canAdministerLicenses)
+        {
+            <section class="hip-panel padded license-actions-panel">
+                <div><span class="license-label">Available actions</span><h2>License access</h2><p>Changes take effect the next time the HUD contacts HIP.</p></div>
+                <div class="license-actions">
+                    @if (_canAdministerLicenses && License.Status == LicenseStatus.Suspended) { <button class="hip-primary-action" type="button" @onclick="RestoreAccess">Restore access</button> }
+                    else if (_canAdministerLicenses && License.Status is not LicenseStatus.Revoked and not LicenseStatus.Expired) { <button class="hip-secondary-action" type="button" @onclick="PauseAccess">Pause access</button> }
+                    @if (_canSupportLicenses && License.Status is not LicenseStatus.Revoked and not LicenseStatus.Expired) { <button class="hip-secondary-action" type="button" @onclick="ShowDeviceConfirmation">Allow a new device</button> }
+                    @if (_canAdministerLicenses && License.Status is not LicenseStatus.Revoked and not LicenseStatus.Expired) { <button class="hip-secondary-action danger-button" type="button" @onclick="ShowCancellation">Cancel this license</button> }
+                </div>
+                @if (_canSupportLicenses && _confirmingDeviceReset) { <div class="license-confirmation" role="alert"><div><h3>Allow a different device?</h3><p>This removes the current device connections. The owner can then connect the HUD again with the same license code.</p></div><div><button class="hip-primary-action" type="button" @onclick="AllowNewDeviceAsync">Yes, allow a new device</button><button class="hip-secondary-action" type="button" @onclick="CloseConfirmations">Keep current devices</button></div></div> }
+                @if (_canAdministerLicenses && _confirmingCancellation) { <div class="license-confirmation danger" role="alert"><div><h3>Cancel this license?</h3><p>The HUD will lose access to HIP. This should only be used when access must end.</p></div><div><button class="hip-primary-action danger-fill" type="button" @onclick="CancelLicense">Yes, cancel the license</button><button class="hip-secondary-action" type="button" @onclick="CloseConfirmations">Keep the license</button></div></div> }
+            </section>
+        }
+        else
+        {
+            <section class="hip-panel padded license-actions-panel"><div><span class="license-label">View-only access</span><h2>License access</h2><p>Your role can inspect this license but cannot change it.</p></div></section>
+        }
         <section class="hip-panel padded connected-devices"><div><span class="license-label">Privacy-safe view</span><h2>Connected devices</h2><p>Only shortened device references are shown here.</p></div>@if (License.DeviceIds.Count == 0) { <p class="license-empty-inline">No devices are connected yet.</p> } else { <ul>@foreach (var deviceId in License.DeviceIds) { <li><span>HUD device</span><code>@MaskDeviceId(deviceId)</code></li> }</ul> }</section>
     }
 </main>
@@ -34,16 +53,99 @@
     [Parameter] public string LicenseId { get; set; } = string.Empty;
     private LicenseSummary? License { get; set; }
     private string? _message; private string? _error; private bool _confirmingCancellation; private bool _confirmingDeviceReset;
+    private bool _requiresStepUp;
+    private bool _canSupportLicenses;
+    private bool _canAdministerLicenses;
+    private string StepUpHref => $"/step-up?returnUrl={Uri.EscapeDataString($"/admin/licenses/{Uri.EscapeDataString(LicenseId)}")}";
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _canSupportLicenses = (await AuthorizationService.AuthorizeAsync(
+            authenticationState.User,
+            null,
+            AdminPolicies.CanSupportLicenses)).Succeeded;
+        _canAdministerLicenses = (await AuthorizationService.AuthorizeAsync(
+            authenticationState.User,
+            null,
+            AdminPolicies.CanAdministerLicenses)).Succeeded;
+    }
+
     protected override void OnParametersSet() => License = LicenseService.GetLicense(LicenseId);
-    private void PauseAccess() => UpdateStatus(LicenseStatus.Suspended, "Access has been paused.");
-    private void RestoreAccess() => UpdateStatus(License?.ActivationCount > 0 ? LicenseStatus.Active : LicenseStatus.Pending, "Access has been restored.");
-    private void UpdateStatus(LicenseStatus status, string message) { ClearMessages(); License = LicenseService.SetStatus(LicenseId, status); if (License is null) _error = "HIP could not update this license. Please try again."; else _message = message; }
-    private void AllowNewDevice() { ClearMessages(); License = LicenseService.ResetActivation(LicenseId); if (License is null) _error = "HIP could not clear the old device connections. Please try again."; else _message = "The owner can now connect a new device with the same license code."; }
-    private void CancelLicense() => UpdateStatus(LicenseStatus.Revoked, "The license has been cancelled.");
+    private Task PauseAccess() => UpdateStatusAsync(LicenseStatus.Suspended, "Access has been paused.");
+    private Task RestoreAccess() => UpdateStatusAsync(License?.ActivationCount > 0 ? LicenseStatus.Active : LicenseStatus.Pending, "Access has been restored.");
+
+    /// <summary>
+    /// Changes license status only after rechecking recent privileged authentication in the active circuit.
+    /// </summary>
+    private async Task UpdateStatusAsync(LicenseStatus status, string message)
+    {
+        ClearMessages();
+        if (!await RequirePolicyAsync(AdminPolicies.CanAdministerLicenses, offerStepUp: false) ||
+            !await RequirePolicyAsync(AdminPolicies.RecentPrivilegedAuthentication, offerStepUp: true))
+        {
+            return;
+        }
+
+        License = LicenseService.SetStatus(LicenseId, status);
+        if (License is null)
+        {
+            _error = "HIP could not update this license. Please try again.";
+        }
+        else
+        {
+            _message = message;
+        }
+    }
+
+    /// <summary>
+    /// Clears device activations only after rechecking recent privileged authentication.
+    /// </summary>
+    private async Task AllowNewDeviceAsync()
+    {
+        ClearMessages();
+        if (!await RequirePolicyAsync(AdminPolicies.CanSupportLicenses, offerStepUp: false))
+        {
+            return;
+        }
+
+        License = LicenseService.ResetActivation(LicenseId);
+        if (License is null)
+        {
+            _error = "HIP could not clear the old device connections. Please try again.";
+        }
+        else
+        {
+            _message = "The owner can now connect a new device with the same license code.";
+        }
+    }
+
+    /// <summary>
+    /// Reauthorizes the current circuit immediately before a license mutation.
+    /// </summary>
+    private async Task<bool> RequirePolicyAsync(string policy, bool offerStepUp)
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var authorization = await AuthorizationService.AuthorizeAsync(
+            authenticationState.User,
+            null,
+            policy);
+        if (authorization.Succeeded)
+        {
+            return true;
+        }
+
+        _error = offerStepUp
+            ? "Confirm your identity before changing license access."
+            : "You do not have permission to change this license.";
+        _requiresStepUp = offerStepUp;
+        return false;
+    }
+
+    private Task CancelLicense() => UpdateStatusAsync(LicenseStatus.Revoked, "The license has been cancelled.");
     private void ShowDeviceConfirmation() { ClearMessages(); _confirmingDeviceReset = true; }
     private void ShowCancellation() { ClearMessages(); _confirmingCancellation = true; }
     private void CloseConfirmations() { _confirmingCancellation = false; _confirmingDeviceReset = false; }
-    private void ClearMessages() { _message = null; _error = null; CloseConfirmations(); }
+    private void ClearMessages() { _message = null; _error = null; _requiresStepUp = false; CloseConfirmations(); }
     private static string StatusLabel(LicenseStatus status) => status switch { LicenseStatus.Pending => "Ready to use", LicenseStatus.Active => "In use", LicenseStatus.Suspended => "Paused", LicenseStatus.Revoked => "Cancelled", LicenseStatus.Expired => "Expired", _ => "Unknown" };
     private static string StatusTone(LicenseStatus status) => status switch { LicenseStatus.Active => "safe", LicenseStatus.Pending => "ready", LicenseStatus.Suspended => "warning", _ => "danger" };
     private static string StatusExplanation(LicenseStatus status) => status switch { LicenseStatus.Pending => "This license is ready to connect to a HUD.", LicenseStatus.Active => "This license can use HIP normally.", LicenseStatus.Suspended => "Access is temporarily paused until an administrator restores it.", LicenseStatus.Revoked => "This license has been cancelled and can no longer use HIP.", LicenseStatus.Expired => "This license has reached the end of its allowed time.", _ => "The current state is not available." };

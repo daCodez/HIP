@@ -28,6 +28,36 @@ public sealed class RedisDuplicateSubmissionGuard(IAtomicExpiryStore atomicStore
 }
 
 /// <summary>
+/// Uses Redis-backed atomic expiry state to reject issuer-scoped message identifier replay across HIP instances.
+/// </summary>
+public sealed class RedisReplayMessageIdStore(IAtomicExpiryStore atomicStore) : IReplayMessageIdStore
+{
+    /// <inheritdoc />
+    public ValueTask<bool> TryReserveAsync(
+        string issuer,
+        string messageId,
+        TimeSpan validityWindow,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(issuer);
+        ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
+        if (validityWindow <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(validityWindow),
+                validityWindow,
+                "Message identifier validity must be positive.");
+        }
+
+        var fingerprint = SecurityStateKey.Fingerprint("message-id", issuer, [messageId]);
+        return atomicStore.TryCreateAsync(
+            $"hip:v1:message-id:{fingerprint}",
+            validityWindow,
+            cancellationToken);
+    }
+}
+
+/// <summary>
 /// Uses Redis-backed atomic expiry state to reject issuer-scoped nonce replay across HIP instances.
 /// </summary>
 public sealed class RedisReplayNonceStore(IAtomicExpiryStore atomicStore) : IReplayNonceStore

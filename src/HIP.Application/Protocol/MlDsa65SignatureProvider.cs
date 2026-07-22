@@ -15,7 +15,7 @@ namespace HIP.Application.Protocol;
 /// https://learn.microsoft.com/dotnet/core/whats-new/dotnet-10/libraries
 /// https://learn.microsoft.com/dotnet/api/system.security.cryptography.mldsa?view=net-10.0
 /// </remarks>
-public sealed class MlDsa65SignatureProvider : IHipSignatureProvider
+public sealed class MlDsa65SignatureProvider : IHipSignatureProvider, IHipPublicKeyFingerprintProvider
 {
     public const string Algorithm = "ML-DSA-65";
     public const int MaximumContentHashBytes = 1_024;
@@ -79,6 +79,25 @@ public sealed class MlDsa65SignatureProvider : IHipSignatureProvider
         using var key = MLDsa.ImportFromPem(publicKey);
         EnsureMlDsa65(key, nameof(publicKey));
         return key.VerifyData(data, signature);
+    }
+
+    /// <inheritdoc />
+    public string ComputePublicKeyFingerprint(string publicKey)
+    {
+        ValidatePem(publicKey, nameof(publicKey));
+        EnsureSupported();
+        var normalizedPem = publicKey.Trim();
+        if (!normalizedPem.StartsWith("-----BEGIN PUBLIC KEY-----", StringComparison.Ordinal) ||
+            !normalizedPem.EndsWith("-----END PUBLIC KEY-----", StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The supplied ML-DSA-65 material must be a SubjectPublicKeyInfo public key.",
+                nameof(publicKey));
+        }
+
+        using var key = MLDsa.ImportFromPem(normalizedPem);
+        EnsureMlDsa65(key, nameof(publicKey));
+        return HipPublicKeyFingerprint.ComputeSha256(Algorithm, key.ExportSubjectPublicKeyInfo());
     }
 
     private static byte[] ValidateContentHash(string contentHash)

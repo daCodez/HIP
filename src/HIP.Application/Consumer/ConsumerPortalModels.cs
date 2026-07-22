@@ -57,6 +57,63 @@ public sealed record ConsumerSettingsSaveResult(
     ConsumerSettings? Settings,
     string Message);
 
+/// <summary>Owner-hash scoped settings persistence contract; raw consumer IDs are never stored.</summary>
+public sealed record ConsumerSettingsRecord(
+    string ConsumerScopeHash,
+    ConsumerSettings Settings,
+    DateTimeOffset UpdatedAtUtc,
+    long Version);
+
+public interface IConsumerSettingsRepository
+{
+    Task<ConsumerSettingsRecord?> GetAsync(
+        string consumerScopeHash,
+        CancellationToken cancellationToken);
+
+    Task<bool> TrySaveAsync(
+        ConsumerSettingsRecord record,
+        long expectedVersion,
+        CancellationToken cancellationToken);
+}
+
+public sealed class InMemoryConsumerSettingsRepository : IConsumerSettingsRepository
+{
+    private readonly object gate = new();
+    private readonly Dictionary<string, ConsumerSettingsRecord> records = new(StringComparer.Ordinal);
+
+    public Task<ConsumerSettingsRecord?> GetAsync(
+        string consumerScopeHash,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (gate)
+        {
+            records.TryGetValue(consumerScopeHash, out var record);
+            return Task.FromResult(record);
+        }
+    }
+
+    public Task<bool> TrySaveAsync(
+        ConsumerSettingsRecord record,
+        long expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (gate)
+        {
+            records.TryGetValue(record.ConsumerScopeHash, out var existing);
+            var currentVersion = existing?.Version ?? 0;
+            if (currentVersion != expectedVersion || record.Version != expectedVersion + 1)
+            {
+                return Task.FromResult(false);
+            }
+
+            records[record.ConsumerScopeHash] = record;
+            return Task.FromResult(true);
+        }
+    }
+}
+
 public enum ConsumerReportStatus
 {
     Submitted,

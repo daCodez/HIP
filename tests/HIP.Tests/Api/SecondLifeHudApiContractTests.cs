@@ -13,7 +13,7 @@ public sealed class SecondLifeHudApiContractTests
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Support");
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Admin");
         client.DefaultRequestHeaders.Add("X-HIP-Admin-User", "support-sl-hud-test");
 
         var setupCodeResponse = await client.PostAsJsonAsync("/api/v1/licenses/setup-codes", new
@@ -88,7 +88,7 @@ public sealed class SecondLifeHudApiContractTests
 
     private static async Task<HudActivation> ActivateHudAsync(HttpClient client)
     {
-        client.DefaultRequestHeaders.TryAddWithoutValidation("X-HIP-Admin-Role", "Support");
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-HIP-Admin-Role", "Admin");
         client.DefaultRequestHeaders.TryAddWithoutValidation("X-HIP-Admin-User", "hud-contract-test");
         var setupCodeResponse = await client.PostAsJsonAsync("/api/v1/licenses/setup-codes", new
         {
@@ -108,9 +108,12 @@ public sealed class SecondLifeHudApiContractTests
         activationResponse.EnsureSuccessStatusCode();
         using var activationJson = await JsonDocument.ParseAsync(await activationResponse.Content.ReadAsStreamAsync());
 
-        return new HudActivation(
+        var activation = new HudActivation(
             activationJson.RootElement.GetProperty("deviceId").GetString()!,
             activationJson.RootElement.GetProperty("deviceCredential").GetString()!);
+        client.DefaultRequestHeaders.Remove("X-HIP-Admin-Role");
+        client.DefaultRequestHeaders.Remove("X-HIP-Admin-User");
+        return activation;
     }
 
     private sealed record HudActivation(string DeviceId, string DeviceCredential);

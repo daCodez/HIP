@@ -1,5 +1,5 @@
 @page "/admin/alerts"
-@attribute [Authorize(Policy = AdminPolicies.CanReviewReports)]
+@attribute [Authorize(Policy = AdminPolicies.CanViewReviews)]
 @rendermode InteractiveServer
 @inject IAdminDashboardService DashboardService
 @inject ILogger<AdminAlerts> Logger

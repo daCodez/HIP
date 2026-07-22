@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using HIP.Domain.Risk;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -92,13 +93,25 @@ public sealed class AiRiskAnalysisApiTests
             }
         });
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var body = await response.Content.ReadAsStringAsync();
+        var draft = JsonDocument.Parse(body);
+        var draftId = draft.RootElement.GetProperty("draftId").GetString();
+        var submitted = await client.PostAsync(
+            $"/api/v1/ai/rule-drafts/{draftId}/submit-for-approval",
+            content: null);
+        var submittedBody = await submitted.Content.ReadAsStringAsync();
         Assert.Multiple(() =>
         {
-            Assert.That(body, Does.Contain("simulationRequired"));
-            Assert.That(body, Does.Contain("recommendedMode"));
-            Assert.That(body, Does.Contain("\"recommendedMode\":1"));
+            Assert.That(body, Does.Contain("simulationPassed"));
+            Assert.That(body, Does.Contain("fixtureSetId"));
+            Assert.That(body, Does.Contain("rollbackPlan"));
+            Assert.That(body, Does.Contain("\"enabled\":false"));
+            Assert.That(body, Does.Contain("\"mode\":\"Disabled\""));
+            Assert.That(body, Does.Not.Contain("tinyurl.com/claim-login"));
+            Assert.That(submitted.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(submittedBody, Does.Contain("\"requiredApprovalCount\":2"));
+            Assert.That(submittedBody, Does.Not.Contain("ai:"));
         });
     }
 

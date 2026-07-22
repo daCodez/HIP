@@ -1,9 +1,14 @@
 @page "/admin/identity/websites"
 @using System.Security.Claims
+@using System.Security.Cryptography
+@using System.Text.Json
+@using HIP.Application.Protocol
 @attribute [Authorize(Policy = AdminPolicies.CanManageDomainVerifications)]
 @rendermode InteractiveServer
 @inject IWebsiteIdentityService WebsiteIdentityService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthorizationService AuthorizationService
+@inject ICanonicalJsonService CanonicalJsonService
 
 <PageTitle>HIP Domain Verification</PageTitle>
 
@@ -27,9 +32,18 @@
                 Display name
                 <input @bind="_displayName" placeholder="Example Website" autocomplete="off" />
             </label>
+            <label>
+                Verification method
+                <select @bind="_verificationMethod">
+                    <option value="@VerificationMethod.DnsTxt">DNS TXT</option>
+                    <option value="@VerificationMethod.WellKnownHipJson">Signed .well-known/hip.json</option>
+                </select>
+            </label>
             <div class="verification-method-summary">
-                <span>DNS TXT verification</span>
-                <small>HIP checks the published domain-control record without exposing stored verification credentials.</small>
+                <span>@MethodLabel(_verificationMethod)</span>
+                <small>@(_verificationMethod == VerificationMethod.DnsTxt
+                    ? "HIP checks the published domain-control record without exposing stored verification credentials."
+                    : "HIP fetches the fixed HTTPS well-known path and verifies the active challenge with the registered signing key.")</small>
             </div>
             <div class="rule-button-row">
                 <button class="primary-button" type="button" @onclick="RegisterWebsiteAsync" disabled="@_isBusy">Register Website</button>
@@ -70,6 +84,10 @@
                         <dt>Method</dt>
                         <dd>@_registered.VerificationRequest.Method</dd>
                     </div>
+                    <div>
+                        <dt>Challenge expires UTC</dt>
+                        <dd>@(_registered.VerificationRequest.ExpiresAtUtc?.ToString("u") ?? "Legacy challenge")</dd>
+                    </div>
                 </dl>
             }
         </article>
@@ -78,11 +96,36 @@
     @if (_registered is not null)
     {
         <section class="rule-builder-panel">
-            <h2>Add This DNS Record</h2>
-            <p>Add this TXT record to your domain DNS, then click Verify Domain.</p>
+            <h2>@(_registered.VerificationRequest.Method == VerificationMethod.DnsTxt ? "Add This DNS Record" : "Publish the Signed Well-Known Document")</h2>
+            @if (_registered.VerificationRequest.Method == VerificationMethod.DnsTxt)
+            {
+                <p>Add this TXT record to your domain DNS, then click Verify Domain.</p>
+            }
+            else
+            {
+                <p>Sign the content hash with the registered private key, add the resulting HIP signature to this template, and publish it at <code>https://@_registered.WebsiteIdentity.Domain/.well-known/hip.json</code>.</p>
+            }
             <div class="json-preview">
-                <pre>@DnsRecordText</pre>
+                <pre>@VerificationPublicationText</pre>
             </div>
+            @if (_registered.VerificationRequest.Method == VerificationMethod.WellKnownHipJson)
+            {
+                <dl class="hip-definition-list">
+                    <div>
+                        <dt>Canonical content hash to sign</dt>
+                        <dd>@(_wellKnownContentHash ?? "Template unavailable")</dd>
+                    </div>
+                    <div>
+                        <dt>Signing key</dt>
+                        <dd>@_registered.WebsiteIdentity.PublicKeys.Single().KeyId / @_registered.WebsiteIdentity.PublicKeys.Single().Algorithm</dd>
+                    </div>
+                </dl>
+                @if (!string.IsNullOrWhiteSpace(_registered.DevelopmentPrivateKey))
+                {
+                    <p class="admin-error">Development only: this private key is shown once. Store it securely, never publish it, and replace it with client-owned production key material.</p>
+                    <div class="json-preview"><pre>@_registered.DevelopmentPrivateKey</pre></div>
+                }
+            }
             <div class="rule-button-row">
                 <button class="primary-button" type="button" @onclick="VerifyWebsiteAsync" disabled="@_isBusy">Verify Domain</button>
                 <a class="secondary-button" href="@LookupHref">Open Public Lookup</a>
@@ -190,7 +233,15 @@
                                                 disabled="@(IsOperationBusy(identity.Domain) || !CanRetry(identity))">
                                             Retry
                                         </button>
-                                        @if (_canRevoke && identity.VerificationStatus != VerificationStatus.Revoked)
+                                        @if (identity.VerificationStatus == VerificationStatus.Expired)
+                                        {
+                                            <button type="button"
+                                                    @onclick="() => RenewVerificationAsync(identity)"
+                                                    disabled="@IsOperationBusy(identity.Domain)">
+                                                Issue New Challenge
+                                            </button>
+                                        }
+                                        @if (_showRevokeAction && identity.VerificationStatus != VerificationStatus.Revoked)
                                         {
                                             <button type="button" class="danger-button"
                                                     @onclick="() => BeginRevoke(identity.Domain)"
@@ -238,7 +289,10 @@
 @code {
     private string _domain = string.Empty;
     private string _displayName = string.Empty;
+    private VerificationMethod _verificationMethod = VerificationMethod.DnsTxt;
     private WebsiteIdentityRegistrationResponse? _registered;
+    private string? _wellKnownTemplate;
+    private string? _wellKnownContentHash;
     private WebsiteIdentity? _verified;
     private bool _isBusy;
     private string _message = string.Empty;
@@ -247,9 +301,7 @@
     private string _searchText = string.Empty;
     private string _sortColumn = "created";
     private bool _sortDescending = true;
-    private string _actorId = "unknown-admin";
-    private string _actorRole = "Unknown";
-    private bool _canRevoke;
+    private bool _showRevokeAction;
     private string? _activeOperationDomain;
     private string? _pendingRevokeDomain;
     private string _revokeReason = string.Empty;
@@ -291,10 +343,12 @@
         }
     }
 
-    private string DnsRecordText =>
+    private string VerificationPublicationText =>
         _registered is null
             ? string.Empty
-            : $"_hip.{_registered.WebsiteIdentity.Domain} TXT \"hip-site-verification={_registered.VerificationRequest.Token}\"";
+            : _registered.VerificationRequest.Method == VerificationMethod.DnsTxt
+                ? $"_hip.{_registered.WebsiteIdentity.Domain} TXT \"hip-site-verification={_registered.VerificationRequest.Token}\""
+                : _wellKnownTemplate ?? "Well-known template unavailable.";
 
     private string LookupHref =>
         _registered is null
@@ -304,15 +358,22 @@
     protected override async Task OnInitializedAsync()
     {
         var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        _actorId = authenticationState.User.Identity?.Name ?? "unknown-admin";
-        _actorRole = authenticationState.User.FindFirst(ClaimTypes.Role)?.Value ?? "Unknown";
-        _canRevoke = authenticationState.User.IsInRole(HIP.Web.Security.AdminRoles.Owner);
+        _showRevokeAction = (await AuthorizationService.AuthorizeAsync(
+            authenticationState.User,
+            null,
+            AdminPolicies.CanRevokeDomainVerifications)).Succeeded;
         await LoadIdentitiesAsync();
     }
 
     private async Task LoadIdentitiesAsync()
     {
-        _identities = await WebsiteIdentityService.ListAsync(CancellationToken.None);
+        var currentActor = await RequireCurrentAdminActorAsync(AdminPolicies.CanManageDomainVerifications);
+        _identities = currentActor is null
+            ? []
+            : await WebsiteIdentityService.ListAsync(
+                currentActor.ActorId,
+                currentActor.Role,
+                CancellationToken.None);
     }
 
     /// <summary>
@@ -360,6 +421,7 @@
             {
                 VerificationStatus.Verified => "Domain control confirmed.",
                 VerificationStatus.Revoked => "Verification revoked.",
+                VerificationStatus.Expired => "Challenge expired. Issue a new challenge before retrying.",
                 VerificationStatus.Unverified => "Verification evidence did not match.",
                 _ => "Awaiting successful verification."
             }
@@ -368,13 +430,13 @@
     private static string MethodLabel(VerificationMethod method) => method switch
     {
         VerificationMethod.DnsTxt => "DNS TXT",
-        VerificationMethod.WellKnownHipJson => "Legacy verification",
+        VerificationMethod.WellKnownHipJson => "Signed well-known JSON",
         _ => method.ToString()
     };
 
     private bool CanRetry(WebsiteIdentity identity) =>
-        identity.VerificationStatus != VerificationStatus.Revoked &&
-        identity.PreferredVerificationMethod == VerificationMethod.DnsTxt;
+        identity.VerificationStatus is not (VerificationStatus.Revoked or VerificationStatus.Expired) &&
+        identity.PreferredVerificationMethod is VerificationMethod.DnsTxt or VerificationMethod.WellKnownHipJson;
 
     private bool IsOperationBusy(string domain) =>
         string.Equals(_activeOperationDomain, domain, StringComparison.OrdinalIgnoreCase);
@@ -383,9 +445,41 @@
     {
         await RunOperationAsync(identity.Domain, async () =>
         {
+            var currentActor = await RequireCurrentAdminActorAsync(
+                AdminPolicies.CanManageDomainVerifications);
+            if (currentActor is null)
+            {
+                _operationError = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
             var updated = await WebsiteIdentityService.RetryVerificationAsync(
-                identity.Domain, _actorId, _actorRole, CancellationToken.None);
+                identity.Domain, currentActor.ActorId, currentActor.Role, CancellationToken.None);
             _operationMessage = $"{identity.Domain}: {StatusDescription(updated)}";
+        });
+    }
+
+    private async Task RenewVerificationAsync(WebsiteIdentity identity)
+    {
+        await RunOperationAsync(identity.Domain, async () =>
+        {
+            var currentActor = await RequireCurrentAdminActorAsync(AdminPolicies.CanManageDomainVerifications);
+            if (currentActor is null)
+            {
+                _operationError = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            _registered = await WebsiteIdentityService.RenewExpiredVerificationAsync(
+                identity.Domain,
+                currentActor.ActorId,
+                currentActor.Role,
+                CancellationToken.None);
+            await PrepareWellKnownTemplateAsync(currentActor.ActorId, currentActor.Role);
+            _verified = null;
+            _operationMessage = _registered.VerificationRequest.Method == VerificationMethod.DnsTxt
+                ? $"{identity.Domain}: new challenge issued. Update the DNS TXT record before verifying."
+                : $"{identity.Domain}: new challenge issued. Sign and republish the well-known document before verifying.";
         });
     }
 
@@ -413,8 +507,17 @@
         var domain = _pendingRevokeDomain;
         await RunOperationAsync(domain, async () =>
         {
+            var currentActor = await RequireCurrentAdminActorAsync(
+                AdminPolicies.CanRevokeDomainVerifications,
+                AdminPolicies.RecentPrivilegedAuthentication);
+            if (currentActor is null)
+            {
+                _operationError = "Sign in again before revoking domain verification.";
+                return;
+            }
+
             await WebsiteIdentityService.RevokeVerificationAsync(
-                domain, _revokeReason, _actorId, _actorRole, CancellationToken.None);
+                domain, _revokeReason, currentActor.ActorId, currentActor.Role, CancellationToken.None);
             _operationMessage = $"{domain} verification was revoked.";
             CancelRevoke();
         });
@@ -451,11 +554,27 @@
     {
         await RunSafelyAsync(async () =>
         {
+            var currentActor = await RequireCurrentAdminActorAsync(
+                AdminPolicies.CanManageDomainVerifications);
+            if (currentActor is null)
+            {
+                _error = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
             _registered = await WebsiteIdentityService.RegisterAsync(
-                new WebsiteIdentityRegistrationRequest(_domain, _displayName, VerificationMethod.DnsTxt),
+                new WebsiteIdentityRegistrationRequest(_domain, _displayName, _verificationMethod),
+                currentActor.ActorId,
+                currentActor.Role,
                 CancellationToken.None);
+            if (_registered.VerificationRequest.Method == VerificationMethod.WellKnownHipJson)
+            {
+                await PrepareWellKnownTemplateAsync(currentActor.ActorId, currentActor.Role);
+            }
             _verified = null;
-            _message = "Website registered. Add the verification record before verifying the domain.";
+            _message = _registered.VerificationRequest.Method == VerificationMethod.DnsTxt
+                ? "Website registered. Add the verification record before verifying the domain."
+                : "Website registered. Sign and publish the well-known template before verifying the domain.";
             await LoadIdentitiesAsync();
         });
     }
@@ -473,18 +592,99 @@
 
         await RunSafelyAsync(async () =>
         {
+            var currentActor = await RequireCurrentAdminActorAsync(
+                AdminPolicies.CanManageDomainVerifications);
+            if (currentActor is null)
+            {
+                _error = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
             _verified = await WebsiteIdentityService.VerifyAsync(
                 new WebsiteVerificationRequest(
                     _registered.WebsiteIdentity.Domain,
                     _registered.VerificationRequest.Method,
                     _registered.VerificationRequest.Token),
+                currentActor.ActorId,
+                currentActor.Role,
                 CancellationToken.None);
             _message = _verified.VerificationStatus == VerificationStatus.Verified
                 ? "Domain verified. HIP can now associate identity signals with this domain."
-                : "Domain is not verified yet. Check that the DNS TXT record has propagated.";
+                : _registered.VerificationRequest.Method == VerificationMethod.DnsTxt
+                    ? "Domain is not verified yet. Check that the DNS TXT record has propagated."
+                    : "Domain is not verified yet. Check the HTTPS document, active challenge, registered key, and signature.";
             await LoadIdentitiesAsync();
         });
     }
+
+    /// <summary>
+    /// Reauthorizes the active circuit and resolves the current server-authenticated actor and effective admin role.
+    /// </summary>
+    /// <param name="policyNames">Named policies that must all succeed immediately before persistence.</param>
+    private async Task<CurrentAdminActor?> RequireCurrentAdminActorAsync(params string[] policyNames)
+    {
+        if (policyNames.Length == 0 || policyNames.Any(string.IsNullOrWhiteSpace))
+        {
+            return null;
+        }
+
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        foreach (var policyName in policyNames)
+        {
+            var authorization = await AuthorizationService.AuthorizeAsync(
+                authenticationState.User,
+                null,
+                policyName);
+            if (!authorization.Succeeded)
+            {
+                return null;
+            }
+        }
+
+        if (!HipAuthenticatedIdentity.TryResolveUniqueClaim(
+                authenticationState.User,
+                HipAuthenticationClaimTypes.ActorId,
+                out var actorId))
+        {
+            return null;
+        }
+
+        var role = ResolveCurrentAdminRole(authenticationState.User);
+        return role is null ? null : new CurrentAdminActor(actorId, role);
+    }
+
+    /// <summary>
+    /// Resolves the strongest current canonical HIP admin role for privacy-safe audit attribution.
+    /// </summary>
+    private static string? ResolveCurrentAdminRole(ClaimsPrincipal principal)
+    {
+        if (principal.IsInRole(HIP.Web.Security.AdminRoles.Owner))
+        {
+            return HIP.Web.Security.AdminRoles.Owner;
+        }
+
+        if (principal.IsInRole(HIP.Web.Security.AdminRoles.Admin))
+        {
+            return HIP.Web.Security.AdminRoles.Admin;
+        }
+
+        if (principal.IsInRole(HIP.Web.Security.AdminRoles.Moderator))
+        {
+            return HIP.Web.Security.AdminRoles.Moderator;
+        }
+
+        if (principal.IsInRole(HIP.Web.Security.AdminRoles.Support))
+        {
+            return HIP.Web.Security.AdminRoles.Support;
+        }
+
+        return principal.IsInRole(HIP.Web.Security.AdminRoles.ReadOnly)
+            ? HIP.Web.Security.AdminRoles.ReadOnly
+            : null;
+    }
+
+    /// <summary>Identifies the authorized actor used by one direct interactive persistence call.</summary>
+    private sealed record CurrentAdminActor(string ActorId, string Role);
 
     /// <summary>
     /// Clears local form state without changing any registered identities.
@@ -494,9 +694,34 @@
         _domain = string.Empty;
         _displayName = string.Empty;
         _registered = null;
+        _verificationMethod = VerificationMethod.DnsTxt;
+        _wellKnownTemplate = null;
+        _wellKnownContentHash = null;
         _verified = null;
         _message = string.Empty;
         _error = string.Empty;
+    }
+
+    private async Task PrepareWellKnownTemplateAsync(string actorId, string actorRole)
+    {
+        if (_registered is null || _registered.VerificationRequest.Method != VerificationMethod.WellKnownHipJson)
+        {
+            _wellKnownTemplate = null;
+            _wellKnownContentHash = null;
+            return;
+        }
+
+        var template = await WebsiteIdentityService.BuildWellKnownDocumentAsync(
+            _registered.WebsiteIdentity.Domain,
+            actorId,
+            actorRole,
+            CancellationToken.None);
+        _wellKnownTemplate = JsonSerializer.Serialize(template, new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            WriteIndented = true
+        });
+        var canonical = WellKnownHipDocumentVerifier.CreateCanonicalSigningPayload(template, CanonicalJsonService);
+        _wellKnownContentHash = $"sha256:{Convert.ToHexString(SHA256.HashData(canonical)).ToLowerInvariant()}";
     }
 
     /// <summary>

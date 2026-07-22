@@ -81,6 +81,45 @@ public sealed class LicenseSetupCodeServiceTests
         });
     }
 
+    [Test]
+    public void Setup_code_expires_at_the_bounded_validity_boundary()
+    {
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero));
+        var service = new InMemorySetupCodeLicenseService(clock);
+        var code = service.CreateSetupCode(new CreateSetupCodeRequest(1, "support", "Normal", ValidForHours: 1));
+
+        clock.UtcNow = code.SetupCodeExpiresAtUtc!.Value;
+        var response = service.ActivateHud(code.SetupCode, "hud-expired", null, "0.1.0");
+        var summary = service.GetLicense(code.LicenseId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Activated, Is.False);
+            Assert.That(response.LicenseStatus, Is.EqualTo(LicenseStatus.Expired));
+            Assert.That(summary!.Status, Is.EqualTo(LicenseStatus.Expired));
+        });
+    }
+
+    [Test]
+    public void Default_single_device_setup_code_is_consumed_after_activation()
+    {
+        var service = new InMemorySetupCodeLicenseService();
+        var code = service.CreateSetupCode(new CreateSetupCodeRequest(1, "support", "Normal"));
+
+        var first = service.ActivateHud(code.SetupCode, "hud-first", null, "0.1.0");
+        var replay = service.ActivateHud(code.SetupCode, "hud-attacker", null, "0.1.0");
+        var summary = service.GetLicense(code.LicenseId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.Activated, Is.True);
+            Assert.That(replay.Activated, Is.False);
+            Assert.That(replay.Message, Is.EqualTo("Setup code was not accepted."));
+            Assert.That(summary!.SetupCodeConsumedAtUtc, Is.Not.Null);
+            Assert.That(summary.ActivationCount, Is.EqualTo(1));
+        });
+    }
+
     /// <summary>
     /// Confirms invalid setup codes cannot activate a HUD.
     /// </summary>
@@ -230,5 +269,11 @@ public sealed class LicenseSetupCodeServiceTests
             new Sha256PrivacyHashingService());
 
         return new SecondLifeHudService(ingestion, licenses, new HudDeviceCredentialService(new PrivacyHashingOptions()));
+    }
+
+    private sealed class ManualTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public DateTimeOffset UtcNow { get; set; } = utcNow;
+        public override DateTimeOffset GetUtcNow() => UtcNow;
     }
 }

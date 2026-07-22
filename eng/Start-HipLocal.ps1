@@ -69,6 +69,7 @@ function Set-HipDevelopmentEnvironment {
     Set-HipDefaultEnvironmentVariable -Name "HIP_RABBITMQ_PORT" -Value "5672"
     Set-HipDefaultEnvironmentVariable -Name "HIP_RABBITMQ_MANAGEMENT_PORT" -Value "15672"
     $env:ConnectionStrings__HipDatabase = "Host=localhost;Port=$($env:HIP_POSTGRES_PORT);Database=$($env:HIP_POSTGRES_DB);Username=$($env:HIP_POSTGRES_USER);Password=$($env:HIP_POSTGRES_PASSWORD)"
+    $env:ConnectionStrings__redis = "localhost:$($env:HIP_REDIS_PORT),abortConnect=false"
     $env:HipInfrastructure__DatabaseProvider = "PostgreSQL"
     $env:HipSecurity__RecordEncryptionKey = $env:HIP_RECORD_ENCRYPTION_KEY
     $env:HipSecurity__PrivacyHashingKey = $env:HIP_PRIVACY_HASHING_KEY

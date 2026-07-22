@@ -1,4 +1,5 @@
 @page "/dev/launcher"
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
 @rendermode InteractiveServer
 
 <PageTitle>HIP Local Launcher</PageTitle>

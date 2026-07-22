@@ -22,7 +22,7 @@
 else
 {
     <section class="hip-card-row four">
-        <article class="hip-mini-stat"><strong>0</strong><span>Messages Scanned</span></article>
+        <article class="hip-mini-stat"><strong>—</strong><span>Messages Scanned</span><small>Message ingestion unavailable</small></article>
         <article class="hip-mini-stat hot"><strong>@CardValue("dangerousResults")</strong><span>Dangerous Scan Results</span></article>
         <article class="hip-mini-stat"><strong>@CardValue("linksScanned")</strong><span>Links Checked</span></article>
         <article class="hip-mini-stat good"><strong>@PrivacyModeLabel</strong><span>Privacy Mode</span></article>
@@ -83,8 +83,13 @@ else
     /// </summary>
     /// <param name="key">Dashboard card key.</param>
     /// <returns>Card value or zero when no live source exists.</returns>
-    private int CardValue(string key) =>
-        _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
+    private string CardValue(string key)
+    {
+        var card = _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+        return card is null || card.IsPlaceholder
+            ? "—"
+            : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     /// <summary>
     /// Maps severity to a HIP visual tone.

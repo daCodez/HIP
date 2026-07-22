@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json;
+using HIP.Application.Protocol;
 using HIP.Domain.Identity;
 using HIP.Domain.Protocol;
 
@@ -20,11 +22,42 @@ public sealed class HipProtocolEnvelopeTests
         {
             Assert.That(json, Is.EqualTo(expected));
             Assert.That(roundTrip.Version, Is.EqualTo(HipProtocolVersion.Current));
+            Assert.That(roundTrip.MessageId, Is.EqualTo("msg-20260717-0001"));
+            Assert.That(roundTrip.Nonce, Is.EqualTo("AAECAwQFBgcICQoLDA0ODw"));
             Assert.That(roundTrip.Issuer.Id, Is.EqualTo("hip:domain:issuer.example"));
             Assert.That(roundTrip.Subject.Type, Is.EqualTo(IdentitySubjectType.Website));
             Assert.That(roundTrip.ContentDigest.ToPrefixedString(), Is.EqualTo($"sha256:{new string('a', 64)}"));
             Assert.That(roundTrip.Claims.Values.Keys, Is.EqualTo(new[] { "riskStatus", "source" }));
             Assert.That(roundTrip.Signature.Scope, Is.EqualTo(HipProtocolSignature.OriginAndIntegrityScope));
+            Assert.That(roundTrip.Signature.Canonicalization, Is.EqualTo(HipProtocolSignature.Rfc8785Canonicalization));
+        });
+    }
+
+    [Test]
+    public void Envelope_signing_payload_removes_only_the_signature_value_and_matches_stable_fixture()
+    {
+        var envelope = ValidEnvelope();
+        var signingPayload = HipProtocolEnvelopeSigningPayload.Create(envelope);
+        var canonical = new Rfc8785CanonicalJsonService().Canonicalize(signingPayload);
+        var expected = File.ReadAllText(Path.Combine(
+            RepositoryRoot(),
+            "tests",
+            "HIP.Tests",
+            "Protocol",
+            "Fixtures",
+            "hip-envelope-v1.signing.canonical.json")).TrimEnd();
+        using var document = JsonDocument.Parse(signingPayload);
+        var signature = document.RootElement.GetProperty("signature");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Encoding.UTF8.GetString(canonical), Is.EqualTo(expected));
+            Assert.That(signature.TryGetProperty("value", out _), Is.False);
+            Assert.That(signature.GetProperty("scope").GetString(), Is.EqualTo(HipProtocolSignature.OriginAndIntegrityScope));
+            Assert.That(signature.GetProperty("keyId").GetString(), Is.EqualTo(envelope.Signature.KeyId));
+            Assert.That(signature.GetProperty("algorithm").GetString(), Is.EqualTo(envelope.Signature.Algorithm));
+            Assert.That(signature.GetProperty("algorithmFamily").GetString(), Is.EqualTo("unknown"));
+            Assert.That(signature.GetProperty("canonicalization").GetString(), Is.EqualTo("RFC8785"));
         });
     }
 
@@ -93,6 +126,51 @@ public sealed class HipProtocolEnvelopeTests
         });
     }
 
+    [TestCase("")]
+    [TestCase("contains space")]
+    [TestCase("contains/slash")]
+    public void Envelope_rejects_invalid_message_identifiers(string messageId)
+    {
+        var valid = ValidEnvelope();
+
+        Assert.Throws<ArgumentException>(() => Copy(valid, messageId: messageId));
+    }
+
+    [Test]
+    public void Envelope_rejects_oversized_message_identifiers()
+    {
+        var valid = ValidEnvelope();
+
+        Assert.Throws<ArgumentException>(() => Copy(
+            valid,
+            messageId: new string('m', HipProtocolEnvelope.MaximumMessageIdLength + 1)));
+    }
+
+    [TestCase("AQID")]
+    [TestCase("AAECAwQFBgcICQoLDA0ODw==")]
+    [TestCase("AAECAwQFBgcICQoLDA0OD+")]
+    [TestCase("A")]
+    public void Envelope_rejects_noncanonical_or_too_short_nonces(string nonce)
+    {
+        var valid = ValidEnvelope();
+
+        Assert.Throws<ArgumentException>(() => Copy(valid, nonce: nonce));
+    }
+
+    [Test]
+    public void Envelope_accepts_the_maximum_canonical_nonce_size()
+    {
+        var valid = ValidEnvelope();
+        var nonce = Convert.ToBase64String(new byte[HipProtocolEnvelope.MaximumNonceBytes])
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+
+        var envelope = Copy(valid, nonce: nonce);
+
+        Assert.That(envelope.Nonce, Is.EqualTo(nonce));
+    }
+
     [Test]
     public void Protocol_components_enforce_size_limits()
     {
@@ -114,6 +192,7 @@ public sealed class HipProtocolEnvelopeTests
                 "key-1",
                 "algorithm",
                 SignatureAlgorithmFamily.Unknown,
+                HipProtocolSignature.Rfc8785Canonicalization,
                 new string('s', HipProtocolSignature.MaximumValueLength + 1)));
         });
     }
@@ -131,6 +210,9 @@ public sealed class HipProtocolEnvelopeTests
     {
         var valid = HipProtocolEnvelopeJson.Serialize(ValidEnvelope());
         var missingIssuer = valid.Replace("\"issuer\":{\"id\":\"hip:domain:issuer.example\"},", string.Empty, StringComparison.Ordinal);
+        var missingMessageId = valid.Replace("\"messageId\":\"msg-20260717-0001\",", string.Empty, StringComparison.Ordinal);
+        var missingNonce = valid.Replace("\"nonce\":\"AAECAwQFBgcICQoLDA0ODw\",", string.Empty, StringComparison.Ordinal);
+        var missingCanonicalization = valid.Replace("\"canonicalization\":\"RFC8785\",", string.Empty, StringComparison.Ordinal);
         var unknownField = valid[..^1] + ",\"unexpected\":true}";
         var duplicateVersion = valid.Replace("\"version\":\"1.0\"", "\"version\":\"1.0\",\"version\":\"1.0\"", StringComparison.Ordinal);
         var unsupportedVersion = valid.Replace("\"version\":\"1.0\"", "\"version\":\"2.0\"", StringComparison.Ordinal);
@@ -138,6 +220,9 @@ public sealed class HipProtocolEnvelopeTests
         Assert.Multiple(() =>
         {
             Assert.Throws<JsonException>(() => HipProtocolEnvelopeJson.Deserialize(missingIssuer));
+            Assert.Throws<JsonException>(() => HipProtocolEnvelopeJson.Deserialize(missingMessageId));
+            Assert.Throws<JsonException>(() => HipProtocolEnvelopeJson.Deserialize(missingNonce));
+            Assert.Throws<JsonException>(() => HipProtocolEnvelopeJson.Deserialize(missingCanonicalization));
             Assert.Throws<JsonException>(() => HipProtocolEnvelopeJson.Deserialize(unknownField));
             Assert.Throws<JsonException>(() => HipProtocolEnvelopeJson.Deserialize(duplicateVersion));
             Assert.Throws<JsonException>(() => HipProtocolEnvelopeJson.Deserialize(unsupportedVersion));
@@ -174,6 +259,8 @@ public sealed class HipProtocolEnvelopeTests
         var issuedAt = new DateTimeOffset(2026, 7, 17, 12, 0, 0, TimeSpan.Zero);
         return new HipProtocolEnvelope(
             HipProtocolVersion.Current,
+            "msg-20260717-0001",
+            "AAECAwQFBgcICQoLDA0ODw",
             new HipProtocolIssuer("hip:domain:issuer.example"),
             new HipProtocolSubject(IdentitySubjectType.Website, "example.com"),
             HipContentDigest.FromPrefixedString($"sha256:{new string('a', 64)}"),
@@ -187,6 +274,7 @@ public sealed class HipProtocolEnvelopeTests
                 "dev-key-1",
                 "PQ-Placeholder-Development-Only",
                 SignatureAlgorithmFamily.Unknown,
+                HipProtocolSignature.Rfc8785Canonicalization,
                 $"devsig:{new string('c', 64)}"),
             issuedAt,
             issuedAt.AddMinutes(5));
@@ -194,10 +282,14 @@ public sealed class HipProtocolEnvelopeTests
 
     private static HipProtocolEnvelope Copy(
         HipProtocolEnvelope source,
+        string? messageId = null,
+        string? nonce = null,
         DateTimeOffset? issuedAtUtc = null,
         DateTimeOffset? expiresAtUtc = null) =>
         new(
             source.Version,
+            messageId ?? source.MessageId,
+            nonce ?? source.Nonce,
             source.Issuer,
             source.Subject,
             source.ContentDigest,

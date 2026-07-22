@@ -109,17 +109,31 @@ public sealed class ApiVersioningTests
     }
 
     [Test]
-    public async Task Identity_v1_route_works()
+    public async Task Identity_development_v1_routes_work_for_local_admin()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-Role", "Admin");
+        client.DefaultRequestHeaders.Add("X-HIP-Admin-User", "identity-versioning-test");
 
-        var response = await client.PostAsJsonAsync("/api/v1/identity/register", new IdentityRegistrationRequest(
+        var register = await client.PostAsJsonAsync("/api/v1/identity/register", new IdentityRegistrationRequest(
             IdentitySubjectType.Domain,
             "example.com",
             "example.com"));
+        var registered = await register.Content.ReadFromJsonAsync<IdentityRegistrationResponse>();
+        var contentHash = new DevelopmentHipCryptoProvider().HashContent("versioned identity signing test");
+        var sign = await client.PostAsJsonAsync("/api/v1/identity/sign", new SignContentRequest(
+            registered!.Identity.IdentityId,
+            contentHash,
+            registered.DevelopmentPrivateKey!,
+            null));
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.Multiple(() =>
+        {
+            Assert.That(register.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(registered.DevelopmentPrivateKey, Is.Not.Empty);
+            Assert.That(sign.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        });
     }
 
     [Test]

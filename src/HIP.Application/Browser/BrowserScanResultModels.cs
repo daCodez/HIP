@@ -97,6 +97,8 @@ public sealed record BrowserScanResultSaveResponse(
 /// <param name="DangerousLinksFound">Number of dangerous/critical links found.</param>
 /// <param name="LastCheckedUtc">UTC timestamp assigned to the stored scan result.</param>
 /// <param name="RecommendedAction">Recommended HIP action.</param>
+/// <param name="SubmissionTrust">Server-normalized provenance for the result.</param>
+/// <param name="IsAuthoritative">Whether HIP produced the result through an authoritative server path.</param>
 /// <param name="PrivacySafeMetadata">Privacy-safe metadata retained with the scan.</param>
 public sealed record BrowserScanResultResponse(
     string Domain,
@@ -110,6 +112,8 @@ public sealed record BrowserScanResultResponse(
     int DangerousLinksFound,
     DateTimeOffset LastCheckedUtc,
     string RecommendedAction,
+    string SubmissionTrust,
+    bool IsAuthoritative,
     IReadOnlyDictionary<string, string> PrivacySafeMetadata)
 {
     /// <summary>
@@ -130,6 +134,8 @@ public sealed record BrowserScanResultResponse(
             record.DangerousLinksFound,
             record.LastCheckedUtc,
             record.RecommendedAction,
+            BrowserScanResultProvenance.GetSubmissionTrust(record),
+            BrowserScanResultProvenance.IsServerAuthoritative(record),
             record.PrivacySafeMetadata);
 }
 

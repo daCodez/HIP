@@ -1,0 +1,72 @@
+@page "/consumer/security"
+@attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
+@rendermode InteractiveServer
+@inject IConsumerPortalService ConsumerPortalService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>HIP Consumer Account Security</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">Consumer Portal</p>
+            <h1>Account Security</h1>
+            <p>Current HIP session assurance and registered-device state. No tokens, keys, or external identity claims are displayed.</p>
+        </div>
+    </section>
+
+    @if (_accessError is not null)
+    {
+        <p class="admin-error" role="alert">@_accessError</p>
+    }
+    else if (_status is not null)
+    {
+        <section class="dashboard-grid">
+            <article class="score-card">
+                <span>Session</span>
+                <strong>Authenticated</strong>
+                <h3>Consumer identity</h3>
+                <p>HIP resolved one unambiguous authenticated consumer identity for this session.</p>
+            </article>
+            <article class="score-card">
+                <span>MFA</span>
+                <strong>@(_hasMfa ? "Verified" : "Not asserted")</strong>
+                <h3>Authentication assurance</h3>
+                <p>MFA is managed by the configured identity provider; HIP retains only reduced assurance evidence.</p>
+            </article>
+            <article class="score-card">
+                <span>Devices</span>
+                <strong>@_status.DeviceStatus</strong>
+                <h3>Registered clients</h3>
+                <p>Review or revoke proof-of-possession devices from the Devices page.</p>
+            </article>
+        </section>
+        <p><a href="/consumer/devices">Manage registered devices</a></p>
+    }
+</main>
+
+@code {
+    private ConsumerStatus? _status;
+    private bool _hasMfa;
+    private string? _accessError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var principal = authenticationState.User;
+        var access = await HipConsumerPageAccess.ExecuteAsync(
+            principal,
+            consumerId => ConsumerPortalService.GetStatusAsync(consumerId, CancellationToken.None));
+        if (!access.Succeeded || access.Value is null)
+        {
+            _accessError = HipConsumerPageAccess.AccessUnavailableMessage;
+            return;
+        }
+
+        _status = access.Value;
+        var mfaClaims = principal.FindAll(HipAuthenticationClaimTypes.MultiFactorAuthenticated).Take(2).ToArray();
+        _hasMfa = mfaClaims.Length == 1 &&
+                  string.Equals(mfaClaims[0].Value, "true", StringComparison.Ordinal) &&
+                  string.Equals(mfaClaims[0].ValueType, System.Security.Claims.ClaimValueTypes.Boolean, StringComparison.Ordinal);
+    }
+}

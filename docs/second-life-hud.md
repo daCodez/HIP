@@ -43,8 +43,13 @@ Activation returns:
 - device ID
 - activation timestamp
 - client settings/config
+- an opaque v2 credential bound to the activated license and device
 
 The setup-code/license manager is documented in `docs/license-setup-codes.md`. HUD activation does not require web login.
+
+The HUD sends the returned credential in `X-HIP-HUD-Credential` on scan, settings, and report calls. HIP validates the credential against the exact active license/device binding; suspending, revoking, expiring, or resetting that license immediately removes access. Reset and later reassignment produce a different credential, so an older credential cannot regain access merely because a device ID is reused.
+
+During a planned privacy-key rotation, newly activated HUDs receive credentials signed only with the current privacy key. HIP may validate credentials made with explicitly configured legacy privacy keys for a short grace period, while still checking the live license/device binding. All configured candidate MACs are evaluated before the result is selected. Remove legacy keys when the grace period ends. A suspected-compromised key must never be retained for compatibility; rotate it immediately and suspend, revoke, or reset affected licenses/devices as appropriate.
 
 Scan input:
 

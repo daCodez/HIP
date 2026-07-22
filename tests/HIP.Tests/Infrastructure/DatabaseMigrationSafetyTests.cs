@@ -48,16 +48,47 @@ public sealed class DatabaseMigrationSafetyTests
     }
 
     [Test]
-    public void Initial_migration_is_compiled_into_the_runtime_model()
+    public void Expected_migrations_are_compiled_into_the_runtime_model()
     {
         var options = new DbContextOptionsBuilder<HipDbContext>()
             .UseNpgsql("Host=localhost;Database=hip_design;Username=hip")
             .Options;
         using var context = new HipDbContext(options);
 
-        var migrations = context.Database.GetMigrations();
+        var migrations = context.Database.GetMigrations().ToArray();
 
-        Assert.That(migrations, Has.One.EndsWith("_InitialHipSchema"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(migrations, Has.Exactly(1).EndsWith("_InitialHipSchema"));
+            Assert.That(migrations, Has.Exactly(1).EndsWith("_AddSigningKeyLifecycleConcurrency"));
+            Assert.That(migrations, Has.Exactly(1).EndsWith("_AddTrustReceipts"));
+        });
+    }
+
+    [Test]
+    public void Trust_receipt_migration_adds_only_the_insert_only_receipt_table()
+    {
+        var migrationsDirectory = Path.Combine(
+            RepositoryRoot(),
+            "src",
+            "HIP.Infrastructure",
+            "Persistence",
+            "Migrations");
+        var migrationPath = Directory.GetFiles(migrationsDirectory, "*_AddTrustReceipts.cs").Single();
+        var migration = File.ReadAllText(migrationPath);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Occurrences(migration, "migrationBuilder.CreateTable("), Is.EqualTo(1));
+            Assert.That(migration, Does.Contain("name: \"hip_trust_receipts\""));
+            Assert.That(migration, Does.Contain("PK_hip_trust_receipts"));
+            Assert.That(migration, Does.Contain("IX_hip_trust_receipts_RelatedEvaluationId"));
+            Assert.That(migration, Does.Contain("unique: true"));
+            Assert.That(migration, Does.Contain("migrationBuilder.DropTable("));
+            Assert.That(migration, Does.Not.Contain("DropColumn("));
+            Assert.That(migration, Does.Not.Contain("AlterColumn("));
+            Assert.That(migration, Does.Not.Contain("migrationBuilder.Sql("));
+        });
     }
 
     [Test]

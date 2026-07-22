@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using HIP.Application.Browser;
 using HIP.Application.Reputation;
@@ -100,6 +101,34 @@ public sealed class AdminScanDetailsTests
     }
 
     /// <summary>
+    /// Verifies a read-only detail lookup cannot promote untrusted telemetry into an authoritative scan path.
+    /// </summary>
+    [Test]
+    public async Task Detail_service_reads_untrusted_scan_without_authoritative_rescan()
+    {
+        var scan = StoredScan(BrowserScanResultProvenance.UntrustedClient);
+        var scanRepository = new InMemoryBrowserScanResultRepository();
+        await scanRepository.SaveAsync(scan, CancellationToken.None);
+        var scanner = new StubScanner();
+        var service = new AdminScanDetailService(
+            scanRepository,
+            scanner,
+            new WeightedFeedbackAggregationService(new InMemoryWeightedFeedbackRepository()),
+            new InMemoryAdminReviewQueueRepository());
+
+        var detail = await service.GetAsync(scan.ScanResultId, CancellationToken.None);
+        var json = JsonSerializer.Serialize(detail);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(scanner.AuthoritativeCallCount, Is.Zero, "A GET/read path must not invoke the scanner path that can publish cache entries or queue sandbox work.");
+            Assert.That(scanner.UntrustedCallCount, Is.EqualTo(1));
+            Assert.That(json, Does.Contain("\"SubmissionTrust\":\"untrusted-client\""));
+            Assert.That(json, Does.Contain("\"IsAuthoritative\":false"));
+        });
+    }
+
+    /// <summary>
     /// Verifies the protected v1 admin scan details route returns layered score fields for authenticated admins.
     /// </summary>
     [Test]
@@ -123,6 +152,60 @@ public sealed class AdminScanDetailsTests
             Assert.That(json.RootElement.GetProperty("contentRiskScore").GetInt32(), Is.InRange(0, 100));
             Assert.That(json.RootElement.GetProperty("finalHipScore").GetInt32(), Is.InRange(0, 100));
             Assert.That(json.RootElement.GetProperty("confidenceLevel").GetString(), Is.Not.Empty);
+        });
+    }
+
+    /// <summary>
+    /// Verifies a read-only admin GET cannot turn anonymous telemetry into privileged sandbox work.
+    /// </summary>
+    [Test]
+    public async Task Admin_scan_details_api_does_not_queue_sandbox_for_untrusted_scan()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        var domain = $"admin-detail-untrusted-{Guid.NewGuid():N}.example";
+        var request = new SiteSafetyScanRequest(
+            $"https://{domain}/login",
+            new SiteSafetyObservedSignals(
+                DownloadLinks: [$"https://{domain}/setup.exe"],
+                HasLoginForm: true,
+                HasPasswordField: true,
+                KnownPhishingPattern: true,
+                KnownMalwareIndicator: true,
+                KnownAbuseReports: 10,
+                DomainReputationScore: 1,
+                PageReputationScore: 1,
+                TrustDataAvailable: true));
+
+        using var scanResponse = await client.PostAsJsonAsync("/api/v1/site-safety/scan", request);
+        Assert.That(scanResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        BrowserScanResultRecord stored;
+        await using (var lookupScope = factory.Services.CreateAsyncScope())
+        {
+            var repository = lookupScope.ServiceProvider.GetRequiredService<IBrowserScanResultRepository>();
+            stored = (await repository.GetLatestByDomainAsync(domain, CancellationToken.None))!;
+        }
+
+        Assert.That(stored, Is.Not.Null);
+        Assert.That(BrowserScanResultProvenance.IsServerAuthoritative(stored), Is.False);
+        AddRole(client, "ReadOnly");
+
+        using var detailResponse = await client.GetAsync($"/api/v1/admin/scans/{Uri.EscapeDataString(stored.ScanResultId)}");
+        using var detailJson = await JsonDocument.ParseAsync(await detailResponse.Content.ReadAsStreamAsync());
+        await using var queueScope = factory.Services.CreateAsyncScope();
+        var sandboxQueue = queueScope.ServiceProvider.GetRequiredService<ISandboxLinkScanQueue>();
+        var queued = await sandboxQueue.DequeueBatchAsync(20, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(detailResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(detailJson.RootElement.GetProperty("submissionTrust").GetString(), Is.EqualTo(BrowserScanResultProvenance.UntrustedClient));
+            Assert.That(detailJson.RootElement.GetProperty("isAuthoritative").GetBoolean(), Is.False);
+            Assert.That(
+                queued.Any(item => item.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase)),
+                Is.False,
+                "A read-only admin detail request must not enqueue privileged sandbox work from untrusted telemetry.");
         });
     }
 
@@ -183,7 +266,8 @@ public sealed class AdminScanDetailsTests
     /// Creates a stored browser scan with only privacy-safe fields and a URL hash.
     /// </summary>
     /// <returns>Stored browser scan record.</returns>
-    private static BrowserScanResultRecord StoredScan() =>
+    private static BrowserScanResultRecord StoredScan(
+        string submissionTrust = BrowserScanResultProvenance.ServerAuthoritative) =>
         new(
             $"browser-scan:test-{Guid.NewGuid():N}",
             $"scan-detail-{Guid.NewGuid():N}.com",
@@ -204,7 +288,8 @@ public sealed class AdminScanDetailsTests
             {
                 ["downloadCandidates"] = "1",
                 ["loginForms"] = "1",
-                ["scanMode"] = "Normal"
+                ["scanMode"] = "Normal",
+                [BrowserScanResultProvenance.MetadataKey] = submissionTrust
             });
 
     /// <summary>
@@ -252,10 +337,30 @@ public sealed class AdminScanDetailsTests
     /// <summary>
     /// Deterministic scanner used by service tests so detail mapping can be tested without external providers.
     /// </summary>
-    private sealed class StubScanner : ISiteSafetyScanner
+    private sealed class StubScanner : ISiteSafetyScanner, IUntrustedSiteSafetyScanner
     {
+        /// <summary>Gets how many calls used the authoritative scanner boundary.</summary>
+        public int AuthoritativeCallCount { get; private set; }
+
+        /// <summary>Gets how many calls used the untrusted, side-effect-free scanner boundary.</summary>
+        public int UntrustedCallCount { get; private set; }
+
         /// <inheritdoc />
         public Task<SiteSafetyScanResult> ScanAsync(SiteSafetyScanRequest request, CancellationToken cancellationToken)
+        {
+            AuthoritativeCallCount++;
+            return CreateResult(cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task<SiteSafetyScanResult> ScanUntrustedAsync(SiteSafetyScanRequest request, CancellationToken cancellationToken)
+        {
+            UntrustedCallCount++;
+            return CreateResult(cancellationToken);
+        }
+
+        /// <summary>Creates the deterministic privacy-safe result used by both scanner boundaries.</summary>
+        private static Task<SiteSafetyScanResult> CreateResult(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var evidence = new SiteSafetyEvidence(

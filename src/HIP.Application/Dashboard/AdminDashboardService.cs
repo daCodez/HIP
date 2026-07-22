@@ -58,16 +58,27 @@ public sealed class AdminDashboardService(
         // encrypted-record scans, so each optional source gets a small read budget. These
         // reads intentionally stay sequential because the current EF-backed stores share a
         // scoped DbContext, and EF Core contexts cannot safely run concurrent operations.
-        var findings = await ReadOptionalAsync(riskFindingRepository.ListAsync, cancellationToken);
-        var rules = await ReadOptionalAsync(ruleRepository.ListAsync, cancellationToken);
-        var candidates = await ReadOptionalAsync(generatedRuleCandidateRepository.ListAsync, cancellationToken);
-        var generatedReviews = await ReadOptionalAsync(adminReviewQueueRepository.ListAsync, cancellationToken);
-        var feedback = await ReadOptionalAsync(weightedFeedbackRepository.ListAsync, cancellationToken);
-        var adminSiteSafetyRules = await ReadOptionalAsync(adminSiteSafetyRuleRepository.ListAsync, cancellationToken);
-        var reviews = await ReadOptionalAsync(reviewQueueRepository.ListAsync, cancellationToken);
-        var appeals = await ReadOptionalAsync(appealRepository.ListAsync, cancellationToken);
-        var overrides = await ReadOptionalAsync(reputationOverrideRepository.ListAsync, cancellationToken);
-        var auditLogs = await ReadOptionalAsync(auditLogRepository.ListAsync, cancellationToken);
+        var findingsRead = await ReadOptionalAsync(riskFindingRepository.ListAsync, cancellationToken);
+        var rulesRead = await ReadOptionalAsync(ruleRepository.ListAsync, cancellationToken);
+        var candidatesRead = await ReadOptionalAsync(generatedRuleCandidateRepository.ListAsync, cancellationToken);
+        var generatedReviewsRead = await ReadOptionalAsync(adminReviewQueueRepository.ListAsync, cancellationToken);
+        var feedbackRead = await ReadOptionalAsync(weightedFeedbackRepository.ListAsync, cancellationToken);
+        var adminSiteSafetyRulesRead = await ReadOptionalAsync(adminSiteSafetyRuleRepository.ListAsync, cancellationToken);
+        var reviewsRead = await ReadOptionalAsync(reviewQueueRepository.ListAsync, cancellationToken);
+        var appealsRead = await ReadOptionalAsync(appealRepository.ListAsync, cancellationToken);
+        var overridesRead = await ReadOptionalAsync(reputationOverrideRepository.ListAsync, cancellationToken);
+        var auditLogsRead = await ReadOptionalAsync(auditLogRepository.ListAsync, cancellationToken);
+
+        var findings = findingsRead.Items;
+        var rules = rulesRead.Items;
+        var candidates = candidatesRead.Items;
+        var generatedReviews = generatedReviewsRead.Items;
+        var feedback = feedbackRead.Items;
+        var adminSiteSafetyRules = adminSiteSafetyRulesRead.Items;
+        var reviews = reviewsRead.Items;
+        var appeals = appealsRead.Items;
+        var overrides = overridesRead.Items;
+        var auditLogs = auditLogsRead.Items;
 
         var now = DateTimeOffset.UtcNow;
         var hasScanData = aggregate.TotalScans > 0 || browserScans.Count > 0;
@@ -90,7 +101,9 @@ public sealed class AdminDashboardService(
         var dangerousResults = useAggregateCounts ? aggregate.Dangerous : browserScans.Count(IsDangerousScan);
         var scansLast24Hours = browserScans.Count(scan => scan.LastCheckedUtc >= now.AddHours(-24));
         var scansLast7Days = browserScans.Count(scan => scan.LastCheckedUtc >= now.AddDays(-7));
-        var averageHipScore = hasScanData ? (int)Math.Round(browserScans.Average(scan => scan.Score)) : 0;
+        var averageHipScore = (hasScanData && browserScans.Count > 0)
+            ? (int)Math.Round(browserScans.Average(scan => scan.Score))
+            : 0;
         var latestScanUtc = browserScans.OrderByDescending(scan => scan.LastCheckedUtc).FirstOrDefault()?.LastCheckedUtc;
         var pendingManualReviews = reviews.Count(item => item.Status is ReviewStatus.Open or ReviewStatus.InReview or ReviewStatus.NeedsMoreInfo);
         var pendingGeneratedReviews = generatedReviews.Count(item => item.Status is AdminReviewStatus.Open or AdminReviewStatus.InReview or AdminReviewStatus.Escalated);
@@ -114,6 +127,8 @@ public sealed class AdminDashboardService(
         var disabledRules = rules.Count(rule => !rule.Enabled || rule.Mode == RuleMode.Disabled) +
                             adminSiteSafetyRules.Count(rule => rule.Status is AdminSiteSafetyRuleStatus.Disabled or AdminSiteSafetyRuleStatus.Archived);
         var hasFeedbackData = feedback.Count > 0;
+        var reviewSourcesAvailable = reviewsRead.IsAvailable && generatedReviewsRead.IsAvailable;
+        var ruleSourcesAvailable = rulesRead.IsAvailable && adminSiteSafetyRulesRead.IsAvailable;
         var suspiciousFeedbackSpikes = CountSuspiciousFeedbackSpikes(feedback);
         var externalProviderErrors = CountExternalProviderErrors(browserScans, generatedReviews);
         var hasExternalProviderData = externalProviderErrors > 0 ||
@@ -148,27 +163,27 @@ public sealed class AdminDashboardService(
             Card("scansLast7Days", "Last 7 Days", scansLast7Days, hasScanData ? "Recent" : "No Data", !hasScanData, "Browser plugin scans received in the last 7 days."),
             Card("averageHipScore", "Average HIP Score", averageHipScore, hasScanData ? "Average" : "No Data", !hasScanData, "Average HIP score across stored browser scans."),
             Card("latestScan", "Latest Scan", latestScanUtc is null ? 0 : (int)Math.Max(0, Math.Round((now - latestScanUtc.Value).TotalMinutes)), latestScanUtc is null ? "No Data" : "Minutes Ago", !hasScanData, "Minutes since the latest stored browser scan."),
-            Card("riskyFindings", "Risky Findings", riskyFindings, riskyFindings > 0 ? "Needs Review" : "Clear", false, "Risk finding reports with HighRisk, Dangerous, or Critical status."),
-            Card("openReviewItems", "Open Review Items", pendingManualReviews, "Queue", false, "Manual review items that still need attention."),
-            Card("pendingReviewItems", "Pending Review Items", pendingManualReviews + pendingGeneratedReviews, "Queue", false, "Manual and generated review items that still need attention."),
-            Card("highSeverityReviewItems", "High-Severity Reviews", highSeverityReviews, highSeverityReviews > 0 ? "Attention" : "Clear", false, "High or critical manual/generated review items."),
-            Card("oldestOpenReviewAgeHours", "Oldest Open Review", oldestOpenReviewAgeHours, oldestOpenReviewAgeHours > 0 ? "Hours" : "No Open Reviews", false, "Age in hours of the oldest open manual or generated review item."),
-            Card("pendingAppeals", "Pending Appeals", appeals.Count(item => item.Status is AppealStatus.Submitted or AppealStatus.InReview or AppealStatus.NeedsMoreInfo), "Queue", false, "Appeals waiting for review or more information."),
-            Card("pendingReputationOverrides", "Pending Reputation Overrides", overrides.Count(item => item.Status == OverrideRequestStatus.Pending), "Queue", false, "Manual reputation change requests awaiting approval."),
-            Card("feedbackReceived", "Feedback Received", feedback.Count, hasFeedbackData ? "Real Data" : "No Data", !hasFeedbackData, "Persisted weighted trust feedback records."),
-            Card("looksSafeFeedback", "Looks Safe Feedback", feedback.Count(item => item.FeedbackType == HipFeedbackType.LooksSafe), hasFeedbackData ? "Real Data" : "No Data", !hasFeedbackData, "Feedback records where users reported the site looked safe."),
-            Card("looksSuspiciousFeedback", "Looks Suspicious Feedback", feedback.Count(item => item.FeedbackType == HipFeedbackType.LooksSuspicious), hasFeedbackData ? "Real Data" : "No Data", !hasFeedbackData, "Feedback records where users reported the site looked suspicious."),
-            Card("reportIssueFeedback", "Report Issue Feedback", feedback.Count(item => item.FeedbackType == HipFeedbackType.ReportIssue), hasFeedbackData ? "Real Data" : "No Data", !hasFeedbackData, "Feedback records where users reported an issue."),
-            Card("suspiciousFeedbackSpikes", "Suspicious Feedback Spikes", suspiciousFeedbackSpikes, hasFeedbackData ? "Real Data" : "No Data", !hasFeedbackData, "Domains with five or more recent suspicious or issue feedback records."),
-            Card("activeRules", "Active Rules", activeTrustRules + activeAdminRules + activeBuiltInRules, "Rules", false, "Built-in, trust, and admin rules currently enforcing behavior."),
+            Card("riskyFindings", "Risky Findings", riskyFindings, !findingsRead.IsAvailable ? "Unavailable" : riskyFindings > 0 ? "Needs Review" : "Clear", !findingsRead.IsAvailable, "Risk finding reports with HighRisk, Dangerous, or Critical status."),
+            Card("openReviewItems", "Open Review Items", pendingManualReviews, reviewsRead.IsAvailable ? "Queue" : "Unavailable", !reviewsRead.IsAvailable, "Manual review items that still need attention."),
+            Card("pendingReviewItems", "Pending Review Items", pendingManualReviews + pendingGeneratedReviews, reviewsRead.IsAvailable && generatedReviewsRead.IsAvailable ? "Queue" : "Unavailable", !reviewsRead.IsAvailable || !generatedReviewsRead.IsAvailable, "Manual and generated review items that still need attention."),
+            Card("highSeverityReviewItems", "High-Severity Reviews", highSeverityReviews, !reviewSourcesAvailable ? "Unavailable" : highSeverityReviews > 0 ? "Attention" : "Clear", !reviewSourcesAvailable, "High or critical manual/generated review items."),
+            Card("oldestOpenReviewAgeHours", "Oldest Open Review", oldestOpenReviewAgeHours, !reviewSourcesAvailable ? "Unavailable" : oldestOpenReviewAgeHours > 0 ? "Hours" : "No Open Reviews", !reviewSourcesAvailable, "Age in hours of the oldest open manual or generated review item."),
+            Card("pendingAppeals", "Pending Appeals", appeals.Count(item => item.Status is AppealStatus.Submitted or AppealStatus.InReview or AppealStatus.NeedsMoreInfo), appealsRead.IsAvailable ? "Queue" : "Unavailable", !appealsRead.IsAvailable, "Appeals waiting for review or more information."),
+            Card("pendingReputationOverrides", "Pending Reputation Overrides", overrides.Count(item => item.Status == OverrideRequestStatus.Pending), overridesRead.IsAvailable ? "Queue" : "Unavailable", !overridesRead.IsAvailable, "Manual reputation change requests awaiting approval."),
+            Card("feedbackReceived", "Feedback Received", feedback.Count, !feedbackRead.IsAvailable ? "Unavailable" : hasFeedbackData ? "Real Data" : "No Data", !feedbackRead.IsAvailable || !hasFeedbackData, "Persisted weighted trust feedback records."),
+            Card("looksSafeFeedback", "Looks Safe Feedback", feedback.Count(item => item.FeedbackType == HipFeedbackType.LooksSafe), !feedbackRead.IsAvailable ? "Unavailable" : hasFeedbackData ? "Real Data" : "No Data", !feedbackRead.IsAvailable || !hasFeedbackData, "Feedback records where users reported the site looked safe."),
+            Card("looksSuspiciousFeedback", "Looks Suspicious Feedback", feedback.Count(item => item.FeedbackType == HipFeedbackType.LooksSuspicious), !feedbackRead.IsAvailable ? "Unavailable" : hasFeedbackData ? "Real Data" : "No Data", !feedbackRead.IsAvailable || !hasFeedbackData, "Feedback records where users reported the site looked suspicious."),
+            Card("reportIssueFeedback", "Report Issue Feedback", feedback.Count(item => item.FeedbackType == HipFeedbackType.ReportIssue), !feedbackRead.IsAvailable ? "Unavailable" : hasFeedbackData ? "Real Data" : "No Data", !feedbackRead.IsAvailable || !hasFeedbackData, "Feedback records where users reported an issue."),
+            Card("suspiciousFeedbackSpikes", "Suspicious Feedback Spikes", suspiciousFeedbackSpikes, !feedbackRead.IsAvailable ? "Unavailable" : hasFeedbackData ? "Real Data" : "No Data", !feedbackRead.IsAvailable || !hasFeedbackData, "Domains with five or more recent suspicious or issue feedback records."),
+            Card("activeRules", "Active Rules", activeTrustRules + activeAdminRules + activeBuiltInRules, ruleSourcesAvailable ? "Rules" : "Partial", !ruleSourcesAvailable, "Built-in, trust, and admin rules currently enforcing behavior."),
             Card("activeBuiltInRules", "Active Built-In Rules", activeBuiltInRules, "Rules", false, "Code-based built-in Site Safety rules."),
-            Card("activeAdminRules", "Active Admin Rules", activeAdminRules, "Rules", false, "Admin-created rules currently active or enforced."),
-            Card("watchModeRules", "Watch Mode Rules", watchTrustRules, "Rules", false, "Enabled JSON trust rules observing before enforcement."),
-            Card("watchOnlyRules", "Watch-Only Rules", watchOnlyRules, "Rules", false, "Admin Site Safety rules in watch-only mode."),
-            Card("simulationRules", "Simulation Rules", simulationRules, "Rules", false, "Admin Site Safety rules in simulation mode."),
-            Card("disabledRules", "Disabled Rules", disabledRules, "Rules", false, "Disabled trust or admin Site Safety rules."),
-            Card("selfHealingCandidates", "Self-Healing Candidates", candidates.Count, "Candidates", false, "Generated rule candidates available for review."),
-            Card("dangerousDomains", "Dangerous Domains", dangerousDomains, dangerousDomains > 0 ? "High Attention" : "Clear", false, "Unique domains with Dangerous or Critical findings."),
+            Card("activeAdminRules", "Active Admin Rules", activeAdminRules, adminSiteSafetyRulesRead.IsAvailable ? "Rules" : "Unavailable", !adminSiteSafetyRulesRead.IsAvailable, "Admin-created rules currently active or enforced."),
+            Card("watchModeRules", "Watch Mode Rules", watchTrustRules, rulesRead.IsAvailable ? "Rules" : "Unavailable", !rulesRead.IsAvailable, "Enabled JSON trust rules observing before enforcement."),
+            Card("watchOnlyRules", "Watch-Only Rules", watchOnlyRules, adminSiteSafetyRulesRead.IsAvailable ? "Rules" : "Unavailable", !adminSiteSafetyRulesRead.IsAvailable, "Admin Site Safety rules in watch-only mode."),
+            Card("simulationRules", "Simulation Rules", simulationRules, adminSiteSafetyRulesRead.IsAvailable ? "Rules" : "Unavailable", !adminSiteSafetyRulesRead.IsAvailable, "Admin Site Safety rules in simulation mode."),
+            Card("disabledRules", "Disabled Rules", disabledRules, ruleSourcesAvailable ? "Rules" : "Partial", !ruleSourcesAvailable, "Disabled trust or admin Site Safety rules."),
+            Card("selfHealingCandidates", "Self-Healing Candidates", candidates.Count, candidatesRead.IsAvailable ? "Candidates" : "Unavailable", !candidatesRead.IsAvailable, "Generated rule candidates available for review."),
+            Card("dangerousDomains", "Dangerous Domains", dangerousDomains, !findingsRead.IsAvailable ? "Unavailable" : dangerousDomains > 0 ? "High Attention" : "Clear", !findingsRead.IsAvailable, "Unique domains with Dangerous or Critical findings."),
             Card("externalProviderErrors", "External Provider Errors", externalProviderErrors, ExternalProviderStatus(externalProviderErrors, hasExternalProviderData), !hasExternalProviderData, "Provider failures from stored scan metadata and generated external-provider review signals."),
             Card("apiHealth", "API Health", 1, "Healthy", false, "Dashboard service responded successfully.")
         };
@@ -302,7 +317,24 @@ public sealed class AdminDashboardService(
             .Take(12)
             .ToArray();
 
-        return new AdminDashboardSummary(cards, recentActivity, "Healthy", DateTimeOffset.UtcNow, hasScanData ? "BrowserPluginScanResults" : "NoStoredScanData", hasScanData, topRiskyDomains, recentScans, recentThreats);
+        var sourceStatuses = new[]
+        {
+            Source("riskFindings", findingsRead),
+            Source("trustRules", rulesRead),
+            Source("generatedRuleCandidates", candidatesRead),
+            Source("generatedReviews", generatedReviewsRead),
+            Source("weightedFeedback", feedbackRead),
+            Source("adminSiteSafetyRules", adminSiteSafetyRulesRead),
+            Source("manualReviews", reviewsRead),
+            Source("appeals", appealsRead),
+            Source("reputationOverrides", overridesRead),
+            Source("auditLogs", auditLogsRead)
+        };
+
+        return new AdminDashboardSummary(cards, recentActivity, "Healthy", DateTimeOffset.UtcNow, hasScanData ? "BrowserPluginScanResults" : "NoStoredScanData", hasScanData, topRiskyDomains, recentScans, recentThreats)
+        {
+            Sources = sourceStatuses
+        };
     }
 
     /// <summary>
@@ -312,7 +344,7 @@ public sealed class AdminDashboardService(
     /// <param name="read">Repository read operation.</param>
     /// <param name="cancellationToken">Request cancellation token.</param>
     /// <returns>Loaded items, or an empty collection when the optional source is unavailable.</returns>
-    private static async Task<IReadOnlyCollection<T>> ReadOptionalAsync<T>(
+    private static async Task<OptionalReadResult<T>> ReadOptionalAsync<T>(
         Func<CancellationToken, Task<IReadOnlyCollection<T>>> read,
         CancellationToken cancellationToken)
     {
@@ -321,17 +353,22 @@ public sealed class AdminDashboardService(
 
         try
         {
-            return await read(timeout.Token);
+            return new OptionalReadResult<T>(await read(timeout.Token), true);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return [];
+            return new OptionalReadResult<T>([], false);
         }
         catch
         {
-            return [];
+            return new OptionalReadResult<T>([], false);
         }
     }
+
+    private static AdminDashboardSourceStatus Source<T>(string key, OptionalReadResult<T> read) =>
+        new(key, read.IsAvailable, read.Items.Count);
+
+    private sealed record OptionalReadResult<T>(IReadOnlyCollection<T> Items, bool IsAvailable);
 
     /// <summary>
     /// Builds the threat-only dashboard stream from real privacy-safe HIP evidence.

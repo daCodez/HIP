@@ -38,6 +38,17 @@ public enum SandboxLinkScanReason
     RedirectCandidate
 }
 
+/// <summary>Durable execution state for one sandbox link scan job.</summary>
+public enum SandboxLinkScanJobStatus
+{
+    Pending,
+    Processing,
+    RetryScheduled,
+    Completed,
+    DeadLettered,
+    Cancelled
+}
+
 /// <summary>
 /// Privacy-safe request queued for a future hardened link sandbox worker.
 /// </summary>
@@ -57,7 +68,21 @@ public sealed record SandboxLinkScanRequest(
     SandboxLinkScanReason Reason,
     string SourceScanId,
     SiteSafetyScanStatus SourceStatus,
-    DateTimeOffset RequestedAtUtc);
+    DateTimeOffset RequestedAtUtc)
+{
+    public SandboxLinkScanJobStatus Status { get; init; } = SandboxLinkScanJobStatus.Pending;
+    public int AttemptCount { get; init; }
+    public DateTimeOffset? NextAttemptAtUtc { get; init; }
+    public string? LeaseToken { get; init; }
+    public string? LeaseOwner { get; init; }
+    public DateTimeOffset? LeaseExpiresAtUtc { get; init; }
+    public string? LastError { get; init; }
+    public DateTimeOffset? CompletedAtUtc { get; init; }
+    public long Version { get; init; } = 1;
+
+    public override string ToString() =>
+        $"SandboxLinkScanRequest {{ RequestId = {RequestId}, Domain = {Domain}, Status = {Status}, AttemptCount = {AttemptCount} }}";
+}
 
 /// <summary>
 /// Queue boundary for sandboxed link analysis work.
@@ -79,6 +104,29 @@ public interface ISandboxLinkScanQueue
     /// <param name="cancellationToken">Token used to cancel queue work.</param>
     /// <returns>Dequeued sandbox scan requests.</returns>
     Task<IReadOnlyCollection<SandboxLinkScanRequest>> DequeueBatchAsync(int maxCount, CancellationToken cancellationToken);
+
+    /// <summary>Atomically claims the oldest ready job under a bounded worker lease.</summary>
+    Task<SandboxLinkScanRequest?> TryClaimNextAsync(
+        string workerId,
+        DateTimeOffset nowUtc,
+        TimeSpan leaseDuration,
+        int maximumAttempts,
+        CancellationToken cancellationToken);
+
+    /// <summary>Completes a job only while its matching lease is still current.</summary>
+    Task<bool> TryCompleteAsync(string requestId, string leaseToken, DateTimeOffset completedAtUtc, CancellationToken cancellationToken);
+
+    /// <summary>Schedules a bounded retry or moves a leased job to the dead-letter state.</summary>
+    Task<bool> TryFailAsync(
+        string requestId,
+        string leaseToken,
+        string safeError,
+        DateTimeOffset failedAtUtc,
+        DateTimeOffset? nextAttemptAtUtc,
+        CancellationToken cancellationToken);
+
+    /// <summary>Cancels pending, retrying, or currently leased work without deleting its audit state.</summary>
+    Task<bool> TryCancelAsync(string requestId, DateTimeOffset cancelledAtUtc, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -101,27 +149,199 @@ public interface ISandboxLinkScanService
 /// </summary>
 public sealed class InMemorySandboxLinkScanQueue : ISandboxLinkScanQueue
 {
-    private readonly ConcurrentQueue<SandboxLinkScanRequest> requests = new();
+    private readonly ConcurrentDictionary<string, SandboxLinkScanRequest> requests = new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim gate = new(1, 1);
 
     /// <inheritdoc />
     public Task EnqueueAsync(SandboxLinkScanRequest request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        requests.Enqueue(request);
+        if (!requests.TryAdd(request.RequestId, request))
+        {
+            throw new InvalidOperationException("Sandbox link scan request already exists.");
+        }
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task<IReadOnlyCollection<SandboxLinkScanRequest>> DequeueBatchAsync(int maxCount, CancellationToken cancellationToken)
+    public async Task<IReadOnlyCollection<SandboxLinkScanRequest>> DequeueBatchAsync(int maxCount, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var batch = new List<SandboxLinkScanRequest>(Math.Max(0, maxCount));
-        while (batch.Count < maxCount && requests.TryDequeue(out var request))
+        await gate.WaitAsync(cancellationToken);
+        try
         {
-            batch.Add(request);
-        }
+            var batch = requests.Values
+                .Where(request => request.Status == SandboxLinkScanJobStatus.Pending)
+                .OrderBy(request => request.RequestedAtUtc)
+                .ThenBy(request => request.RequestId, StringComparer.Ordinal)
+                .Take(Math.Max(0, maxCount))
+                .ToArray();
+            foreach (var request in batch)
+            {
+                requests.TryRemove(request.RequestId, out _);
+            }
 
-        return Task.FromResult<IReadOnlyCollection<SandboxLinkScanRequest>>(batch);
+            return batch;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<SandboxLinkScanRequest?> TryClaimNextAsync(
+        string workerId,
+        DateTimeOffset nowUtc,
+        TimeSpan leaseDuration,
+        int maximumAttempts,
+        CancellationToken cancellationToken)
+    {
+        SandboxLinkScanJobContract.ValidateClaim(workerId, leaseDuration, maximumAttempts);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            foreach (var exhausted in requests.Values.Where(job => SandboxLinkScanJobContract.IsReady(job, nowUtc) && job.AttemptCount >= maximumAttempts))
+            {
+                requests[exhausted.RequestId] = SandboxLinkScanJobContract.DeadLetter(exhausted, nowUtc);
+            }
+
+            var candidate = requests.Values
+                .Where(job => SandboxLinkScanJobContract.IsReady(job, nowUtc) && job.AttemptCount < maximumAttempts)
+                .OrderBy(job => job.NextAttemptAtUtc ?? job.RequestedAtUtc)
+                .ThenBy(job => job.RequestId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (candidate is null)
+            {
+                return null;
+            }
+
+            var claimed = SandboxLinkScanJobContract.Claim(candidate, workerId, nowUtc, leaseDuration);
+            requests[candidate.RequestId] = claimed;
+            return claimed;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<bool> TryCompleteAsync(string requestId, string leaseToken, DateTimeOffset completedAtUtc, CancellationToken cancellationToken) =>
+        TryTransitionAsync(requestId, cancellationToken, current => SandboxLinkScanJobContract.Complete(current, leaseToken, completedAtUtc));
+
+    /// <inheritdoc />
+    public Task<bool> TryFailAsync(string requestId, string leaseToken, string safeError, DateTimeOffset failedAtUtc, DateTimeOffset? nextAttemptAtUtc, CancellationToken cancellationToken) =>
+        TryTransitionAsync(requestId, cancellationToken, current => SandboxLinkScanJobContract.Fail(current, leaseToken, safeError, failedAtUtc, nextAttemptAtUtc));
+
+    /// <inheritdoc />
+    public Task<bool> TryCancelAsync(string requestId, DateTimeOffset cancelledAtUtc, CancellationToken cancellationToken) =>
+        TryTransitionAsync(requestId, cancellationToken, current => SandboxLinkScanJobContract.Cancel(current, cancelledAtUtc));
+
+    private async Task<bool> TryTransitionAsync(
+        string requestId,
+        CancellationToken cancellationToken,
+        Func<SandboxLinkScanRequest, SandboxLinkScanRequest?> transition)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (!requests.TryGetValue(requestId, out var current) || transition(current) is not { } updated)
+            {
+                return false;
+            }
+
+            requests[requestId] = updated;
+            return true;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+}
+
+/// <summary>Pure transition rules shared by in-memory and durable sandbox queues.</summary>
+public static class SandboxLinkScanJobContract
+{
+    public static void ValidateClaim(string workerId, TimeSpan leaseDuration, int maximumAttempts)
+    {
+        if (string.IsNullOrWhiteSpace(workerId) || workerId.Length > 128 || workerId.Any(char.IsControl))
+            throw new ArgumentException("Sandbox worker ID must be bounded plain text.", nameof(workerId));
+        if (leaseDuration < TimeSpan.FromSeconds(1) || leaseDuration > TimeSpan.FromMinutes(10))
+            throw new ArgumentOutOfRangeException(nameof(leaseDuration));
+        if (maximumAttempts is < 1 or > 10)
+            throw new ArgumentOutOfRangeException(nameof(maximumAttempts));
+    }
+
+    public static bool IsReady(SandboxLinkScanRequest job, DateTimeOffset nowUtc) =>
+        job.Status == SandboxLinkScanJobStatus.Pending ||
+        job.Status == SandboxLinkScanJobStatus.RetryScheduled && job.NextAttemptAtUtc <= nowUtc ||
+        job.Status == SandboxLinkScanJobStatus.Processing && job.LeaseExpiresAtUtc <= nowUtc;
+
+    public static SandboxLinkScanRequest Claim(SandboxLinkScanRequest job, string workerId, DateTimeOffset nowUtc, TimeSpan leaseDuration) =>
+        job with
+        {
+            Status = SandboxLinkScanJobStatus.Processing,
+            AttemptCount = job.AttemptCount + 1,
+            NextAttemptAtUtc = null,
+            LeaseToken = $"sandbox-lease:{Guid.NewGuid():N}",
+            LeaseOwner = workerId.Trim(),
+            LeaseExpiresAtUtc = nowUtc.Add(leaseDuration),
+            LastError = null,
+            Version = job.Version + 1
+        };
+
+    public static SandboxLinkScanRequest? Complete(SandboxLinkScanRequest job, string leaseToken, DateTimeOffset completedAtUtc) =>
+        HasCurrentLease(job, leaseToken, completedAtUtc)
+            ? ClearLease(job with { Status = SandboxLinkScanJobStatus.Completed, CompletedAtUtc = completedAtUtc, LastError = null, Version = job.Version + 1 })
+            : null;
+
+    public static SandboxLinkScanRequest? Fail(SandboxLinkScanRequest job, string leaseToken, string safeError, DateTimeOffset failedAtUtc, DateTimeOffset? nextAttemptAtUtc)
+    {
+        ValidateSafeError(safeError);
+        if (nextAttemptAtUtc is not null && nextAttemptAtUtc <= failedAtUtc)
+            throw new ArgumentOutOfRangeException(nameof(nextAttemptAtUtc));
+        return HasCurrentLease(job, leaseToken, failedAtUtc)
+            ? ClearLease(job with
+            {
+                Status = nextAttemptAtUtc is null ? SandboxLinkScanJobStatus.DeadLettered : SandboxLinkScanJobStatus.RetryScheduled,
+                LastError = safeError.Trim(),
+                NextAttemptAtUtc = nextAttemptAtUtc,
+                CompletedAtUtc = nextAttemptAtUtc is null ? failedAtUtc : null,
+                Version = job.Version + 1
+            })
+            : null;
+    }
+
+    public static SandboxLinkScanRequest? Cancel(SandboxLinkScanRequest job, DateTimeOffset cancelledAtUtc) =>
+        job.Status is SandboxLinkScanJobStatus.Pending or SandboxLinkScanJobStatus.RetryScheduled or SandboxLinkScanJobStatus.Processing
+            ? ClearLease(job with { Status = SandboxLinkScanJobStatus.Cancelled, CompletedAtUtc = cancelledAtUtc, NextAttemptAtUtc = null, Version = job.Version + 1 })
+            : null;
+
+    public static SandboxLinkScanRequest DeadLetter(SandboxLinkScanRequest job, DateTimeOffset nowUtc) =>
+        ClearLease(job with
+        {
+            Status = SandboxLinkScanJobStatus.DeadLettered,
+            LastError = "Sandbox job exhausted its execution attempts.",
+            NextAttemptAtUtc = null,
+            CompletedAtUtc = nowUtc,
+            Version = job.Version + 1
+        });
+
+    private static bool HasCurrentLease(SandboxLinkScanRequest job, string leaseToken, DateTimeOffset nowUtc) =>
+        job.Status == SandboxLinkScanJobStatus.Processing &&
+        !string.IsNullOrWhiteSpace(leaseToken) &&
+        string.Equals(job.LeaseToken, leaseToken, StringComparison.Ordinal) &&
+        job.LeaseExpiresAtUtc > nowUtc;
+
+    private static SandboxLinkScanRequest ClearLease(SandboxLinkScanRequest job) =>
+        job with { LeaseToken = null, LeaseOwner = null, LeaseExpiresAtUtc = null };
+
+    private static void ValidateSafeError(string safeError)
+    {
+        if (string.IsNullOrWhiteSpace(safeError) || safeError.Length > 256 || safeError.Any(char.IsControl))
+            throw new ArgumentException("Sandbox job errors must be bounded plain text.", nameof(safeError));
     }
 }
 

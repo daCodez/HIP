@@ -1,8 +1,11 @@
 @page "/admin/appeals"
 @page "/admin/appeals/{AppealId}"
-@attribute [Authorize(Policy = AdminPolicies.CanReviewReports)]
+@attribute [Authorize(Policy = AdminPolicies.CanViewAppeals)]
 @rendermode InteractiveServer
 @inject IAppealService AppealService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IWebHostEnvironment HostEnvironment
 
 <PageTitle>HIP Appeals</PageTitle>
 
@@ -11,8 +14,20 @@
         <p class="eyebrow">Admin MVP</p>
         <h1>Appeals</h1>
         <p>Review privacy-safe appeals for domains, senders, device keys, organizations, and content patterns.</p>
-        <button type="button" @onclick="CreateSample">Create Sample Appeal</button>
+        @if (HostEnvironment.IsDevelopment())
+        {
+            <AuthorizeView Policy="@AdminPolicies.CanDecideAppeals">
+                <Authorized>
+                    <button type="button" @onclick="CreateSample">Create Sample Appeal</button>
+                </Authorized>
+            </AuthorizeView>
+        }
     </section>
+
+    @if (_message is not null)
+    {
+        <p class="admin-message" role="status">@_message</p>
+    }
 
     @if (_selected is not null)
     {
@@ -44,9 +59,14 @@
                         <td>@appeal.CreatedAtUtc.UtcDateTime.ToString("u")</td>
                         <td>@appeal.Decision @appeal.DecisionReason</td>
                         <td>
-                            <button type="button" @onclick="() => Approve(appeal.AppealId)">Approve</button>
-                            <button type="button" @onclick="() => Reject(appeal.AppealId)">Reject</button>
-                            <button type="button" @onclick="() => MoreInfo(appeal.AppealId)">More Info</button>
+                            <AuthorizeView Policy="@AdminPolicies.CanDecideAppeals">
+                                <Authorized>
+                                    <button type="button" @onclick="() => Approve(appeal.AppealId)">Approve</button>
+                                    <button type="button" @onclick="() => Reject(appeal.AppealId)">Reject</button>
+                                    <button type="button" @onclick="() => MoreInfo(appeal.AppealId)">More Info</button>
+                                </Authorized>
+                                <NotAuthorized><span>View only</span></NotAuthorized>
+                            </AuthorizeView>
                         </td>
                     </tr>
                 }
@@ -61,6 +81,7 @@
 
     private IReadOnlyCollection<AppealRequest> _appeals = [];
     private AppealRequest? _selected;
+    private string? _message;
 
     protected override void OnInitialized() => Refresh();
 
@@ -72,9 +93,8 @@
         _selected = string.IsNullOrWhiteSpace(AppealId) ? null : AppealService.Get(AppealId);
     }
 
-    private void CreateSample()
-    {
-        AppealService.Submit(new AppealRequest(
+    private Task CreateSample() =>
+        RunAuthorizedMutationAsync(_ => AppealService.Submit(new AppealRequest(
             "",
             TargetType.Domain,
             "appeal-example.com",
@@ -86,25 +106,49 @@
             null,
             null,
             null,
-            new Dictionary<string, string> { ["evidenceSummary"] = "public DNS and redirect fix notes" }));
-        Refresh();
-    }
+            new Dictionary<string, string> { ["evidenceSummary"] = "public DNS and redirect fix notes" })),
+            developmentOnly: true);
 
-    private void Approve(string id)
-    {
-        AppealService.Approve(id, "admin-dev", "Appeal accepted based on privacy-safe evidence.");
-        Refresh();
-    }
+    private Task Approve(string id) =>
+        RunAuthorizedMutationAsync(actor => AppealService.Approve(
+            id,
+            actor,
+            "Appeal accepted based on privacy-safe evidence."));
 
-    private void Reject(string id)
-    {
-        AppealService.Reject(id, "admin-dev", "Risk evidence remains valid.");
-        Refresh();
-    }
+    private Task Reject(string id) =>
+        RunAuthorizedMutationAsync(actor => AppealService.Reject(
+            id,
+            actor,
+            "Risk evidence remains valid."));
 
-    private void MoreInfo(string id)
+    private Task MoreInfo(string id) =>
+        RunAuthorizedMutationAsync(actor => AppealService.RequestMoreInfo(
+            id,
+            actor,
+            "Need more public remediation evidence."));
+
+    /// <summary>
+    /// Reauthorizes the current circuit immediately before a direct appeal mutation.
+    /// </summary>
+    private async Task RunAuthorizedMutationAsync(
+        Func<string, AppealRequest> mutation,
+        bool developmentOnly = false)
     {
-        AppealService.RequestMoreInfo(id, "admin-dev", "Need more public remediation evidence.");
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var result = await HipAdminPageAccess.ExecuteAuthorizedAsync(
+            authenticationState.User,
+            AuthorizationService,
+            HostEnvironment,
+            AdminPolicies.CanDecideAppeals,
+            mutation,
+            developmentOnly);
+        if (!result.Succeeded)
+        {
+            _message = HipAdminPageAccess.AccessUnavailableMessage;
+            return;
+        }
+
+        _message = null;
         Refresh();
     }
 }

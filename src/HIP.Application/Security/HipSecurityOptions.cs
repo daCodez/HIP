@@ -46,6 +46,11 @@ public static class HipCorsPolicies
     public const string PublicRead = "PublicHipReadOnly";
 
     /// <summary>
+    /// Allows embedded badges to verify signed, public badge documents without granting mutation access.
+    /// </summary>
+    public const string PublicBadgeVerification = "PublicHipBadgeVerification";
+
+    /// <summary>
     /// Allows privacy-safe write requests only from configured HIP clients and local development origins.
     /// </summary>
     public const string ClientWrite = "HipClientWrite";

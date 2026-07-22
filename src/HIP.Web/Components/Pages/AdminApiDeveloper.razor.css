@@ -1,0 +1,328 @@
+.service-clients-page {
+    max-width: 1240px;
+    margin: 0 auto;
+}
+
+.service-client-heading {
+    max-width: none;
+}
+
+.service-client-trust-note,
+.service-client-message,
+.service-client-credential {
+    margin-bottom: 18px;
+    border: 1px solid #1d4964;
+    border-radius: 8px;
+    padding: 18px 20px;
+    color: #b9d9df;
+    background: rgba(4, 199, 223, 0.07);
+}
+
+.service-client-trust-note strong,
+.service-client-credential h2,
+.service-client-message strong {
+    color: #eef4ff;
+}
+
+.service-client-trust-note p,
+.service-client-credential p,
+.service-client-message p {
+    margin: 6px 0 0;
+}
+
+.service-client-credential {
+    display: grid;
+    gap: 16px;
+    border-color: rgba(18, 216, 149, 0.36);
+    background: rgba(18, 216, 149, 0.08);
+}
+
+.service-client-credential span,
+.service-client-section-label {
+    color: #08d7ec;
+    font-size: 0.78rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.service-client-credential h2 {
+    margin: 4px 0 0;
+}
+
+.service-client-credential code {
+    overflow-wrap: anywhere;
+    border: 1px solid rgba(18, 216, 149, 0.3);
+    border-radius: 7px;
+    padding: 14px;
+    color: #dffff3;
+    background: #07111f;
+    user-select: all;
+}
+
+.credential-dismiss,
+.service-client-danger,
+.service-client-cancel {
+    width: fit-content;
+    min-height: 40px;
+    border: 1px solid #24486f;
+    border-radius: 7px;
+    padding: 0 13px;
+    color: #cfe0f8;
+    background: #0b1728;
+    font-weight: 800;
+}
+
+.service-client-message.error {
+    border-color: rgba(255, 81, 104, 0.32);
+    color: #ffc0c9;
+    background: rgba(255, 81, 104, 0.08);
+}
+
+.service-client-message.success {
+    border-color: rgba(18, 216, 149, 0.28);
+    color: #a9f5d5;
+    background: rgba(18, 216, 149, 0.07);
+}
+
+.service-client-layout {
+    display: grid;
+    grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.4fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.service-client-create {
+    display: grid;
+    gap: 10px;
+    position: sticky;
+    top: 18px;
+}
+
+.service-client-create header,
+.service-client-inventory > header {
+    margin-bottom: 8px;
+}
+
+.service-client-create h2,
+.service-client-inventory h2 {
+    margin: 5px 0;
+    color: #eef4ff;
+}
+
+.service-client-create p,
+.service-client-inventory p,
+.service-client-create small {
+    color: #8fa1ba;
+}
+
+.service-client-create label {
+    display: grid;
+    gap: 3px;
+    margin-top: 8px;
+    color: #d8e4f7;
+    font-weight: 800;
+}
+
+.service-client-create input,
+.service-client-create select,
+.service-client-create textarea {
+    width: 100%;
+    border: 1px solid #24486f;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #e9f2ff;
+    background: #07111f;
+    font: inherit;
+}
+
+.service-client-create textarea {
+    resize: vertical;
+}
+
+.service-client-create button {
+    margin-top: 12px;
+}
+
+.service-client-inventory > header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: start;
+}
+
+.service-client-count {
+    min-width: 42px;
+    border-radius: 7px;
+    padding: 6px 10px;
+    color: #08d7ec;
+    background: rgba(8, 215, 236, 0.12);
+    font-weight: 900;
+    text-align: center;
+}
+
+.service-client-list {
+    display: grid;
+    gap: 14px;
+}
+
+.service-client-card {
+    border: 1px solid #172b45;
+    border-radius: 8px;
+    padding: 18px;
+    background: #07111f;
+}
+
+.service-client-card > header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: start;
+}
+
+.service-client-card h3 {
+    margin: 0 0 5px;
+    color: #eef4ff;
+}
+
+.service-client-card header code {
+    color: #8fa1ba;
+    overflow-wrap: anywhere;
+}
+
+.service-client-status {
+    border-radius: 6px;
+    padding: 4px 9px;
+    font-size: 0.78rem;
+    font-weight: 900;
+}
+
+.service-client-status.active {
+    color: #12d895;
+    background: rgba(18, 216, 149, 0.12);
+}
+
+.service-client-status.expired {
+    color: #ffd044;
+    background: rgba(255, 208, 68, 0.12);
+}
+
+.service-client-status.revoked {
+    color: #ff6276;
+    background: rgba(255, 81, 104, 0.12);
+}
+
+.service-client-card dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 18px 0;
+}
+
+.service-client-card dl div {
+    min-width: 0;
+}
+
+.service-client-card dt {
+    color: #6f829e;
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.service-client-card dd {
+    margin: 4px 0 0;
+    color: #d8e4f7;
+}
+
+.service-client-card dd code {
+    overflow-wrap: anywhere;
+}
+
+.service-client-grants strong {
+    color: #9db0c8;
+}
+
+.service-client-grants ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.service-client-grants li {
+    border: 1px solid #183a5d;
+    border-radius: 6px;
+    padding: 4px 8px;
+    color: #b8c7dc;
+    background: #0b1728;
+}
+
+.service-client-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 18px;
+}
+
+.service-client-actions .hip-secondary-action {
+    min-height: 40px;
+}
+
+.service-client-danger {
+    border-color: rgba(255, 81, 104, 0.35);
+    color: #ff8797;
+    background: rgba(255, 81, 104, 0.08);
+}
+
+.service-client-revoked {
+    margin: 16px 0 0;
+    color: #ff8797 !important;
+}
+
+.service-client-empty {
+    border: 1px dashed #24486f;
+    border-radius: 8px;
+    padding: 28px;
+    text-align: center;
+}
+
+.service-client-empty h3 {
+    margin: 0;
+    color: #eef4ff;
+}
+
+.load-more {
+    margin-top: 16px;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
+}
+
+@media (max-width: 900px) {
+    .service-client-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .service-client-create {
+        position: static;
+    }
+}
+
+@media (max-width: 560px) {
+    .service-client-card > header,
+    .service-client-inventory > header {
+        display: grid;
+    }
+
+    .service-client-card dl {
+        grid-template-columns: 1fr;
+    }
+}

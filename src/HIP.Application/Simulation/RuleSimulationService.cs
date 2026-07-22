@@ -1,10 +1,15 @@
 using HIP.Application.Rules;
 using HIP.Domain.Rules;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace HIP.Application.Simulation;
 
-public sealed class RuleSimulationService(IRuleActionApplier actionApplier) : IRuleSimulationService
+public sealed class RuleSimulationService(IRuleActionApplier actionApplier, TimeProvider? timeProvider = null) : IRuleSimulationService
 {
+    private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
+
     public RuleSimulationResult Simulate(TrustRule rule, IReadOnlyCollection<RuleSimulationTestCase>? testCases)
     {
         ArgumentNullException.ThrowIfNull(rule);
@@ -13,6 +18,8 @@ public sealed class RuleSimulationService(IRuleActionApplier actionApplier) : IR
         {
             throw new ArgumentException("At least one simulation test case is required.", nameof(testCases));
         }
+        RuleSimulationResultContract.ValidateInputCases(cases);
+        var startedAtUtc = timeProvider.GetUtcNow();
 
         var results = cases.Select(testCase => Evaluate(rule, testCase)).ToArray();
         var passedCount = results.Count(result => result.Passed);
@@ -54,9 +61,10 @@ public sealed class RuleSimulationService(IRuleActionApplier actionApplier) : IR
         var recommendedMode = RecommendedMode(rule, failedCount, confidence, falsePositiveRisk);
         var recommendedAction = RecommendedAction(rule, failedCount, confidence, falsePositiveRisk, falseNegativeRisk, impact);
         var failedCases = results.Where(result => !result.Passed).ToArray();
-        var simulationId = $"{rule.RuleId}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
+        var simulationId = $"simulation:{Guid.NewGuid():N}";
+        var completedAtUtc = timeProvider.GetUtcNow();
 
-        return new RuleSimulationResult(
+        var simulation = new RuleSimulationResult(
             simulationId,
             rule.RuleId,
             failedCount == 0,
@@ -79,8 +87,18 @@ public sealed class RuleSimulationService(IRuleActionApplier actionApplier) : IR
                 rule.Version > 1 ? rule.Version - 1 : null,
                 failedCount > 0 || falsePositiveRisk > 0 ? "Disable or revert this rule if false positives or simulation failures occur." : "Disable this rule if production feedback shows unexpected false positives.",
                 true,
-                DateTimeOffset.UtcNow),
-            results);
+                completedAtUtc),
+            results,
+            rule.Version,
+            FixtureSetId(cases),
+            startedAtUtc,
+            completedAtUtc,
+            Version: 1)
+        {
+            RuleDefinitionHash = RuleDefinitionFingerprint.Compute(rule)
+        };
+        RuleSimulationResultContract.Validate(simulation);
+        return simulation;
     }
 
     private RuleSimulationCaseResult Evaluate(TrustRule rule, RuleSimulationTestCase testCase)
@@ -106,7 +124,23 @@ public sealed class RuleSimulationService(IRuleActionApplier actionApplier) : IR
             failures.Add($"Expected safety routing {testCase.ExpectedSafetyPageRouting.Value} but got {result.ShouldRouteToSafetyPage}.");
         }
 
-        return new RuleSimulationCaseResult(testCase.Name, failures.Count == 0, result.IsMatch, failures.Count == 0 ? null : string.Join(" ", failures));
+        return new RuleSimulationCaseResult(
+            testCase.Name,
+            failures.Count == 0,
+            result.IsMatch,
+            failures.Count == 0 ? null : string.Join(" ", failures),
+            testCase.ExpectedMatch,
+            testCase.ExpectedRiskLevel?.ToString(),
+            testCase.ExpectedSafetyPageRouting,
+            Array.AsReadOnly(testCase.InputFacts.Values.Keys.OrderBy(key => key, StringComparer.Ordinal).ToArray()));
+    }
+
+    private static string FixtureSetId(IEnumerable<RuleSimulationTestCase> cases)
+    {
+        var descriptor = string.Join('\n', cases
+            .OrderBy(testCase => testCase.Name, StringComparer.Ordinal)
+            .Select(testCase => $"{testCase.Name}|{testCase.ExpectedMatch}|{testCase.ExpectedRiskLevel}|{testCase.ExpectedSafetyPageRouting}|{string.Join(',', testCase.InputFacts.Values.Keys.OrderBy(key => key, StringComparer.Ordinal))}"));
+        return $"fixtures:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(descriptor))).ToLowerInvariant()}";
     }
 
     private static string SpeedImpact(int caseCount) => caseCount switch
@@ -173,4 +207,17 @@ public sealed class RuleSimulationService(IRuleActionApplier actionApplier) : IR
     private static bool IsHighImpact(TrustRule rule) =>
         rule.Severity is RuleSeverity.High or RuleSeverity.HighRisk or RuleSeverity.Dangerous or RuleSeverity.Critical ||
         rule.Actions.Any(action => action.Type is RuleActionType.Block or RuleActionType.RouteToSafetyPage);
+}
+
+/// <summary>
+/// Creates a stable fingerprint that binds simulation and approval to the exact rule snapshot.
+/// </summary>
+public static class RuleDefinitionFingerprint
+{
+    public static string Compute(TrustRule rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(rule);
+        return $"sha256:{Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()}";
+    }
 }

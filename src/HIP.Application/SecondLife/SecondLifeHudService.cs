@@ -64,15 +64,26 @@ public sealed class SecondLifeHudService : ISecondLifeHudService
             activation.DeviceId,
             activation.ActivatedAtUtc,
             request.HudVersion,
-            activation.Activated && activation.DeviceId is not null ? credentialService.Issue(activation.DeviceId) : null);
+            activation.Activated && activation.LicenseId is not null && activation.DeviceId is not null
+                ? credentialService.Issue(activation.LicenseId, activation.DeviceId)
+                : null);
     }
 
     /// <inheritdoc />
     public SecondLifeHudScanResponse Scan(SecondLifeHudScanRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.DeviceId))
+        _ = NormalizeDeviceId(request.DeviceId);
+        ValidateCompactField(request.Source, 64, "HUD scan source", required: true);
+        ValidateCompactField(request.SenderHash, 128, "HUD sender hash", required: false);
+
+        if (request.DetectedUrls is null)
         {
-            throw new ArgumentException("HUD device ID is required.");
+            throw new ArgumentException("Detected URLs collection is required.");
+        }
+
+        if (request.DetectedUrls.Count > 8)
+        {
+            throw new ArgumentException("SL HUD scan accepts at most 8 detected URLs.");
         }
 
         if (ContainsPrivateLogMarker(request.MessageText))
@@ -81,6 +92,11 @@ public sealed class SecondLifeHudService : ISecondLifeHudService
         }
 
         var detectedUrls = request.DetectedUrls?.Where(url => !string.IsNullOrWhiteSpace(url)).ToArray() ?? [];
+        foreach (var url in detectedUrls)
+        {
+            ValidateCompactField(url, 2048, "Detected URL", required: true);
+        }
+
         if (detectedUrls.Length == 0 && string.IsNullOrWhiteSpace(request.MessageText))
         {
             return new SecondLifeHudScanResponse("Low", 88, ["No risky URL signal was supplied."], "StatusOnly", null);
@@ -121,21 +137,20 @@ public sealed class SecondLifeHudService : ISecondLifeHudService
         var medium = !high && reasons.Count == 1;
         var riskLevel = critical ? "Critical" : high ? "High" : medium ? "Medium" : "Low";
         var score = critical ? 12 : high ? 32 : medium ? 58 : 88;
-        var action = riskLevel switch
-        {
-            "Critical" => "StrongPopupAndSafetyBlock",
-            "High" => "PrivateWarningAndPopup",
-            "Medium" => "PrivateWarning",
-            _ => "StatusOnly"
-        };
+        var settings = GetSettings(request.DeviceId);
+        var warningAllowed = ModeAllowsWarning(settings.Mode, riskLevel);
+        var privateWarning = warningAllowed && settings.PrivateWarningsEnabled;
+        var popup = privateWarning && settings.PopupAlertsEnabled && riskLevel is "High" or "Critical";
+        var safetyRouting = privateWarning && settings.SafetyRoutingEnabled && riskLevel is "High" or "Critical";
+        var action = RecommendedAction(riskLevel, privateWarning, popup, safetyRouting);
 
         if (reasons.Count == 0)
         {
             reasons.Add("No suspicious link pattern detected from privacy-safe HUD inputs.");
         }
 
-        var safetyUrl = riskLevel is "High" or "Critical"
-            ? SafetyPageUrl(detectedUrls.FirstOrDefault(), ExtractDomain(detectedUrls.FirstOrDefault()) ?? "unknown", string.Join("; ", reasons))
+        var safetyUrl = safetyRouting
+            ? SafetyPageUrl(null, ExtractDomain(detectedUrls.FirstOrDefault()) ?? "unknown", string.Join("; ", reasons))
             : null;
 
         return new SecondLifeHudScanResponse(riskLevel, score, reasons, action, safetyUrl);
@@ -147,6 +162,16 @@ public sealed class SecondLifeHudService : ISecondLifeHudService
         var normalizedDeviceId = NormalizeDeviceId(deviceId);
         var licenseSettings = licenseService.GetSettingsForDevice(normalizedDeviceId);
         return Settings.GetOrAdd(normalizedDeviceId, id => ToHudSettings(id, licenseSettings));
+    }
+
+    /// <inheritdoc />
+    public SecondLifeHudSettings GetSettings(string licenseId, string deviceId)
+    {
+        var normalizedLicenseId = NormalizeLicenseId(licenseId);
+        var normalizedDeviceId = NormalizeDeviceId(deviceId);
+        return ToHudSettings(
+            normalizedDeviceId,
+            licenseService.GetSettingsForDevice(normalizedLicenseId, normalizedDeviceId));
     }
 
     /// <inheritdoc />
@@ -167,6 +192,33 @@ public sealed class SecondLifeHudService : ISecondLifeHudService
 
         Settings[normalizedDeviceId] = saved;
         return new SecondLifeHudSettingsResponse(true, licenseSave.Message, saved);
+    }
+
+    /// <inheritdoc />
+    public SecondLifeHudSettingsResponse SaveSettings(
+        string licenseId,
+        string deviceId,
+        SecondLifeHudSettings settings)
+    {
+        var normalizedLicenseId = NormalizeLicenseId(licenseId);
+        var normalizedDeviceId = NormalizeDeviceId(deviceId);
+        if (!ValidModes.Contains(settings.Mode))
+        {
+            return new SecondLifeHudSettingsResponse(
+                false,
+                "Invalid HUD mode.",
+                GetSettings(normalizedLicenseId, normalizedDeviceId));
+        }
+
+        var saved = settings with { DeviceId = normalizedDeviceId };
+        var licenseSave = licenseService.SaveSettingsForDevice(
+            normalizedLicenseId,
+            normalizedDeviceId,
+            ToLicenseSettings(saved));
+        return new SecondLifeHudSettingsResponse(
+            licenseSave.Saved,
+            licenseSave.Message,
+            ToHudSettings(normalizedDeviceId, licenseSave.Settings));
     }
 
     /// <inheritdoc />
@@ -283,12 +335,79 @@ public sealed class SecondLifeHudService : ISecondLifeHudService
     /// <returns>Normalized device ID.</returns>
     private static string NormalizeDeviceId(string deviceId)
     {
-        if (string.IsNullOrWhiteSpace(deviceId))
+        var normalized = deviceId?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 128)
         {
-            throw new ArgumentException("HUD device ID is required.");
+            throw new ArgumentException("HUD device ID must contain 1 to 128 characters.");
         }
 
-        return deviceId.Trim();
+        return normalized;
+    }
+
+    private static string NormalizeLicenseId(string licenseId)
+    {
+        var normalized = licenseId?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 128)
+        {
+            throw new ArgumentException("HUD license ID is invalid.");
+        }
+
+        return normalized;
+    }
+
+    /// <summary>
+    /// Enforces compact plain-text HUD signal fields before combining or evaluating them.
+    /// </summary>
+    private static void ValidateCompactField(string? value, int maximumLength, string fieldName, bool required)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            if (required)
+            {
+                throw new ArgumentException($"{fieldName} is required.");
+            }
+
+            return;
+        }
+
+        if (value.Length > maximumLength || value.Any(char.IsControl))
+        {
+            throw new ArgumentException($"{fieldName} must be bounded plain text no longer than {maximumLength} characters.");
+        }
+    }
+
+    /// <summary>
+    /// Applies the configured scan mode to owner-visible warnings without changing the risk result itself.
+    /// </summary>
+    private static bool ModeAllowsWarning(string mode, string riskLevel) => mode.ToLowerInvariant() switch
+    {
+        "quiet" => riskLevel is "High" or "Critical",
+        "normal" => riskLevel is "Medium" or "High" or "Critical",
+        "strict" or "paranoid" => riskLevel is not "Low",
+        _ => false
+    };
+
+    /// <summary>
+    /// Selects a client action that never requests a disabled warning surface.
+    /// </summary>
+    private static string RecommendedAction(string riskLevel, bool privateWarning, bool popup, bool safetyRouting)
+    {
+        if (!privateWarning)
+        {
+            return "StatusOnly";
+        }
+
+        if (riskLevel == "Critical" && popup && safetyRouting)
+        {
+            return "StrongPopupAndSafetyBlock";
+        }
+
+        if (popup)
+        {
+            return "PrivateWarningAndPopup";
+        }
+
+        return "PrivateWarning";
     }
 
     /// <summary>

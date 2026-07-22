@@ -7,6 +7,8 @@ The Second Life HUD simulator is a dev/test harness for HIP client behavior. HIP
 - UI: `/admin/sl-hud-simulator`
 - API: `POST /api/v1/sl-hud/simulate`
 
+Both surfaces require `CanSupportLicenses` (Owner, Admin, or Support). The simulator is an operational test tool, not a public HUD endpoint.
+
 ## What It Tests
 
 - safe chat messages

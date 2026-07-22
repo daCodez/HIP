@@ -1,0 +1,54 @@
+@page "/consumer/licenses"
+@attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
+@rendermode InteractiveServer
+@inject IConsumerPortalService ConsumerPortalService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>HIP Consumer Licenses</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">Consumer Portal</p>
+            <h1>Licenses</h1>
+            <p>Only licenses explicitly linked to this authenticated web account can appear here.</p>
+        </div>
+    </section>
+
+    @if (_accessError is not null)
+    {
+        <p class="admin-error" role="alert">@_accessError</p>
+    }
+    else if (_status is null)
+    {
+        <p class="admin-message" role="status">Loading account-linked license state…</p>
+    }
+    else
+    {
+        <section class="lookup-result">
+            <h2>@_status.LicenseStatus</h2>
+            <p>No HUD license is linked to this web account. HIP does not enumerate global licenses or infer ownership from an avatar or device identifier.</p>
+            <p>HUD activation continues to use its separate setup-code flow without requiring a consumer web login.</p>
+        </section>
+    }
+</main>
+
+@code {
+    private ConsumerStatus? _status;
+    private string? _accessError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var access = await HipConsumerPageAccess.ExecuteAsync(
+            authenticationState.User,
+            consumerId => ConsumerPortalService.GetStatusAsync(consumerId, CancellationToken.None));
+        if (!access.Succeeded || access.Value is null)
+        {
+            _accessError = HipConsumerPageAccess.AccessUnavailableMessage;
+            return;
+        }
+
+        _status = access.Value;
+    }
+}

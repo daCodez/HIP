@@ -86,8 +86,14 @@ public sealed class EfSandboxLinkScanQueue(HipRecordStore store) : ISandboxLinkS
     private const string Partition = "sandbox-link-scan-queue";
 
     /// <inheritdoc />
-    public Task EnqueueAsync(SandboxLinkScanRequest request, CancellationToken cancellationToken) =>
-        store.SaveAsync(Partition, request.RequestId, request, cancellationToken);
+    public async Task EnqueueAsync(SandboxLinkScanRequest request, CancellationToken cancellationToken)
+    {
+        var initial = request with { Version = 1 };
+        if (!await store.TrySaveVersionedAsync(Partition, request.RequestId, initial, 0, 1, cancellationToken))
+        {
+            throw new InvalidOperationException("Sandbox link scan request already exists.");
+        }
+    }
 
     /// <inheritdoc />
     public async Task<IReadOnlyCollection<SandboxLinkScanRequest>> DequeueBatchAsync(int maxCount, CancellationToken cancellationToken)
@@ -111,6 +117,83 @@ public sealed class EfSandboxLinkScanQueue(HipRecordStore store) : ISandboxLinkS
         }
 
         return batch;
+    }
+
+    /// <inheritdoc />
+    public async Task<SandboxLinkScanRequest?> TryClaimNextAsync(
+        string workerId,
+        DateTimeOffset nowUtc,
+        TimeSpan leaseDuration,
+        int maximumAttempts,
+        CancellationToken cancellationToken)
+    {
+        SandboxLinkScanJobContract.ValidateClaim(workerId, leaseDuration, maximumAttempts);
+        var candidates = (await store.ListAsync<SandboxLinkScanRequest>(Partition, cancellationToken))
+            .Where(job => SandboxLinkScanJobContract.IsReady(job, nowUtc))
+            .OrderBy(job => job.NextAttemptAtUtc ?? job.RequestedAtUtc)
+            .ThenBy(job => job.RequestId, StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var candidate in candidates)
+        {
+            var stored = await store.GetVersionedAsync<SandboxLinkScanRequest>(Partition, candidate.RequestId, cancellationToken);
+            if (stored is null || !SandboxLinkScanJobContract.IsReady(stored.Value.Record, nowUtc))
+            {
+                continue;
+            }
+
+            var current = stored.Value.Record with { Version = stored.Value.AggregateVersion };
+            var updated = current.AttemptCount >= maximumAttempts
+                ? SandboxLinkScanJobContract.DeadLetter(current, nowUtc)
+                : SandboxLinkScanJobContract.Claim(current, workerId, nowUtc, leaseDuration);
+            var saved = await store.TryUpdateVersionedAsync(
+                Partition,
+                current.RequestId,
+                updated,
+                stored.Value.AggregateVersion,
+                updated.Version,
+                cancellationToken);
+            if (saved && updated.Status == SandboxLinkScanJobStatus.Processing)
+            {
+                return updated;
+            }
+        }
+
+        return null;
+    }
+
+    /// <inheritdoc />
+    public Task<bool> TryCompleteAsync(string requestId, string leaseToken, DateTimeOffset completedAtUtc, CancellationToken cancellationToken) =>
+        TryTransitionAsync(requestId, current => SandboxLinkScanJobContract.Complete(current, leaseToken, completedAtUtc), cancellationToken);
+
+    /// <inheritdoc />
+    public Task<bool> TryFailAsync(string requestId, string leaseToken, string safeError, DateTimeOffset failedAtUtc, DateTimeOffset? nextAttemptAtUtc, CancellationToken cancellationToken) =>
+        TryTransitionAsync(requestId, current => SandboxLinkScanJobContract.Fail(current, leaseToken, safeError, failedAtUtc, nextAttemptAtUtc), cancellationToken);
+
+    /// <inheritdoc />
+    public Task<bool> TryCancelAsync(string requestId, DateTimeOffset cancelledAtUtc, CancellationToken cancellationToken) =>
+        TryTransitionAsync(requestId, current => SandboxLinkScanJobContract.Cancel(current, cancelledAtUtc), cancellationToken);
+
+    private async Task<bool> TryTransitionAsync(
+        string requestId,
+        Func<SandboxLinkScanRequest, SandboxLinkScanRequest?> transition,
+        CancellationToken cancellationToken)
+    {
+        var stored = await store.GetVersionedAsync<SandboxLinkScanRequest>(Partition, requestId, cancellationToken);
+        if (stored is null)
+        {
+            return false;
+        }
+
+        var current = stored.Value.Record with { Version = stored.Value.AggregateVersion };
+        var updated = transition(current);
+        return updated is not null && await store.TryUpdateVersionedAsync(
+            Partition,
+            requestId,
+            updated,
+            stored.Value.AggregateVersion,
+            updated.Version,
+            cancellationToken);
     }
 }
 

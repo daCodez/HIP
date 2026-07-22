@@ -66,6 +66,12 @@ public static class AdminSiteSafetyRuleConditionEvaluator
     /// <returns>The matching value, or null when the field is not allow-listed.</returns>
     private static object? FieldValue(string field, SiteSafetyRuleInput input) => field switch
     {
+        _ when AdminSiteSafetyRuleFieldCatalog.TryGet(field, out var definition) => CanonicalFieldValue(definition.Name, input),
+        _ => null
+    };
+
+    private static object? CanonicalFieldValue(string field, SiteSafetyRuleInput input) => field switch
+    {
         "Domain" => input.Domain,
         "Tld" => input.Tld,
         "HasHttps" => input.HasHttps,

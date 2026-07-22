@@ -2,6 +2,7 @@ using HIP.Application.Browser;
 using HIP.Application.Reporting;
 using HIP.Application.Scalability;
 using NUnit.Framework;
+using System.Text.Json;
 
 namespace HIP.Tests.Browser;
 
@@ -154,6 +155,75 @@ public sealed class BrowserScanResultServiceTests
     }
 
     /// <summary>
+    /// Verifies unattested submissions remain durable telemetry without entering the shared authoritative hot cache.
+    /// </summary>
+    [Test]
+    public async Task Untrusted_save_does_not_write_shared_scan_cache_and_exposes_provenance()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        var cache = new RecordingScanResultCache();
+        var service = new BrowserScanResultService(
+            repository,
+            new Sha256PrivacyHashingService(),
+            cache,
+            new InMemoryDashboardScanAggregateStore());
+
+        await ((IUntrustedBrowserScanResultSubmissionService)service).SaveUntrustedAsync(
+            ValidRequest(),
+            CancellationToken.None);
+
+        var stored = await repository.GetLatestByDomainAsync("example.com", CancellationToken.None);
+        var response = await service.GetLatestByDomainAsync("example.com", CancellationToken.None);
+        var json = JsonSerializer.Serialize(response);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(cache.StoreCount, Is.Zero, "Untrusted telemetry must not replace the cache consumed by authoritative/latest reads.");
+            Assert.That(stored, Is.Not.Null);
+            Assert.That(BrowserScanResultProvenance.IsServerAuthoritative(stored!), Is.False);
+            Assert.That(json, Does.Contain("\"SubmissionTrust\":\"untrusted-client\""));
+            Assert.That(json, Does.Contain("\"IsAuthoritative\":false"));
+        });
+    }
+
+    /// <summary>
+    /// Verifies the compatibility raw-latest query does not hide newer untrusted telemetry behind an older authoritative cache entry.
+    /// </summary>
+    [Test]
+    public async Task Raw_latest_query_returns_newer_untrusted_record_when_authoritative_cache_exists()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        var cache = new RecordingScanResultCache();
+        var service = new BrowserScanResultService(
+            repository,
+            new Sha256PrivacyHashingService(),
+            cache,
+            new InMemoryDashboardScanAggregateStore());
+
+        await service.SaveAsync(
+            ValidRequest() with { ScannedAtUtc = DateTimeOffset.UtcNow.AddHours(-1) },
+            CancellationToken.None);
+        await ((IUntrustedBrowserScanResultSubmissionService)service).SaveUntrustedAsync(
+            ValidRequest() with
+            {
+                Score = 7,
+                RiskLevel = "Dangerous",
+                Status = "Dangerous",
+                RecommendedAction = "RouteToSafetyPage"
+            },
+            CancellationToken.None);
+
+        var response = await service.GetLatestByDomainAsync("example.com", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(cache.StoreCount, Is.EqualTo(1), "Only the authoritative save should populate the shared cache.");
+            Assert.That(response!.Score, Is.EqualTo(7));
+            Assert.That(response.Status, Is.EqualTo("Dangerous"));
+        });
+    }
+
+    /// <summary>
     /// Creates a service using in-memory persistence for isolated unit tests.
     /// </summary>
     /// <returns>A browser scan result service.</returns>
@@ -186,5 +256,38 @@ public sealed class BrowserScanResultServiceTests
                 ["scanMode"] = "Normal",
                 ["downloadCandidates"] = "0"
             });
+
+    /// <summary>
+    /// Records shared hot-cache writes while retaining normal cache behavior for query regressions.
+    /// </summary>
+    private sealed class RecordingScanResultCache : IScanResultCache
+    {
+        private ScanResultCacheEntry? entry;
+
+        /// <summary>Gets the number of cache publications.</summary>
+        public int StoreCount { get; private set; }
+
+        /// <inheritdoc />
+        public Task<ScanResultCacheEntry?> GetFreshAsync(string domain, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                entry is not null &&
+                entry.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase) &&
+                entry.ExpiresAtUtc > DateTimeOffset.UtcNow
+                    ? entry
+                    : null);
+        }
+
+        /// <inheritdoc />
+        public Task StoreAsync(BrowserScanResultRecord result, TimeSpan ttl, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            StoreCount++;
+            var now = DateTimeOffset.UtcNow;
+            entry = new ScanResultCacheEntry(result.Domain, result, now, now.Add(ttl));
+            return Task.CompletedTask;
+        }
+    }
 }
 
