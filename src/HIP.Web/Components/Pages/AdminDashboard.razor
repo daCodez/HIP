@@ -49,19 +49,26 @@
                     <b>@ProtectionStatus</b>
                 </div>
                 <div class="trust-copy">
-                    <p class="kicker">Overall HIP protection</p>
+                    <p class="kicker">@ProtectionKicker</p>
                     <h2>@ProtectionHeading</h2>
                     <p>@ProtectionExplanation</p>
-                    <div class="trust-distribution" aria-label="@OutcomeDistributionLabel">
-                        <i class="trusted" style="@SegmentStyle(TrustedPercent)"></i>
-                        <i class="caution" style="@SegmentStyle(CautionPercent)"></i>
-                        <i class="risk" style="@SegmentStyle(RiskPercent)"></i>
-                    </div>
-                    <footer class="trust-legend">
-                        <span><i class="trusted"></i><b>@TrustedPercent%</b> Trusted</span>
-                        <span><i class="caution"></i><b>@CautionPercent%</b> Caution</span>
-                        <span><i class="risk"></i><b>@RiskPercent%</b> Risk</span>
-                    </footer>
+                    @if (_summary.HasScanData)
+                    {
+                        <div class="trust-distribution" aria-label="@OutcomeDistributionLabel">
+                            <i class="trusted" style="@SegmentStyle(TrustedPercent)"></i>
+                            <i class="caution" style="@SegmentStyle(CautionPercent)"></i>
+                            <i class="risk" style="@SegmentStyle(RiskPercent)"></i>
+                        </div>
+                        <footer class="trust-legend">
+                            <span><i class="trusted"></i><b>@TrustedPercent%</b> Trusted</span>
+                            <span><i class="caution"></i><b>@CautionPercent%</b> Caution</span>
+                            <span><i class="risk"></i><b>@RiskPercent%</b> Risk</span>
+                        </footer>
+                    }
+                    else if (HasClientObservedScore)
+                    {
+                        <p class="data-note">Client observations are not included in authoritative Trusted, Caution, or Risk percentages.</p>
+                    }
                 </div>
             </article>
 
@@ -261,15 +268,18 @@
     private int RiskPercent => OutcomePercent(HighRiskCount + CriticalCount, ClassifiedCount);
     private int ProtectionScore => Math.Clamp(Card("averageHipScore")?.Value ?? 0, 0, 100);
     private int ClientTelemetryCount => CountCard("clientTelemetryObservations");
-    private string ProtectionScoreText => _summary?.HasScanData == true ? ProtectionScore.ToString(System.Globalization.CultureInfo.InvariantCulture) : "—";
-    private string ProtectionScoreAriaLabel => _summary?.HasScanData == true ? $"Protection score {ProtectionScore} out of 100" : "Authoritative protection score unavailable";
+    private int ClientObservedScore => Math.Clamp(Card("clientTelemetryAverageScore")?.Value ?? 0, 0, 100);
+    private bool HasClientObservedScore => ClientTelemetryCount > 0 && Card("clientTelemetryAverageScore")?.IsPlaceholder == false;
+    private string ProtectionScoreText => (_summary?.HasScanData == true ? ProtectionScore : HasClientObservedScore ? ClientObservedScore : (int?)null)?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "—";
+    private string ProtectionScoreAriaLabel => _summary?.HasScanData == true ? $"Authoritative protection score {ProtectionScore} out of 100" : HasClientObservedScore ? $"Client-observed score {ClientObservedScore} out of 100; not authoritative" : "Protection score unavailable";
     private int JudgmentCount => CountCard("pendingReviewItems") + CountCard("selfHealingCandidates") + CountCard("pendingAppeals");
     private AdminRecentThreatItem? PriorityThreat => _summary?.RecentThreats.FirstOrDefault();
     private int MaxBucketTotal => Math.Max(1, DailyOutcomes.Max(bucket => bucket.Total));
 
     private string ProtectionLabel => ProtectionScore >= 85 ? "Protected" : ProtectionScore >= 60 ? "Caution" : ProtectionScore >= 30 ? "High risk" : "Critical";
-    private string ProtectionStatus => _summary?.HasScanData != true ? "Awaiting evidence" : JudgmentCount > 0 ? "Protection pending review" : ProtectionLabel;
-    private string ProtectionHeading => _summary?.HasScanData != true ? "Protection needs evidence." : JudgmentCount > 0 ? "Strong evidence, incomplete judgment." : "Current evidence is fully reviewed.";
+    private string ProtectionKicker => _summary?.HasScanData == true ? "Overall HIP protection" : HasClientObservedScore ? "Client-observed HIP signal" : "Overall HIP protection";
+    private string ProtectionStatus => _summary?.HasScanData != true ? HasClientObservedScore ? "Client-observed · not verified" : "Awaiting evidence" : JudgmentCount > 0 ? "Protection pending review" : ProtectionLabel;
+    private string ProtectionHeading => _summary?.HasScanData != true ? HasClientObservedScore ? "Observed score available, verification pending." : "Protection needs evidence." : JudgmentCount > 0 ? "Strong evidence, incomplete judgment." : "Current evidence is fully reviewed.";
     private string ProtectionExplanation => _summary?.HasScanData == true ? JudgmentCount > 0 ? $"{JudgmentCount} {Pluralize(JudgmentCount, "decision", "decisions")} require review before protection status can be confirmed." : $"Average HIP score across {_summary.RecentScans.Count} recent privacy-safe scan summaries." : ClientTelemetryCount > 0 ? $"HIP stored {ClientTelemetryCount} privacy-safe client {Pluralize(ClientTelemetryCount, "observation", "observations")}. They are visible below but cannot become an authoritative score without verified evidence." : "HIP needs stored scan evidence before it can calculate protection.";
     private string DashboardHeading => _summary?.HasScanData != true
         ? ClientTelemetryCount > 0 ? "Client telemetry is arriving." : "Trust needs evidence."

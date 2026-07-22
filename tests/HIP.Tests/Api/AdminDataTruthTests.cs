@@ -60,6 +60,20 @@ public sealed class AdminDataTruthTests
     }
 
     [Test]
+    public void Dashboard_displays_client_observed_score_without_claiming_authoritative_protection()
+    {
+        var source = ReadWorkspaceFile("src", "HIP.Web", "Components", "Pages", "AdminDashboard.razor");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("ClientObservedScore"));
+            Assert.That(source, Does.Contain("Client-observed score"));
+            Assert.That(source, Does.Contain("not authoritative"));
+            Assert.That(source, Does.Contain("not included in authoritative Trusted, Caution, or Risk percentages"));
+        });
+    }
+
+    [Test]
     public void Score_overview_selects_live_cards_by_contract_key_and_explains_client_telemetry()
     {
         var source = ReadWorkspaceFile("src", "HIP.Web", "Components", "Pages", "AdminReputationOverview.razor");
