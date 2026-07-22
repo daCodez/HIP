@@ -484,6 +484,11 @@
       lastSummary.scanResultSubmission = "Success";
       lastSummary.scanResultDataSource = "BrowserPluginScan";
       lastSummary.lastSubmittedUtc = response.result?.lastCheckedUtc || new Date().toISOString();
+    } catch (error) {
+      lastSummary.scanResultSubmission = "Failure";
+      lastSummary.scanResultDataSource = "NotStored";
+      lastSummary.scanResultError = "HIP scan result persistence unavailable.";
+      throw error;
     } finally {
       pendingScanSubmissions.delete(submissionKey);
     }

@@ -9,6 +9,15 @@ export const SCORE_BANDS = Object.freeze([
 ]);
 
 const riskyStatuses = new Set(["Suspicious", "HighRisk", "Dangerous", "Critical"]);
+const terminalScanStages = new Set(["Complete", "Failed", "SkippedHipPage"]);
+const terminalSubmissionStates = new Set([
+  "Success",
+  "Failure",
+  "Failed",
+  "Disabled",
+  "Skipped",
+  "DuplicateSuppressed"
+]);
 const privateContentPatterns = [
   /page\s*text/i,
   /form\s*(value|content|field)/i,
@@ -205,7 +214,7 @@ export function buildPopupViewModel(lookup, summary, settings, currentUrl) {
     loginFormsDetected: summary?.loginFormsDetected ?? 0,
     lastScanText: formatDate(summary?.updatedAt),
     lastSubmittedText: submissionText(summary),
-    dataSourceText: summary?.scanResultDataSource || lookup?.dataSource || "Pending",
+    dataSourceText: assessmentSourceText(lookup, summary),
     lookupUrl: buildPublicLookupUrl(settings?.webBaseUrl, lookup?.domain, lookup?.publicLookupUrl),
     safetyDetailsUrl: buildSafetyDetailsUrl(settings?.webBaseUrl, currentUrl, status)
   };
@@ -431,8 +440,43 @@ function componentScore(lookup, category) {
 function submissionText(summary) {
   const status = summary?.scanResultSubmission || "Pending";
   if (status === "Success" && summary?.lastSubmittedUtc) {
-    return `Success (${formatDate(summary.lastSubmittedUtc)})`;
+    return "Client telemetry stored (" + formatDate(summary.lastSubmittedUtc) + ")";
   }
 
-  return status;
+  return {
+    Success: "Client telemetry stored",
+    DuplicateSuppressed: "Client telemetry already stored",
+    Failure: "Client telemetry not stored",
+    Failed: "Client telemetry not stored",
+    Disabled: "Client telemetry disabled",
+    Skipped: "Client telemetry not submitted",
+    Pending: "Saving client telemetry"
+  }[status] || "Client telemetry unavailable";
+}
+
+/**
+ * Keeps client-observed telemetry distinct from HIP's authoritative assessment.
+ */
+function assessmentSourceText(lookup, summary) {
+  const hasClientEvidence = summary?.scanResultDataSource === "BrowserPluginScan" ||
+    summary?.siteSafetyDataSource === "SiteSafetyScan";
+  const hasAuthoritativeAssessment = Boolean(lookup) && lookup?.dataSource !== "NoStoredData";
+
+  if (hasClientEvidence) {
+    return hasAuthoritativeAssessment
+      ? "Client-observed evidence; authoritative HIP assessment available"
+      : "Client-observed evidence; no authoritative HIP assessment";
+  }
+
+  return hasAuthoritativeAssessment
+    ? "Authoritative HIP assessment available"
+    : "No authoritative HIP assessment";
+}
+
+/**
+ * Returns true only when both the page scan and client telemetry submission are finished.
+ */
+export function isTerminalScanSummary(summary = {}) {
+  return terminalScanStages.has(summary?.scanStage) &&
+    terminalSubmissionStates.has(summary?.scanResultSubmission);
 }

@@ -3,6 +3,7 @@ import {
   buildPopupViewModel,
   buildSiteSafetyViewModel,
   feedbackCopy,
+  isTerminalScanSummary,
   loadingSummaryViewModel,
   unavailableMessage
 } from "./popupViewModel.js";
@@ -227,7 +228,11 @@ async function waitForScanSummary() {
       await startContentScanIfNeeded();
     }
 
-    renderLoadingSummary(attempt === 0 ? "Scanning page" : "Still scanning");
+    if (isCompleteSiteSafetySummary(summary)) {
+      renderSummary(summary);
+    } else {
+      renderLoadingSummary(attempt === 0 ? "Scanning page" : "Still scanning");
+    }
     await delay(summaryPollDelayMs);
   }
 
@@ -299,11 +304,7 @@ async function injectContentScanner(tabId) {
  * Determines whether a summary has enough data to replace loading indicators.
  */
 function isUsefulSummary(summary = {}) {
-  return isCompleteSiteSafetySummary(summary) ||
-    summary.apiStatus === "Unavailable" ||
-    summary.scanResultSubmission === "Success" ||
-    summary.scanResultSubmission === "Failure" ||
-    summary.scanResultSubmission === "Disabled";
+  return isTerminalScanSummary(summary);
 }
 
 /**

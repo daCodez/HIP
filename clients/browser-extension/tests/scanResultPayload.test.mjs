@@ -396,6 +396,16 @@ test("content script contains duplicate scan submission guards", async () => {
   assert.match(backgroundScript, /duplicateSuppressed/);
 });
 
+test("content script records a terminal failure when scan persistence throws", async () => {
+  const contentScript = await readFile(new URL("../src/content.js", import.meta.url), "utf8");
+
+  assert.match(
+    contentScript,
+    /catch \(error\) \{\s*lastSummary\.scanResultSubmission = "Failure";\s*lastSummary\.scanResultDataSource = "NotStored";/
+  );
+  assert.match(contentScript, /HIP scan result persistence unavailable\./);
+});
+
 test("plugin version is formatted from manifest version", () => {
   assert.equal(formatPluginVersion("0.1.2"), "HIP Plugin v0.1.2-dev");
 });
