@@ -38,6 +38,7 @@
 .admin-portal .stage :is(.hip-secondary-action,.license-manage-link){border-color:var(--line);background:var(--elevated);color:var(--ink)}
 .admin-portal .stage :is(button,a,input,select,textarea):focus-visible,.admin-portal :is(.nav-item,.iconbtn):focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 72%,white);outline-offset:3px}
 .admin-portal .stage :is(input,select,textarea){min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:2px;background:var(--input);color:var(--ink)}
+.admin-portal .stage :is(input[type="checkbox"],input[type="radio"]){width:1.1rem;height:1.1rem;min-width:1.1rem;min-height:1.1rem;flex:0 0 1.1rem;margin:0;padding:0;border-radius:3px;accent-color:var(--primary)}
 .admin-portal .stage textarea{min-height:116px}
 .admin-portal .stage :is(.hip-pill,.license-status,.severity-badge){display:inline-flex;align-items:center;min-height:24px;padding:4px 8px;border-radius:2px;font:700 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase}
 .admin-portal .stage :is(.hip-alert-row,.hip-platform-row,.judgment-row){transition:background 140ms,border-color 140ms,transform 140ms}
