@@ -10,7 +10,7 @@ primary source, and optional dependency availability.
 | --- | --- | --- |
 | `AdminAlerts.razor` | `IAdminDashboardService` privacy-safe threat projection | Explicit empty/filter states; refresh failures retain rows and show an error. |
 | `AdminApiDeveloper.razor` | Authorized service-client management endpoints | Explicit empty list; secrets are returned only once at creation. |
-| `AdminAppeals.razor` | `IAppealService` | Empty queue; sample creation is development-only and labelled. |
+| `AdminAppeals.razor` | Async `IAppealService` reads and actor-authorized decisions | Explicit loading/empty/not-found/error states; decisions require an operator reason, persist asynchronously, and write privacy-safe audit evidence. Sample creation is development-only and labelled. |
 | `AdminAuditLogs.razor` | `IAuditLogService` | Explicit empty/filter states; refresh failures retain rows and show an error. |
 | `AdminDashboard.razor` | `IAdminDashboardService` | Shows snapshot time/source; unavailable metrics use an em dash and dependency health degrades. |
 | `AdminFeedbackLoop.razor` | Dashboard weighted-feedback projection | No fabricated feedback; unavailable cards use an em dash. |

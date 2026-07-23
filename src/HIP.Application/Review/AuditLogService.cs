@@ -70,6 +70,37 @@ public sealed class AuditLogService(IAuditLogRepository repository) : IAuditLogS
         return entry;
     }
 
+    /// <inheritdoc />
+    public async Task<AuditLogEntry> WriteAsync(
+        string actorId,
+        string action,
+        TargetType targetType,
+        string targetId,
+        string summary,
+        AuditSeverity severity,
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string? actorRole = null,
+        IReadOnlyDictionary<string, string>? beforeMetadata = null,
+        IReadOnlyDictionary<string, string>? afterMetadata = null,
+        string? correlationId = null)
+    {
+        var entry = CreateEntry(
+            actorId,
+            action,
+            targetType,
+            targetId,
+            summary,
+            severity,
+            metadata,
+            actorRole,
+            beforeMetadata,
+            afterMetadata,
+            correlationId);
+        await repository.SaveAsync(entry, cancellationToken).ConfigureAwait(false);
+        return entry;
+    }
+
     public AuditLogEntry WriteOnce(
         string idempotencyKey,
         string actorId,

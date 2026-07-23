@@ -34,6 +34,35 @@ public interface IAuditLogService
         IReadOnlyDictionary<string, string>? afterMetadata = null,
         string? correlationId = null);
 
+    /// <summary>
+    /// Persists one sanitized audit entry without blocking the caller's synchronization context.
+    /// </summary>
+    Task<AuditLogEntry> WriteAsync(
+        string actorId,
+        string action,
+        TargetType targetType,
+        string targetId,
+        string summary,
+        AuditSeverity severity,
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string? actorRole = null,
+        IReadOnlyDictionary<string, string>? beforeMetadata = null,
+        IReadOnlyDictionary<string, string>? afterMetadata = null,
+        string? correlationId = null) =>
+        Task.FromResult(Write(
+            actorId,
+            action,
+            targetType,
+            targetId,
+            summary,
+            severity,
+            metadata,
+            actorRole,
+            beforeMetadata,
+            afterMetadata,
+            correlationId));
+
     AuditLogEntry WriteOnce(
         string idempotencyKey,
         string actorId,

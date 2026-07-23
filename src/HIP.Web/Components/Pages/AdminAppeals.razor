@@ -9,16 +9,17 @@
 
 <PageTitle>HIP Appeals</PageTitle>
 
-<main class="admin-rule-page">
+<main class="admin-rule-page" aria-busy="@(_loading || _busy)">
     <section class="admin-rule-header">
-        <p class="eyebrow">Admin MVP</p>
+        <p class="eyebrow">Trust operations</p>
         <h1>Appeals</h1>
         <p>Review privacy-safe appeals for domains, senders, device keys, organizations, and content patterns.</p>
+        <button type="button" class="hip-secondary-action" @onclick="RefreshAsync" disabled="@(_loading || _busy)">Refresh</button>
         @if (HostEnvironment.IsDevelopment())
         {
             <AuthorizeView Policy="@AdminPolicies.CanDecideAppeals">
                 <Authorized>
-                    <button type="button" @onclick="CreateSample">Create Sample Appeal</button>
+                    <button type="button" @onclick="CreateSampleAsync" disabled="@_busy">Create Sample Appeal</button>
                 </Authorized>
             </AuthorizeView>
         }
@@ -26,129 +27,209 @@
 
     @if (_message is not null)
     {
-        <p class="admin-message" role="status">@_message</p>
+        <p class="admin-message" role="status" aria-live="polite">@_message</p>
+    }
+    @if (_error is not null)
+    {
+        <p class="admin-message danger" role="alert">@_error</p>
     }
 
     @if (_selected is not null)
     {
-        <section class="rule-builder-panel">
-            <h2>Appeal Detail</h2>
+        <section class="rule-builder-panel" aria-labelledby="appeal-detail-heading">
+            <div class="hip-panel-heading flush">
+                <div><h2 id="appeal-detail-heading">Appeal Detail</h2><p>Submitted @_selected.CreatedAtUtc.UtcDateTime.ToString("u") · Updated @_selected.UpdatedAtUtc.UtcDateTime.ToString("u")</p></div>
+                <span class="hip-pill @StatusTone(_selected.Status)">@_selected.Status</span>
+            </div>
             <dl class="lookup-details">
                 <dt>ID</dt><dd>@_selected.AppealId</dd>
                 <dt>Target</dt><dd>@_selected.TargetType: @_selected.TargetId</dd>
-                <dt>Status</dt><dd>@_selected.Status</dd>
                 <dt>Reason</dt><dd>@_selected.Reason</dd>
-                <dt>Decision</dt><dd>@_selected.Decision @_selected.DecisionReason</dd>
+                <dt>Decision</dt><dd>@(string.IsNullOrWhiteSpace(_selected.Decision) ? "Pending" : _selected.Decision) @(string.IsNullOrWhiteSpace(_selected.DecisionReason) ? null : $"— {_selected.DecisionReason}")</dd>
             </dl>
+
+            @if (CanDecide(_selected.Status))
+            {
+                <AuthorizeView Policy="@AdminPolicies.CanDecideAppeals">
+                    <Authorized>
+                        <div class="rule-form-grid">
+                            <label for="appeal-decision-reason">Decision reason</label>
+                            <textarea id="appeal-decision-reason" maxlength="500" rows="4" @bind="_decisionReason" disabled="@_busy" placeholder="Explain the privacy-safe evidence supporting this decision."></textarea>
+                            <small>Required. Do not include private messages, credentials, or raw personal data.</small>
+                            <div class="rule-actions" role="group" aria-label="Appeal decision actions">
+                                <button type="button" @onclick="() => DecideAsync(AppealStatus.Approved)" disabled="@DecisionDisabled">Approve</button>
+                                <button type="button" @onclick="() => DecideAsync(AppealStatus.Rejected)" disabled="@DecisionDisabled">Reject</button>
+                                <button type="button" @onclick="() => DecideAsync(AppealStatus.NeedsMoreInfo)" disabled="@DecisionDisabled">Request more information</button>
+                            </div>
+                        </div>
+                    </Authorized>
+                    <NotAuthorized><p>View only. Your role cannot decide appeals.</p></NotAuthorized>
+                </AuthorizeView>
+            }
         </section>
     }
 
-    <section class="rule-builder-panel">
-        <h2>Appeal Requests</h2>
-        <table class="admin-rule-table">
-            <thead>
-                <tr><th>Target</th><th>Reason</th><th>Status</th><th>Submitted</th><th>Decision</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-                @foreach (var appeal in _appeals)
-                {
-                    <tr>
-                        <td>@appeal.TargetType: @appeal.TargetId</td>
-                        <td>@appeal.Reason</td>
-                        <td>@appeal.Status</td>
-                        <td>@appeal.CreatedAtUtc.UtcDateTime.ToString("u")</td>
-                        <td>@appeal.Decision @appeal.DecisionReason</td>
-                        <td>
-                            <AuthorizeView Policy="@AdminPolicies.CanDecideAppeals">
-                                <Authorized>
-                                    <button type="button" @onclick="() => Approve(appeal.AppealId)">Approve</button>
-                                    <button type="button" @onclick="() => Reject(appeal.AppealId)">Reject</button>
-                                    <button type="button" @onclick="() => MoreInfo(appeal.AppealId)">More Info</button>
-                                </Authorized>
-                                <NotAuthorized><span>View only</span></NotAuthorized>
-                            </AuthorizeView>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+    <section class="rule-builder-panel" aria-labelledby="appeal-requests-heading">
+        <h2 id="appeal-requests-heading">Appeal Requests</h2>
+        @if (_loading)
+        {
+            <p role="status">Loading stored appeals…</p>
+        }
+        else if (_appeals.Count == 0)
+        {
+            <div class="visual-empty" role="status"><b>No appeals submitted</b><span>Consumer appeal requests will appear here after HIP stores them.</span></div>
+        }
+        else
+        {
+            <div class="hip-table-wrap">
+                <table class="admin-rule-table">
+                    <thead><tr><th scope="col">Target</th><th scope="col">Reason</th><th scope="col">Status</th><th scope="col">Submitted</th><th scope="col">Decision</th><th scope="col">Details</th></tr></thead>
+                    <tbody>
+                        @foreach (var appeal in _appeals)
+                        {
+                            <tr>
+                                <td>@appeal.TargetType: @appeal.TargetId</td>
+                                <td>@appeal.Reason</td>
+                                <td><span class="hip-pill @StatusTone(appeal.Status)">@appeal.Status</span></td>
+                                <td>@appeal.CreatedAtUtc.UtcDateTime.ToString("u")</td>
+                                <td>@(string.IsNullOrWhiteSpace(appeal.Decision) ? "Pending" : appeal.Decision)</td>
+                                <td><a href="@($"/admin/appeals/{Uri.EscapeDataString(appeal.AppealId)}")">Review appeal</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     </section>
 </main>
 
 @code {
-    [Parameter]
-    public string? AppealId { get; set; }
+    [Parameter] public string? AppealId { get; set; }
 
     private IReadOnlyCollection<AppealRequest> _appeals = [];
     private AppealRequest? _selected;
+    private string _decisionReason = string.Empty;
     private string? _message;
+    private string? _error;
+    private bool _loading = true;
+    private bool _busy;
 
-    protected override void OnInitialized() => Refresh();
+    private bool DecisionDisabled => _busy || string.IsNullOrWhiteSpace(_decisionReason);
 
-    protected override void OnParametersSet() => Refresh();
+    /// <summary>Loads the durable appeal queue and optional route-selected detail.</summary>
+    protected override Task OnParametersSetAsync() => RefreshAsync();
 
-    private void Refresh()
+    private async Task RefreshAsync()
     {
-        _appeals = AppealService.List();
-        _selected = string.IsNullOrWhiteSpace(AppealId) ? null : AppealService.Get(AppealId);
+        _loading = true;
+        _error = null;
+        try
+        {
+            _appeals = await AppealService.ListAsync(CancellationToken.None);
+            _selected = string.IsNullOrWhiteSpace(AppealId)
+                ? null
+                : await AppealService.GetAsync(AppealId, CancellationToken.None);
+            if (!string.IsNullOrWhiteSpace(AppealId) && _selected is null)
+            {
+                _error = "That appeal was not found.";
+            }
+        }
+        catch
+        {
+            _appeals = [];
+            _selected = null;
+            _error = "HIP could not load appeals. Try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
-    private Task CreateSample() =>
-        RunAuthorizedMutationAsync(_ => AppealService.Submit(new AppealRequest(
-            "",
-            TargetType.Domain,
-            "appeal-example.com",
-            "sha256:submitter",
-            "The domain has remediated the reported redirect issue.",
-            AppealStatus.Submitted,
-            DateTimeOffset.UtcNow,
-            DateTimeOffset.UtcNow,
-            null,
-            null,
-            null,
-            new Dictionary<string, string> { ["evidenceSummary"] = "public DNS and redirect fix notes" })),
+    private Task CreateSampleAsync() =>
+        RunAuthorizedMutationAsync(
+            (_, cancellationToken) => AppealService.SubmitAsync(new AppealRequest(
+                "",
+                TargetType.Domain,
+                "appeal-example.com",
+                "sha256:submitter",
+                "The domain has remediated the reported redirect issue.",
+                AppealStatus.Submitted,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                null,
+                null,
+                null,
+                new Dictionary<string, string> { ["evidenceSummary"] = "public DNS and redirect fix notes" }),
+                cancellationToken),
             developmentOnly: true);
 
-    private Task Approve(string id) =>
-        RunAuthorizedMutationAsync(actor => AppealService.Approve(
-            id,
-            actor,
-            "Appeal accepted based on privacy-safe evidence."));
-
-    private Task Reject(string id) =>
-        RunAuthorizedMutationAsync(actor => AppealService.Reject(
-            id,
-            actor,
-            "Risk evidence remains valid."));
-
-    private Task MoreInfo(string id) =>
-        RunAuthorizedMutationAsync(actor => AppealService.RequestMoreInfo(
-            id,
-            actor,
-            "Need more public remediation evidence."));
-
-    /// <summary>
-    /// Reauthorizes the current circuit immediately before a direct appeal mutation.
-    /// </summary>
-    private async Task RunAuthorizedMutationAsync(
-        Func<string, AppealRequest> mutation,
-        bool developmentOnly = false)
+    private Task DecideAsync(AppealStatus status)
     {
-        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var result = await HipAdminPageAccess.ExecuteAuthorizedAsync(
-            authenticationState.User,
-            AuthorizationService,
-            HostEnvironment,
-            AdminPolicies.CanDecideAppeals,
-            mutation,
-            developmentOnly);
-        if (!result.Succeeded)
+        if (_selected is null || DecisionDisabled)
         {
-            _message = HipAdminPageAccess.AccessUnavailableMessage;
-            return;
+            return Task.CompletedTask;
         }
 
-        _message = null;
-        Refresh();
+        var appealId = _selected.AppealId;
+        var reason = _decisionReason.Trim();
+        return RunAuthorizedMutationAsync((actor, cancellationToken) => status switch
+        {
+            AppealStatus.Approved => AppealService.ApproveAsync(appealId, actor, reason, cancellationToken),
+            AppealStatus.Rejected => AppealService.RejectAsync(appealId, actor, reason, cancellationToken),
+            AppealStatus.NeedsMoreInfo => AppealService.RequestMoreInfoAsync(appealId, actor, reason, cancellationToken),
+            _ => throw new ArgumentOutOfRangeException(nameof(status))
+        });
     }
+
+    private async Task RunAuthorizedMutationAsync(
+        Func<string, CancellationToken, Task<AppealRequest>> mutation,
+        bool developmentOnly = false)
+    {
+        _busy = true;
+        _message = null;
+        _error = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var result = await HipAdminPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                HostEnvironment,
+                [AdminPolicies.CanDecideAppeals],
+                mutation,
+                CancellationToken.None,
+                developmentOnly);
+            if (!result.Succeeded)
+            {
+                _error = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            _decisionReason = string.Empty;
+            _message = "Appeal updated and audit evidence recorded.";
+            await RefreshAsync();
+        }
+        catch (ArgumentException exception)
+        {
+            _error = exception.Message;
+        }
+        catch
+        {
+            _error = "HIP could not update the appeal. Its existing state was preserved.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static bool CanDecide(AppealStatus status) => status is AppealStatus.Submitted or AppealStatus.InReview or AppealStatus.NeedsMoreInfo;
+    private static string StatusTone(AppealStatus status) => status switch
+    {
+        AppealStatus.Approved => "good",
+        AppealStatus.Rejected => "danger",
+        AppealStatus.NeedsMoreInfo => "caution",
+        _ => "suspicious"
+    };
 }

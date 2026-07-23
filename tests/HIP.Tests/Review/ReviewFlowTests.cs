@@ -197,6 +197,29 @@ public sealed class ReviewFlowTests
         Assert.Throws<ValidationException>(() => services.Overrides.Request(Override(currentScore: -1, requestedScore: 105)));
     }
 
+    [Test]
+    public async Task Appeal_async_operator_flow_persists_decision_and_audit_evidence()
+    {
+        var services = Services();
+        var submitted = await services.Appeals.SubmitAsync(Appeal(), CancellationToken.None);
+
+        var approved = await services.Appeals.ApproveAsync(
+            submitted.AppealId,
+            "reviewer-42",
+            "Public remediation evidence was verified.",
+            CancellationToken.None);
+        var stored = await services.Appeals.GetAsync(submitted.AppealId, CancellationToken.None);
+        var audits = await services.AuditLogs.ListAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(approved.Status, Is.EqualTo(AppealStatus.Approved));
+            Assert.That(stored, Is.EqualTo(approved));
+            Assert.That(stored!.DecisionReason, Is.EqualTo("Public remediation evidence was verified."));
+            Assert.That(audits.Any(entry => entry.Action == "Appeal approved"), Is.True);
+        });
+    }
+
     private static ServiceSet Services()
     {
         var audit = new AuditLogService(new InMemoryAuditLogRepository());

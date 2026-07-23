@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Runtime.CompilerServices;
 using HIP.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.FileProviders;
@@ -315,7 +316,10 @@ public sealed class AdminReviewPageMutationSecurityTests
             Assert.That(reviewPage, Does.Contain("AdminPolicies.CanDecideReviews,\n            mutation"));
             Assert.That(appealPage, Does.Contain("Authorize(Policy = AdminPolicies.CanViewAppeals)"));
             Assert.That(appealPage, Does.Contain("Policy=\"@AdminPolicies.CanDecideAppeals\""));
-            Assert.That(appealPage, Does.Contain("AdminPolicies.CanDecideAppeals,\n            mutation"));
+            Assert.That(appealPage, Does.Contain("[AdminPolicies.CanDecideAppeals]"));
+            Assert.That(appealPage, Does.Contain("Func<string, CancellationToken, Task<AppealRequest>> mutation"));
+            Assert.That(appealPage, Does.Contain("AppealService.ApproveAsync"));
+            Assert.That(appealPage, Does.Contain("Decision reason"));
             Assert.That(reviewPage, Does.Contain("@if (HostEnvironment.IsDevelopment())"));
             Assert.That(appealPage, Does.Contain("@if (HostEnvironment.IsDevelopment())"));
             Assert.That(reviewPage, Does.Contain("developmentOnly: true"));
@@ -326,15 +330,28 @@ public sealed class AdminReviewPageMutationSecurityTests
     private static ClaimsPrincipal Principal(params Claim[] claims) =>
         new(new ClaimsIdentity(claims, "test", ClaimTypes.Name, ClaimTypes.Role));
 
-    private static string RepositoryRoot()
+    private static string RepositoryRoot([CallerFilePath] string sourceFilePath = "")
     {
-        var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "HIP.slnx")))
+        foreach (var startPath in new[]
+                 {
+                     Path.GetDirectoryName(sourceFilePath),
+                     TestContext.CurrentContext.TestDirectory,
+                     Directory.GetCurrentDirectory()
+                 }.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            directory = directory.Parent;
+            var directory = new DirectoryInfo(startPath!);
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "HIP.slnx")))
+            {
+                directory = directory.Parent;
+            }
+
+            if (directory is not null)
+            {
+                return directory.FullName;
+            }
         }
 
-        return directory?.FullName ?? throw new DirectoryNotFoundException("Could not locate HIP repository root.");
+        throw new DirectoryNotFoundException("Could not locate HIP repository root.");
     }
 
     private sealed class StubAuthorizationService(bool succeeds) : IAuthorizationService
