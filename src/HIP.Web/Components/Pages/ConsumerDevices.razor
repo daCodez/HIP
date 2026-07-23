@@ -13,7 +13,7 @@
             <h1>Devices</h1>
             <p>Register this browser with a private key that stays on this device, then revoke the registration whenever you need to.</p>
         </div>
-        <span class="device-key-note">Private key stays in this browser</span>
+        <span class="device-key-note">@BrowserReadinessLabel</span>
     </section>
 
     @if (_isLoading)
@@ -42,8 +42,8 @@
                 <p>Terminal records retained so old keys cannot be registered again.</p>
             </article>
             <article class="device-summary-card assurance">
-                <span>Registration proof</span><strong>P-256</strong>
-                <p>Proof confirms private-key possession. It does not prove a device is safe.</p>
+                <span>Browser key storage</span><strong>@BrowserReadinessShortLabel</strong>
+                <p>@BrowserReadinessDescription</p>
             </article>
         </section>
 
@@ -67,6 +67,14 @@
                         disabled="@RegistrationDisabled">
                     @(_isRegistering ? "Registering…" : "Register this browser")
                 </button>
+                @if (!_browserSupportChecked)
+                {
+                    <small role="status">Checking WebCrypto and local key storage…</small>
+                }
+                else if (!_browserRegistrationSupported)
+                {
+                    <small role="alert">@BrowserReadinessDescription</small>
+                }
                 @if (AtDeviceLimit)
                 {
                     <small>Revoke an active device before registering another one.</small>

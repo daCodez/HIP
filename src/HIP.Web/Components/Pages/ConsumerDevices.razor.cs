@@ -30,11 +30,25 @@ public partial class ConsumerDevices : IAsyncDisposable
     private bool _isBusy;
     private bool _isRegistering;
     private bool _canUseJavaScript;
+    private bool _browserSupportChecked;
+    private bool _browserRegistrationSupported;
+    private BrowserDeviceSupport? _browserSupport;
+    private string _registrationStage = "starting secure registration";
 
     private int ActiveDeviceCount => _devices.Count(device => device.RevocationState == DeviceRevocationState.Active);
     private int RevokedDeviceCount => _devices.Count - ActiveDeviceCount;
     private bool AtDeviceLimit => ActiveDeviceCount >= DeviceRegistrationPolicy.Default.MaximumDevices;
-    private bool RegistrationDisabled => _isBusy || AtDeviceLimit || string.IsNullOrWhiteSpace(_friendlyName);
+    private bool RegistrationDisabled => _isBusy || AtDeviceLimit || string.IsNullOrWhiteSpace(_friendlyName) ||
+                                         !_browserSupportChecked || !_browserRegistrationSupported;
+    private string BrowserReadinessLabel => !_browserSupportChecked
+        ? "Checking browser key storage"
+        : _browserRegistrationSupported ? "Private key stays in this browser" : "Secure key storage unavailable";
+    private string BrowserReadinessShortLabel => !_browserSupportChecked ? "Checking" : _browserRegistrationSupported ? "Ready" : "Unavailable";
+    private string BrowserReadinessDescription => !_browserSupportChecked
+        ? "HIP is checking whether this browser can create and retain a non-exportable key."
+        : _browserRegistrationSupported
+            ? "WebCrypto and browser-profile key storage are ready. Proof confirms key possession, not device safety."
+            : BrowserSupportFailure(_browserSupport);
 
     protected override Task OnInitializedAsync() => LoadDevicesAsync();
 
@@ -46,6 +60,7 @@ public partial class ConsumerDevices : IAsyncDisposable
         }
 
         _canUseJavaScript = true;
+        await InspectBrowserSupportAsync();
         if (await ReconcileLocalKeysAsync())
         {
             StateHasChanged();
@@ -69,8 +84,10 @@ public partial class ConsumerDevices : IAsyncDisposable
 
         try
         {
+            SetRegistrationProgress("creating a non-exportable browser key");
             var module = await GetDeviceModuleAsync();
             prepared = await module.InvokeAsync<PreparedDeviceKey>("prepareDeviceKey");
+            SetRegistrationProgress("requesting a short-lived HIP challenge");
             var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             var issuedAccess = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
                 authenticationState.User,
@@ -99,14 +116,17 @@ public partial class ConsumerDevices : IAsyncDisposable
             }
 
             var challenge = issued.Challenge;
+            SetRegistrationProgress("storing the private key in this browser profile");
             await module.InvokeVoidAsync("stageDeviceKey", prepared.Handle, challenge.DeviceId);
             prepared = null;
             stagedDeviceId = challenge.DeviceId;
+            SetRegistrationProgress("proving private-key possession");
             var signature = await module.InvokeAsync<string>(
                 "signDeviceChallenge",
                 challenge.DeviceId,
                 challenge.SigningInput);
 
+            SetRegistrationProgress("saving the verified registration");
             authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             var completedAccess = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
                 authenticationState.User,
@@ -131,11 +151,22 @@ public partial class ConsumerDevices : IAsyncDisposable
             }
 
             registrationCompleted = true;
+            SetRegistrationProgress("activating this browser's local key");
             await module.InvokeVoidAsync("activateDeviceKey", challenge.DeviceId);
             stagedDeviceId = null;
             _friendlyName = "This browser";
             SetSuccess("This browser is registered. Its private key remains non-exportable in this browser profile.");
             await LoadDevicesAsync();
+        }
+        catch (JSException exception)
+        {
+            SetError(registrationCompleted
+                ? "The device was registered, but this browser could not activate its local key. Revoke it before trying again."
+                : BrowserRegistrationError(exception.Message, _registrationStage));
+            if (registrationCompleted)
+            {
+                await LoadDevicesAsync();
+            }
         }
         catch (Exception)
         {
@@ -248,9 +279,35 @@ public partial class ConsumerDevices : IAsyncDisposable
     private void CancelRevoke() => _confirmingDeviceId = null;
     private void SetError(string message) { _statusMessage = message; _statusIsError = true; }
     private void SetSuccess(string message) { _statusMessage = message; _statusIsError = false; }
+    private void SetRegistrationProgress(string stage)
+    {
+        _registrationStage = stage;
+        _statusMessage = $"HIP is {stage}…";
+        _statusIsError = false;
+        StateHasChanged();
+    }
 
     private async Task<IJSObjectReference> GetDeviceModuleAsync() =>
         _deviceModule ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", DeviceModulePath);
+
+    private async Task InspectBrowserSupportAsync()
+    {
+        try
+        {
+            _browserSupport = await (await GetDeviceModuleAsync())
+                .InvokeAsync<BrowserDeviceSupport>("inspectDeviceRegistrationSupport");
+            _browserRegistrationSupported = _browserSupport.Supported;
+        }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or InvalidOperationException)
+        {
+            _browserSupport = null;
+            _browserRegistrationSupported = false;
+        }
+        finally
+        {
+            _browserSupportChecked = true;
+        }
+    }
 
     private async Task DiscardPendingKeyAsync(string handle)
     {
@@ -317,6 +374,26 @@ public partial class ConsumerDevices : IAsyncDisposable
     private static string FormatRevokedDate(DateTimeOffset? value) =>
         value is null ? "Revoked" : $"Revoked {FormatDate(value.Value)}";
 
+    private static string BrowserSupportFailure(BrowserDeviceSupport? support)
+    {
+        if (support is null) return "HIP could not inspect this browser's secure key features. Refresh and try again.";
+        if (!support.SecureContext) return "Device registration requires a secure HTTPS or localhost page.";
+        if (!support.WebCryptoAvailable) return "This browser does not provide the WebCrypto features HIP needs for a non-exportable key.";
+        if (!support.KeyStorageAvailable) return "This browser profile is blocking local device-key storage. Allow site data for HIP, then refresh.";
+        return "Secure device registration is unavailable in this browser profile.";
+    }
+
+    private static string BrowserRegistrationError(string message, string stage)
+    {
+        if (message.Contains("HIP_DEVICE_INSECURE_CONTEXT", StringComparison.Ordinal))
+            return "Registration stopped because this is not a secure HTTPS or localhost page.";
+        if (message.Contains("HIP_DEVICE_WEBCRYPTO_UNAVAILABLE", StringComparison.Ordinal))
+            return "Registration stopped because WebCrypto is unavailable in this browser.";
+        if (message.Contains("HIP_DEVICE_KEY_STORAGE_UNAVAILABLE", StringComparison.Ordinal))
+            return "Registration stopped because this browser profile could not retain the private key. Allow site data for HIP, then retry.";
+        return $"Registration stopped while {stage}. HIP did not send the private key to the server; retry or refresh the page.";
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_deviceModule is null) return;
@@ -331,4 +408,11 @@ public partial class ConsumerDevices : IAsyncDisposable
     private sealed record LocalKeyReconciliation(
         [property: JsonPropertyName("activated")] int Activated,
         [property: JsonPropertyName("removed")] int Removed);
+
+    private sealed record BrowserDeviceSupport(
+        [property: JsonPropertyName("supported")] bool Supported,
+        [property: JsonPropertyName("secureContext")] bool SecureContext,
+        [property: JsonPropertyName("webCryptoAvailable")] bool WebCryptoAvailable,
+        [property: JsonPropertyName("keyStorageAvailable")] bool KeyStorageAvailable,
+        [property: JsonPropertyName("extensionAvailable")] bool ExtensionAvailable);
 }

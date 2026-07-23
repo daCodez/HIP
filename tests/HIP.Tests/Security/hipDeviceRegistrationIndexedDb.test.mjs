@@ -8,7 +8,9 @@ const modulePath = new URL(
 
 test("staging waits for transaction commit and retains the pending key after an abort", async () => {
     const originalIndexedDb = globalThis.indexedDB;
+    const originalSecureContext = globalThis.isSecureContext;
     globalThis.indexedDB = createIndexedDb(["abort", "complete"]);
+    globalThis.isSecureContext = true;
 
     try {
         const source = await readFile(modulePath, "utf8");
@@ -25,6 +27,34 @@ test("staging waits for transaction commit and retains the pending key after an 
     }
     finally {
         globalThis.indexedDB = originalIndexedDb;
+        globalThis.isSecureContext = originalSecureContext;
+    }
+});
+
+test("reports browser key capabilities before registration", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const originalSecureContext = globalThis.isSecureContext;
+    globalThis.indexedDB = createIndexedDb(["complete"]);
+    globalThis.isSecureContext = true;
+
+    try {
+        const source = await readFile(modulePath, "utf8");
+        const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}#capabilities`;
+        const registration = await import(moduleUrl);
+
+        const support = await registration.inspectDeviceRegistrationSupport();
+
+        assert.deepEqual(support, {
+            supported: true,
+            secureContext: true,
+            webCryptoAvailable: true,
+            keyStorageAvailable: true,
+            extensionAvailable: false
+        });
+    }
+    finally {
+        globalThis.indexedDB = originalIndexedDb;
+        globalThis.isSecureContext = originalSecureContext;
     }
 });
 

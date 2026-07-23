@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Runtime.CompilerServices;
 using HIP.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using NUnit.Framework;
@@ -230,6 +231,8 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(devices, Does.Contain("AuthenticationStateProvider"));
             Assert.That(devices, Does.Contain("HipConsumerPageAccess.ExecuteAsync"));
             Assert.That(devices, Does.Contain("hip-device-registration.js"));
+            Assert.That(devices, Does.Contain("inspectDeviceRegistrationSupport"));
+            Assert.That(devices, Does.Contain("browser profile is blocking local device-key storage"));
             Assert.That(devices, Does.Contain("ReconcileLocalKeysAsync"));
 
             var register = Section(devices, "private async Task RegisterAsync()", "private async Task RevokeAsync");
@@ -291,17 +294,20 @@ public sealed class HipConsumerPageIsolationTests
         return source[start..end];
     }
 
-    private static string RepositoryRoot()
+    private static string RepositoryRoot([CallerFilePath] string sourceFilePath = "")
     {
-        var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
-        while (directory is not null)
+        foreach (var startPath in new[] { Path.GetDirectoryName(sourceFilePath), TestContext.CurrentContext.TestDirectory })
         {
-            if (File.Exists(Path.Combine(directory.FullName, "HIP.slnx")))
+            var directory = new DirectoryInfo(startPath!);
+            while (directory is not null)
             {
-                return directory.FullName;
-            }
+                if (File.Exists(Path.Combine(directory.FullName, "HIP.slnx")))
+                {
+                    return directory.FullName;
+                }
 
-            directory = directory.Parent;
+                directory = directory.Parent;
+            }
         }
 
         throw new DirectoryNotFoundException("Could not locate the HIP repository root.");

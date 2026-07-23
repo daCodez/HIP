@@ -4,10 +4,50 @@ const pendingKeys = new Map();
 const extensionHandlePrefix = "extension:";
 const extensionManagedDeviceIds = new Set();
 
+export async function inspectDeviceRegistrationSupport() {
+    const extension = await requestExtension("capabilities", {}, 500);
+    const extensionAvailable = extension?.supported === true;
+    const secureContext = globalThis.isSecureContext === true;
+    const webCryptoAvailable = typeof globalThis.crypto?.randomUUID === "function" &&
+        typeof globalThis.crypto?.subtle?.generateKey === "function";
+    const indexedDbAvailable = typeof globalThis.indexedDB?.open === "function";
+    let keyStorageAvailable = false;
+
+    if (indexedDbAvailable) {
+        try {
+            const database = await openDatabase();
+            database.close();
+            keyStorageAvailable = true;
+        }
+        catch {
+            keyStorageAvailable = false;
+        }
+    }
+
+    return {
+        supported: secureContext && (extensionAvailable || (webCryptoAvailable && keyStorageAvailable)),
+        secureContext,
+        webCryptoAvailable,
+        keyStorageAvailable,
+        extensionAvailable
+    };
+}
+
 export async function prepareDeviceKey() {
     const extension = await requestExtension("prepare", {}, 750);
     if (extension?.handle && extension?.publicKey && extension?.algorithm === "ECDSA-P256-SHA256") {
         return { handle: `${extensionHandlePrefix}${extension.handle}`, publicKey: extension.publicKey };
+    }
+
+    const support = await inspectDeviceRegistrationSupport();
+    if (!support.secureContext) {
+        throw new Error("HIP_DEVICE_INSECURE_CONTEXT");
+    }
+    if (!support.webCryptoAvailable && !support.extensionAvailable) {
+        throw new Error("HIP_DEVICE_WEBCRYPTO_UNAVAILABLE");
+    }
+    if (!support.keyStorageAvailable && !support.extensionAvailable) {
+        throw new Error("HIP_DEVICE_KEY_STORAGE_UNAVAILABLE");
     }
 
     const keyPair = await globalThis.crypto.subtle.generateKey(

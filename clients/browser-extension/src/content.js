@@ -165,6 +165,7 @@
 
   function bridgeRuntimeMessage(operation, payload = {}) {
     switch (operation) {
+      case "capabilities": return { type: "HIP_DEVICE_CAPABILITIES" };
       case "prepare": return { type: "HIP_DEVICE_PREPARE" };
       case "stage": return { type: "HIP_DEVICE_STAGE", handle: payload.handle, deviceId: payload.deviceId };
       case "sign": return { type: "HIP_DEVICE_SIGN_CHALLENGE", deviceId: payload.deviceId, signingInput: payload.signingInput };
