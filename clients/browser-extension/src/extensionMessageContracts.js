@@ -18,6 +18,7 @@ const MESSAGE_KEYS = Object.freeze({
   HIP_SAVE_SCAN_RESULT: ["result"],
   HIP_SCAN_SUMMARY: ["summary"],
   HIP_GET_SCAN_SUMMARY: ["tabId"],
+  HIP_DEVICE_CAPABILITIES: [],
   HIP_DEVICE_PREPARE: [],
   HIP_DEVICE_STAGE: ["handle", "deviceId"],
   HIP_DEVICE_SIGN_CHALLENGE: ["deviceId", "signingInput"],
@@ -46,6 +47,7 @@ const CONTENT_SCRIPT_MESSAGES = new Set([
   "HIP_SUBMIT_SITE_FEEDBACK",
   "HIP_SAVE_SCAN_RESULT",
   "HIP_SCAN_SUMMARY",
+  "HIP_DEVICE_CAPABILITIES",
   "HIP_DEVICE_PREPARE",
   "HIP_DEVICE_STAGE",
   "HIP_DEVICE_SIGN_CHALLENGE",
@@ -257,6 +259,7 @@ function validateMessageFields(message, sender) {
         throw new Error("Tab identifier is invalid.");
       }
       return;
+    case "HIP_DEVICE_CAPABILITIES":
     case "HIP_DEVICE_PREPARE":
       return;
     case "HIP_DEVICE_STAGE":

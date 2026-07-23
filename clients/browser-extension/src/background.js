@@ -151,6 +151,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
 
+  if (message?.type === "HIP_DEVICE_CAPABILITIES") {
+    handleDeviceOperation(_sender, () => ({ supported: true, algorithm: "ECDSA-P256-SHA256" }))
+      .then(result => sendResponse({ ok: true, result: safeExtensionResult(result) }))
+      .catch(() => sendResponse({ ok: false, error: "HIP extension registration unavailable" }));
+    return true;
+  }
+
   if (message?.type === "HIP_DEVICE_PREPARE") {
     handleDeviceOperation(_sender, prepareInstallationKey)
       .then(result => sendResponse({ ok: true, result: safeExtensionResult(result) }))
