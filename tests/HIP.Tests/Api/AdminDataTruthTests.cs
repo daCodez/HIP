@@ -100,7 +100,6 @@ public sealed class AdminDataTruthTests
     {
         var pages = new[]
         {
-            "AdminFeedbackLoop.razor",
             "AdminMessageShield.razor",
             "AdminPlatformConnections.razor",
             "AdminReportsPage.razor",
@@ -112,6 +111,22 @@ public sealed class AdminDataTruthTests
             var source = ReadWorkspaceFile("src", "HIP.Web", "Components", "Pages", page);
             Assert.That(source, Does.Contain("card.IsPlaceholder"), page);
         }
+    }
+
+    [Test]
+    public void Feedback_loop_uses_stored_privacy_safe_feedback_records()
+    {
+        var source = ReadWorkspaceFile("src", "HIP.Web", "Components", "Pages", "AdminFeedbackLoop.razor");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("IAdminFeedbackService"));
+            Assert.That(source, Does.Contain("GetOverviewAsync"));
+            Assert.That(source, Does.Contain("GetDomainAsync"));
+            Assert.That(source, Does.Contain("Reporter identifiers, page hashes, raw URLs, page text, and form data are not shown"));
+            Assert.That(source, Does.Not.Contain("IAdminDashboardService"));
+            Assert.That(source, Does.Not.Contain("card.IsPlaceholder"));
+        });
     }
 
     [Test]

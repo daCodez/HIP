@@ -18,6 +18,7 @@ public sealed class RazorPageAuthorizationMatrixTests
         Page("AdminDashboard", "/", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Overview</h1>"),
         Page("AdminDashboard", "/admin", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Overview</h1>"),
         Page("AdminFeedbackLoop", "/admin/feedback", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Feedback Loop</h1>"),
+        Page("AdminFeedbackLoop", "/admin/feedback/{Domain}", "/admin/feedback/example.com", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Feedback Loop</h1>"),
         Page("AdminMessageShield", "/admin/message-shield", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Message Shield</h1>"),
         Page("AdminPlatformConnections", "/admin/platforms", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Platform Connections</h1>"),
         Page("AdminPrivacySafety", "/admin/privacy", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Privacy"),
@@ -88,7 +89,7 @@ public sealed class RazorPageAuthorizationMatrixTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(Cases, Has.Length.EqualTo(44), "The maintained matrix must contain every protected route template.");
+            Assert.That(Cases, Has.Length.EqualTo(45), "The maintained matrix must contain every protected route template.");
             Assert.That(
                 Cases.Select(item => item.ComponentName).Distinct(StringComparer.Ordinal).ToArray(),
                 Has.Length.EqualTo(37),

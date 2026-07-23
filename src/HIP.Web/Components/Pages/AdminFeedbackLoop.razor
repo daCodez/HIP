@@ -1,97 +1,140 @@
 @page "/admin/feedback"
+@page "/admin/feedback/{Domain}"
 @attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
 @rendermode InteractiveServer
-@inject IAdminDashboardService DashboardService
+@inject IAdminFeedbackService FeedbackService
 
 <PageTitle>HIP Feedback Loop</PageTitle>
 
-<section class="hip-page-heading compact">
-    <div>
-        <h1>Feedback Loop</h1>
-        <p>Weighted trust feedback from HIP clients. Feedback is evidence, not voting.</p>
-    </div>
-</section>
-
-@if (_summary is null)
-{
-    <section class="hip-panel padded narrow">
-        <h2>Loading feedback</h2>
-        <p>HIP is reading stored feedback summaries.</p>
-    </section>
-}
-else
-{
-    <section class="hip-card-row">
-        <article class="hip-action-card good">
-            <span>✓</span>
-            <div><h2>Looks Safe</h2><p>@CardValue("looksSafeFeedback") weighted feedback signal(s).</p></div>
-        </article>
-        <article class="hip-action-card suspicious">
-            <span>!</span>
-            <div><h2>Looks Suspicious</h2><p>@CardValue("looksSuspiciousFeedback") weighted feedback signal(s).</p></div>
-        </article>
-        <article class="hip-action-card danger">
-            <span>!</span>
-            <div><h2>Reported Issues</h2><p>@CardValue("reportIssueFeedback") issue feedback signal(s).</p></div>
-        </article>
+<main class="admin-rule-page" aria-busy="@_loading">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">Trust evidence</p>
+            <h1>Feedback Loop</h1>
+            <p>Inspect stored, privacy-safe client feedback. Feedback influences confidence and review priority; it never acts as a vote or proves a site is safe.</p>
+        </div>
+        <button type="button" class="hip-secondary-action" @onclick="LoadAsync" disabled="@_loading">Refresh</button>
     </section>
 
-    <section class="hip-panel padded narrow">
-        <h2>Feedback-Driven Review Signals</h2>
-        @if (_summary.RecentThreats.All(threat => !threat.Source.Contains("Feedback", StringComparison.OrdinalIgnoreCase)))
+    @if (_error is not null)
+    {
+        <p class="admin-message danger" role="alert">@_error</p>
+    }
+    else if (_loading)
+    {
+        <section class="hip-panel padded narrow" role="status"><h2>Loading feedback</h2><p>HIP is reading stored feedback evidence.</p></section>
+    }
+    else if (_overview is not null)
+    {
+        <section class="hip-card-row" aria-label="Stored feedback totals">
+            <article class="hip-action-card"><div><h2>Total stored</h2><p>@_overview.TotalSubmissions submission(s) across @_overview.DistinctDomains domain(s).</p></div></article>
+            <article class="hip-action-card good"><div><h2>Looks safe</h2><p>@_overview.LooksSafeCount supporting signal(s).</p></div></article>
+            <article class="hip-action-card suspicious"><div><h2>Looks suspicious</h2><p>@_overview.LooksSuspiciousCount caution signal(s).</p></div></article>
+            <article class="hip-action-card danger"><div><h2>Reported issues</h2><p>@_overview.ReportIssueCount issue signal(s).</p></div></article>
+        </section>
+
+        @if (_detail is not null)
         {
-            <p>No feedback-driven review signals yet. HIP is not showing fake private messages here.</p>
+            <section class="rule-builder-panel" aria-labelledby="feedback-detail-heading">
+                <div class="hip-panel-heading flush">
+                    <div><p class="eyebrow">Current 14-day evidence</p><h2 id="feedback-detail-heading">@_detail.Domain</h2></div>
+                    <span class="hip-pill @(_detail.Summary.RecommendedReview ? "caution" : "good")">@(_detail.Summary.RecommendedReview ? "Review recommended" : "No review threshold")</span>
+                </div>
+                <dl class="lookup-details">
+                    <dt>Looks safe weight</dt><dd>@_detail.Summary.LooksSafeWeight</dd>
+                    <dt>Looks suspicious weight</dt><dd>@_detail.Summary.LooksSuspiciousWeight</dd>
+                    <dt>Reported issue weight</dt><dd>@_detail.Summary.ReportIssueWeight</dd>
+                    <dt>Recent submissions</dt><dd>@_detail.Summary.RecentFeedbackCount</dd>
+                    <dt>Confidence impact</dt><dd>@_detail.Summary.ConfidenceImpact / 100</dd>
+                </dl>
+                @if (_detail.Summary.Explanations.Count > 0)
+                {
+                    <h3>Why HIP interpreted it this way</h3>
+                    <ul>@foreach (var explanation in _detail.Summary.Explanations) { <li>@explanation</li> }</ul>
+                }
+                @if (_detail.Summary.RecommendedReview)
+                {
+                    <a class="hip-primary-action" href="/admin/review">Open review queue</a>
+                }
+                <h3>Recent privacy-safe events</h3>
+                <div class="hip-table-wrap">
+                    <table class="admin-rule-table">
+                        <thead><tr><th scope="col">Submitted</th><th scope="col">Signal</th><th scope="col">Source</th><th scope="col">Reporter tier</th><th scope="col">Reason code</th></tr></thead>
+                        <tbody>
+                            @foreach (var item in _detail.RecentEvents)
+                            {
+                                <tr><td>@item.SubmittedAtUtc.UtcDateTime.ToString("u")</td><td>@item.FeedbackType</td><td>@item.Source</td><td>@item.ReporterTrustLevel</td><td>@(item.ReasonCode?.ToString() ?? "Not supplied")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p><small>Reporter identifiers, page hashes, raw URLs, page text, and form data are not shown.</small></p>
+            </section>
         }
-        else
-        {
-            @foreach (var threat in _summary.RecentThreats.Where(threat => threat.Source.Contains("Feedback", StringComparison.OrdinalIgnoreCase)))
+
+        <section class="rule-builder-panel" aria-labelledby="feedback-domains-heading">
+            <h2 id="feedback-domains-heading">Domains with stored feedback</h2>
+            @if (_overview.Domains.Count == 0)
             {
-                <article class="hip-feedback-item">
-                    <div>
-                        <strong>@threat.Domain</strong>
-                        <span>@threat.Source</span>
-                        <span class="hip-pill @Tone(threat.Severity)">@threat.Severity</span>
-                    </div>
-                    <p>@threat.ReasonSummary</p>
-                    <small>@threat.CreatedAtUtc.UtcDateTime.ToString("u")</small>
-                </article>
+                <div class="visual-empty" role="status"><b>No feedback stored</b><span>Privacy-safe feedback from connected HIP clients will appear here.</span></div>
             }
-        }
-    </section>
-}
+            else
+            {
+                <div class="hip-table-wrap">
+                    <table class="admin-rule-table">
+                        <thead><tr><th scope="col">Domain</th><th scope="col">Safe</th><th scope="col">Suspicious</th><th scope="col">Issues</th><th scope="col">Latest</th><th scope="col">Details</th></tr></thead>
+                        <tbody>
+                            @foreach (var item in _overview.Domains)
+                            {
+                                <tr>
+                                    <td>@item.Domain @if (item.ReviewThresholdReached) { <span class="hip-pill caution">Threshold reached</span> }</td>
+                                    <td>@item.LooksSafeCount</td><td>@item.LooksSuspiciousCount</td><td>@item.ReportIssueCount</td>
+                                    <td>@item.LatestSubmittedAtUtc.UtcDateTime.ToString("u")</td>
+                                    <td><a href="@($"/admin/feedback/{Uri.EscapeDataString(item.Domain)}")">Inspect evidence</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</main>
 
 @code {
-    private AdminDashboardSummary? _summary;
+    [Parameter] public string? Domain { get; set; }
 
-    /// <summary>
-    /// Loads live feedback and review summaries.
-    /// </summary>
-    protected override async Task OnInitializedAsync() =>
-        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+    private AdminFeedbackOverview? _overview;
+    private AdminFeedbackDomainDetail? _detail;
+    private bool _loading = true;
+    private string? _error;
 
-    /// <summary>
-    /// Gets a live dashboard card value.
-    /// </summary>
-    /// <param name="key">Dashboard card key.</param>
-    /// <returns>Card value, or an unavailable marker when the source did not answer.</returns>
-    private string CardValue(string key)
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
     {
-        var card = _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
-        return card is null || card.IsPlaceholder
-            ? "—"
-            : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _loading = true;
+        _error = null;
+        try
+        {
+            _overview = await FeedbackService.GetOverviewAsync(CancellationToken.None);
+            _detail = string.IsNullOrWhiteSpace(Domain)
+                ? null
+                : await FeedbackService.GetDomainAsync(Domain, CancellationToken.None);
+            if (!string.IsNullOrWhiteSpace(Domain) && _detail is null)
+            {
+                _error = "No current feedback evidence was found for that domain.";
+            }
+        }
+        catch
+        {
+            _overview = null;
+            _detail = null;
+            _error = "HIP could not load stored feedback. Try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
-
-    /// <summary>
-    /// Maps severity to a visual tone.
-    /// </summary>
-    /// <param name="severity">Severity label.</param>
-    /// <returns>CSS tone.</returns>
-    private static string Tone(string severity) =>
-        severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
-        severity.Equals("High", StringComparison.OrdinalIgnoreCase)
-            ? "danger"
-            : severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)
-                ? "suspicious"
-                : "caution";
 }

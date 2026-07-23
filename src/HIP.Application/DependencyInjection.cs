@@ -111,6 +111,7 @@ public static class DependencyInjection
         services.AddScoped<IReputationService, ReputationService>();
         services.AddScoped<IAdminSenderProfileService, AdminSenderProfileService>();
         services.AddScoped<IWeightedFeedbackAggregationService, WeightedFeedbackAggregationService>();
+        services.AddScoped<IAdminFeedbackService, AdminFeedbackService>();
         services.AddScoped<IRiskFindingIngestionService, RiskFindingIngestionService>();
         services.AddScoped<IRiskFindingRetentionService, RiskFindingRetentionService>();
         services.TryAddSingleton(new PrivacyHashingOptions());
