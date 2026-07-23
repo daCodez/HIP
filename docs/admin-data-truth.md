@@ -31,7 +31,7 @@ primary source, and optional dependency availability.
 | `AdminScanDetails.razor` | `IAdminScanDetailService` | Explicit missing-scan state; read-only limitations are stated. |
 | `AdminSecondLifeHudSimulator.razor` | `ISecondLifeHudSimulationService` | Clearly labelled development simulator with intentional sample inputs. |
 | `AdminSelfHealing.razor` | `ISelfHealingAnalysisService` | Clearly labelled development analysis with intentional privacy-safe sample findings. |
-| `AdminSenderProfiles.razor` | Dashboard risk projection only | States that sender storage is not connected; no fake senders or message details. |
+| `AdminSenderProfiles.razor` | `IAdminSenderProfileService` over durable reputation profiles and events | Explicit empty/error states; only stored Sender profiles are listed, with bounded privacy-safe reasons and event history. |
 | `AdminSettings.razor` | Current-process external-provider options | Save text says the update is process-local and must be persisted through configuration/secrets. |
 | `AdminTourScan.razor` | Static product tour | Clearly titled sample threat and never linked as live scan evidence. |
 | `AdminWebsiteIdentity.razor` | `IWebsiteIdentityService` | Explicit empty/search/not-found states; privileged mutations reauthorize the actor. |

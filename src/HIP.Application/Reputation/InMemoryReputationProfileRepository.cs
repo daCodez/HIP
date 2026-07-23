@@ -13,6 +13,14 @@ public sealed class InMemoryReputationProfileRepository : IReputationProfileRepo
         return Task.FromResult(profile);
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyCollection<ReputationProfile>> ListAsync(
+        ReputationSubjectType targetType,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<ReputationProfile>>(_profiles.Values
+            .Where(profile => profile.TargetType == targetType)
+            .ToArray());
+
     public Task SaveAsync(ReputationProfile profile, CancellationToken cancellationToken)
     {
         _profiles[Key(profile.TargetType, profile.TargetId)] = profile;

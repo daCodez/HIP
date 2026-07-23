@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace HIP.Tests.Api;
 
 /// <summary>
@@ -5,6 +7,8 @@ namespace HIP.Tests.Api;
 /// </summary>
 public sealed class AdminDataTruthTests
 {
+    private static readonly string SourceDirectory = Path.GetDirectoryName(SourceFilePath())!;
+
     [Test]
     public void Admin_navigation_does_not_publish_hard_coded_queue_counts()
     {
@@ -100,8 +104,7 @@ public sealed class AdminDataTruthTests
             "AdminMessageShield.razor",
             "AdminPlatformConnections.razor",
             "AdminReportsPage.razor",
-            "AdminReputationSignals.razor",
-            "AdminSenderProfiles.razor"
+            "AdminReputationSignals.razor"
         };
 
         foreach (var page in pages)
@@ -109,6 +112,21 @@ public sealed class AdminDataTruthTests
             var source = ReadWorkspaceFile("src", "HIP.Web", "Components", "Pages", page);
             Assert.That(source, Does.Contain("card.IsPlaceholder"), page);
         }
+    }
+
+    [Test]
+    public void Sender_profiles_uses_the_stored_sender_profile_service()
+    {
+        var source = ReadWorkspaceFile("src", "HIP.Web", "Components", "Pages", "AdminSenderProfiles.razor");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("IAdminSenderProfileService"));
+            Assert.That(source, Does.Contain("No sender profiles yet"));
+            Assert.That(source, Does.Contain("Reputation Timeline"));
+            Assert.That(source, Does.Not.Contain("Sender profiles not connected"));
+            Assert.That(source, Does.Not.Contain("No sender repository yet"));
+        });
     }
 
     [Test]
@@ -133,23 +151,29 @@ public sealed class AdminDataTruthTests
 
     private static string WorkspacePath(params string[] segments)
     {
-        var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
-        while (directory is not null)
+        foreach (var startPath in new[]
         {
-            var candidate = Path.Combine([directory.FullName, .. segments]);
-            if (File.Exists(candidate))
+            SourceDirectory,
+            Directory.GetCurrentDirectory(),
+            TestContext.CurrentContext.WorkDirectory,
+            TestContext.CurrentContext.TestDirectory
+        }.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var directory = new DirectoryInfo(startPath);
+            while (directory is not null)
             {
-                return candidate;
-            }
+                var candidate = Path.Combine([directory.FullName, .. segments]);
+                if (File.Exists(candidate) || Directory.Exists(candidate))
+                {
+                    return candidate;
+                }
 
-            if (Directory.Exists(candidate))
-            {
-                return candidate;
+                directory = directory.Parent;
             }
-
-            directory = directory.Parent;
         }
 
         throw new FileNotFoundException($"Could not locate {string.Join('/', segments)}.");
     }
+
+    private static string SourceFilePath([CallerFilePath] string sourceFilePath = "") => sourceFilePath;
 }

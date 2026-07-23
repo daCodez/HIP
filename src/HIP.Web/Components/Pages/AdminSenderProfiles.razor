@@ -1,91 +1,179 @@
 @page "/admin/reputation/senders"
 @attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
 @rendermode InteractiveServer
-@inject IAdminDashboardService DashboardService
+@using HIP.Application.Reputation
+@inject IAdminSenderProfileService SenderProfileService
 
 <PageTitle>HIP Sender Profiles</PageTitle>
 
-<section class="hip-page-heading compact">
-    <div>
-        <h1>Sender Profiles</h1>
-        <p>Detailed trust and risk history per sender.</p>
-    </div>
-</section>
-
-@if (_summary is null)
-{
-    <section class="hip-panel padded narrow">
-        <h2>Loading sender profile data</h2>
-        <p>HIP is reading connected scan and review signals.</p>
+<main class="admin-rule-page" aria-busy="@_loading">
+    <section class="hip-page-heading compact">
+        <div>
+            <h1>Sender Profiles</h1>
+            <p>Stored privacy-safe reputation history for senders observed by HIP.</p>
+        </div>
+        <button type="button" class="hip-secondary-action" @onclick="LoadAsync" disabled="@_loading">Refresh</button>
     </section>
-}
-else
-{
-    <section class="hip-profile-layout">
-        <aside class="hip-sender-list">
-            <h2>Known Senders</h2>
-            <button class="selected" type="button">
-                <span>--</span>
-                <strong>Sender profiles not connected<small>No sender repository yet</small></strong>
-                <em class="caution">—</em>
-            </button>
-        </aside>
 
-        <div class="hip-profile-main">
-            <article class="hip-panel padded sender-summary">
-                <div class="risk-ring caution"><strong>@CardValue("riskyFindings")</strong><span>signals</span></div>
-                <div>
-                    <h2>Sender Reputation <span class="hip-pill caution">Not connected yet</span></h2>
-                    <p>HIP has live domain, scan, feedback, and review signals, but not a real sender-profile data source.</p>
-                    <p>Recent threats: @_summary.RecentThreats.Count · Feedback records: @CardValue("feedbackReceived")</p>
-                    <small>No fake sender names, aliases, or private message details are shown.</small>
-                </div>
-            </article>
-
-            <article class="hip-panel padded">
-                <h2>Live Risk Reasons</h2>
-                @if (_summary.RecentThreats.Count == 0)
+    @if (_error is not null)
+    {
+        <section class="hip-panel padded narrow" role="alert">
+            <h2>Sender profiles unavailable</h2>
+            <p>@_error</p>
+        </section>
+    }
+    else if (_loading)
+    {
+        <section class="hip-panel padded narrow" role="status">
+            <h2>Loading sender profiles</h2>
+            <p>HIP is reading stored reputation profiles and events.</p>
+        </section>
+    }
+    else if (_profiles.Count == 0)
+    {
+        <section class="hip-panel padded narrow" role="status">
+            <h2>No sender profiles yet</h2>
+            <p>Profiles appear after HIP stores a privacy-safe reputation event whose target type is Sender.</p>
+        </section>
+    }
+    else
+    {
+        <section class="hip-profile-layout" aria-label="Stored sender reputation profiles">
+            <aside class="hip-sender-list" aria-labelledby="known-senders-heading">
+                <h2 id="known-senders-heading">Known Senders</h2>
+                @foreach (var sender in _profiles)
                 {
-                    <p>No live sender-related risk reasons yet.</p>
+                    <button class="@(sender.SenderId == _selected?.Profile.SenderId ? "selected" : null)"
+                            type="button"
+                            aria-pressed="@(sender.SenderId == _selected?.Profile.SenderId)"
+                            @onclick="() => SelectAsync(sender.SenderId)">
+                        <span aria-hidden="true">@Initial(sender.SenderId)</span>
+                        <strong>@sender.SenderId<small>@sender.EventCount reputation event(s)</small></strong>
+                        <em class="@Tone(sender.Status)">@sender.CurrentScore</em>
+                    </button>
+                }
+            </aside>
+
+            <div class="hip-profile-main">
+                @if (_selected is null)
+                {
+                    <article class="hip-panel padded" role="status">
+                        <h2>Select a sender</h2>
+                        <p>Choose a stored sender profile to inspect its reputation evidence.</p>
+                    </article>
                 }
                 else
                 {
-                    <ul class="hip-x-list warning">
-                        @foreach (var threat in _summary.RecentThreats.Take(5))
-                        {
-                            <li>@threat.Domain: @threat.ReasonSummary</li>
-                        }
-                    </ul>
-                }
-            </article>
+                    <article class="hip-panel padded sender-summary">
+                        <div class="risk-ring @Tone(_selected.Profile.Status)" aria-label="Sender reputation score @_selected.Profile.CurrentScore out of 100"><strong>@_selected.Profile.CurrentScore</strong><span>/100</span></div>
+                        <div>
+                            <h2>@_selected.Profile.SenderId <span class="hip-pill @Tone(_selected.Profile.Status)">@_selected.Profile.Status</span></h2>
+                            <p>@_selected.Profile.EventCount stored event(s), including @_selected.Profile.ConfirmedAbuseCount confirmed abuse and @_selected.Profile.AccidentalIssueCount accidental issue event(s).</p>
+                            <small>Updated @_selected.Profile.LastUpdatedUtc.UtcDateTime.ToString("u"). A reputation score is evidence, not proof that a sender is safe.</small>
+                        </div>
+                    </article>
 
-            <article class="hip-panel padded">
-                <h2>Trust Timeline</h2>
-                <p>Sender timeline storage is not connected yet.</p>
-            </article>
-        </div>
-    </section>
-}
+                    <article class="hip-panel padded">
+                        <h2>Score Reasons</h2>
+                        @if (_selected.Explanations.Count == 0)
+                        {
+                            <p>No stored explanation is available for this profile.</p>
+                        }
+                        else
+                        {
+                            <ul class="hip-check-list">
+                                @foreach (var explanation in _selected.Explanations)
+                                {
+                                    <li>@explanation</li>
+                                }
+                            </ul>
+                        }
+                    </article>
+
+                    <article class="hip-panel padded">
+                        <h2>Reputation Timeline</h2>
+                        @if (_selected.Events.Count == 0)
+                        {
+                            <p>No reputation events are available for this profile.</p>
+                        }
+                        else
+                        {
+                            <div class="hip-table-wrap">
+                                <table class="hip-data-table">
+                                    <thead><tr><th scope="col">Event</th><th scope="col">Severity</th><th scope="col">Impact</th><th scope="col">Reason</th><th scope="col">Recorded</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var item in _selected.Events)
+                                        {
+                                            <tr><td>@item.EventType</td><td>@item.Severity</td><td>@SignedImpact(item.ScoreImpact)</td><td>@item.Reason</td><td>@item.CreatedAtUtc.UtcDateTime.ToString("u")</td></tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </article>
+                }
+            </div>
+        </section>
+    }
+</main>
 
 @code {
-    private AdminDashboardSummary? _summary;
+    private IReadOnlyCollection<AdminSenderProfileSummary> _profiles = [];
+    private AdminSenderProfileDetail? _selected;
+    private bool _loading = true;
+    private string? _error;
 
-    /// <summary>
-    /// Loads live risk summary data for the sender profile shell.
-    /// </summary>
-    protected override async Task OnInitializedAsync() =>
-        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+    /// <summary>Loads stored sender profiles and selects the newest profile.</summary>
+    protected override Task OnInitializedAsync() => LoadAsync();
 
-    /// <summary>
-    /// Gets a live dashboard card value.
-    /// </summary>
-    /// <param name="key">Dashboard card key.</param>
-    /// <returns>Card value, or an unavailable marker when the source did not answer.</returns>
-    private string CardValue(string key)
+    private async Task LoadAsync()
     {
-        var card = _summary?.Cards.FirstOrDefault(card => card.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
-        return card is null || card.IsPlaceholder
-            ? "—"
-            : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _loading = true;
+        _error = null;
+        try
+        {
+            _profiles = await SenderProfileService.ListAsync(CancellationToken.None);
+            var selectedId = _selected?.Profile.SenderId;
+            if (selectedId is null || _profiles.All(profile => profile.SenderId != selectedId))
+            {
+                selectedId = _profiles.FirstOrDefault()?.SenderId;
+            }
+
+            _selected = selectedId is null
+                ? null
+                : await SenderProfileService.GetAsync(selectedId, CancellationToken.None);
+        }
+        catch
+        {
+            _profiles = [];
+            _selected = null;
+            _error = "HIP could not load sender reputation data. Try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
+
+    private async Task SelectAsync(string senderId)
+    {
+        try
+        {
+            _error = null;
+            _selected = await SenderProfileService.GetAsync(senderId, CancellationToken.None);
+        }
+        catch
+        {
+            _error = "HIP could not load that sender profile. Try again.";
+        }
+    }
+
+    private static string Initial(string senderId) => senderId.Trim().FirstOrDefault().ToString().ToUpperInvariant();
+    private static string SignedImpact(int impact) => impact > 0 ? $"+{impact}" : impact.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private static string Tone(HIP.Domain.Risk.RiskStatus status) => status switch
+    {
+        HIP.Domain.Risk.RiskStatus.Trusted or HIP.Domain.Risk.RiskStatus.ProbablySafe => "good",
+        HIP.Domain.Risk.RiskStatus.HighRisk or HIP.Domain.Risk.RiskStatus.Dangerous or HIP.Domain.Risk.RiskStatus.Critical => "danger",
+        _ => "caution"
+    };
 }

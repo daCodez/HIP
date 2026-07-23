@@ -109,6 +109,7 @@ public static class DependencyInjection
         services.AddScoped<IReputationOverrideService, ReputationOverrideService>();
         services.AddSingleton<IReputationScoringPolicy, DefaultReputationScoringPolicy>();
         services.AddScoped<IReputationService, ReputationService>();
+        services.AddScoped<IAdminSenderProfileService, AdminSenderProfileService>();
         services.AddScoped<IWeightedFeedbackAggregationService, WeightedFeedbackAggregationService>();
         services.AddScoped<IRiskFindingIngestionService, RiskFindingIngestionService>();
         services.AddScoped<IRiskFindingRetentionService, RiskFindingRetentionService>();
