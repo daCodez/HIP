@@ -111,6 +111,13 @@
                 </section>
 
                 <footer class="owner-certificate-actions">
+                    @if (item.EnrollmentStatus == DomainEnrollmentStatus.PendingOwnership && item.DnsVerifiedAtUtc is null)
+                    {
+                        <button class="btn btn-primary" type="button" disabled="@(_checkingEnrollmentId is not null)"
+                                @onclick="() => CheckDnsAsync(item)">
+                            @(_checkingEnrollmentId == item.EnrollmentId ? "Checking…" : "Check DNS")
+                        </button>
+                    }
                     @if (item.CertificateId is not null)
                     {
                         <a class="btn btn-primary" href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">View public certificate</a>
@@ -133,6 +140,7 @@
     private string? _enrollmentMessage;
     private string? _enrollmentError;
     private DomainCertificateEnrollmentStartResult? _challenge;
+    private string? _checkingEnrollmentId;
     protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
@@ -214,6 +222,48 @@
         var record = $"_hip.{_challenge.Domain} TXT \"hip-site-verification={_challenge.ChallengeToken}\"";
         await JavaScript.InvokeVoidAsync("navigator.clipboard.writeText", record);
         _enrollmentMessage = "DNS record copied.";
+    }
+
+    private async Task CheckDnsAsync(OwnerDomainCertificateSummary item)
+    {
+        _checkingEnrollmentId = item.EnrollmentId;
+        _enrollmentError = null;
+        _enrollmentMessage = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                ConsumerPolicies.CanUseConsumerPortal,
+                consumerId => EnrollmentService.CheckDnsAsync(
+                    consumerId,
+                    item.Domain,
+                    CancellationToken.None));
+            if (!access.Succeeded || access.Value is null)
+            {
+                _enrollmentError = HipConsumerPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            if (access.Value.Status == DomainCertificateDnsCheckStatus.Verified)
+            {
+                _enrollmentMessage = "DNS domain control verified. HIP recorded the ownership transition.";
+                await LoadAsync();
+            }
+            else if (access.Value.Status == DomainCertificateDnsCheckStatus.Pending)
+            {
+                _enrollmentMessage = "HIP did not find the matching DNS record yet. DNS propagation can take time.";
+            }
+            else
+            {
+                _enrollmentError = "HIP could not verify this DNS record right now. The stored challenge was not changed.";
+            }
+        }
+        finally
+        {
+            _checkingEnrollmentId = null;
+        }
     }
     private static RenderFragment ProgressStep(
         string label,

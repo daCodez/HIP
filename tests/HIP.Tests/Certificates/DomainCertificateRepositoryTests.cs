@@ -194,6 +194,44 @@ public sealed class DomainCertificateRepositoryTests
         });
     }
 
+    [Test]
+    public async Task Ownership_verification_advances_once_and_appends_an_audit_event()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        var started = new DomainEnrollmentStartRecord(
+            "enrollment-verify",
+            "owner-1",
+            "verify.example",
+            DomainEnrollmentStatus.PendingOwnership,
+            DomainCertificatePolicy.V1.Version,
+            Now,
+            "certificate-event:enrollment-verify");
+        await repository.TryStartEnrollmentAsync(started, CancellationToken.None);
+        var verification = new DomainOwnershipVerificationRecord(
+            "enrollment-verify",
+            "owner-1",
+            "verify.example",
+            VerificationMethod.DnsTxt,
+            Now.AddMinutes(5),
+            "certificate-event:ownership-verify");
+
+        var applied = await repository.TryApplyOwnershipVerificationAsync(verification, CancellationToken.None);
+        var retry = await repository.TryApplyOwnershipVerificationAsync(verification, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied.Status, Is.EqualTo(DomainEnrollmentTransitionWriteStatus.Updated));
+            Assert.That(retry.Status, Is.EqualTo(DomainEnrollmentTransitionWriteStatus.AlreadyApplied));
+            var enrollment = context.DomainEnrollments.Single(item => item.EnrollmentId == "enrollment-verify");
+            Assert.That(enrollment.Status, Is.EqualTo(DomainEnrollmentStatus.OwnershipVerified));
+            Assert.That(enrollment.DnsVerifiedAtUtc, Is.EqualTo(Now.AddMinutes(5)));
+            Assert.That(context.DomainCertificateEvents.Count(item => item.EnrollmentId == "enrollment-verify"), Is.EqualTo(2));
+            Assert.That(context.DomainCertificateEvents.Single(item => item.EventType == "DomainOwnershipVerified").ActorId,
+                Is.EqualTo("owner-1"));
+        });
+    }
+
     private static HipDbContext Context()
     {
         var options = new DbContextOptionsBuilder<HipDbContext>()

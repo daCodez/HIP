@@ -226,6 +226,8 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(certificates, Does.Contain("EnrollmentService.StartAsync"));
             Assert.That(certificates, Does.Contain("Start verification"));
             Assert.That(certificates, Does.Contain("Copy DNS record"));
+            Assert.That(certificates, Does.Contain("EnrollmentService.CheckDnsAsync"));
+            Assert.That(certificates, Does.Contain("Check DNS"));
             Assert.That(certificates, Does.Contain("_hip."));
             Assert.That(certificates, Does.Contain("Domain ownership"));
             Assert.That(certificates, Does.Contain("Certificate status"));

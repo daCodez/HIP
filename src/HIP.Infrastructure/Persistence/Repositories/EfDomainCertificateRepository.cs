@@ -204,6 +204,81 @@ public sealed class EfDomainCertificateRepository(
         }
     }
 
+    /// <inheritdoc />
+    public async Task<DomainEnrollmentTransitionWriteResult> TryApplyOwnershipVerificationAsync(
+        DomainOwnershipVerificationRecord verification,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(verification);
+        ValidateIdentifier(verification.EnrollmentId, 128);
+        ValidateIdentifier(verification.OwnerId, 256);
+        ValidateIdentifier(verification.AuditEventId, 128);
+        var domain = HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(verification.Domain);
+        if (domain != verification.Domain ||
+            verification.Method != HIP.Domain.Identity.VerificationMethod.DnsTxt ||
+            verification.VerifiedAtUtc.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException("Domain ownership verification state is invalid.", nameof(verification));
+        }
+
+        var enrollment = await dbContext.DomainEnrollments.SingleOrDefaultAsync(
+            item => item.EnrollmentId == verification.EnrollmentId &&
+                    item.OwnerId == verification.OwnerId &&
+                    item.Domain == verification.Domain &&
+                    item.IsCurrent,
+            cancellationToken);
+        if (enrollment is null)
+        {
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.NotFound);
+        }
+        if (enrollment.Status != DomainEnrollmentStatus.PendingOwnership)
+        {
+            return new DomainEnrollmentTransitionWriteResult(
+                enrollment.DnsVerifiedAtUtc is not null &&
+                enrollment.Status is not DomainEnrollmentStatus.Draft and not DomainEnrollmentStatus.PendingOwnership
+                    ? DomainEnrollmentTransitionWriteStatus.AlreadyApplied
+                    : DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+        if (await dbContext.DomainCertificateEvents.AnyAsync(
+                item => item.EventId == verification.AuditEventId,
+                cancellationToken))
+        {
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+
+        DomainEnrollmentLifecycle.RequireTransition(
+            enrollment.Status,
+            DomainEnrollmentStatus.OwnershipVerified);
+        var previous = enrollment.Status;
+        enrollment.Status = DomainEnrollmentStatus.OwnershipVerified;
+        enrollment.DnsVerifiedAtUtc = verification.VerifiedAtUtc;
+        enrollment.UpdatedAtUtc = verification.VerifiedAtUtc;
+        enrollment.AggregateVersion++;
+        dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+        {
+            EventId = verification.AuditEventId,
+            EnrollmentId = enrollment.EnrollmentId,
+            CertificateId = null,
+            EventType = "DomainOwnershipVerified",
+            PreviousStatus = previous.ToString(),
+            CurrentStatus = enrollment.Status.ToString(),
+            ActorId = verification.OwnerId,
+            PublicSummary = "HIP verified domain control through DNS.",
+            PolicyVersion = enrollment.PolicyVersion,
+            OccurredAtUtc = verification.VerifiedAtUtc
+        });
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Updated);
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+    }
+
 
     /// <inheritdoc />
     public async Task<DomainCertificateRepositoryWriteResult> TryCreateIssuedAsync(
