@@ -1,6 +1,7 @@
 using FluentValidation;
 using HIP.Application.Ai;
 using HIP.Application.Browser;
+using HIP.Application.Certificates;
 using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
 using HIP.Application.Devices;
@@ -24,6 +25,7 @@ using HIP.Application.Scalability;
 using HIP.Application.SiteSafety;
 using HIP.Application.Simulation;
 using HIP.Domain.Reporting;
+using HIP.Domain.Certificates;
 using HIP.Domain.Review;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,6 +56,8 @@ public static class DependencyInjection
 
         services.AddMediatR(configuration => configuration.RegisterServicesFromAssembly(assembly));
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(DomainCertificatePolicy.V1);
+        services.AddSingleton<DomainRegistrationNormalizer>();
         services.AddValidatorsFromAssembly(assembly);
         services.AddSingleton<IValidator<ReviewItem>, ReviewItemValidator>();
         services.AddSingleton<IValidator<AppealRequest>, AppealRequestValidator>();
