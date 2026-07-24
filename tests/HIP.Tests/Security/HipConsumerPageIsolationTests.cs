@@ -220,6 +220,13 @@ public sealed class HipConsumerPageIsolationTests
             var certificates = ReadPage(root, "ConsumerCertificates.razor");
             Assert.That(certificates, Does.Contain("@page \"/consumer/certificates\""));
             Assert.That(certificates, Does.Contain("IDomainCertificateOwnerQuery"));
+            Assert.That(certificates, Does.Contain("IDomainCertificateEnrollmentService"));
+            Assert.That(certificates, Does.Contain("HipConsumerPageAccess.ExecuteAuthorizedAsync"));
+            Assert.That(certificates, Does.Contain("ConsumerPolicies.CanUseConsumerPortal"));
+            Assert.That(certificates, Does.Contain("EnrollmentService.StartAsync"));
+            Assert.That(certificates, Does.Contain("Start verification"));
+            Assert.That(certificates, Does.Contain("Copy DNS record"));
+            Assert.That(certificates, Does.Contain("_hip."));
             Assert.That(certificates, Does.Contain("Domain ownership"));
             Assert.That(certificates, Does.Contain("Certificate status"));
             Assert.That(certificates, Does.Contain("Current HIP score"));

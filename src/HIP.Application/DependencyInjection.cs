@@ -53,6 +53,7 @@ public static class DependencyInjection
         bool allowDevelopmentCryptoProvider = false)
     {
         var assembly = typeof(DependencyInjection).Assembly;
+        services.AddScoped<IDomainCertificateEnrollmentService, DomainCertificateEnrollmentService>();
 
         services.AddMediatR(configuration => configuration.RegisterServicesFromAssembly(assembly));
         services.TryAddSingleton(TimeProvider.System);

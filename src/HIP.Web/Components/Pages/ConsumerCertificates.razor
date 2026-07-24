@@ -4,7 +4,10 @@
 @using HIP.Application.Certificates
 @using HIP.Domain.Certificates
 @inject IDomainCertificateOwnerQuery CertificateQuery
+@inject IDomainCertificateEnrollmentService EnrollmentService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthorizationService AuthorizationService
+@inject IJSRuntime JavaScript
 
 <PageTitle>HIP Domain Certificates</PageTitle>
 
@@ -12,9 +15,47 @@
     <section class="admin-rule-header">
         <div>
             <p class="eyebrow">Domain owner portal</p>
+
             <h1>Domain certificates</h1>
             <p>Track verified control, certificate eligibility, and current signed certificate status for domains connected to this account.</p>
         </div>
+    </section>
+    <section class="domain-enrollment-panel" aria-labelledby="start-verification-heading">
+        <h2 id="start-verification-heading">Start verification</h2>
+        <p>Adding a domain starts control verification. It does not issue a certificate or trusted badge.</p>
+        <form @onsubmit="StartVerificationAsync" @onsubmit:preventDefault>
+            <label>
+                Public domain
+                <input @bind="_domain" autocomplete="url" maxlength="253" placeholder="example.com" required />
+            </label>
+            <label>
+                Public display name
+                <input @bind="_displayName" maxlength="200" required />
+            </label>
+            <button class="btn btn-primary" type="submit" disabled="@_starting">
+                @(_starting ? "Starting…" : "Start verification")
+            </button>
+        </form>
+        @if (_enrollmentError is not null)
+        {
+            <p class="admin-error" role="alert">@_enrollmentError</p>
+        }
+        else if (_enrollmentMessage is not null)
+        {
+            <p class="admin-message" role="status">@_enrollmentMessage</p>
+        }
+        @if (_challenge is not null && _challenge.ChallengeToken is not null)
+        {
+            <div class="dns-challenge">
+                <h3>Add this DNS TXT record</h3>
+                <dl>
+                    <div><dt>Name</dt><dd><code>_hip.@_challenge.Domain</code></dd></div>
+                    <div><dt>Value</dt><dd><code>hip-site-verification=@_challenge.ChallengeToken</code></dd></div>
+                    <div><dt>Expires</dt><dd>@FormatDate(_challenge.ChallengeExpiresAtUtc)</dd></div>
+                </dl>
+                <button class="btn" type="button" @onclick="CopyDnsRecordAsync">Copy DNS record</button>
+            </div>
+        }
     </section>
 
     @if (_accessError is not null)
@@ -86,9 +127,19 @@
     private bool _loading = true;
     private string? _accessError;
 
-    protected override async Task OnInitializedAsync()
+    private string _domain = string.Empty;
+    private string _displayName = string.Empty;
+    private bool _starting;
+    private string? _enrollmentMessage;
+    private string? _enrollmentError;
+    private DomainCertificateEnrollmentStartResult? _challenge;
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
     {
         var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _loading = true;
+        _accessError = null;
         var access = await HipConsumerPageAccess.ExecuteAsync(
             authenticationState.User,
             consumerId => CertificateQuery.ListForOwnerAsync(
@@ -108,6 +159,62 @@
         _loading = false;
     }
 
+    private async Task StartVerificationAsync()
+    {
+        _starting = true;
+        _enrollmentError = null;
+        _enrollmentMessage = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                ConsumerPolicies.CanUseConsumerPortal,
+                consumerId => EnrollmentService.StartAsync(
+                    consumerId,
+                    new DomainCertificateEnrollmentStartRequest(
+                        _domain,
+                        _displayName,
+                        VerificationMethod.DnsTxt),
+                    CancellationToken.None));
+            if (!access.Succeeded || access.Value is null)
+            {
+                _enrollmentError = HipConsumerPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            _challenge = access.Value;
+            if (_challenge.Status is DomainCertificateEnrollmentStartStatus.Started or
+                DomainCertificateEnrollmentStartStatus.Existing)
+            {
+                _enrollmentMessage = "Enrollment saved. Add the DNS record below, then return to check verification.";
+                await LoadAsync();
+            }
+            else
+            {
+                _enrollmentError = _challenge.Status == DomainCertificateEnrollmentStartStatus.InvalidRequest
+                    ? "Enter a valid public domain and display name."
+                    : "HIP could not start this enrollment. The domain may already be claimed or storage may be unavailable.";
+            }
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+
+    private async Task CopyDnsRecordAsync()
+    {
+        if (_challenge?.Domain is null || _challenge.ChallengeToken is null)
+        {
+            return;
+        }
+
+        var record = $"_hip.{_challenge.Domain} TXT \"hip-site-verification={_challenge.ChallengeToken}\"";
+        await JavaScript.InvokeVoidAsync("navigator.clipboard.writeText", record);
+        _enrollmentMessage = "DNS record copied.";
+    }
     private static RenderFragment ProgressStep(
         string label,
         bool complete,
@@ -116,6 +223,7 @@
     {
         var state = complete ? "complete" : IsFailed(item) ? "failed" : IsCurrent(item, index) ? "current" : "pending";
         builder.OpenElement(0, "li");
+
         builder.AddAttribute(1, "class", $"progress-step progress-{state}");
         builder.AddAttribute(2, "aria-label", $"{label}: {state}");
         builder.OpenElement(3, "span");

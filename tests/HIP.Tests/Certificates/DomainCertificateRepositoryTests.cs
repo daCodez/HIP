@@ -159,6 +159,41 @@ public sealed class DomainCertificateRepositoryTests
         });
     }
 
+    [Test]
+    public async Task Enrollment_start_is_idempotent_and_commits_an_audit_event()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        var candidate = new DomainEnrollmentStartRecord(
+            "enrollment-new",
+            "owner-1",
+            "new.example",
+            DomainEnrollmentStatus.PendingOwnership,
+            DomainCertificatePolicy.V1.Version,
+            Now,
+            "certificate-event:enrollment-new");
+
+        var created = await repository.TryStartEnrollmentAsync(candidate, CancellationToken.None);
+        var retry = await repository.TryStartEnrollmentAsync(
+            candidate with { CreatedAtUtc = Now.AddMinutes(1) },
+            CancellationToken.None);
+        var conflict = await repository.TryStartEnrollmentAsync(
+            candidate with { EnrollmentId = "enrollment-other", OwnerId = "owner-other" },
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(created.Status, Is.EqualTo(DomainEnrollmentRepositoryWriteStatus.Created));
+            Assert.That(retry.Status, Is.EqualTo(DomainEnrollmentRepositoryWriteStatus.ExistingSame));
+            Assert.That(conflict.Status, Is.EqualTo(DomainEnrollmentRepositoryWriteStatus.Conflict));
+            Assert.That(context.DomainEnrollments.Count(item => item.Domain == "new.example"), Is.EqualTo(1));
+            var auditEvent = context.DomainCertificateEvents.Single(item => item.EnrollmentId == "enrollment-new");
+            Assert.That(auditEvent.EventType, Is.EqualTo("EnrollmentStarted"));
+            Assert.That(auditEvent.ActorId, Is.EqualTo("owner-1"));
+            Assert.That(auditEvent.CertificateId, Is.Null);
+        });
+    }
+
     private static HipDbContext Context()
     {
         var options = new DbContextOptionsBuilder<HipDbContext>()

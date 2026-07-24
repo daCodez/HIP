@@ -91,6 +91,7 @@ public static class DependencyInjection
         services.AddScoped<EfDomainCertificateRepository>();
         services.AddScoped<IDomainCertificateRepository>(provider => provider.GetRequiredService<EfDomainCertificateRepository>());
         services.AddScoped<IDomainCertificateOwnerQuery>(provider => provider.GetRequiredService<EfDomainCertificateRepository>());
+        services.AddScoped<IDomainEnrollmentRepository>(provider => provider.GetRequiredService<EfDomainCertificateRepository>());
         services.AddScoped<IDomainVerificationRequestRepository, EfDomainVerificationRequestRepository>();
         services.AddScoped<IWebsiteIdentityRepository, EfWebsiteIdentityRepository>();
         services.AddScoped<IWebsiteOwnershipClaimRepository, EfWebsiteOwnershipClaimRepository>();

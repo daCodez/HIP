@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using HIP.Application.Certificates;
 using HIP.Application.Protocol;
+using HIP.Domain.Certificates;
 using HIP.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,7 +13,7 @@ namespace HIP.Infrastructure.Persistence.Repositories;
 /// <summary>Insert-only EF repository for signed domain certificates and their issuance audit events.</summary>
 public sealed class EfDomainCertificateRepository(
     HipDbContext dbContext,
-    ICanonicalJsonService canonicalJsonService) : IDomainCertificateRepository, IDomainCertificateOwnerQuery
+    ICanonicalJsonService canonicalJsonService) : IDomainCertificateRepository, IDomainCertificateOwnerQuery, IDomainEnrollmentRepository
 {
     private static readonly JsonSerializerOptions CollectionJsonOptions = CreateCollectionOptions();
     private readonly ICanonicalJsonService canonicalizer =
@@ -96,6 +97,111 @@ public sealed class EfDomainCertificateRepository(
                     certificate == null ? null : certificate.ExpiresAtUtc,
                     certificate == null ? null : certificate.LastVerificationAtUtc))
             .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<DomainEnrollmentRepositoryWriteResult> TryStartEnrollmentAsync(
+        DomainEnrollmentStartRecord enrollment,
+        CancellationToken cancellationToken)
+    {
+        ValidateEnrollmentStart(enrollment);
+        var collision = await FindEnrollmentCollisionAsync(enrollment, cancellationToken);
+        if (collision is not null)
+        {
+            return collision;
+        }
+
+        dbContext.DomainEnrollments.Add(new HipDomainEnrollmentEntity
+        {
+            EnrollmentId = enrollment.EnrollmentId,
+            OwnerId = enrollment.OwnerId,
+            Domain = enrollment.Domain,
+            Status = enrollment.Status,
+            PolicyVersion = enrollment.PolicyVersion,
+            IsCurrent = true,
+            CreatedAtUtc = enrollment.CreatedAtUtc,
+            UpdatedAtUtc = enrollment.CreatedAtUtc,
+            AggregateVersion = 1
+        });
+        dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+        {
+            EventId = enrollment.AuditEventId,
+            EnrollmentId = enrollment.EnrollmentId,
+            CertificateId = null,
+            EventType = "EnrollmentStarted",
+            PreviousStatus = DomainEnrollmentStatus.Draft.ToString(),
+            CurrentStatus = enrollment.Status.ToString(),
+            ActorId = enrollment.OwnerId,
+            PublicSummary = "Domain enrollment started; domain control is not yet verified.",
+            PolicyVersion = enrollment.PolicyVersion,
+            OccurredAtUtc = enrollment.CreatedAtUtc
+        });
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return new DomainEnrollmentRepositoryWriteResult(
+                DomainEnrollmentRepositoryWriteStatus.Created,
+                enrollment);
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            var reconciled = await FindEnrollmentCollisionAsync(enrollment, cancellationToken);
+            if (reconciled is null)
+            {
+                throw;
+            }
+
+            return reconciled;
+        }
+    }
+
+    private async Task<DomainEnrollmentRepositoryWriteResult?> FindEnrollmentCollisionAsync(
+        DomainEnrollmentStartRecord candidate,
+        CancellationToken cancellationToken)
+    {
+        var existing = await dbContext.DomainEnrollments.AsNoTracking()
+            .SingleOrDefaultAsync(
+                item => item.EnrollmentId == candidate.EnrollmentId || item.Domain == candidate.Domain && item.IsCurrent,
+                cancellationToken);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        var exactAudit = await dbContext.DomainCertificateEvents.AsNoTracking().AnyAsync(
+            item => item.EventId == candidate.AuditEventId &&
+                    item.EnrollmentId == existing.EnrollmentId &&
+                    item.EventType == "EnrollmentStarted",
+            cancellationToken);
+        var exact = existing.EnrollmentId == candidate.EnrollmentId &&
+                    existing.OwnerId == candidate.OwnerId &&
+                    existing.Domain == candidate.Domain &&
+                    existing.Status == candidate.Status &&
+                    existing.PolicyVersion == candidate.PolicyVersion &&
+                    exactAudit;
+        return new DomainEnrollmentRepositoryWriteResult(
+            exact
+                ? DomainEnrollmentRepositoryWriteStatus.ExistingSame
+                : DomainEnrollmentRepositoryWriteStatus.Conflict,
+            exact ? candidate : null);
+    }
+
+    private static void ValidateEnrollmentStart(DomainEnrollmentStartRecord enrollment)
+    {
+        ArgumentNullException.ThrowIfNull(enrollment);
+        ValidateIdentifier(enrollment.EnrollmentId, 128);
+        ValidateIdentifier(enrollment.OwnerId, 256);
+        ValidateIdentifier(enrollment.AuditEventId, 128);
+        ValidateIdentifier(enrollment.PolicyVersion, 128);
+        var domain = HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(enrollment.Domain);
+        if (domain != enrollment.Domain ||
+            enrollment.Status != DomainEnrollmentStatus.PendingOwnership ||
+            enrollment.CreatedAtUtc.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException("Initial domain enrollment state is invalid.", nameof(enrollment));
+        }
     }
 
 
