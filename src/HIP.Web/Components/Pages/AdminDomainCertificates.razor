@@ -1,0 +1,118 @@
+@page "/admin/certificates"
+@attribute [Authorize(Policy = AdminPolicies.CanViewReviews)]
+@rendermode InteractiveServer
+@using HIP.Application.Certificates
+@using HIP.Domain.Certificates
+@inject IDomainCertificateAdminQuery CertificateQuery
+
+<PageTitle>HIP Certificate Operations</PageTitle>
+
+<main class="admin-rule-page admin-certificate-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">HIP Admin · certificate operations</p>
+            <h1>Domain Trust Certificates</h1>
+            <p>Review persisted enrollment and signed certificate state. Domain control and signatures are evidence, not automatic safety claims.</p>
+        </div>
+    </section>
+
+    @if (_error is not null)
+    {
+        <p class="admin-error" role="alert">@_error</p>
+    }
+    else if (_loading)
+    {
+        <p class="admin-message" role="status">Loading certificate operations…</p>
+    }
+    else
+    {
+        <section class="dashboard-grid" aria-label="Certificate operation counts">
+            <article class="score-card"><span>Pending certificate reviews</span><strong>@PendingReviews.Count</strong><p>Policy or evidence requires an authorized decision.</p></article>
+            <article class="score-card"><span>Recently issued certificates</span><strong>@RecentlyIssued.Count</strong><p>Current signed certificates in this page.</p></article>
+            <article class="score-card"><span>Recently revoked certificates</span><strong>@RecentlyRevoked.Count</strong><p>Current certificates whose live lifecycle is revoked.</p></article>
+            <article class="score-card"><span>Failed verification attempts</span><strong>Open</strong><p><a href="/admin/identity/websites">Open domain verification operations</a></p></article>
+        </section>
+
+        <section class="lookup-result">
+            <header class="certificate-queue-heading">
+                <div>
+                    <h2>Current certificate operations</h2>
+                    <p>Identity conflicts, suspicious registrations, renewal reviews, badge misuse, and suspension or revocation requests remain visible through their persisted lifecycle and review records.</p>
+                </div>
+            </header>
+            @if (_items.Count == 0)
+            {
+                <p class="admin-message">No domain certificate enrollments are stored yet.</p>
+            }
+            else
+            {
+                <div class="table-scroll" tabindex="0" aria-label="Domain certificate operations table">
+                    <table>
+                        <thead>
+                            <tr><th>Domain</th><th>Enrollment</th><th>Certificate</th><th>Badge</th><th>HIP score</th><th>Unresolved</th><th>Policy version</th><th>Updated UTC</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _items)
+                            {
+                                <tr>
+                                    <td>@item.Domain</td>
+                                    <td>@item.EnrollmentStatus</td>
+                                    <td>@(item.CertificateStatus?.ToString() ?? "Not issued")</td>
+                                    <td>@(item.BadgeLevel?.ToString() ?? "None")</td>
+                                    <td>@(item.CurrentScore?.ToString() ?? "—")</td>
+                                    <td>@item.UnresolvedCriticalFindings critical</td>
+                                    <td><code>@item.PolicyVersion</code></td>
+                                    <td>@item.UpdatedAtUtc.ToString("u")</td>
+                                    <td>
+                                        <a href="@($"/admin/identity/websites?domain={Uri.EscapeDataString(item.Domain)}")">Verification</a>
+                                        @if (item.CertificateId is not null)
+                                        {
+                                            <span aria-hidden="true"> · </span><a href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">Public certificate</a>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</main>
+
+@code {
+    private IReadOnlyList<AdminDomainCertificateSummary> _items = [];
+    private bool _loading = true;
+    private string? _error;
+
+    private IReadOnlyList<AdminDomainCertificateSummary> PendingReviews => _items
+        .Where(item => item.EnrollmentStatus == DomainEnrollmentStatus.PendingSecurityReview ||
+                       item.CertificateStatus == DomainCertificateStatus.PendingReview)
+        .ToArray();
+    private IReadOnlyList<AdminDomainCertificateSummary> RecentlyIssued => _items
+        .Where(item => item.IssuedAtUtc is not null)
+        .OrderByDescending(item => item.IssuedAtUtc)
+        .Take(10)
+        .ToArray();
+    private IReadOnlyList<AdminDomainCertificateSummary> RecentlyRevoked => _items
+        .Where(item => item.CertificateStatus == DomainCertificateStatus.Revoked)
+        .OrderByDescending(item => item.UpdatedAtUtc)
+        .Take(10)
+        .ToArray();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _items = await CertificateQuery.ListForAdminAsync(0, 100, CancellationToken.None);
+        }
+        catch
+        {
+            _error = "HIP could not load certificate operations right now.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

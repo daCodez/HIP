@@ -232,6 +232,40 @@ public sealed class DomainCertificateRepositoryTests
         });
     }
 
+    [Test]
+    public async Task Admin_summary_query_pages_real_cross_owner_state_without_owner_identifiers()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        await repository.TryCreateIssuedAsync(Record(), CancellationToken.None);
+        context.DomainEnrollments.Add(new HipDomainEnrollmentEntity
+        {
+            EnrollmentId = "enrollment-admin-pending",
+            OwnerId = "owner-private",
+            Domain = "pending.example",
+            Status = DomainEnrollmentStatus.PendingSecurityReview,
+            PolicyVersion = DomainCertificatePolicy.V1.Version,
+            CreatedAtUtc = Now,
+            UpdatedAtUtc = Now,
+            UnresolvedCriticalFindings = 1,
+            AggregateVersion = 1
+        });
+        await context.SaveChangesAsync();
+
+        var summaries = await repository.ListForAdminAsync(0, 25, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(summaries, Has.Count.EqualTo(2));
+            Assert.That(summaries.Select(item => item.Domain), Is.EqualTo(new[] { "example.com", "pending.example" }));
+            Assert.That(summaries.Single(item => item.Domain == "example.com").CertificateStatus,
+                Is.EqualTo(DomainCertificateStatus.Active));
+            Assert.That(summaries.Single(item => item.Domain == "pending.example").UnresolvedCriticalFindings,
+                Is.EqualTo(1));
+            Assert.That(typeof(AdminDomainCertificateSummary).GetProperty("OwnerId"), Is.Null);
+        });
+    }
+
     private static HipDbContext Context()
     {
         var options = new DbContextOptionsBuilder<HipDbContext>()
