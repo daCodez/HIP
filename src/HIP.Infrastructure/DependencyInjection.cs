@@ -88,6 +88,7 @@ public static class DependencyInjection
         services.AddScoped<IServiceClientRepository, EfServiceClientRepository>();
         services.AddScoped<ISigningKeyLifecycleRepository, EfSigningKeyLifecycleRepository>();
         services.AddScoped<IHipTrustReceiptRepository, EfHipTrustReceiptRepository>();
+        services.AddScoped<IDomainCertificateRepository, EfDomainCertificateRepository>();
         services.AddScoped<IDomainVerificationRequestRepository, EfDomainVerificationRequestRepository>();
         services.AddScoped<IWebsiteIdentityRepository, EfWebsiteIdentityRepository>();
         services.AddScoped<IWebsiteOwnershipClaimRepository, EfWebsiteOwnershipClaimRepository>();

@@ -45,10 +45,17 @@ public sealed class HipDomainCertificateEntity
     public string? SignatureAlgorithm { get; set; }
     public string? CanonicalPayload { get; set; }
     public string? Signature { get; set; }
+    public string? SigningAuthorityId { get; set; }
     public string? VerificationMethodsJson { get; set; }
+    public string? SignatureAlgorithmFamily { get; set; }
+    public string? SignatureCanonicalization { get; set; }
+    public string? RegistrantPublicKeyId { get; set; }
     public string? PublicFindingsSummaryJson { get; set; }
     public string? PublicRiskClassification { get; set; }
     public string? PublicCertificateUrl { get; set; }
+    public string? SignedCertificateJson { get; set; }
+    public string? CertificateDigest { get; set; }
+    public string? SourceDecisionDigest { get; set; }
     public string? RevocationStatusUrl { get; set; }
     public long AggregateVersion { get; set; }
 }

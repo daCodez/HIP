@@ -40,7 +40,13 @@ internal static class DomainCertificateModelConfiguration
             entity.Property(item => item.PublicDisplayName).HasMaxLength(200);
             entity.Property(item => item.PublicOrganizationName).HasMaxLength(200);
             entity.Property(item => item.PublicRiskClassification).HasMaxLength(80);
+            entity.Property(item => item.SigningAuthorityId).HasMaxLength(256);
             entity.Property(item => item.PublicCertificateUrl).HasMaxLength(512);
+            entity.Property(item => item.SignatureAlgorithmFamily).HasMaxLength(80);
+            entity.Property(item => item.SignatureCanonicalization).HasMaxLength(80);
+            entity.Property(item => item.RegistrantPublicKeyId).HasMaxLength(128);
+            entity.Property(item => item.CertificateDigest).HasMaxLength(71);
+            entity.Property(item => item.SourceDecisionDigest).HasMaxLength(71);
             entity.Property(item => item.RevocationStatusUrl).HasMaxLength(512);
             entity.Property(item => item.AggregateVersion).IsConcurrencyToken();
             entity.HasIndex(item => item.Domain).IsUnique().HasFilter("\"IsCurrent\" = TRUE");

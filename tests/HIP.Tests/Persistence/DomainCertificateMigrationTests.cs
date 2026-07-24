@@ -8,6 +8,33 @@ namespace HIP.Tests.Persistence;
 public sealed class DomainCertificateMigrationTests
 {
     [Test]
+    public void Signing_metadata_migration_is_additive_and_preserves_existing_rows()
+    {
+        var migration = new AddDomainCertificateSigningMetadata();
+        var addedColumns = migration.UpOperations.OfType<AddColumnOperation>().ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                addedColumns.Select(column => column.Name),
+                Is.EquivalentTo(new[]
+                {
+                    "CertificateDigest",
+                    "RegistrantPublicKeyId",
+                    "SignatureAlgorithmFamily",
+                    "SignatureCanonicalization",
+                    "SignedCertificateJson",
+                    "SigningAuthorityId",
+                    "SourceDecisionDigest"
+                }));
+            Assert.That(addedColumns.All(column => column.IsNullable), Is.True);
+            Assert.That(migration.UpOperations.OfType<DropColumnOperation>(), Is.Empty);
+            Assert.That(migration.UpOperations.OfType<AlterColumnOperation>(), Is.Empty);
+            Assert.That(migration.UpOperations.OfType<SqlOperation>(), Is.Empty);
+        });
+    }
+
+    [Test]
     public void Migration_adds_only_the_three_certificate_tables_and_indexes()
     {
         var migration = new AddDomainTrustCertificates();

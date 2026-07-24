@@ -131,6 +131,11 @@ public static class DomainTrustCertificateJson
     public static string Serialize(SignedDomainTrustCertificate certificate) =>
         JsonSerializer.Serialize(certificate, Options);
 
+    /// <summary>Parses a signed public certificate using the stable certificate JSON contract.</summary>
+    public static SignedDomainTrustCertificate Deserialize(string certificateJson) =>
+        JsonSerializer.Deserialize<SignedDomainTrustCertificate>(certificateJson, Options)
+        ?? throw new JsonException("The signed domain certificate JSON is empty.");
+
     public static byte[] SigningPayload(DomainTrustCertificatePayload payload) =>
         JsonSerializer.SerializeToUtf8Bytes(payload, Options);
 
