@@ -80,6 +80,8 @@ public static class DependencyInjection
         services.AddSingleton<IPublicSuffixResolver, PublicSuffixListResolver>();
         services.AddSingleton(WellKnownHipDocumentFetchOptions.Default);
         services.AddSingleton<IWellKnownHipDocumentFetcher, SafeWellKnownHipDocumentFetcher>();
+        services.AddSingleton<IWellKnownHostAddressResolver, SystemWellKnownHostAddressResolver>();
+        services.AddSingleton<IWellKnownHttpMessageHandlerFactory, PinnedWellKnownHttpMessageHandlerFactory>();
 
         services.AddScoped<IHipIdentityRepository, EfHipIdentityRepository>();
         services.AddScoped<IDeviceRegistrationRepository, EfDeviceRegistrationRepository>();

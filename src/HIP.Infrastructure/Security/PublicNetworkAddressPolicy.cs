@@ -31,9 +31,29 @@ public static class PublicNetworkAddressPolicy
             };
         }
 
-        return address.AddressFamily == AddressFamily.InterNetworkV6 &&
-            !address.IsIPv6LinkLocal && !address.IsIPv6Multicast && !address.IsIPv6SiteLocal &&
-            (bytes[0] & 0xFE) != 0xFC &&
-            !(bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0d && bytes[3] == 0xb8);
+        if (address.AddressFamily != AddressFamily.InterNetworkV6 ||
+            address.IsIPv6LinkLocal ||
+            address.IsIPv6Multicast ||
+            address.IsIPv6SiteLocal ||
+            (bytes[0] & 0xFE) == 0xFC)
+        {
+            return false;
+        }
+
+        // Fail closed outside IANA's currently allocated global-unicast 2000::/3 block.
+        if ((bytes[0] & 0xE0) != 0x20)
+        {
+            return false;
+        }
+
+        return !IsPrefix(bytes, 0x20, 0x01, 0x00, 0x00) && // Teredo and special 2001:0000::/32
+            !IsPrefix(bytes, 0x20, 0x01, 0x00, 0x02) && // Benchmarking 2001:2::/48
+            !IsPrefix(bytes, 0x20, 0x01, 0x0d, 0xb8) && // Documentation 2001:db8::/32
+            !(bytes[0] == 0x20 && bytes[1] == 0x02) && // 6to4 can tunnel embedded private IPv4
+            !(bytes[0] == 0x3f && bytes[1] == 0xfe) && // Retired 6bone range
+            !(bytes[0] == 0x3f && bytes[1] == 0xff && (bytes[2] & 0xF0) == 0); // Documentation 3fff::/20
     }
+
+    private static bool IsPrefix(byte[] address, byte first, byte second, byte third, byte fourth) =>
+        address[0] == first && address[1] == second && address[2] == third && address[3] == fourth;
 }
