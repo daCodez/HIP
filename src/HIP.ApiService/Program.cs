@@ -5,6 +5,7 @@ using System.Threading.RateLimiting;
 using HIP.ApiService.Security;
 using HIP.Application;
 using HIP.Application.Browser;
+using HIP.Application.Certificates;
 using HIP.Application.Devices;
 using HIP.Application.Identity;
 using HIP.Application.Performance;
@@ -226,6 +227,47 @@ publicApi.MapGet("/lookup/domain/{domain}", async (
 .AllowAnonymous()
 .CacheOutput(HipOutputCachePolicies.PublicLookup);
 
+
+publicApi.MapGet("/certificates/{certificateId}", async (
+    string certificateId,
+    HttpContext httpContext,
+    IPublicDomainCertificateService certificateService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await certificateService.GetByIdAsync(certificateId, cancellationToken);
+        if (result.Status == PublicDomainCertificateLookupStatus.NotFound)
+        {
+            httpContext.Response.Headers.CacheControl = "no-store";
+            return Results.NotFound();
+        }
+        if (result.Status == PublicDomainCertificateLookupStatus.Unavailable || result.Certificate is null)
+        {
+            httpContext.Response.Headers.CacheControl = "no-store";
+            return Results.Problem("HIP could not verify this certificate right now.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        httpContext.Response.Headers.CacheControl = result.Certificate.IsActive
+            ? "public, max-age=60"
+            : "no-store";
+        return Results.Ok(result.Certificate);
+    }
+    catch (ArgumentException ex)
+    {
+        httpContext.Response.Headers.CacheControl = "no-store";
+        return Results.BadRequest(new ApiErrorResponse(ex.Message));
+    }
+})
+.WithName("PublicDomainCertificate")
+.WithSummary("Returns and verifies a signed HIP Domain Trust Certificate.")
+.Produces<PublicDomainCertificateResponse>()
+.Produces(StatusCodes.Status404NotFound)
+.Produces(StatusCodes.Status503ServiceUnavailable)
+.Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+.AllowAnonymous()
+.RequireRateLimiting(PublicScanPolicy);
 publicApi.MapGet("/badge/domain/{domain}", async (
     string domain,
     ITrustBadgeService badgeService,

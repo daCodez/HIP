@@ -25,7 +25,10 @@ public sealed class EfDomainCertificateRepository(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(certificateId);
         var entity = await dbContext.DomainCertificates.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.CertificateId == certificateId, cancellationToken);
+            .SingleOrDefaultAsync(
+                item => item.CertificateId == certificateId &&
+                        item.SignedCertificateJson != null,
+                cancellationToken);
         return entity is null ? null : await FromEntityAsync(entity, cancellationToken);
     }
 
@@ -37,7 +40,9 @@ public sealed class EfDomainCertificateRepository(
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
         var entity = await dbContext.DomainCertificates.AsNoTracking()
             .SingleOrDefaultAsync(
-                item => item.Domain == domain && item.IsCurrent,
+                item => item.Domain == domain &&
+                        item.IsCurrent &&
+                        item.SignedCertificateJson != null,
                 cancellationToken);
         return entity is null ? null : await FromEntityAsync(entity, cancellationToken);
     }

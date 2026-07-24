@@ -9,6 +9,7 @@ using System.Security.Claims;
 using HIP.Application;
 using HIP.Application.Ai;
 using HIP.Application.Browser;
+using HIP.Application.Certificates;
 using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
 using HIP.Application.Devices;
@@ -825,6 +826,42 @@ static void MapPublicApis(RouteGroupBuilder publicApi)
     })
         .AllowAnonymous()
         .RequireCors(HipCorsPolicies.ClientWrite);
+
+
+    publicApi.MapGet("/certificates/{certificateId}", async (
+        string certificateId,
+        HttpContext httpContext,
+        IPublicDomainCertificateService certificateService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var result = await certificateService.GetByIdAsync(certificateId, cancellationToken);
+            if (result.Status == PublicDomainCertificateLookupStatus.NotFound)
+            {
+                httpContext.Response.Headers.CacheControl = "no-store";
+                return Results.NotFound();
+            }
+            if (result.Status == PublicDomainCertificateLookupStatus.Unavailable || result.Certificate is null)
+            {
+                httpContext.Response.Headers.CacheControl = "no-store";
+                return Results.Problem("HIP could not verify this certificate right now.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            httpContext.Response.Headers.CacheControl = result.Certificate.IsActive
+                ? "public, max-age=60"
+                : "no-store";
+            return Results.Ok(result.Certificate);
+        }
+        catch (ArgumentException ex)
+        {
+            httpContext.Response.Headers.CacheControl = "no-store";
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    })
+        .AllowAnonymous()
+        .RequireRateLimiting(RateLimitPolicies.PublicScanPolicy);
 
     publicApi.MapGet("/badge/domain/{domain}", async (
         string domain,

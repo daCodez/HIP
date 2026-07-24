@@ -62,6 +62,7 @@ public static class DependencyInjection
         services.AddSingleton<IDomainCertificatePolicyEvaluator, DomainCertificatePolicyEvaluator>();
         services.AddScoped<IDomainCertificateSigningService, DomainCertificateSigningService>();
         services.AddScoped<IDomainCertificateIssuanceService, DomainCertificateIssuanceService>();
+        services.AddScoped<IPublicDomainCertificateService, PublicDomainCertificateService>();
         services.AddValidatorsFromAssembly(assembly);
         services.AddSingleton<IValidator<ReviewItem>, ReviewItemValidator>();
         services.AddSingleton<IValidator<AppealRequest>, AppealRequestValidator>();
