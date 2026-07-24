@@ -4,10 +4,12 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using HIP.Application.Browser;
+using HIP.Application.Certificates;
 using HIP.Application.Dashboard;
 using HIP.Application.Identity;
 using HIP.Application.Reputation;
 using HIP.Domain.Reporting;
+using HIP.Domain.Certificates;
 using HIP.Domain.Identity;
 using HIP.Domain.Review;
 using HIP.Domain.Risk;
@@ -80,6 +82,38 @@ public sealed class AdminDashboardTests
         });
     }
 
+    [Test]
+    public async Task Dashboard_certificate_cards_use_persisted_current_certificate_state()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var certificates = new StubDomainCertificateAdminQuery(
+            CertificateSummary("active.example", DomainCertificateStatus.Active, DomainCertificateLevel.Verified, now.AddDays(10)),
+            CertificateSummary("suspended.example", DomainCertificateStatus.Suspended, DomainCertificateLevel.Registered, now.AddDays(90)),
+            CertificateSummary("revoked.example", DomainCertificateStatus.Revoked, DomainCertificateLevel.Monitored, now.AddDays(90)),
+            CertificateSummary("expired.example", DomainCertificateStatus.Active, DomainCertificateLevel.Monitored, now.AddMinutes(-1)),
+            CertificateSummary("pending.example", null, null, null));
+        var service = Dashboard(
+            new InMemoryBrowserScanResultRepository(),
+            domainCertificateAdminQuery: certificates);
+
+        var summary = await service.GetSummaryAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Card(summary, "domainCertificatesTotal").Value, Is.EqualTo(4));
+            Assert.That(Card(summary, "domainCertificatesActive").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "domainCertificatesSuspended").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "domainCertificatesRevoked").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "domainCertificatesExpired").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "domainCertificatesExpiringSoon").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "domainCertificatesRegistered").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "domainCertificatesVerified").Value, Is.EqualTo(1));
+            Assert.That(Card(summary, "domainCertificatesMonitored").Value, Is.EqualTo(2));
+            Assert.That(Card(summary, "domainCertificateEnrollmentsPending").Value, Is.EqualTo(1));
+            Assert.That(summary.RecentActivity.Any(item => item.ActivityType == "Domain Certificate"), Is.True);
+            Assert.That(summary.Sources.Single(source => source.Key == "domainCertificates").IsAvailable, Is.True);
+        });
+    }
     [Test]
     public async Task Dashboard_domains_scanned_counts_all_distinct_domains_beyond_recent_window()
     {
@@ -291,6 +325,7 @@ public sealed class AdminDashboardTests
         Assert.Multiple(() =>
         {
             Assert.That(source, Does.Contain("Domain identity"));
+            Assert.That(source, Does.Contain("Domain Trust Certificates"));
             Assert.That(source, Does.Contain("/admin/identity/websites"));
             Assert.That(source, Does.Contain("Verification confirms control of a domain."));
             Assert.That(source, Does.Contain("It does not certify that the site is safe or compliant."));
@@ -767,6 +802,7 @@ public sealed class AdminDashboardTests
             Assert.That(source, Does.Contain("Protection outcomes by day"));
             Assert.That(source, Does.Contain("Top risk categories"));
             Assert.That(source, Does.Contain("Domain identity"));
+            Assert.That(source, Does.Contain("Domain Trust Certificates"));
             Assert.That(source, Does.Contain("Provider health"));
             Assert.That(source, Does.Contain("System activity"));
         });
@@ -1108,7 +1144,8 @@ public sealed class AdminDashboardTests
         IWeightedFeedbackRepository? weightedFeedbackRepository = null,
         IAdminSiteSafetyRuleRepository? adminSiteSafetyRuleRepository = null,
         IRuleRepository? ruleRepository = null,
-        IWebsiteIdentityRepository? websiteIdentityRepository = null)
+        IWebsiteIdentityRepository? websiteIdentityRepository = null,
+        IDomainCertificateAdminQuery? domainCertificateAdminQuery = null)
     {
         var auditLogRepository = new InMemoryAuditLogRepository();
         return new AdminDashboardService(
@@ -1124,7 +1161,8 @@ public sealed class AdminDashboardTests
             generatedReviewRepository ?? new InMemoryAdminReviewQueueRepository(),
             weightedFeedbackRepository ?? new InMemoryWeightedFeedbackRepository(),
             adminSiteSafetyRuleRepository ?? new InMemoryAdminSiteSafetyRuleRepository(),
-            websiteIdentityRepository ?? new StubWebsiteIdentityRepository());
+            websiteIdentityRepository ?? new StubWebsiteIdentityRepository(),
+            domainCertificateAdminQuery);
     }
 
     private static WebsiteIdentity WebsiteIdentity(string domain, VerificationStatus status) =>
@@ -1137,6 +1175,41 @@ public sealed class AdminDashboardTests
             DateTimeOffset.UtcNow.AddDays(-1),
             status == VerificationStatus.Verified ? DateTimeOffset.UtcNow.AddHours(-1) : null);
 
+    private static AdminDomainCertificateSummary CertificateSummary(
+        string domain,
+        DomainCertificateStatus? status,
+        DomainCertificateLevel? level,
+        DateTimeOffset? expiresAtUtc) =>
+        new(
+            $"enrollment-{domain}",
+            domain,
+            status is null ? DomainEnrollmentStatus.PendingSecurityReview : DomainEnrollmentStatus.Verified,
+            "hip-domain-certificate-v1",
+            DateTimeOffset.UtcNow.AddMinutes(-5),
+            DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow.AddDays(-1),
+            null,
+            status is null ? null : DateTimeOffset.UtcNow.AddHours(-1),
+            null,
+            80,
+            0,
+            status is null ? null : $"certificate-{domain}",
+            status,
+            level,
+            status is null ? null : DateTimeOffset.UtcNow.AddDays(-1),
+            expiresAtUtc,
+            status is null ? null : DateTimeOffset.UtcNow.AddHours(-1));
+
+    private sealed class StubDomainCertificateAdminQuery(params AdminDomainCertificateSummary[] certificates)
+        : IDomainCertificateAdminQuery
+    {
+        public Task<IReadOnlyList<AdminDomainCertificateSummary>> ListForAdminAsync(
+            int offset,
+            int limit,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AdminDomainCertificateSummary>>(
+                certificates.Skip(offset).Take(limit).ToArray());
+    }
     private sealed class StubWebsiteIdentityRepository(params WebsiteIdentity[] identities) : IWebsiteIdentityRepository
     {
         private readonly Dictionary<string, WebsiteIdentity> records =

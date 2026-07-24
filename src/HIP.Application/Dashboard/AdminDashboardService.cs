@@ -1,4 +1,5 @@
 using HIP.Application.Browser;
+using HIP.Application.Certificates;
 using HIP.Application.Identity;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
@@ -8,6 +9,7 @@ using HIP.Application.SelfHealing;
 using HIP.Application.Scalability;
 using HIP.Application.SiteSafety;
 using HIP.Domain.Audit;
+using HIP.Domain.Certificates;
 using HIP.Domain.Identity;
 using HIP.Domain.Reporting;
 using HIP.Domain.Review;
@@ -45,7 +47,8 @@ public sealed class AdminDashboardService(
     IAdminReviewQueueRepository adminReviewQueueRepository,
     IWeightedFeedbackRepository weightedFeedbackRepository,
     IAdminSiteSafetyRuleRepository adminSiteSafetyRuleRepository,
-    IWebsiteIdentityRepository websiteIdentityRepository) : IAdminDashboardService
+    IWebsiteIdentityRepository websiteIdentityRepository,
+    IDomainCertificateAdminQuery? domainCertificateAdminQuery = null) : IAdminDashboardService
 {
     private static readonly TimeSpan LegacyReadBudget = TimeSpan.FromMilliseconds(750);
 
@@ -77,6 +80,11 @@ public sealed class AdminDashboardService(
         var overridesRead = await ReadOptionalAsync(reputationOverrideRepository.ListAsync, cancellationToken);
         var auditLogsRead = await ReadOptionalAsync(auditLogRepository.ListAsync, cancellationToken);
         var websiteIdentitiesRead = await ReadOptionalAsync(websiteIdentityRepository.ListAsync, cancellationToken);
+        var domainCertificatesRead = domainCertificateAdminQuery is null
+            ? new OptionalReadResult<AdminDomainCertificateSummary>([], false)
+            : await ReadOptionalAsync(
+                token => ListDomainCertificatesAsync(domainCertificateAdminQuery, token),
+                cancellationToken);
 
         var findings = findingsRead.Items;
         var rules = rulesRead.Items;
@@ -89,6 +97,7 @@ public sealed class AdminDashboardService(
         var overrides = overridesRead.Items;
         var auditLogs = auditLogsRead.Items;
         var websiteIdentities = websiteIdentitiesRead.Items;
+        var domainCertificates = domainCertificatesRead.Items;
         var scanHistory = clientTelemetryRead.IsAvailable ? clientTelemetryRead.Items : browserScans;
         var authoritativeScans = scanHistory
             .Where(BrowserScanResultProvenance.IsServerAuthoritative)
@@ -100,6 +109,25 @@ public sealed class AdminDashboardService(
             .ToArray();
 
         var now = DateTimeOffset.UtcNow;
+        var issuedCertificates = domainCertificates
+            .Where(item => item.CertificateId is not null && item.CertificateStatus is not null && item.BadgeLevel is not null)
+            .ToArray();
+        var certificateTotal = issuedCertificates.Length;
+        var certificateActive = issuedCertificates.Count(item => EffectiveCertificateStatus(item, now) == DomainCertificateStatus.Active);
+        var certificateSuspended = issuedCertificates.Count(item => EffectiveCertificateStatus(item, now) == DomainCertificateStatus.Suspended);
+        var certificateRevoked = issuedCertificates.Count(item => EffectiveCertificateStatus(item, now) == DomainCertificateStatus.Revoked);
+        var certificateExpired = issuedCertificates.Count(item => EffectiveCertificateStatus(item, now) == DomainCertificateStatus.Expired);
+        var certificateRenewalRequired = issuedCertificates.Count(item => EffectiveCertificateStatus(item, now) == DomainCertificateStatus.RenewalRequired);
+        var certificateExpiringSoon = issuedCertificates.Count(item =>
+            EffectiveCertificateStatus(item, now) == DomainCertificateStatus.Active &&
+            item.ExpiresAtUtc > now &&
+            item.ExpiresAtUtc <= now.AddDays(30));
+        var certificateRegistered = issuedCertificates.Count(item => item.BadgeLevel == DomainCertificateLevel.Registered);
+        var certificateVerified = issuedCertificates.Count(item => item.BadgeLevel == DomainCertificateLevel.Verified);
+        var certificateMonitored = issuedCertificates.Count(item => item.BadgeLevel == DomainCertificateLevel.Monitored);
+        var certificateEnrollmentsPending = domainCertificates.Count(item =>
+            item.CertificateId is null &&
+            item.EnrollmentStatus is not DomainEnrollmentStatus.Suspended and not DomainEnrollmentStatus.Revoked);
         var hasScanData = authoritativeScans.Length > 0;
         var totalScans = authoritativeScans.Length;
         var scansToday = authoritativeScans.Count(scan => scan.LastCheckedUtc.UtcDateTime.Date == now.UtcDateTime.Date);
@@ -199,6 +227,17 @@ public sealed class AdminDashboardService(
             Card("clientTelemetryCautionResults", "Observed Caution", clientTelemetryCautionResults, !clientTelemetryRead.IsAvailable ? "Unavailable" : clientTelemetry.Length > 0 ? "Informational" : "No Data", !clientTelemetryRead.IsAvailable || clientTelemetry.Length == 0, "Client observations classified as limited, unknown, or suspicious; not authoritative."),
             Card("clientTelemetryRiskResults", "Observed Risk", clientTelemetryRiskResults, !clientTelemetryRead.IsAvailable ? "Unavailable" : clientTelemetry.Length > 0 ? "Informational" : "No Data", !clientTelemetryRead.IsAvailable || clientTelemetry.Length == 0, "Client observations classified as HighRisk, Dangerous, or Critical; not authoritative."),
             Card("latestClientTelemetry", "Latest Client Observation", latestClientTelemetryUtc is null ? 0 : (int)Math.Max(0, Math.Round((now - latestClientTelemetryUtc.Value).TotalMinutes)), !clientTelemetryRead.IsAvailable ? "Unavailable" : latestClientTelemetryUtc is null ? "No Data" : "Minutes Ago", !clientTelemetryRead.IsAvailable || latestClientTelemetryUtc is null, "Minutes since HIP stored the latest privacy-safe client observation."),
+            Card("domainCertificatesTotal", "Current Certificates", certificateTotal, domainCertificatesRead.IsAvailable ? "Persisted" : "Unavailable", !domainCertificatesRead.IsAvailable, "Current persisted HIP Domain Trust Certificates."),
+            Card("domainCertificatesActive", "Active Certificates", certificateActive, domainCertificatesRead.IsAvailable ? "Active" : "Unavailable", !domainCertificatesRead.IsAvailable, "Signed certificates that are active and not expired."),
+            Card("domainCertificatesSuspended", "Suspended Certificates", certificateSuspended, domainCertificatesRead.IsAvailable ? "Lifecycle" : "Unavailable", !domainCertificatesRead.IsAvailable, "Current certificates suspended through the audited lifecycle."),
+            Card("domainCertificatesRevoked", "Revoked Certificates", certificateRevoked, domainCertificatesRead.IsAvailable ? "Lifecycle" : "Unavailable", !domainCertificatesRead.IsAvailable, "Current certificates permanently revoked through the audited lifecycle."),
+            Card("domainCertificatesExpired", "Expired Certificates", certificateExpired, domainCertificatesRead.IsAvailable ? "Lifecycle" : "Unavailable", !domainCertificatesRead.IsAvailable, "Certificates whose signed expiry has passed."),
+            Card("domainCertificatesRenewalRequired", "Renewal Required", certificateRenewalRequired, domainCertificatesRead.IsAvailable ? "Lifecycle" : "Unavailable", !domainCertificatesRead.IsAvailable, "Certificates marked for renewal under the current policy."),
+            Card("domainCertificatesExpiringSoon", "Expiring Soon", certificateExpiringSoon, domainCertificatesRead.IsAvailable ? "Next 30 Days" : "Unavailable", !domainCertificatesRead.IsAvailable, "Active certificates expiring within 30 days."),
+            Card("domainCertificatesRegistered", "Registered Level", certificateRegistered, domainCertificatesRead.IsAvailable ? "Certificate Level" : "Unavailable", !domainCertificatesRead.IsAvailable, "Certificates proving domain control without making a site-safety claim."),
+            Card("domainCertificatesVerified", "Verified Level", certificateVerified, domainCertificatesRead.IsAvailable ? "Certificate Level" : "Unavailable", !domainCertificatesRead.IsAvailable, "Certificates with completed identity and baseline security verification."),
+            Card("domainCertificatesMonitored", "Monitored Level", certificateMonitored, domainCertificatesRead.IsAvailable ? "Certificate Level" : "Unavailable", !domainCertificatesRead.IsAvailable, "Certificates with current continuous-monitoring evidence."),
+            Card("domainCertificateEnrollmentsPending", "Pending Enrollments", certificateEnrollmentsPending, domainCertificatesRead.IsAvailable ? "Enrollment" : "Unavailable", !domainCertificatesRead.IsAvailable, "Current domain enrollments that have not received a certificate."),
             Card("registeredWebsiteIdentities", "Registered Domains", websiteIdentities.Count, !websiteIdentitiesRead.IsAvailable ? "Unavailable" : websiteIdentities.Count > 0 ? "Registered" : "No Data", !websiteIdentitiesRead.IsAvailable, "Domains registered with HIP. Registration alone does not prove domain control or site safety."),
             Card("verifiedWebsiteIdentities", "Control Verified", verifiedWebsiteIdentities, !websiteIdentitiesRead.IsAvailable ? "Unavailable" : "Domain Control", !websiteIdentitiesRead.IsAvailable, "Domains where HIP verified control. This does not certify that a site is safe or compliant."),
             Card("pendingWebsiteIdentities", "Awaiting Verification", pendingWebsiteIdentities, !websiteIdentitiesRead.IsAvailable ? "Unavailable" : pendingWebsiteIdentities > 0 ? "Action Needed" : "Clear", !websiteIdentitiesRead.IsAvailable, "Registered domains still awaiting successful control verification."),
@@ -282,7 +321,19 @@ public sealed class AdminDashboardService(
                 $"{scan.LinksScanned} links scanned; {scan.RiskyLinksFound} risky links found. {scan.ReasonSummary}",
                 scan.LastCheckedUtc));
 
+        var certificateActivity = domainCertificates
+            .OrderByDescending(item => item.UpdatedAtUtc)
+            .Take(5)
+            .Select(item => new AdminRecentActivityItem(
+                "Domain Certificate",
+                "Domain",
+                item.Domain,
+                null,
+                CertificateActivitySummary(item, now),
+                item.UpdatedAtUtc));
+
         var recentActivity = browserScanActivity
+            .Concat(certificateActivity)
             .Concat(findings
             .OrderByDescending(finding => finding.DetectedAtUtc)
             .Take(5)
@@ -370,7 +421,8 @@ public sealed class AdminDashboardService(
             Source("appeals", appealsRead),
             Source("reputationOverrides", overridesRead),
             Source("auditLogs", auditLogsRead),
-            Source("websiteIdentities", websiteIdentitiesRead)
+            Source("websiteIdentities", websiteIdentitiesRead),
+            Source("domainCertificates", domainCertificatesRead)
         };
 
         var dataSource = hasScanData
@@ -384,6 +436,44 @@ public sealed class AdminDashboardService(
         };
     }
 
+    private static async Task<IReadOnlyCollection<AdminDomainCertificateSummary>> ListDomainCertificatesAsync(
+        IDomainCertificateAdminQuery query,
+        CancellationToken cancellationToken)
+    {
+        const int pageSize = 100;
+        const int maximumItems = 10_000;
+        var items = new List<AdminDomainCertificateSummary>();
+        while (items.Count < maximumItems)
+        {
+            var page = await query.ListForAdminAsync(items.Count, pageSize, cancellationToken).ConfigureAwait(false);
+            items.AddRange(page);
+            if (page.Count < pageSize)
+            {
+                return items;
+            }
+        }
+
+        throw new InvalidOperationException("Domain certificate dashboard projection exceeded its safe read bound.");
+    }
+
+    private static DomainCertificateStatus? EffectiveCertificateStatus(
+        AdminDomainCertificateSummary certificate,
+        DateTimeOffset now) =>
+        certificate.ExpiresAtUtc <= now && certificate.CertificateStatus == DomainCertificateStatus.Active
+            ? DomainCertificateStatus.Expired
+            : certificate.CertificateStatus;
+
+    private static string CertificateActivitySummary(
+        AdminDomainCertificateSummary certificate,
+        DateTimeOffset now)
+    {
+        if (certificate.CertificateId is null)
+        {
+            return $"Enrollment is {certificate.EnrollmentStatus}; no certificate has been issued.";
+        }
+
+        return $"{certificate.BadgeLevel} certificate is {EffectiveCertificateStatus(certificate, now)}.";
+    }
     /// <summary>
     /// Reads an optional dashboard source with a small local budget so slow legacy stores cannot block the live scan dashboard.
     /// </summary>
