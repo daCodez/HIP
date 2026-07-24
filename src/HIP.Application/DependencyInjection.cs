@@ -58,6 +58,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(DomainCertificatePolicy.V1);
         services.AddSingleton<DomainRegistrationNormalizer>();
+        services.AddSingleton<IDomainCertificatePolicyEvaluator, DomainCertificatePolicyEvaluator>();
         services.AddValidatorsFromAssembly(assembly);
         services.AddSingleton<IValidator<ReviewItem>, ReviewItemValidator>();
         services.AddSingleton<IValidator<AppealRequest>, AppealRequestValidator>();
