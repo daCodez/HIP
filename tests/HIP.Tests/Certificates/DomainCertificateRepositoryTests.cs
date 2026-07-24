@@ -97,6 +97,30 @@ public sealed class DomainCertificateRepositoryTests
             Throws.TypeOf<InvalidOperationException>());
     }
 
+    [Test]
+    public async Task Live_status_can_change_without_rewriting_the_signed_issuance_payload()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        var record = Record();
+        await repository.TryCreateIssuedAsync(record, CancellationToken.None);
+        context.ChangeTracker.Clear();
+        var entity = await context.DomainCertificates.SingleAsync();
+        entity.Status = DomainCertificateStatus.Suspended;
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var stored = await repository.GetByIdAsync(
+            record.Certificate.Payload.CertificateId,
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(stored?.CurrentStatus, Is.EqualTo(DomainCertificateStatus.Suspended));
+            Assert.That(stored?.Certificate.Payload.Status, Is.EqualTo(DomainCertificateStatus.Active));
+        });
+    }
+
     private static HipDbContext Context()
     {
         var options = new DbContextOptionsBuilder<HipDbContext>()

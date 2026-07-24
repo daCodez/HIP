@@ -21,7 +21,8 @@ public sealed record HipStoredDomainCertificate(
     string SignedCertificateJson,
     string CertificateDigest,
     string SourceDecisionDigest,
-    DomainCertificateAuditEvent IssuanceEvent);
+    DomainCertificateAuditEvent IssuanceEvent,
+    DomainCertificateStatus CurrentStatus = DomainCertificateStatus.Active);
 
 /// <summary>Outcome of an insert-only certificate issuance write.</summary>
 public enum DomainCertificateRepositoryWriteStatus

@@ -47,7 +47,7 @@ public sealed class EfDomainCertificateRepository(
         HipStoredDomainCertificate certificate,
         CancellationToken cancellationToken)
     {
-        Validate(certificate);
+        Validate(certificate, requireInitialActiveStatus: true);
         var existing = await FindCollisionAsync(certificate, cancellationToken);
         if (existing is not null)
         {
@@ -122,8 +122,9 @@ public sealed class EfDomainCertificateRepository(
                     ignoreCase: false),
                 auditEvent.ReasonCode,
                 auditEvent.PublicSummary,
-                auditEvent.OccurredAtUtc));
-        Validate(stored);
+                auditEvent.OccurredAtUtc),
+            entity.Status);
+        Validate(stored, requireInitialActiveStatus: false);
         ValidateIndexes(entity, stored);
         return stored;
     }
@@ -139,7 +140,7 @@ public sealed class EfDomainCertificateRepository(
             OwnerId = stored.OwnerId,
             Domain = payload.Domain,
             Level = payload.Level,
-            Status = payload.Status,
+            Status = stored.CurrentStatus,
             PolicyVersion = payload.PolicyVersion,
             CertificateVersion = payload.CertificateVersion,
             IsCurrent = true,
@@ -190,7 +191,9 @@ public sealed class EfDomainCertificateRepository(
         OccurredAtUtc = stored.IssuanceEvent.OccurredAtUtc
     };
 
-    private void Validate(HipStoredDomainCertificate stored)
+    private void Validate(
+        HipStoredDomainCertificate stored,
+        bool requireInitialActiveStatus)
     {
         ArgumentNullException.ThrowIfNull(stored);
         ArgumentNullException.ThrowIfNull(stored.Certificate);
@@ -199,7 +202,6 @@ public sealed class EfDomainCertificateRepository(
         if (!string.Equals(stored.SignedCertificateJson, expectedJson, StringComparison.Ordinal) ||
             !string.Equals(stored.CertificateDigest, Digest(expectedJson), StringComparison.Ordinal) ||
             !IsDigest(stored.SourceDecisionDigest) ||
-            stored.Certificate.Payload.Status != HIP.Domain.Certificates.DomainCertificateStatus.Active ||
             stored.IssuanceEvent.EventType != "CertificateIssued" ||
             stored.IssuanceEvent.PreviousStatus is not null ||
             stored.IssuanceEvent.CurrentStatus != HIP.Domain.Certificates.DomainCertificateStatus.Active ||
@@ -212,6 +214,12 @@ public sealed class EfDomainCertificateRepository(
         ValidateIdentifier(stored.OwnerId, 256);
         ValidateIdentifier(stored.IssuanceEvent.EventId, 128);
         ValidateIdentifier(stored.IssuanceEvent.ActorId, 256);
+        if (requireInitialActiveStatus &&
+            (stored.Certificate.Payload.Status != HIP.Domain.Certificates.DomainCertificateStatus.Active ||
+             stored.CurrentStatus != HIP.Domain.Certificates.DomainCertificateStatus.Active))
+        {
+            throw new ArgumentException("New domain certificate issuance must start active.", nameof(stored));
+        }
     }
 
     private void ValidateIndexes(
@@ -225,7 +233,7 @@ public sealed class EfDomainCertificateRepository(
             entity.OwnerId != stored.OwnerId ||
             entity.Domain != payload.Domain ||
             entity.Level != payload.Level ||
-            entity.Status != payload.Status ||
+            entity.Status != stored.CurrentStatus ||
             entity.PolicyVersion != payload.PolicyVersion ||
             entity.CertificateVersion != payload.CertificateVersion ||
             entity.IssuedAtUtc != payload.IssuedAtUtc ||
