@@ -202,7 +202,8 @@ public sealed class HipConsumerPageIsolationTests
             "ConsumerSettingsPage.razor",
             "ConsumerHome.razor",
             "ConsumerLicenses.razor",
-            "ConsumerAccountSecurity.razor"
+            "ConsumerAccountSecurity.razor",
+            "ConsumerCertificates.razor"
         };
 
         Assert.Multiple(() =>
@@ -214,6 +215,32 @@ public sealed class HipConsumerPageIsolationTests
                 Assert.That(source, Does.Contain("HipConsumerPageAccess.Execute"), fileName);
                 Assert.That(source, Does.Contain("AuthenticationStateProvider"), fileName);
             }
+
+
+            var certificates = ReadPage(root, "ConsumerCertificates.razor");
+            Assert.That(certificates, Does.Contain("@page \"/consumer/certificates\""));
+            Assert.That(certificates, Does.Contain("IDomainCertificateOwnerQuery"));
+            Assert.That(certificates, Does.Contain("Domain ownership"));
+            Assert.That(certificates, Does.Contain("Certificate status"));
+            Assert.That(certificates, Does.Contain("Current HIP score"));
+            Assert.That(certificates, Does.Contain("Certificate expiration"));
+            Assert.That(certificates, Does.Contain("Domain added"));
+            Assert.That(certificates, Does.Contain("DNS verified"));
+            Assert.That(certificates, Does.Contain("Website verified"));
+            Assert.That(certificates, Does.Contain("Identity completed"));
+            Assert.That(certificates, Does.Contain("Security review completed"));
+            Assert.That(certificates, Does.Contain("Certificate issued"));
+            Assert.That(certificates, Does.Contain("Monitoring active"));
+            Assert.That(certificates, Does.Not.Contain("OwnerId"));
+
+            var navigation = File.ReadAllText(Path.Combine(
+                root,
+                "src",
+                "HIP.Web",
+                "Components",
+                "Layout",
+                "ControlCenterNav.razor"));
+            Assert.That(navigation, Does.Contain("href=\"consumer/certificates\""));
 
             var settings = ReadPage(root, "ConsumerSettingsPage.razor");
             var save = Section(settings, "private async Task SaveAsync()", "private void Apply");

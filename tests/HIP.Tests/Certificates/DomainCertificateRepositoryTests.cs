@@ -121,6 +121,44 @@ public sealed class DomainCertificateRepositoryTests
         });
     }
 
+    [Test]
+    public async Task Owner_summary_query_is_exactly_scoped_and_uses_current_persisted_state()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        await repository.TryCreateIssuedAsync(Record(), CancellationToken.None);
+        context.DomainEnrollments.Add(new HipDomainEnrollmentEntity
+        {
+            EnrollmentId = "enrollment-other",
+            OwnerId = "owner-other",
+            Domain = "private.example",
+            Status = DomainEnrollmentStatus.PendingOwnership,
+            PolicyVersion = DomainCertificatePolicy.V1.Version,
+            CreatedAtUtc = Now,
+            UpdatedAtUtc = Now,
+            AggregateVersion = 1
+        });
+        await context.SaveChangesAsync();
+
+        var summaries = await repository.ListForOwnerAsync(
+            "owner-1",
+            offset: 0,
+            limit: 25,
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(summaries, Has.Count.EqualTo(1));
+            Assert.That(summaries[0].Domain, Is.EqualTo("example.com"));
+            Assert.That(summaries[0].EnrollmentStatus, Is.EqualTo(DomainEnrollmentStatus.Verified));
+            Assert.That(summaries[0].CertificateId, Is.EqualTo("hip-domain-cert-0001"));
+            Assert.That(summaries[0].CertificateStatus, Is.EqualTo(DomainCertificateStatus.Active));
+            Assert.That(summaries[0].BadgeLevel, Is.EqualTo(DomainCertificateLevel.Verified));
+            Assert.That(summaries, Has.None.Matches<OwnerDomainCertificateSummary>(
+                item => item.Domain == "private.example"));
+        });
+    }
+
     private static HipDbContext Context()
     {
         var options = new DbContextOptionsBuilder<HipDbContext>()

@@ -1,0 +1,135 @@
+.owner-certificate-page {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.domain-certificate-empty,
+.domain-certificate-card {
+    --owner-certificate-accent: #7d8ba1;
+    padding: clamp(1rem, 3vw, 1.5rem);
+    border: 1px solid var(--line);
+    border-left: .35rem solid var(--owner-certificate-accent);
+    border-radius: .75rem;
+    background: var(--panel);
+}
+
+.domain-certificate-active { --owner-certificate-accent: #00c9c8; }
+.domain-certificate-caution { --owner-certificate-accent: #f0ad3d; }
+.domain-certificate-critical { --owner-certificate-accent: #f14968; }
+.domain-certificate-inactive { --owner-certificate-accent: #7d8ba1; }
+
+.domain-certificate-card > header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.domain-certificate-card h2 {
+    margin: .25rem 0;
+    overflow-wrap: anywhere;
+}
+
+.owner-certificate-status {
+    padding: .45rem .7rem;
+    border: 1px solid var(--owner-certificate-accent);
+    border-radius: .35rem;
+    color: var(--owner-certificate-accent);
+    font-weight: 700;
+}
+
+.owner-certificate-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+    gap: .75rem;
+    margin: 1.25rem 0;
+}
+
+.owner-certificate-facts article {
+    min-width: 0;
+    padding: .9rem;
+    border: 1px solid var(--line);
+    background: color-mix(in srgb, var(--panel) 82%, black);
+}
+
+.owner-certificate-facts span,
+.owner-certificate-facts strong {
+    display: block;
+}
+
+.owner-certificate-facts span {
+    color: var(--muted);
+    font-size: .8rem;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.owner-certificate-facts strong {
+    margin-top: .35rem;
+    overflow-wrap: anywhere;
+}
+
+.verification-progress ol {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(7rem, 1fr));
+    gap: .35rem;
+    margin: 1rem 0;
+    padding: 0;
+    list-style: none;
+    overflow-x: auto;
+}
+
+.progress-step {
+    min-width: 7rem;
+    padding: .75rem;
+    border-top: .2rem solid #7d8ba1;
+    color: var(--muted);
+}
+
+.progress-step span {
+    display: grid;
+    width: 1.7rem;
+    height: 1.7rem;
+    margin-bottom: .45rem;
+    place-items: center;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+}
+
+.progress-complete { border-color: #00c9c8; color: #00aead; }
+.progress-current { border-color: #f0ad3d; color: #bd7b00; font-weight: 700; }
+.progress-failed { border-color: #f14968; color: #d92f52; font-weight: 700; }
+
+.owner-certificate-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem 1rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--line);
+}
+
+.owner-certificate-actions span {
+    color: var(--muted);
+}
+
+.owner-certificate-actions a:focus-visible {
+    outline: .2rem solid currentColor;
+    outline-offset: .2rem;
+}
+
+@media (max-width: 44rem) {
+    .owner-certificate-facts { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .owner-certificate-page *,
+    .owner-certificate-page *::before,
+    .owner-certificate-page *::after {
+        scroll-behavior: auto !important;
+        transition: none !important;
+        animation: none !important;
+    }
+}

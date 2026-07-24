@@ -12,7 +12,7 @@ namespace HIP.Infrastructure.Persistence.Repositories;
 /// <summary>Insert-only EF repository for signed domain certificates and their issuance audit events.</summary>
 public sealed class EfDomainCertificateRepository(
     HipDbContext dbContext,
-    ICanonicalJsonService canonicalJsonService) : IDomainCertificateRepository
+    ICanonicalJsonService canonicalJsonService) : IDomainCertificateRepository, IDomainCertificateOwnerQuery
 {
     private static readonly JsonSerializerOptions CollectionJsonOptions = CreateCollectionOptions();
     private readonly ICanonicalJsonService canonicalizer =
@@ -46,6 +46,58 @@ public sealed class EfDomainCertificateRepository(
                 cancellationToken);
         return entity is null ? null : await FromEntityAsync(entity, cancellationToken);
     }
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<OwnerDomainCertificateSummary>> ListForOwnerAsync(
+        string ownerId,
+        int offset,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        ValidateIdentifier(ownerId, 256);
+        if (offset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(offset));
+        }
+        if (limit is < 1 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit));
+        }
+
+        var enrollments = dbContext.DomainEnrollments.AsNoTracking()
+            .Where(item => item.OwnerId == ownerId && item.IsCurrent)
+            .OrderBy(item => item.Domain)
+            .Skip(offset)
+            .Take(limit);
+        var currentCertificates = dbContext.DomainCertificates.AsNoTracking()
+            .Where(item => item.IsCurrent);
+        return await (
+                from enrollment in enrollments
+                join certificate in currentCertificates
+                    on enrollment.EnrollmentId equals certificate.EnrollmentId into certificates
+                from certificate in certificates.DefaultIfEmpty()
+                select new OwnerDomainCertificateSummary(
+                    enrollment.EnrollmentId,
+                    enrollment.Domain,
+                    enrollment.Status,
+                    enrollment.PolicyVersion,
+                    enrollment.CreatedAtUtc,
+                    enrollment.UpdatedAtUtc,
+                    enrollment.DnsVerifiedAtUtc,
+                    enrollment.WebsiteVerifiedAtUtc,
+                    enrollment.IdentityCompletedAtUtc,
+                    enrollment.SecurityReviewCompletedAtUtc,
+                    enrollment.LastMonitoringAtUtc,
+                    enrollment.CurrentScore,
+                    enrollment.UnresolvedCriticalFindings,
+                    certificate == null ? null : certificate.CertificateId,
+                    certificate == null ? null : certificate.Status,
+                    certificate == null ? null : certificate.Level,
+                    certificate == null ? null : certificate.IssuedAtUtc,
+                    certificate == null ? null : certificate.ExpiresAtUtc,
+                    certificate == null ? null : certificate.LastVerificationAtUtc))
+            .ToListAsync(cancellationToken);
+    }
+
 
     /// <inheritdoc />
     public async Task<DomainCertificateRepositoryWriteResult> TryCreateIssuedAsync(

@@ -1,0 +1,173 @@
+@page "/consumer/certificates"
+@attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
+@rendermode InteractiveServer
+@using HIP.Application.Certificates
+@using HIP.Domain.Certificates
+@inject IDomainCertificateOwnerQuery CertificateQuery
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>HIP Domain Certificates</PageTitle>
+
+<main class="admin-rule-page owner-certificate-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">Domain owner portal</p>
+            <h1>Domain certificates</h1>
+            <p>Track verified control, certificate eligibility, and current signed certificate status for domains connected to this account.</p>
+        </div>
+    </section>
+
+    @if (_accessError is not null)
+    {
+        <p class="admin-error" role="alert">@_accessError</p>
+    }
+    else if (_loading)
+    {
+        <p class="admin-message" role="status">Loading your domain certificate progress…</p>
+    }
+    else if (_items.Count == 0)
+    {
+        <section class="domain-certificate-empty" aria-labelledby="empty-certificates-heading">
+            <h2 id="empty-certificates-heading">No domain enrollments yet</h2>
+            <p>Add a domain to begin control verification. Registration alone never creates a trusted HIP badge.</p>
+        </section>
+    }
+    else
+    {
+        @foreach (var item in _items)
+        {
+            <article class="domain-certificate-card @StatusClass(item)" aria-labelledby="@HeadingId(item)">
+                <header>
+                    <div>
+                        <p class="eyebrow">HIP Domain Trust Certificate</p>
+                        <h2 id="@HeadingId(item)">@item.Domain</h2>
+                    </div>
+                    <span class="owner-certificate-status">@CertificateStatus(item)</span>
+                </header>
+
+                <section class="owner-certificate-facts" aria-label="Current certificate facts">
+                    <article><span>Domain ownership</span><strong>@OwnershipStatus(item)</strong></article>
+                    <article><span>Certificate status</span><strong>@CertificateStatus(item)</strong></article>
+                    <article><span>Badge level</span><strong>@(item.BadgeLevel?.ToString() ?? "Not issued")</strong></article>
+                    <article><span>Current HIP score</span><strong>@(item.CurrentScore?.ToString() ?? "Not available")</strong></article>
+                    <article><span>Monitoring status</span><strong>@MonitoringStatus(item)</strong></article>
+                    <article><span>Certificate expiration</span><strong>@FormatDate(item.ExpiresAtUtc)</strong></article>
+                    <article><span>Last successful verification</span><strong>@FormatDate(item.LastVerificationAtUtc ?? item.WebsiteVerifiedAtUtc ?? item.DnsVerifiedAtUtc)</strong></article>
+                    <article><span>Unresolved requirements</span><strong>@item.UnresolvedCriticalFindings critical</strong></article>
+                </section>
+
+                <section class="verification-progress" aria-labelledby="@ProgressHeadingId(item)">
+                    <h3 id="@ProgressHeadingId(item)">Verification progress</h3>
+                    <ol>
+                        @ProgressStep("Domain added", true, item, 0)
+                        @ProgressStep("DNS verified", item.DnsVerifiedAtUtc is not null, item, 1)
+                        @ProgressStep("Website verified", item.WebsiteVerifiedAtUtc is not null, item, 2)
+                        @ProgressStep("Identity completed", item.IdentityCompletedAtUtc is not null, item, 3)
+                        @ProgressStep("Security review completed", item.SecurityReviewCompletedAtUtc is not null, item, 4)
+                        @ProgressStep("Certificate issued", item.CertificateId is not null, item, 5)
+                        @ProgressStep("Monitoring active", item.EnrollmentStatus == DomainEnrollmentStatus.Monitored, item, 6)
+                    </ol>
+                </section>
+
+                <footer class="owner-certificate-actions">
+                    @if (item.CertificateId is not null)
+                    {
+                        <a class="btn btn-primary" href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">View public certificate</a>
+                    }
+                    <span>Verification and lifecycle actions appear only when the stored state permits them.</span>
+                </footer>
+            </article>
+        }
+    }
+</main>
+
+@code {
+    private IReadOnlyList<OwnerDomainCertificateSummary> _items = [];
+    private bool _loading = true;
+    private string? _accessError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var access = await HipConsumerPageAccess.ExecuteAsync(
+            authenticationState.User,
+            consumerId => CertificateQuery.ListForOwnerAsync(
+                consumerId,
+                offset: 0,
+                limit: 50,
+                CancellationToken.None));
+        if (!access.Succeeded)
+        {
+            _accessError = HipConsumerPageAccess.AccessUnavailableMessage;
+        }
+        else
+        {
+            _items = access.Value ?? [];
+        }
+
+        _loading = false;
+    }
+
+    private static RenderFragment ProgressStep(
+        string label,
+        bool complete,
+        OwnerDomainCertificateSummary item,
+        int index) => builder =>
+    {
+        var state = complete ? "complete" : IsFailed(item) ? "failed" : IsCurrent(item, index) ? "current" : "pending";
+        builder.OpenElement(0, "li");
+        builder.AddAttribute(1, "class", $"progress-step progress-{state}");
+        builder.AddAttribute(2, "aria-label", $"{label}: {state}");
+        builder.OpenElement(3, "span");
+        builder.AddAttribute(4, "aria-hidden", "true");
+        builder.AddContent(5, complete ? "✓" : index + 1);
+        builder.CloseElement();
+        builder.AddContent(6, label);
+        builder.CloseElement();
+    };
+
+    private static bool IsCurrent(OwnerDomainCertificateSummary item, int index)
+    {
+        var completed = new[]
+        {
+            true,
+            item.DnsVerifiedAtUtc is not null,
+            item.WebsiteVerifiedAtUtc is not null,
+            item.IdentityCompletedAtUtc is not null,
+            item.SecurityReviewCompletedAtUtc is not null,
+            item.CertificateId is not null,
+            item.EnrollmentStatus == DomainEnrollmentStatus.Monitored
+        };
+        return !completed[index] && Array.FindIndex(completed, value => !value) == index;
+    }
+
+    private static bool IsFailed(OwnerDomainCertificateSummary item) =>
+        item.EnrollmentStatus is DomainEnrollmentStatus.Suspended or DomainEnrollmentStatus.Revoked ||
+        item.CertificateStatus is DomainCertificateStatus.Suspended or DomainCertificateStatus.Revoked;
+
+    private static string StatusClass(OwnerDomainCertificateSummary item) => IsFailed(item)
+        ? "domain-certificate-critical"
+        : item.CertificateStatus == DomainCertificateStatus.Active
+            ? "domain-certificate-active"
+            : item.EnrollmentStatus is DomainEnrollmentStatus.PendingOwnership or DomainEnrollmentStatus.PendingSecurityReview
+                ? "domain-certificate-caution"
+                : "domain-certificate-inactive";
+
+    private static string OwnershipStatus(OwnerDomainCertificateSummary item) =>
+        item.DnsVerifiedAtUtc is not null || item.WebsiteVerifiedAtUtc is not null
+            ? "Verified"
+            : item.EnrollmentStatus.ToString();
+
+    private static string CertificateStatus(OwnerDomainCertificateSummary item) =>
+        item.CertificateStatus?.ToString() ?? "Not issued";
+
+    private static string MonitoringStatus(OwnerDomainCertificateSummary item) =>
+        item.EnrollmentStatus == DomainEnrollmentStatus.Monitored
+            ? $"Active · {FormatDate(item.LastMonitoringAtUtc)}"
+            : item.LastMonitoringAtUtc is null ? "Not active" : $"Last checked {FormatDate(item.LastMonitoringAtUtc)}";
+
+    private static string FormatDate(DateTimeOffset? timestamp) => timestamp?.ToString("u") ?? "Not available";
+    private static string HeadingId(OwnerDomainCertificateSummary item) => $"certificate-{SafeId(item.EnrollmentId)}";
+    private static string ProgressHeadingId(OwnerDomainCertificateSummary item) => $"progress-{SafeId(item.EnrollmentId)}";
+    private static string SafeId(string value) => string.Concat(value.Select(character => char.IsLetterOrDigit(character) ? character : '-'));
+}
