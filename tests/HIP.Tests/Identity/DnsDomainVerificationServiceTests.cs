@@ -190,6 +190,97 @@ public sealed class DnsDomainVerificationServiceTests
     }
 
     [Test]
+    public async Task StartAsync_issues_a_high_entropy_base64url_challenge()
+    {
+        var service = Service([]);
+        var first = await service.StartAsync("entropy-one.test", VerificationMethod.DnsTxt, CancellationToken.None);
+        var second = await service.StartAsync("entropy-two.test", VerificationMethod.DnsTxt, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.Token, Has.Length.GreaterThanOrEqualTo(43));
+            Assert.That(first.Token, Does.Match("^[A-Za-z0-9_-]+$"));
+            Assert.That(second.Token, Is.Not.EqualTo(first.Token));
+        });
+    }
+
+    [Test]
+    public async Task VerifyAsync_suspends_a_challenge_after_the_bounded_failed_attempts()
+    {
+        var resolverCalls = 0;
+        var service = new DnsDomainVerificationService(
+            new StubDnsTxtRecordResolver(_ =>
+            {
+                resolverCalls++;
+                return Task.FromResult<IReadOnlyCollection<string>>([]);
+            }),
+            new TestDomainVerificationRequestRepository(),
+            new CapturingLogger<DnsDomainVerificationService>(),
+            new DomainVerificationLifecycleOptions(TimeSpan.FromHours(24), TimeSpan.FromDays(7), 2));
+        var issued = await service.StartAsync("attempt-limit.test", VerificationMethod.DnsTxt, CancellationToken.None);
+
+        var first = await service.VerifyAsync(issued.Domain, issued.Method, "wrong-token-one", CancellationToken.None);
+        var second = await service.VerifyAsync(issued.Domain, issued.Method, "wrong-token-two", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.VerificationAttemptCount, Is.EqualTo(1));
+            Assert.That(first.Status, Is.EqualTo(VerificationStatus.Unverified));
+            Assert.That(second.VerificationAttemptCount, Is.EqualTo(2));
+            Assert.That(second.Status, Is.EqualTo(VerificationStatus.Suspended));
+            Assert.That(resolverCalls, Is.Zero);
+            Assert.That(
+                async () => await service.VerifyAsync(issued.Domain, issued.Method, issued.Token, CancellationToken.None),
+                Throws.InvalidOperationException.With.Message.Contains("regenerate"));
+        });
+    }
+
+    [Test]
+    public async Task VerifyAsync_consumes_a_successful_challenge_and_rejects_replay()
+    {
+        string? issuedToken = null;
+        var service = Service(_ => Task.FromResult<IReadOnlyCollection<string>>(
+            [$"hip-site-verification={issuedToken}"]));
+        var issued = await service.StartAsync("single-use.test", VerificationMethod.DnsTxt, CancellationToken.None);
+        issuedToken = issued.Token;
+
+        var verified = await service.VerifyAsync(issued.Domain, issued.Method, issued.Token, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(verified.Status, Is.EqualTo(VerificationStatus.Verified));
+            Assert.That(verified.ConsumedAtUtc, Is.Not.Null);
+            Assert.That(verified.VerificationAttemptCount, Is.EqualTo(1));
+            Assert.That(
+                async () => await service.VerifyAsync(issued.Domain, issued.Method, issued.Token, CancellationToken.None),
+                Throws.InvalidOperationException.With.Message.Contains("already been used"));
+        });
+    }
+
+    [Test]
+    public async Task RegenerateAsync_invalidates_the_previous_challenge_and_resets_attempts()
+    {
+        var service = Service([]);
+        var issued = await service.StartAsync("regenerate.test", VerificationMethod.DnsTxt, CancellationToken.None);
+        await service.VerifyAsync(issued.Domain, issued.Method, "wrong-token", CancellationToken.None);
+
+        var regenerated = await service.RegenerateAsync(issued.Domain, issued.Method, CancellationToken.None);
+        var oldTokenResult = await service.VerifyAsync(
+            issued.Domain, issued.Method, issued.Token, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(regenerated.Token, Is.Not.EqualTo(issued.Token));
+            Assert.That(regenerated.ChallengeVersion, Is.EqualTo(2));
+            Assert.That(regenerated.Status, Is.EqualTo(VerificationStatus.Pending));
+            Assert.That(regenerated.VerificationAttemptCount, Is.Zero);
+            Assert.That(regenerated.ConsumedAtUtc, Is.Null);
+            Assert.That(oldTokenResult.Status, Is.EqualTo(VerificationStatus.Unverified));
+            Assert.That(oldTokenResult.VerificationAttemptCount, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
     public async Task RetryAsync_uses_the_stored_challenge_without_admin_token_input()
     {
         string? storedToken = null;

@@ -39,7 +39,7 @@ public sealed class DnsDomainVerificationService(
         var request = new DomainVerificationRequest(
             normalized,
             method,
-            Guid.NewGuid().ToString("N"),
+            DomainVerificationChallengeToken.Generate(),
             VerificationStatus.Pending,
             now,
             null,
@@ -70,7 +70,7 @@ public sealed class DnsDomainVerificationService(
         var request = new DomainVerificationRequest(
             normalized,
             method,
-            Guid.NewGuid().ToString("N"),
+            DomainVerificationChallengeToken.Generate(),
             VerificationStatus.Pending,
             now,
             null,
@@ -135,6 +135,14 @@ public sealed class DnsDomainVerificationService(
         {
             return await ExpireAsync(request, cancellationToken).ConfigureAwait(false);
         }
+        if (request.ConsumedAtUtc is not null)
+        {
+            throw new InvalidOperationException("This domain verification challenge has already been used.");
+        }
+        if (request.Status == VerificationStatus.Suspended || request.VerificationAttemptCount >= lifecycle.MaximumVerificationAttempts)
+        {
+            throw new InvalidOperationException("The verification attempt limit was reached; regenerate the challenge before retrying.");
+        }
 
         VerificationStatus status;
         string message;
@@ -175,12 +183,23 @@ public sealed class DnsDomainVerificationService(
         }
 
         var checkedAtUtc = clock.GetUtcNow();
+        var attemptCount = checked(request.VerificationAttemptCount + 1);
+        if (status != VerificationStatus.Verified && attemptCount >= lifecycle.MaximumVerificationAttempts)
+        {
+            status = VerificationStatus.Suspended;
+            message = "The verification attempt limit was reached. Regenerate the challenge before retrying.";
+        }
         var updated = request with
         {
             Status = status,
             VerifiedAtUtc = status == VerificationStatus.Verified ? checkedAtUtc : null,
             LastCheckedAtUtc = checkedAtUtc,
-            LastCheckMessage = message
+            LastCheckMessage = message,
+            VerificationAttemptCount = attemptCount,
+            ConsumedAtUtc = status == VerificationStatus.Verified ? checkedAtUtc : null,
+            LastAttemptOutcome = status == VerificationStatus.Verified
+                ? DomainVerificationAttemptOutcome.Succeeded
+                : status == VerificationStatus.Pending ? DomainVerificationAttemptOutcome.Pending : DomainVerificationAttemptOutcome.Failed
         };
         return await TryApplyTransitionAsync(request, updated, cancellationToken)
             .ConfigureAwait(false);
@@ -303,7 +322,7 @@ public sealed class DnsDomainVerificationService(
         var now = clock.GetUtcNow();
         var renewed = request with
         {
-            Token = Guid.NewGuid().ToString("N"),
+            Token = DomainVerificationChallengeToken.Generate(),
             Status = VerificationStatus.Pending,
             CreatedAtUtc = now,
             VerifiedAtUtc = null,
@@ -311,7 +330,10 @@ public sealed class DnsDomainVerificationService(
             LastCheckedAtUtc = null,
             LastCheckMessage = "A new domain verification challenge was issued.",
             RevokedAtUtc = null,
-            ChallengeVersion = checked(request.ChallengeVersion + 1)
+            ChallengeVersion = checked(request.ChallengeVersion + 1),
+            VerificationAttemptCount = 0,
+            ConsumedAtUtc = null,
+            LastAttemptOutcome = null
         };
         if (!await verificationRepository.TryUpdateAsync(request, renewed, cancellationToken).ConfigureAwait(false))
         {
@@ -321,6 +343,43 @@ public sealed class DnsDomainVerificationService(
         return renewed;
     }
 
+    /// <inheritdoc />
+    public async Task<DomainVerificationRequest> RegenerateAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken)
+    {
+        var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+        var request = await verificationRepository.GetAsync(normalized, method, cancellationToken) ??
+            throw new ArgumentException("Domain verification request was not found.", nameof(domain));
+        if (request.Status == VerificationStatus.Revoked)
+        {
+            throw new InvalidOperationException("Revoked domain verification cannot issue another challenge.");
+        }
+
+        var now = clock.GetUtcNow();
+        var regenerated = request with
+        {
+            Token = DomainVerificationChallengeToken.Generate(),
+            Status = VerificationStatus.Pending,
+            CreatedAtUtc = now,
+            VerifiedAtUtc = null,
+            ExpiresAtUtc = now.Add(lifecycle.ChallengeLifetime),
+            LastCheckedAtUtc = null,
+            LastCheckMessage = "A replacement domain verification challenge was issued.",
+            RevokedAtUtc = null,
+            ChallengeVersion = checked(request.ChallengeVersion + 1),
+            VerificationAttemptCount = 0,
+            ConsumedAtUtc = null,
+            LastAttemptOutcome = null
+        };
+        if (!await verificationRepository.TryUpdateAsync(request, regenerated, cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("Domain verification state changed concurrently; reload before regenerating.");
+        }
+
+        return regenerated;
+    }
     private async Task<DomainVerificationRequest> TryApplyTransitionAsync(
         DomainVerificationRequest expected,
         DomainVerificationRequest updated,
@@ -504,7 +563,8 @@ public sealed class DnsDomainVerificationService(
     /// <param name="left">First token.</param>
     /// <param name="right">Second token.</param>
     /// <returns>True when the tokens match exactly.</returns>
-    private static bool TokensMatch(string left, string right) => string.Equals(left, right, StringComparison.Ordinal);
+    private static bool TokensMatch(string left, string right) =>
+        DomainVerificationChallengeToken.Matches(left, right);
 
     /// <summary>
     /// Builds a plain-English status message that avoids exposing verification tokens.

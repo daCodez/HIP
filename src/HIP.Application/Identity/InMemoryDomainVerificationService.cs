@@ -35,7 +35,7 @@ public sealed class InMemoryDomainVerificationService(
         var request = new DomainVerificationRequest(
             normalized,
             method,
-            Guid.NewGuid().ToString("N"),
+            DomainVerificationChallengeToken.Generate(),
             VerificationStatus.Pending,
             now,
             null,
@@ -70,7 +70,7 @@ public sealed class InMemoryDomainVerificationService(
                 return new DomainVerificationRequest(
                 normalized,
                 method,
-                Guid.NewGuid().ToString("N"),
+                DomainVerificationChallengeToken.Generate(),
                 VerificationStatus.Pending,
                 now,
                 null,
@@ -123,18 +123,39 @@ public sealed class InMemoryDomainVerificationService(
                 }
                 continue;
             }
+            if (request.ConsumedAtUtc is not null)
+            {
+                throw new InvalidOperationException("This domain verification challenge has already been used.");
+            }
+            if (request.Status == VerificationStatus.Suspended || request.VerificationAttemptCount >= lifecycle.MaximumVerificationAttempts)
+            {
+                throw new InvalidOperationException("The verification attempt limit was reached; regenerate the challenge before retrying.");
+            }
 
-            var status = string.Equals(request.Token, token, StringComparison.Ordinal)
+            var status = DomainVerificationChallengeToken.Matches(request.Token, token)
                 ? VerificationStatus.Verified
                 : VerificationStatus.Unverified;
+            var attemptCount = checked(request.VerificationAttemptCount + 1);
+            if (status != VerificationStatus.Verified && attemptCount >= lifecycle.MaximumVerificationAttempts)
+            {
+                status = VerificationStatus.Suspended;
+            }
+            var checkedAtUtc = clock.GetUtcNow();
             var updated = request with
             {
                 Status = status,
-                VerifiedAtUtc = status == VerificationStatus.Verified ? clock.GetUtcNow() : null,
-                LastCheckedAtUtc = clock.GetUtcNow(),
+                VerifiedAtUtc = status == VerificationStatus.Verified ? checkedAtUtc : null,
+                LastCheckedAtUtc = checkedAtUtc,
                 LastCheckMessage = status == VerificationStatus.Verified
                     ? "Domain verification succeeded."
-                    : "The verification evidence did not match the active challenge."
+                    : status == VerificationStatus.Suspended
+                        ? "The verification attempt limit was reached. Regenerate the challenge before retrying."
+                        : "The verification evidence did not match the active challenge.",
+                VerificationAttemptCount = attemptCount,
+                ConsumedAtUtc = status == VerificationStatus.Verified ? checkedAtUtc : null,
+                LastAttemptOutcome = status == VerificationStatus.Verified
+                    ? DomainVerificationAttemptOutcome.Succeeded
+                    : DomainVerificationAttemptOutcome.Failed
             };
             if (_requests.TryUpdate(key, updated, request))
             {
@@ -253,7 +274,7 @@ public sealed class InMemoryDomainVerificationService(
             var now = clock.GetUtcNow();
             var renewed = request with
             {
-                Token = Guid.NewGuid().ToString("N"),
+                Token = DomainVerificationChallengeToken.Generate(),
                 Status = VerificationStatus.Pending,
                 CreatedAtUtc = now,
                 VerifiedAtUtc = null,
@@ -261,11 +282,57 @@ public sealed class InMemoryDomainVerificationService(
                 LastCheckedAtUtc = null,
                 LastCheckMessage = "A new domain verification challenge was issued.",
                 RevokedAtUtc = null,
-                ChallengeVersion = checked(request.ChallengeVersion + 1)
+                ChallengeVersion = checked(request.ChallengeVersion + 1),
+                VerificationAttemptCount = 0,
+                ConsumedAtUtc = null,
+                LastAttemptOutcome = null
             };
             if (_requests.TryUpdate(key, renewed, request))
             {
                 return Task.FromResult(renewed);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<DomainVerificationRequest> RegenerateAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken)
+    {
+        var normalized = DomainInputValidator.ValidateAndNormalize(domain);
+        var key = Key(normalized, method);
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_requests.TryGetValue(key, out var request))
+            {
+                throw new ArgumentException("Domain verification request was not found.", nameof(domain));
+            }
+            if (request.Status == VerificationStatus.Revoked)
+            {
+                throw new InvalidOperationException("Revoked domain verification cannot issue another challenge.");
+            }
+
+            var now = clock.GetUtcNow();
+            var regenerated = request with
+            {
+                Token = DomainVerificationChallengeToken.Generate(),
+                Status = VerificationStatus.Pending,
+                CreatedAtUtc = now,
+                VerifiedAtUtc = null,
+                ExpiresAtUtc = now.Add(lifecycle.ChallengeLifetime),
+                LastCheckedAtUtc = null,
+                LastCheckMessage = "A replacement domain verification challenge was issued.",
+                RevokedAtUtc = null,
+                ChallengeVersion = checked(request.ChallengeVersion + 1),
+                VerificationAttemptCount = 0,
+                ConsumedAtUtc = null,
+                LastAttemptOutcome = null
+            };
+            if (_requests.TryUpdate(key, regenerated, request))
+            {
+                return Task.FromResult(regenerated);
             }
         }
     }
@@ -286,7 +353,7 @@ public sealed class InMemoryDomainVerificationService(
         }
 
         var status = _requests.TryGetValue(Key(normalized, VerificationMethod.DnsTxt), out var request)
-            ? string.Equals(request.Token, expectedToken, StringComparison.Ordinal)
+            ? DomainVerificationChallengeToken.Matches(request.Token, expectedToken)
                 ? DomainVerificationCheckStatus.Verified
                 : DomainVerificationCheckStatus.Invalid
             : DomainVerificationCheckStatus.NotConfigured;

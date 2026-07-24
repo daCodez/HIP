@@ -65,6 +65,13 @@ public interface IDomainVerificationService
         CancellationToken cancellationToken) =>
         throw new NotSupportedException("This domain verification provider does not support expired challenge renewal.");
 
+    /// <summary>Invalidates the active challenge and issues a fresh bounded challenge generation.</summary>
+    Task<DomainVerificationRequest> RegenerateAsync(
+        string domain,
+        VerificationMethod method,
+        CancellationToken cancellationToken) =>
+        throw new NotSupportedException("This domain verification provider does not support challenge regeneration.");
+
     /// <summary>
     /// Checks the live DNS TXT verification status for a domain.
     /// </summary>
