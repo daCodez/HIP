@@ -13,6 +13,8 @@ let client = new HipApiClient(settings);
 let activeTabId = null;
 let activeTabUrl = null;
 let activeLookup = null;
+let activeCertificate = null;
+let activeSummary = {};
 let activeSiteSafety = null;
 let popupStartedContentScan = false;
 let badgeObservationPromise = null;
@@ -39,6 +41,10 @@ const elements = {
   contentRiskScore: document.getElementById("contentRiskScore"),
   finalHipScoreExplanation: document.getElementById("finalHipScoreExplanation"),
   verified: document.getElementById("verified"),
+  certificateStatus: document.getElementById("certificateStatus"),
+  certificateLevel: document.getElementById("certificateLevel"),
+  certificateVerification: document.getElementById("certificateVerification"),
+  certificateExpiry: document.getElementById("certificateExpiry"),
   identityStatus: document.getElementById("identityStatus"),
   lastChecked: document.getElementById("lastChecked"),
   scanPanel: document.getElementById("scanPanel"),
@@ -116,20 +122,33 @@ async function initialize() {
 
   const domain = normalizeHost(currentUrl.hostname);
   elements.domain.textContent = domain;
+  loadDomainCertificate(currentUrl.hostname).catch(() => {});
 
   const lookup = await client.scoreSite({ url: currentUrl.toString(), domain });
   activeLookup = lookup;
   renderLoadingSummary("Checking page scan");
   const summary = await waitForScanSummary();
+  activeSummary = summary;
   await renderSiteSafety(summary).catch(handleSiteSafetyUnavailable);
   renderLookup(lookup, summary);
 }
 
+async function loadDomainCertificate(domain) {
+  try {
+    activeCertificate = await client.verifyDomainCertificate(domain);
+  } catch {
+    activeCertificate = null;
+  }
+
+  if (activeLookup) {
+    renderLookup(activeLookup, activeSummary);
+  }
+}
 /**
  * Renders the website score and lookup links from public-safe HIP response data.
  */
 function renderLookup(lookup, summary = {}) {
-  const viewModel = buildPopupViewModel(lookup, summary, settings, activeTabUrl);
+  const viewModel = buildPopupViewModel(lookup, summary, settings, activeTabUrl, activeCertificate);
   elements.state.hidden = true;
   elements.scorePanel.hidden = false;
   elements.reasonsPanel.hidden = false;
@@ -151,6 +170,10 @@ function renderLookup(lookup, summary = {}) {
   elements.finalHipScoreExplanation.textContent = viewModel.finalHipScoreExplanation;
   elements.verified.textContent = viewModel.verifiedText;
   elements.identityStatus.textContent = viewModel.identityText;
+  elements.certificateStatus.textContent = viewModel.certificateStatusText;
+  elements.certificateLevel.textContent = viewModel.certificateLevelText;
+  elements.certificateVerification.textContent = viewModel.certificateVerificationText;
+  elements.certificateExpiry.textContent = viewModel.certificateExpiryText;
   elements.lastChecked.textContent = viewModel.lastCheckedText;
 
   elements.reasons.replaceChildren(...viewModel.reasons.map(reason => {
@@ -217,7 +240,8 @@ function renderLoadingSummary(stage = "Checking") {
  * Renders a content-script scan summary after one is available.
  */
 function renderSummary(summary = {}) {
-  const viewModel = buildPopupViewModel(activeLookup, summary, settings, activeTabUrl);
+  activeSummary = summary;
+  const viewModel = buildPopupViewModel(activeLookup, summary, settings, activeTabUrl, activeCertificate);
   elements.scanPanel.hidden = false;
   elements.apiStatus.textContent = viewModel.apiStatus;
   elements.linksScanned.textContent = viewModel.linksScanned;
@@ -642,6 +666,7 @@ async function refreshScan() {
     popupStartedContentScan = false;
     await startContentScanIfNeeded();
     const summary = await waitForScanSummary();
+    activeSummary = summary;
     await renderSiteSafety(summary).catch(handleSiteSafetyUnavailable);
     if (activeLookup) {
       renderLookup(activeLookup, summary);

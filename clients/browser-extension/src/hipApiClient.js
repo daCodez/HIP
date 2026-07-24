@@ -73,6 +73,89 @@ export class HipApiClient {
     return response.json();
   }
 
+  /**
+   * Verifies HIP's short-lived badge response, then retrieves the referenced
+   * certificate directly from HIP instead of trusting page-controlled markup.
+   */
+  async verifyDomainCertificate(domain) {
+    const normalizedDomain = normalizeCertificateDomain(domain);
+    if (!normalizedDomain) {
+      throw new Error("Certificate domain is required.");
+    }
+
+    const badgeUrl = `${this.config.apiBaseUrl}/api/v1/public/badge/domain/${encodeURIComponent(normalizedDomain)}`;
+    const badgeResponse = await fetchWithTimeout(badgeUrl, {
+      method: "GET",
+      headers: { "Accept": "application/json" }
+    });
+    if (!badgeResponse.ok) {
+      throw new Error(`HIP badge verification failed with status ${badgeResponse.status}.`);
+    }
+
+    const badge = await badgeResponse.json();
+    const badgeCertificate = badge?.certificate;
+    const signedBadgeCertificate = badge?.signedBadge?.payload?.certificate;
+    if (!badge?.signedBadge || !badgeCertificate || !signedBadgeCertificate ||
+        normalizeCertificateDomain(badge.domain) !== normalizedDomain ||
+        normalizeCertificateDomain(badgeCertificate.domain) !== normalizedDomain ||
+        !sameCertificateState(badgeCertificate, signedBadgeCertificate)) {
+      throw new Error("HIP returned no domain-matching certificate.");
+    }
+
+    const verifyResponse = await fetchWithTimeout(
+      `${this.config.apiBaseUrl}/api/v1/public/badge/verify`,
+      {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(badge.signedBadge)
+      });
+    const badgeVerification = verifyResponse.ok ? await verifyResponse.json() : null;
+    if (!badgeVerification?.isVerified || badgeVerification.status !== "Verified") {
+      throw new Error("HIP badge signature verification failed.");
+    }
+
+    const certificateId = String(badgeCertificate.certificateId || "");
+    const certificateResponse = await fetchWithTimeout(
+      `${this.config.apiBaseUrl}/api/v1/public/certificates/${encodeURIComponent(certificateId)}`,
+      {
+        method: "GET",
+        headers: { "Accept": "application/json" }
+      });
+    if (!certificateResponse.ok) {
+      throw new Error(`HIP certificate lookup failed with status ${certificateResponse.status}.`);
+    }
+
+    const certificate = await certificateResponse.json();
+    const payload = certificate?.signedCertificate?.payload;
+    if (!payload ||
+        payload.certificateId !== certificateId ||
+        normalizeCertificateDomain(payload.domain) !== normalizedDomain ||
+        payload.level !== badgeCertificate.level ||
+        certificate.currentStatus !== badgeCertificate.status ||
+        certificate.signatureStatus !== "Verified" ||
+        badgeCertificate.signatureStatus !== "Verified" ||
+        certificate.isActive !== badgeCertificate.isActive ||
+        payload.expiresAtUtc !== badgeCertificate.expiresAtUtc ||
+        (certificate.publicCertificateUrl || payload.publicCertificateUrl) !==
+          badgeCertificate.publicCertificateUrl) {
+      throw new Error("HIP certificate state is unavailable or inconsistent.");
+    }
+
+    return {
+      certificateId,
+      domain: normalizedDomain,
+      level: payload.level,
+      status: certificate.currentStatus,
+      signatureStatus: certificate.signatureStatus,
+      validityStatus: certificate.validityStatus,
+      expiresAtUtc: payload.expiresAtUtc,
+      publicCertificateUrl: certificate.publicCertificateUrl || payload.publicCertificateUrl,
+      isActive: certificate.isActive === true
+    };
+  }
   async scoreSite(request) {
     const url = `${this.config.apiBaseUrl}/api/v1/browser/score-site`;
     const response = await fetchWithTimeout(url, {
@@ -728,6 +811,19 @@ export function classifyClientChatContext(context = {}) {
     : "page-link";
 }
 
+function sameCertificateState(left, right) {
+  return left.certificateId === right.certificateId &&
+    left.domain === right.domain &&
+    left.level === right.level &&
+    left.status === right.status &&
+    left.signatureStatus === right.signatureStatus &&
+    left.expiresAtUtc === right.expiresAtUtc &&
+    left.publicCertificateUrl === right.publicCertificateUrl &&
+    left.isActive === right.isActive;
+}
+function normalizeCertificateDomain(hostname) {
+  return String(hostname || "").trim().replace(/\.$/, "").toLowerCase();
+}
 export function normalizeHost(hostname) {
   return (hostname || "").replace(/^www\./i, "").toLowerCase();
 }
