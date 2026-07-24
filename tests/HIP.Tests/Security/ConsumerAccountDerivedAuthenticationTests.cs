@@ -1,6 +1,14 @@
 using System.Net;
+using System.Security.Claims;
 using System.Text.RegularExpressions;
+using HIP.Web.Security;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 
 namespace HIP.Tests.Security;
 
@@ -92,6 +100,54 @@ public sealed class ConsumerAccountDerivedAuthenticationTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
+    /// <summary>
+    /// Confirms Blazor framework requests retain both account claims even though their URL is outside either portal.
+    /// </summary>
+    [TestCase("/_blazor")]
+    [TestCase("/_blazor/negotiate")]
+    public async Task Local_account_cookie_keeps_consumer_identity_on_blazor_circuit_routes(string path)
+    {
+        using var provider = DevelopmentAuthenticationProvider();
+        var context = new DefaultHttpContext { RequestServices = provider };
+        context.Connection.RemoteIpAddress = IPAddress.Loopback;
+        context.Request.Host = new HostString("localhost");
+        context.Request.Path = path;
+        context.Request.Headers.Cookie =
+            $"{HipDevHeaderAuthenticationHandler.DevAdminRoleCookieName}={AdminRoles.Owner}; " +
+            $"{HipDevHeaderAuthenticationHandler.DevAdminUserCookieName}=local-owner-subject";
+
+        var result = await context.AuthenticateAsync(HipDevHeaderAuthenticationHandler.SchemeName);
+        var principal = result.Principal;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(principal, Is.Not.Null);
+            Assert.That(principal!.FindAll(HipAuthenticationClaimTypes.ActorId).Count(), Is.EqualTo(1));
+            Assert.That(principal.FindAll(HipAuthenticationClaimTypes.ConsumerId).Count(), Is.EqualTo(1));
+            Assert.That(principal.IsInRole(AdminRoles.Owner), Is.True);
+            Assert.That(
+                principal.FindFirstValue(HipAuthenticationClaimTypes.ConsumerId),
+                Does.StartWith("local-account-").And.Not.EqualTo("local-owner-subject"));
+        });
+    }
+
+    private static ServiceProvider DevelopmentAuthenticationProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment());
+        services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = HipDevHeaderAuthenticationHandler.SchemeName;
+                options.DefaultChallengeScheme = HipDevHeaderAuthenticationHandler.SchemeName;
+            })
+            .AddScheme<AuthenticationSchemeOptions, HipDevHeaderAuthenticationHandler>(
+                HipDevHeaderAuthenticationHandler.SchemeName,
+                _ => { });
+        return services.BuildServiceProvider();
+    }
+
     private static HttpClient Client(WebApplicationFactory<Program> factory) =>
         factory.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -116,5 +172,15 @@ public sealed class ConsumerAccountDerivedAuthenticationTests
                 ["returnUrl"] = returnUrl,
                 ["__RequestVerificationToken"] = tokenMatch.Groups[1].Value
             }));
+    }
+
+    private sealed class TestWebHostEnvironment : IWebHostEnvironment
+    {
+        public string ApplicationName { get; set; } = "HIP.Tests";
+        public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
+        public string WebRootPath { get; set; } = string.Empty;
+        public string EnvironmentName { get; set; } = Environments.Development;
+        public string ContentRootPath { get; set; } = string.Empty;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }

@@ -21,7 +21,7 @@ namespace HIP.Tests.Security;
 [TestFixture]
 public sealed class HipWebRouteAuthorizationClosureTests
 {
-    private const int ExpectedProtectedRouteCount = 119;
+    private const int ExpectedProtectedRouteCount = 120;
 
     private static readonly PrincipalKind[] HumanPrincipals = Enum.GetValues<PrincipalKind>();
 
@@ -143,8 +143,9 @@ public sealed class HipWebRouteAuthorizationClosureTests
         Route(HttpMethods.Get, "/api/v1/admin/roles", AdminPolicies.CanViewAdminDashboard),
         Route(HttpMethods.Get, "/api/v1/admin/site-safety/external-providers", AdminPolicies.CanViewAdminDashboard),
 
-        // Audit, review, appeal, and override workflows: 27 (67 cumulative).
+        // Audit, review, appeal, and override workflows: 28 (68 cumulative).
         Route(HttpMethods.Get, "/api/v1/admin/audit-logs", AdminPolicies.CanViewAuditLogs),
+        Route(HttpMethods.Get, "/api/v1/admin/audit/export", AdminPolicies.CanViewAuditLogs),
         Route(HttpMethods.Get, "/api/v1/admin/audit", AdminPolicies.CanViewAuditLogs),
         Route(HttpMethods.Post, "/api/v1/admin/audit/query", AdminPolicies.CanViewAuditLogs),
         Route(HttpMethods.Get, "/api/v1/admin/reports", AdminPolicies.CanViewReviews),

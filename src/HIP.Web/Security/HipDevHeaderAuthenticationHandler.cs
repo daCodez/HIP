@@ -61,24 +61,13 @@ public sealed class HipDevHeaderAuthenticationHandler(
             return AuthenticateConsumer(consumerValues.ToString());
         }
 
-        if (IsConsumerRequest(Request.Path))
-        {
-            Request.Cookies.TryGetValue(DevAdminUserCookieName, out var accountSubject);
-            var hasLocalAccount =
-                Request.Cookies.TryGetValue(DevAdminRoleCookieName, out var accountRole) &&
-                AdminRoles.All.Contains(accountRole.Trim()) &&
-                !string.IsNullOrWhiteSpace(accountSubject);
-            return hasLocalAccount
-                ? AuthenticateConsumer(DevelopmentConsumerId(accountSubject!))
-                : Task.FromResult(AuthenticateResult.NoResult());
-        }
-
         return Request.Cookies.TryGetValue(DevAdminRoleCookieName, out var cookieRole)
             ? AuthenticateAdmin(
                 cookieRole,
                 Request.Cookies.TryGetValue(DevAdminUserCookieName, out var cookieUser)
                     ? cookieUser
-                    : "hip-dev-admin")
+                    : "hip-dev-admin",
+                includeConsumerIdentity: true)
             : Task.FromResult(AuthenticateResult.NoResult());
     }
 
@@ -120,7 +109,10 @@ public sealed class HipDevHeaderAuthenticationHandler(
     /// <param name="roleValue">Role from a dev header or dev cookie.</param>
     /// <param name="userValue">User name from a dev header or dev cookie.</param>
     /// <returns>Authentication result containing admin claims or a failure for unsupported roles.</returns>
-    private static Task<AuthenticateResult> AuthenticateAdmin(string roleValue, string userValue)
+    private static Task<AuthenticateResult> AuthenticateAdmin(
+        string roleValue,
+        string userValue,
+        bool includeConsumerIdentity = false)
     {
         var role = roleValue.Trim();
         if (!AdminRoles.All.Contains(role))
@@ -134,12 +126,19 @@ public sealed class HipDevHeaderAuthenticationHandler(
             user = "hip-dev-admin";
         }
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.Name, user),
-            new Claim(ClaimTypes.Role, role),
-            new Claim(HipAuthenticationClaimTypes.ActorId, user)
+            new(ClaimTypes.Name, user),
+            new(ClaimTypes.Role, role),
+            new(HipAuthenticationClaimTypes.ActorId, user)
         };
+        if (includeConsumerIdentity)
+        {
+            claims.Add(new Claim(
+                HipAuthenticationClaimTypes.ConsumerId,
+                DevelopmentConsumerId(user)));
+        }
+
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, SchemeName);
@@ -150,7 +149,7 @@ public sealed class HipDevHeaderAuthenticationHandler(
     /// <summary>
     /// Authenticates local consumer test requests without exposing private consumer data.
     /// </summary>
-    /// <returns>Consumer authentication result for an explicit test header or a route-scoped local account.</returns>
+    /// <returns>Consumer authentication result for an explicit test header.</returns>
     private static Task<AuthenticateResult> AuthenticateConsumer(string consumerValue)
     {
         var consumerId = consumerValue.Trim();
@@ -177,7 +176,4 @@ public sealed class HipDevHeaderAuthenticationHandler(
         return $"local-account-{Convert.ToHexString(SHA256.HashData(subjectBytes)).ToLowerInvariant()}";
     }
 
-    private static bool IsConsumerRequest(PathString path) =>
-        path.StartsWithSegments("/consumer") ||
-        path.StartsWithSegments("/api/v1/consumer");
 }

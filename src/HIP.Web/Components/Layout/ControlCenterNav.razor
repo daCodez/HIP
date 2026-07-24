@@ -1,18 +1,21 @@
+@inject NavigationManager Navigation
+@implements IDisposable
+
 <div class="brand">
     <img class="mark" src="/hip-logo-original.png" alt="HIP" width="40" height="41" />
-    <AuthorizeView Policy="@ConsumerPolicies.CanUseConsumerPortal">
-        <Authorized>
-            <div><b>HIP</b><small>CONSUMER PORTAL</small></div>
-        </Authorized>
-        <NotAuthorized>
-            <div><b>HIP CONTROL</b><small>TRUST OPERATIONS</small></div>
-        </NotAuthorized>
-    </AuthorizeView>
+    @if (IsConsumerPortal)
+    {
+        <div><b>HIP</b><small>CONSUMER PORTAL</small></div>
+    }
+    else
+    {
+        <div><b>HIP CONTROL</b><small>TRUST OPERATIONS</small></div>
+    }
 </div>
 
-<AuthorizeView Policy="@ConsumerPolicies.CanUseConsumerPortal" Context="portalAuthentication">
-    <Authorized>
-        <nav class="nav" aria-label="HIP consumer navigation">
+@if (IsConsumerPortal)
+{
+<nav class="nav" aria-label="HIP consumer navigation">
             <p class="group-title">Consumer portal</p>
             <NavLink class="nav-item" href="consumer" Match="NavLinkMatch.All">@Icon("grid")<span>Home</span></NavLink>
             <NavLink class="nav-item" href="consumer/scans">@Icon("search")<span>Scan History</span></NavLink>
@@ -23,9 +26,10 @@
             <NavLink class="nav-item" href="consumer/licenses">@Icon("file")<span>Licenses</span></NavLink>
             <NavLink class="nav-item" href="consumer/security">@Icon("shield")<span>Account Security</span></NavLink>
         </nav>
-    </Authorized>
-    <NotAuthorized>
-        <nav class="nav" aria-label="HIP admin navigation">
+}
+else
+{
+<nav class="nav" aria-label="HIP admin navigation">
     <p class="group-title">Command</p>
     <NavLink class="nav-item" href="admin" Match="NavLinkMatch.All">@Icon("grid")<span>Overview</span></NavLink>
 
@@ -86,8 +90,7 @@
     <NavLink class="nav-item" href="admin/roles">@Icon("eye")<span>Roles &amp; Permissions</span></NavLink>
     <NavLink class="nav-item" href="admin/settings">@Icon("settings")<span>Settings</span></NavLink>
 </nav>
-    </NotAuthorized>
-</AuthorizeView>
+}
 
 <AuthorizeView Context="authentication">
     <Authorized>
@@ -108,9 +111,18 @@
 </AuthorizeView>
 
 @code {
-    private static string OperatorLabel(System.Security.Claims.ClaimsPrincipal principal)
+    protected override void OnInitialized() =>
+        Navigation.LocationChanged += HandleLocationChanged;
+
+    private void HandleLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args) =>
+        _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() =>
+        Navigation.LocationChanged -= HandleLocationChanged;
+
+    private string OperatorLabel(System.Security.Claims.ClaimsPrincipal principal)
     {
-        if (principal.FindFirst(HipAuthenticationClaimTypes.ConsumerId) is not null)
+        if (IsConsumerPortal)
         {
             return "Your HIP account";
         }
@@ -127,18 +139,29 @@
             : principal.Identity.Name;
     }
 
-    private static string OperatorRole(System.Security.Claims.ClaimsPrincipal principal) =>
-        principal.FindFirst(HipAuthenticationClaimTypes.ConsumerId) is not null
+    private string OperatorRole(System.Security.Claims.ClaimsPrincipal principal) =>
+        IsConsumerPortal
             ? "Consumer"
             : principal.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Authenticated user";
 
-    private static string OperatorInitials(System.Security.Claims.ClaimsPrincipal principal)
+    private string OperatorInitials(System.Security.Claims.ClaimsPrincipal principal)
     {
         var role = OperatorRole(principal);
         var initials = new string(role.Where(char.IsLetterOrDigit).Take(2).ToArray()).ToUpperInvariant();
         return initials.Length == 0 ? "HIP" : initials;
     }
 
+    private bool IsConsumerPortal
+    {
+        get
+        {
+            var route = Navigation.ToBaseRelativePath(Navigation.Uri)
+                .Split('?', '#')[0]
+                .Trim('/');
+            return route.Equals("consumer", StringComparison.OrdinalIgnoreCase) ||
+                   route.StartsWith("consumer/", StringComparison.OrdinalIgnoreCase);
+        }
+    }
     private static RenderFragment Icon(string name) => name switch
     {
         "search" => Svg("<circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m16 16 4 4\"/>"),
