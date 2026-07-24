@@ -1,12 +1,31 @@
 <div class="brand">
     <img class="mark" src="/hip-logo-original.png" alt="HIP" width="40" height="41" />
-    <div>
-        <b>HIP CONTROL</b>
-        <small>TRUST OPERATIONS</small>
-    </div>
+    <AuthorizeView Policy="@ConsumerPolicies.CanUseConsumerPortal">
+        <Authorized>
+            <div><b>HIP</b><small>CONSUMER PORTAL</small></div>
+        </Authorized>
+        <NotAuthorized>
+            <div><b>HIP CONTROL</b><small>TRUST OPERATIONS</small></div>
+        </NotAuthorized>
+    </AuthorizeView>
 </div>
 
-<nav class="nav" aria-label="HIP admin navigation">
+<AuthorizeView Policy="@ConsumerPolicies.CanUseConsumerPortal" Context="portalAuthentication">
+    <Authorized>
+        <nav class="nav" aria-label="HIP consumer navigation">
+            <p class="group-title">Consumer portal</p>
+            <NavLink class="nav-item" href="consumer" Match="NavLinkMatch.All">@Icon("grid")<span>Home</span></NavLink>
+            <NavLink class="nav-item" href="consumer/scans">@Icon("search")<span>Scan History</span></NavLink>
+            <NavLink class="nav-item" href="consumer/devices">@Icon("grid")<span>Devices</span></NavLink>
+            <NavLink class="nav-item" href="consumer/alerts">@Icon("bell")<span>Alert Settings</span></NavLink>
+            <NavLink class="nav-item" href="consumer/reports">@Icon("file")<span>Reports</span></NavLink>
+            <NavLink class="nav-item" href="consumer/appeals">@Icon("eye")<span>Appeals</span></NavLink>
+            <NavLink class="nav-item" href="consumer/licenses">@Icon("file")<span>Licenses</span></NavLink>
+            <NavLink class="nav-item" href="consumer/security">@Icon("shield")<span>Account Security</span></NavLink>
+        </nav>
+    </Authorized>
+    <NotAuthorized>
+        <nav class="nav" aria-label="HIP admin navigation">
     <p class="group-title">Command</p>
     <NavLink class="nav-item" href="admin" Match="NavLinkMatch.All">@Icon("grid")<span>Overview</span></NavLink>
 
@@ -67,6 +86,8 @@
     <NavLink class="nav-item" href="admin/roles">@Icon("eye")<span>Roles &amp; Permissions</span></NavLink>
     <NavLink class="nav-item" href="admin/settings">@Icon("settings")<span>Settings</span></NavLink>
 </nav>
+    </NotAuthorized>
+</AuthorizeView>
 
 <AuthorizeView Context="authentication">
     <Authorized>
@@ -89,6 +110,11 @@
 @code {
     private static string OperatorLabel(System.Security.Claims.ClaimsPrincipal principal)
     {
+        if (principal.FindFirst(HipAuthenticationClaimTypes.ConsumerId) is not null)
+        {
+            return "Your HIP account";
+        }
+
         var actorId = principal.FindFirst(HipAuthenticationClaimTypes.ActorId)?.Value;
         if (!string.IsNullOrWhiteSpace(actorId))
         {
@@ -102,7 +128,9 @@
     }
 
     private static string OperatorRole(System.Security.Claims.ClaimsPrincipal principal) =>
-        principal.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Authenticated user";
+        principal.FindFirst(HipAuthenticationClaimTypes.ConsumerId) is not null
+            ? "Consumer"
+            : principal.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Authenticated user";
 
     private static string OperatorInitials(System.Security.Claims.ClaimsPrincipal principal)
     {

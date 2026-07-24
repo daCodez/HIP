@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
@@ -45,32 +47,63 @@ public sealed class HipDevHeaderAuthenticationHandler(
             return Task.FromResult(AuthenticateResult.Fail("HIP development authentication is local-only."));
         }
 
-        if (!Request.Headers.TryGetValue(RoleHeaderName, out var roleValues))
+        if (Request.Headers.TryGetValue(RoleHeaderName, out var roleValues))
         {
-            return Request.Cookies.TryGetValue(DevAdminRoleCookieName, out var cookieRole)
-                ? AuthenticateAdmin(cookieRole, Request.Cookies.TryGetValue(DevAdminUserCookieName, out var cookieUser) ? cookieUser : "hip-dev-admin")
-                : AuthenticateConsumer();
+            return AuthenticateAdmin(
+                roleValues.ToString(),
+                Request.Headers.TryGetValue(UserHeaderName, out var userValues)
+                    ? userValues.ToString()
+                    : "hip-dev-admin");
         }
 
-        return AuthenticateAdmin(
-            roleValues.ToString(),
-            Request.Headers.TryGetValue(UserHeaderName, out var userValues) ? userValues.ToString() : "hip-dev-admin");
+        if (Request.Headers.TryGetValue(ConsumerHeaderName, out var consumerValues))
+        {
+            return AuthenticateConsumer(consumerValues.ToString());
+        }
+
+        if (IsConsumerRequest(Request.Path))
+        {
+            Request.Cookies.TryGetValue(DevAdminUserCookieName, out var accountSubject);
+            var hasLocalAccount =
+                Request.Cookies.TryGetValue(DevAdminRoleCookieName, out var accountRole) &&
+                AdminRoles.All.Contains(accountRole.Trim()) &&
+                !string.IsNullOrWhiteSpace(accountSubject);
+            return hasLocalAccount
+                ? AuthenticateConsumer(DevelopmentConsumerId(accountSubject!))
+                : Task.FromResult(AuthenticateResult.NoResult());
+        }
+
+        return Request.Cookies.TryGetValue(DevAdminRoleCookieName, out var cookieRole)
+            ? AuthenticateAdmin(
+                cookieRole,
+                Request.Cookies.TryGetValue(DevAdminUserCookieName, out var cookieUser)
+                    ? cookieUser
+                    : "hip-dev-admin")
+            : Task.FromResult(AuthenticateResult.NoResult());
     }
 
     /// <summary>
-    /// Redirects local development browser requests for protected admin pages to the credential form.
+    /// Redirects local development browser requests for protected portal pages to the credential form.
     /// </summary>
     /// <param name="properties">Authentication challenge properties supplied by ASP.NET Core authorization.</param>
     /// <returns>A completed task after the response challenge is written.</returns>
     /// <remarks>
-    /// This deliberately applies only to local Development admin page navigation. API requests still receive
-    /// a 401 so automated clients do not silently follow a browser login redirect, and non-local Development
-    /// hosts never receive the dev login path.
+    /// This deliberately applies only to local Development portal navigation. API requests still receive a 401
+    /// so automated clients do not silently follow a browser login redirect, and non-local Development hosts
+    /// never receive the dev login path.
     /// </remarks>
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)
     {
         if (LocalDevelopmentRequestGuard.IsLocalDevelopmentRequest(Request, environment) &&
             Request.Path.StartsWithSegments("/admin"))
+        {
+            var returnUrl = Uri.EscapeDataString($"{Request.PathBase}{Request.Path}{Request.QueryString}");
+            Response.Redirect($"/login?returnUrl={returnUrl}");
+            return Task.CompletedTask;
+        }
+
+        if (LocalDevelopmentRequestGuard.IsLocalDevelopmentRequest(Request, environment) &&
+            Request.Path.StartsWithSegments("/consumer"))
         {
             var returnUrl = Uri.EscapeDataString($"{Request.PathBase}{Request.Path}{Request.QueryString}");
             Response.Redirect($"/login?returnUrl={returnUrl}");
@@ -117,15 +150,10 @@ public sealed class HipDevHeaderAuthenticationHandler(
     /// <summary>
     /// Authenticates local consumer test requests without exposing private consumer data.
     /// </summary>
-    /// <returns>Consumer authentication result when a dev consumer header exists.</returns>
-    private Task<AuthenticateResult> AuthenticateConsumer()
+    /// <returns>Consumer authentication result for an explicit test header or a route-scoped local account.</returns>
+    private static Task<AuthenticateResult> AuthenticateConsumer(string consumerValue)
     {
-        if (!Request.Headers.TryGetValue(ConsumerHeaderName, out var consumerValues))
-        {
-            return Task.FromResult(AuthenticateResult.NoResult());
-        }
-
-        var consumerId = consumerValues.ToString().Trim();
+        var consumerId = consumerValue.Trim();
         if (string.IsNullOrWhiteSpace(consumerId))
         {
             return Task.FromResult(AuthenticateResult.Fail("Consumer ID is required."));
@@ -142,4 +170,14 @@ public sealed class HipDevHeaderAuthenticationHandler(
 
         return Task.FromResult(AuthenticateResult.Success(ticket));
     }
+
+    private static string DevelopmentConsumerId(string accountSubject)
+    {
+        var subjectBytes = Encoding.UTF8.GetBytes($"hip-development-consumer:{accountSubject.Trim()}");
+        return $"local-account-{Convert.ToHexString(SHA256.HashData(subjectBytes)).ToLowerInvariant()}";
+    }
+
+    private static bool IsConsumerRequest(PathString path) =>
+        path.StartsWithSegments("/consumer") ||
+        path.StartsWithSegments("/api/v1/consumer");
 }
