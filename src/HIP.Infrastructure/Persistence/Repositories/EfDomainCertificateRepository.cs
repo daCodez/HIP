@@ -13,7 +13,7 @@ namespace HIP.Infrastructure.Persistence.Repositories;
 /// <summary>Insert-only EF repository for signed domain certificates and their issuance audit events.</summary>
 public sealed class EfDomainCertificateRepository(
     HipDbContext dbContext,
-    ICanonicalJsonService canonicalJsonService) : IDomainCertificateRepository, IDomainCertificateOwnerQuery, IDomainEnrollmentRepository, IDomainCertificateAdminQuery
+    ICanonicalJsonService canonicalJsonService) : IDomainCertificateRepository, IDomainCertificateOwnerQuery, IDomainEnrollmentRepository, IDomainCertificateAdminQuery, IDomainCertificateLifecycleRepository
 {
     private static readonly JsonSerializerOptions CollectionJsonOptions = CreateCollectionOptions();
     private readonly ICanonicalJsonService canonicalizer =
@@ -327,6 +327,107 @@ public sealed class EfDomainCertificateRepository(
             return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Conflict);
         }
     }
+
+    /// <inheritdoc />
+    public async Task<DomainCertificateTransitionWriteResult> TryTransitionStatusAsync(
+        DomainCertificateStatusTransition transition,
+        CancellationToken cancellationToken)
+    {
+        ValidateTransition(transition);
+        var existingEvent = await FindTransitionEventAsync(transition, cancellationToken);
+        if (existingEvent is not null)
+        {
+            return existingEvent;
+        }
+
+        var certificate = await dbContext.DomainCertificates.SingleOrDefaultAsync(
+            item => item.CertificateId == transition.CertificateId &&
+                    item.IsCurrent &&
+                    item.SignedCertificateJson != null,
+            cancellationToken);
+        if (certificate is null)
+        {
+            return new DomainCertificateTransitionWriteResult(DomainCertificateTransitionWriteStatus.NotFound);
+        }
+        if (certificate.Status != transition.ExpectedStatus)
+        {
+            return new DomainCertificateTransitionWriteResult(DomainCertificateTransitionWriteStatus.Conflict);
+        }
+
+        certificate.Status = transition.TargetStatus;
+        certificate.AggregateVersion++;
+        dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+        {
+            EventId = transition.EventId,
+            EnrollmentId = certificate.EnrollmentId,
+            CertificateId = certificate.CertificateId,
+            EventType = TransitionEventType(transition.TargetStatus),
+            PreviousStatus = transition.ExpectedStatus.ToString(),
+            CurrentStatus = transition.TargetStatus.ToString(),
+            ActorId = transition.ActorId,
+            ReasonCode = transition.ReasonCode,
+            PublicSummary = transition.PublicSummary,
+            PolicyVersion = certificate.PolicyVersion,
+            EvidenceDigest = certificate.SourceDecisionDigest,
+            OccurredAtUtc = transition.OccurredAtUtc
+        });
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return new DomainCertificateTransitionWriteResult(DomainCertificateTransitionWriteStatus.Updated);
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            return await FindTransitionEventAsync(transition, cancellationToken)
+                ?? new DomainCertificateTransitionWriteResult(DomainCertificateTransitionWriteStatus.Conflict);
+        }
+    }
+
+    private async Task<DomainCertificateTransitionWriteResult?> FindTransitionEventAsync(
+        DomainCertificateStatusTransition transition,
+        CancellationToken cancellationToken)
+    {
+        var item = await dbContext.DomainCertificateEvents.AsNoTracking()
+            .SingleOrDefaultAsync(candidate => candidate.EventId == transition.EventId, cancellationToken);
+        if (item is null)
+        {
+            return null;
+        }
+        var exact = item.CertificateId == transition.CertificateId &&
+                    item.PreviousStatus == transition.ExpectedStatus.ToString() &&
+                    item.CurrentStatus == transition.TargetStatus.ToString() &&
+                    item.ActorId == transition.ActorId &&
+                    item.ReasonCode == transition.ReasonCode &&
+                    item.PublicSummary == transition.PublicSummary &&
+                    item.OccurredAtUtc == transition.OccurredAtUtc;
+        return new DomainCertificateTransitionWriteResult(
+            exact ? DomainCertificateTransitionWriteStatus.ExistingSame : DomainCertificateTransitionWriteStatus.Conflict);
+    }
+
+    private static void ValidateTransition(DomainCertificateStatusTransition transition)
+    {
+        ArgumentNullException.ThrowIfNull(transition);
+        ValidateIdentifier(transition.CertificateId, 128);
+        ValidateIdentifier(transition.ActorId, 256);
+        ValidateIdentifier(transition.EventId, 128);
+        ValidateIdentifier(transition.ReasonCode, 120);
+        DomainCertificateLifecycle.RequireTransition(transition.ExpectedStatus, transition.TargetStatus);
+        DomainCertificateLifecycle.RequireReason(transition.TargetStatus, transition.PublicSummary);
+        if (transition.PublicSummary.Length > 500 || transition.PublicSummary.Any(char.IsControl) ||
+            transition.OccurredAtUtc.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException("Certificate status transition metadata is invalid.", nameof(transition));
+        }
+    }
+
+    private static string TransitionEventType(DomainCertificateStatus targetStatus) => targetStatus switch
+    {
+        DomainCertificateStatus.Suspended => "CertificateSuspended",
+        DomainCertificateStatus.Active => "CertificateReinstated",
+        DomainCertificateStatus.Revoked => "CertificateRevoked",
+        _ => throw new ArgumentOutOfRangeException(nameof(targetStatus))
+    };
 
 
     /// <inheritdoc />

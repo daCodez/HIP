@@ -54,6 +54,7 @@ public static class DependencyInjection
     {
         var assembly = typeof(DependencyInjection).Assembly;
         services.AddScoped<IDomainCertificateEnrollmentService, DomainCertificateEnrollmentService>();
+        services.AddScoped<IDomainCertificateLifecycleService, DomainCertificateLifecycleService>();
 
         services.AddMediatR(configuration => configuration.RegisterServicesFromAssembly(assembly));
         services.TryAddSingleton(TimeProvider.System);

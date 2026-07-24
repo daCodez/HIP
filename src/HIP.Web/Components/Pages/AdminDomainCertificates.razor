@@ -1,9 +1,14 @@
 @page "/admin/certificates"
 @attribute [Authorize(Policy = AdminPolicies.CanViewReviews)]
 @rendermode InteractiveServer
+@implements IDisposable
 @using HIP.Application.Certificates
 @using HIP.Domain.Certificates
 @inject IDomainCertificateAdminQuery CertificateQuery
+@inject IDomainCertificateLifecycleService LifecycleService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthorizationService AuthorizationService
+@inject IHostEnvironment HostEnvironment
 
 <PageTitle>HIP Certificate Operations</PageTitle>
 
@@ -20,11 +25,15 @@
     {
         <p class="admin-error" role="alert">@_error</p>
     }
-    else if (_loading)
+    @if (_statusMessage is not null)
+    {
+        <p class="admin-message" role="status">@_statusMessage</p>
+    }
+    @if (_error is null && _loading)
     {
         <p class="admin-message" role="status">Loading certificate operations…</p>
     }
-    else
+    else if (_error is null)
     {
         <section class="dashboard-grid" aria-label="Certificate operation counts">
             <article class="score-card"><span>Pending certificate reviews</span><strong>@PendingReviews.Count</strong><p>Policy or evidence requires an authorized decision.</p></article>
@@ -68,6 +77,18 @@
                                         @if (item.CertificateId is not null)
                                         {
                                             <span aria-hidden="true"> · </span><a href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">Public certificate</a>
+                                            @if (item.CertificateStatus == DomainCertificateStatus.Active)
+                                            {
+                                                <span aria-hidden="true"> · </span><button type="button" class="hip-secondary-action" @onclick="() => BeginAction(item, DomainCertificateStatus.Suspended)" disabled="@_submitting">Suspend</button>
+                                            }
+                                            @if (item.CertificateStatus == DomainCertificateStatus.Suspended)
+                                            {
+                                                <span aria-hidden="true"> · </span><button type="button" class="hip-secondary-action" @onclick="() => BeginAction(item, DomainCertificateStatus.Active)" disabled="@_submitting">Reinstate</button>
+                                            }
+                                            @if (item.CertificateStatus is DomainCertificateStatus.Active or DomainCertificateStatus.Suspended)
+                                            {
+                                                <span aria-hidden="true"> · </span><button type="button" class="danger-button" @onclick="() => BeginAction(item, DomainCertificateStatus.Revoked)" disabled="@_submitting">Revoke</button>
+                                            }
                                         }
                                     </td>
                                 </tr>
@@ -77,13 +98,55 @@
                 </div>
             }
         </section>
+
+        @if (_selectedItem is not null && _targetStatus is not null)
+        {
+            <section class="lookup-result certificate-action-confirmation" aria-labelledby="certificate-action-title">
+                <h2 id="certificate-action-title">Confirm certificate action</h2>
+                <p>
+                    <strong>@ActionLabel(_targetStatus.Value)</strong>
+                    the live certificate for <strong>@_selectedItem.Domain</strong>.
+                    The signed issuance record remains unchanged and this action is permanently audited.
+                </p>
+                @if (_targetStatus == DomainCertificateStatus.Revoked)
+                {
+                    <p role="alert"><strong>Revocation is permanent.</strong> This certificate cannot be reinstated.</p>
+                }
+                <div class="form-group">
+                    <label for="certificate-action-reason">Reason</label>
+                    <textarea id="certificate-action-reason"
+                              @bind="_reason"
+                              maxlength="500"
+                              rows="4"
+                              required
+                              aria-describedby="certificate-action-reason-help"></textarea>
+                    <p id="certificate-action-reason-help">Enter 5–500 privacy-safe characters. Do not include secrets or private evidence.</p>
+                </div>
+                <div class="service-client-actions">
+                    <button type="button"
+                            class="@(_targetStatus == DomainCertificateStatus.Revoked ? "danger-button" : "hip-primary-action")"
+                            @onclick="ConfirmActionAsync"
+                            disabled="@(_submitting || !ReasonIsValid)">
+                        @(_submitting ? "Saving…" : $"Confirm {ActionLabel(_targetStatus.Value).ToLowerInvariant()}")
+                    </button>
+                    <button type="button" class="hip-secondary-action" @onclick="CancelAction" disabled="@_submitting">Cancel</button>
+                </div>
+            </section>
+        }
     }
 </main>
 
 @code {
     private IReadOnlyList<AdminDomainCertificateSummary> _items = [];
+    private readonly CancellationTokenSource _pageCancellation = new();
     private bool _loading = true;
+    private bool _submitting;
     private string? _error;
+    private string? _statusMessage;
+    private AdminDomainCertificateSummary? _selectedItem;
+    private DomainCertificateStatus? _targetStatus;
+    private string _reason = string.Empty;
+    private string? _operationId;
 
     private IReadOnlyList<AdminDomainCertificateSummary> PendingReviews => _items
         .Where(item => item.EnrollmentStatus == DomainEnrollmentStatus.PendingSecurityReview ||
@@ -102,9 +165,19 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
         try
         {
-            _items = await CertificateQuery.ListForAdminAsync(0, 100, CancellationToken.None);
+            _items = await CertificateQuery.ListForAdminAsync(0, 100, _pageCancellation.Token);
+            _error = null;
+        }
+        catch (OperationCanceledException) when (_pageCancellation.IsCancellationRequested)
+        {
         }
         catch
         {
@@ -114,5 +187,119 @@
         {
             _loading = false;
         }
+    }
+
+    private void BeginAction(AdminDomainCertificateSummary item, DomainCertificateStatus targetStatus)
+    {
+        _selectedItem = item;
+        _targetStatus = targetStatus;
+        _reason = string.Empty;
+        _operationId = Guid.NewGuid().ToString("N");
+        _error = null;
+        _statusMessage = null;
+    }
+
+    private void CancelAction()
+    {
+        _selectedItem = null;
+        _targetStatus = null;
+        _reason = string.Empty;
+        _operationId = null;
+    }
+
+    private async Task ConfirmActionAsync()
+    {
+        if (_selectedItem?.CertificateId is not { } certificateId ||
+            _targetStatus is not { } targetStatus ||
+            _operationId is not { } operationId ||
+            !ReasonIsValid)
+        {
+            _error = "Enter a privacy-safe reason of at least 5 characters.";
+            return;
+        }
+
+        _submitting = true;
+        _error = null;
+        _statusMessage = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            IReadOnlyCollection<string> policies = targetStatus == DomainCertificateStatus.Revoked
+                ? [AdminPolicies.CanRevokeDomainVerifications, AdminPolicies.RecentPrivilegedAuthentication]
+                : [AdminPolicies.CanManageDomainVerifications];
+            var access = await HipAdminPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                HostEnvironment,
+                policies,
+                (actorId, cancellationToken) => LifecycleService.ChangeStatusAsync(
+                    new DomainCertificateLifecycleRequest(
+                        certificateId,
+                        targetStatus,
+                        _reason,
+                        operationId,
+                        actorId),
+                    cancellationToken),
+                _pageCancellation.Token);
+            if (!access.Succeeded)
+            {
+                _error = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            var result = access.Value;
+            if (result is null)
+            {
+                _error = "HIP could not change the certificate status right now.";
+                return;
+            }
+            if (result.Status is DomainCertificateLifecycleChangeStatus.Changed or
+                DomainCertificateLifecycleChangeStatus.Existing)
+            {
+                var domain = _selectedItem.Domain;
+                CancelAction();
+                _statusMessage = $"{domain} is now {targetStatus.ToString().ToLowerInvariant()}.";
+                await LoadAsync();
+                return;
+            }
+
+            _error = result.Status switch
+            {
+                DomainCertificateLifecycleChangeStatus.InvalidRequest => "The certificate action or reason is invalid.",
+                DomainCertificateLifecycleChangeStatus.NotFound => "The current signed certificate no longer exists.",
+                DomainCertificateLifecycleChangeStatus.Conflict => "The certificate changed before this action completed. Refresh and review its current status.",
+                _ => "HIP could not change the certificate status right now."
+            };
+        }
+        catch (OperationCanceledException) when (_pageCancellation.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private bool ReasonIsValid
+    {
+        get
+        {
+            var trimmed = _reason.Trim();
+            return trimmed.Length is >= 5 and <= 500 && !trimmed.Any(char.IsControl);
+        }
+    }
+
+    private static string ActionLabel(DomainCertificateStatus targetStatus) => targetStatus switch
+    {
+        DomainCertificateStatus.Suspended => "Suspend",
+        DomainCertificateStatus.Active => "Reinstate",
+        DomainCertificateStatus.Revoked => "Revoke",
+        _ => "Change"
+    };
+
+    public void Dispose()
+    {
+        _pageCancellation.Cancel();
+        _pageCancellation.Dispose();
     }
 }

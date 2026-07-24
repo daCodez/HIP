@@ -122,6 +122,41 @@ public sealed class DomainCertificateRepositoryTests
     }
 
     [Test]
+    public async Task Certificate_transition_updates_live_status_and_appends_reasoned_audit_without_rewriting_signature()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        var issued = Record();
+        await repository.TryCreateIssuedAsync(issued, CancellationToken.None);
+        var transition = new DomainCertificateStatusTransition(
+            issued.Certificate.Payload.CertificateId,
+            DomainCertificateStatus.Active,
+            DomainCertificateStatus.Suspended,
+            "admin-1",
+            "monitoring-stale",
+            "Monitoring evidence is stale.",
+            Now.AddMinutes(5),
+            "certificate-event:suspend-1");
+
+        var applied = await repository.TryTransitionStatusAsync(transition, CancellationToken.None);
+        var retry = await repository.TryTransitionStatusAsync(transition, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied.Status, Is.EqualTo(DomainCertificateTransitionWriteStatus.Updated));
+            Assert.That(retry.Status, Is.EqualTo(DomainCertificateTransitionWriteStatus.ExistingSame));
+            var certificate = context.DomainCertificates.Single();
+            Assert.That(certificate.Status, Is.EqualTo(DomainCertificateStatus.Suspended));
+            Assert.That(certificate.SignedCertificateJson, Is.EqualTo(issued.SignedCertificateJson));
+            var auditEvent = context.DomainCertificateEvents.Single(item => item.EventType == "CertificateSuspended");
+            Assert.That(auditEvent.ActorId, Is.EqualTo("admin-1"));
+            Assert.That(auditEvent.ReasonCode, Is.EqualTo("monitoring-stale"));
+            Assert.That(auditEvent.PreviousStatus, Is.EqualTo(DomainCertificateStatus.Active.ToString()));
+            Assert.That(auditEvent.CurrentStatus, Is.EqualTo(DomainCertificateStatus.Suspended.ToString()));
+        });
+    }
+
+    [Test]
     public async Task Owner_summary_query_is_exactly_scoped_and_uses_current_persisted_state()
     {
         await using var context = Context();

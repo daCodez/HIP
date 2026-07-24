@@ -25,6 +25,16 @@ public sealed class AdminDomainCertificatePageTests
             Assert.That(page, Does.Contain("Recently revoked certificates"));
             Assert.That(page, Does.Contain("Policy version"));
             Assert.That(page, Does.Not.Contain("OwnerId"));
+            Assert.That(page, Does.Contain("IDomainCertificateLifecycleService"));
+            Assert.That(page, Does.Contain("HipAdminPageAccess.ExecuteAuthorizedAsync"));
+            Assert.That(page, Does.Contain("AdminPolicies.CanManageDomainVerifications"));
+            Assert.That(page, Does.Contain("AdminPolicies.CanRevokeDomainVerifications"));
+            Assert.That(page, Does.Contain("AdminPolicies.RecentPrivilegedAuthentication"));
+            Assert.That(page, Does.Contain("Suspend"));
+            Assert.That(page, Does.Contain("Reinstate"));
+            Assert.That(page, Does.Contain("Revoke"));
+            Assert.That(page, Does.Contain("Reason"));
+            Assert.That(page, Does.Contain("Confirm certificate action"));
             Assert.That(navigation, Does.Contain("href=\"admin/certificates\""));
             Assert.That(navigation, Does.Contain("Policy=\"@AdminPolicies.CanViewReviews\""));
         });
