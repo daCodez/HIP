@@ -32,6 +32,15 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
     /// </summary>
     public DbSet<HipTrustReceiptEntity> TrustReceipts => Set<HipTrustReceiptEntity>();
 
+    /// <summary>Gets indexed domain-owner enrollment state.</summary>
+    public DbSet<HipDomainEnrollmentEntity> DomainEnrollments => Set<HipDomainEnrollmentEntity>();
+
+    /// <summary>Gets versioned HIP Domain Trust Certificate records.</summary>
+    public DbSet<HipDomainCertificateEntity> DomainCertificates => Set<HipDomainCertificateEntity>();
+
+    /// <summary>Gets the append-only domain certificate audit trail.</summary>
+    public DbSet<HipDomainCertificateEventEntity> DomainCertificateEvents => Set<HipDomainCertificateEventEntity>();
+
     /// <summary>
     /// Configures table names, keys, lengths, and indexes for HIP persistence.
     /// </summary>
@@ -105,5 +114,7 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
             entity.HasIndex(receipt => receipt.ExpiresAtUtc);
             entity.HasIndex(receipt => receipt.IssuerId);
         });
+
+        DomainCertificateModelConfiguration.Configure(modelBuilder);
     }
 }
