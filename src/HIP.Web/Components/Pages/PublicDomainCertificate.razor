@@ -1,0 +1,181 @@
+@page "/certificate/{CertificateId}"
+@attribute [AllowAnonymous]
+@using HIP.Application.Certificates
+@using HIP.Domain.Certificates
+@inject IPublicDomainCertificateService CertificateService
+
+<PageTitle>HIP Domain Trust Certificate</PageTitle>
+
+<main class="certificate-page">
+    @if (_loading)
+    {
+        <p class="certificate-state-message" role="status">Verifying this HIP Domain Trust Certificate…</p>
+    }
+    else if (_lookupStatus == PublicDomainCertificateLookupStatus.NotFound)
+    {
+        <section class="certificate-panel certificate-unavailable" aria-labelledby="certificate-heading">
+            <p class="eyebrow">HIP Domain Trust Certificate</p>
+            <h1 id="certificate-heading">Certificate not found</h1>
+            <p>No public HIP certificate is available for this identifier.</p>
+            <a href="/lookup">Check a domain instead</a>
+        </section>
+    }
+    else if (_certificate is null)
+    {
+        <section class="certificate-panel certificate-unavailable" aria-labelledby="certificate-heading">
+            <p class="eyebrow">HIP Domain Trust Certificate</p>
+            <h1 id="certificate-heading">Unable to verify</h1>
+            <p>HIP could not verify this certificate right now. Do not treat a copied badge or screenshot as proof.</p>
+        </section>
+    }
+    else
+    {
+        var payload = _certificate.SignedCertificate.Payload;
+        var signature = _certificate.SignedCertificate.Signature;
+        <section class="certificate-panel @StatusClass(_certificate)" aria-labelledby="certificate-heading">
+            <header class="certificate-heading">
+                <div>
+                    <p class="eyebrow">HIP Domain Trust Certificate</p>
+                    <h1 id="certificate-heading">@payload.Domain</h1>
+                    <p>@LevelMeaning(payload.Level)</p>
+                </div>
+                <span class="certificate-status" role="status">
+                    @StatusLabel(_certificate)
+                </span>
+            </header>
+
+            @if (!_certificate.IsActive)
+            {
+                <div class="certificate-warning" role="alert">
+                    This certificate is not currently active. Do not rely on its badge as a current trust claim.
+                </div>
+            }
+
+            <dl class="certificate-facts">
+                <div><dt>Badge level</dt><dd>HIP @payload.Level</dd></div>
+                <div><dt>Current status</dt><dd>@_certificate.CurrentStatus</dd></div>
+                <div><dt>Signature verification</dt><dd>@_certificate.SignatureStatus</dd></div>
+                <div><dt>Issued</dt><dd>@payload.IssuedAtUtc.ToString("u")</dd></div>
+                <div><dt>Expires</dt><dd>@payload.ExpiresAtUtc.ToString("u")</dd></div>
+                <div><dt>Last verified</dt><dd>@payload.LastVerificationAtUtc.ToString("u")</dd></div>
+                <div><dt>Last monitored</dt><dd>@FormatTimestamp(payload.LastMonitoringAtUtc)</dd></div>
+                <div><dt>Public risk</dt><dd>@payload.PublicRiskClassification</dd></div>
+                <div><dt>Policy version</dt><dd>@payload.PolicyVersion</dd></div>
+                <div><dt>Certificate ID</dt><dd><code>@payload.CertificateId</code></dd></div>
+            </dl>
+
+            @if (!string.IsNullOrWhiteSpace(payload.PublicDisplayName) ||
+                 !string.IsNullOrWhiteSpace(payload.PublicOrganizationName))
+            {
+                <section class="certificate-section" aria-labelledby="certificate-identity-heading">
+                    <h2 id="certificate-identity-heading">Public identity</h2>
+                    @if (!string.IsNullOrWhiteSpace(payload.PublicDisplayName))
+                    {
+                        <p><strong>Display name:</strong> @payload.PublicDisplayName</p>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(payload.PublicOrganizationName))
+                    {
+                        <p><strong>Organization:</strong> @payload.PublicOrganizationName</p>
+                    }
+                </section>
+            }
+
+            <section class="certificate-section" aria-labelledby="certificate-methods-heading">
+                <h2 id="certificate-methods-heading">Verification completed</h2>
+                <ul>
+                    @foreach (var method in payload.CompletedVerificationMethods)
+                    {
+                        <li>@VerificationMethodLabel(method)</li>
+                    }
+                </ul>
+            </section>
+
+            <section class="certificate-section" aria-labelledby="certificate-signature-heading">
+                <h2 id="certificate-signature-heading">Digital signature</h2>
+                <p>HIP verified this document against the current certificate-authority key state.</p>
+                <dl class="certificate-signature-facts">
+                    <div><dt>Authority</dt><dd><code>@signature.AuthorityId</code></dd></div>
+                    <div><dt>Key ID</dt><dd><code>@signature.KeyId</code></dd></div>
+                    <div><dt>Algorithm</dt><dd><code>@signature.Algorithm</code></dd></div>
+                </dl>
+            </section>
+
+            <section class="certificate-context" aria-labelledby="certificate-context-heading">
+                <h2 id="certificate-context-heading">What this certificate means</h2>
+                <p>A signature proves origin and integrity. It does not, by itself, prove that a site is safe.</p>
+                <p>The HIP Domain Trust Certificate does not replace the website’s SSL/TLS certificate. TLS protects the connection; HIP adds identity and policy evidence.</p>
+                <p><a href="/lookup/@Uri.EscapeDataString(payload.Domain)">View the current HIP risk score separately</a></p>
+            </section>
+        </section>
+    }
+</main>
+
+@code {
+    [Parameter]
+    public string? CertificateId { get; set; }
+
+    private bool _loading = true;
+    private PublicDomainCertificateLookupStatus _lookupStatus;
+    private PublicDomainCertificateResponse? _certificate;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _certificate = null;
+        try
+        {
+            var result = await CertificateService.GetByIdAsync(
+                CertificateId ?? string.Empty,
+                CancellationToken.None);
+            _lookupStatus = result.Status;
+            _certificate = result.Certificate;
+        }
+        catch (ArgumentException)
+        {
+            _lookupStatus = PublicDomainCertificateLookupStatus.NotFound;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string StatusClass(PublicDomainCertificateResponse certificate) =>
+        certificate.SignatureStatus is not PublicDomainCertificateSignatureStatus.Verified
+            ? "certificate-unavailable"
+            : certificate.CurrentStatus switch
+            {
+                DomainCertificateStatus.Active => "certificate-active",
+                DomainCertificateStatus.PendingVerification or
+                DomainCertificateStatus.PendingReview or
+                DomainCertificateStatus.RenewalRequired => "certificate-caution",
+                DomainCertificateStatus.Revoked => "certificate-revoked",
+                DomainCertificateStatus.Suspended => "certificate-revoked",
+                _ => "certificate-inactive"
+            };
+
+    private static string StatusLabel(PublicDomainCertificateResponse certificate) =>
+        certificate.SignatureStatus is not PublicDomainCertificateSignatureStatus.Verified
+            ? "Unable to verify"
+            : certificate.IsActive
+                ? $"HIP {certificate.SignedCertificate.Payload.Level} · Active"
+                : certificate.CurrentStatus.ToString();
+
+    private static string LevelMeaning(DomainCertificateLevel level) => level switch
+    {
+        DomainCertificateLevel.Registered => "Domain control has been verified by HIP. This is not a safety claim.",
+        DomainCertificateLevel.Verified => "This domain completed HIP identity and baseline security verification.",
+        DomainCertificateLevel.Monitored => "This domain is verified and continuously monitored by HIP.",
+        _ => "HIP certificate level unavailable."
+    };
+
+    private static string VerificationMethodLabel(VerificationMethod method) => method switch
+    {
+        VerificationMethod.DnsTxt => "DNS domain control",
+        VerificationMethod.WellKnownHipJson => "HTTPS website control",
+        _ => method.ToString()
+    };
+
+    private static string FormatTimestamp(DateTimeOffset? timestamp) =>
+        timestamp?.ToString("u") ?? "Not available";
+}

@@ -1,0 +1,114 @@
+.certificate-page {
+    min-height: 100vh;
+    padding: clamp(1rem, 4vw, 3rem);
+    background: #08111f;
+    color: #eef5ff;
+}
+
+.certificate-panel {
+    --certificate-accent: #7d8ba1;
+    max-width: 68rem;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 4vw, 2.5rem);
+    border: 1px solid #263852;
+    border-left: .35rem solid var(--certificate-accent);
+    border-radius: .9rem;
+    background: #0d192a;
+    box-shadow: 0 1rem 3rem rgb(0 0 0 / 25%);
+}
+
+.certificate-active { --certificate-accent: #00c9c8; }
+.certificate-caution { --certificate-accent: #f0ad3d; }
+.certificate-revoked { --certificate-accent: #f14968; }
+.certificate-inactive,
+.certificate-unavailable { --certificate-accent: #7d8ba1; }
+
+.certificate-heading {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.certificate-heading h1 {
+    margin: .25rem 0 .5rem;
+    overflow-wrap: anywhere;
+}
+
+.certificate-status {
+    padding: .55rem .8rem;
+    border: 1px solid var(--certificate-accent);
+    border-radius: .35rem;
+    color: var(--certificate-accent);
+    font-weight: 700;
+}
+
+.certificate-warning {
+    margin: 1.5rem 0;
+    padding: 1rem;
+    border: 1px solid #f14968;
+    border-radius: .5rem;
+    background: rgb(241 73 104 / 10%);
+}
+
+.certificate-facts,
+.certificate-signature-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    gap: .75rem;
+    margin: 2rem 0;
+}
+
+.certificate-facts div,
+.certificate-signature-facts div {
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid #263852;
+    background: #0a1525;
+}
+
+.certificate-facts dt,
+.certificate-signature-facts dt {
+    color: #9eb4cf;
+    font-size: .82rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+}
+
+.certificate-facts dd,
+.certificate-signature-facts dd {
+    margin: .45rem 0 0;
+    overflow-wrap: anywhere;
+}
+
+.certificate-section,
+.certificate-context {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #263852;
+}
+
+.certificate-panel a {
+    color: #78b4ff;
+}
+
+.certificate-panel a:focus-visible {
+    outline: .2rem solid #fff;
+    outline-offset: .2rem;
+}
+
+@media (max-width: 38rem) {
+    .certificate-page { padding: .75rem; }
+    .certificate-panel { padding: 1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .certificate-page *,
+    .certificate-page *::before,
+    .certificate-page *::after {
+        scroll-behavior: auto !important;
+        transition: none !important;
+        animation: none !important;
+    }
+}
