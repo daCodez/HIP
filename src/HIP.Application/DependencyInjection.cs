@@ -57,8 +57,10 @@ public static class DependencyInjection
         services.AddMediatR(configuration => configuration.RegisterServicesFromAssembly(assembly));
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(DomainCertificatePolicy.V1);
+        services.TryAddSingleton(new DomainCertificateSigningAuthorityPolicy([]));
         services.AddSingleton<DomainRegistrationNormalizer>();
         services.AddSingleton<IDomainCertificatePolicyEvaluator, DomainCertificatePolicyEvaluator>();
+        services.AddScoped<IDomainCertificateSigningService, DomainCertificateSigningService>();
         services.AddValidatorsFromAssembly(assembly);
         services.AddSingleton<IValidator<ReviewItem>, ReviewItemValidator>();
         services.AddSingleton<IValidator<AppealRequest>, AppealRequestValidator>();
