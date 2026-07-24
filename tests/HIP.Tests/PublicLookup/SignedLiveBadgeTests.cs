@@ -1,10 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
+using HIP.Application.Certificates;
 using HIP.Application.Protocol;
 using HIP.Application.PublicLookup;
+using HIP.Domain.Certificates;
 using HIP.Domain.Identity;
 using HIP.Domain.Protocol;
 using HIP.Domain.Risk;
+using HIP.Tests.Certificates;
 
 namespace HIP.Tests.PublicLookup;
 
@@ -37,6 +40,9 @@ public sealed class SignedLiveBadgeTests
             Assert.That(first.Document.Payload.Status, Is.EqualTo(RiskStatus.MostlyTrusted));
             Assert.That(first.Document.Payload.IdentityVerificationStatus, Is.EqualTo("Verified"));
             Assert.That(first.Document.Payload.VerifiedMeaning, Does.Contain("identity"));
+            Assert.That(first.Document.Payload.Certificate?.CertificateId, Is.EqualTo("hip-domain-cert-0001"));
+            Assert.That(first.Document.Payload.Certificate?.Status, Is.EqualTo(DomainCertificateStatus.Active));
+            Assert.That(first.Document.Payload.Certificate?.IsActive, Is.True);
             Assert.That(first.Document.Payload.IssuedAtUtc, Is.EqualTo(Now));
             Assert.That(first.Document.Payload.ExpiresAtUtc, Is.EqualTo(Now.AddMinutes(5)));
             Assert.That(first.Document.Signature.KeyId, Is.EqualTo(KeyId));
@@ -52,6 +58,8 @@ public sealed class SignedLiveBadgeTests
             Assert.That(signingJson, Does.Contain("\"score\":73"));
             Assert.That(signingJson, Does.Contain("\"keyId\":\"badge-key-1\""));
             Assert.That(signingJson, Does.Contain("\"algorithm\":\"test-signature-v1\""));
+            Assert.That(signingJson, Does.Contain("\"certificateId\":\"hip-domain-cert-0001\""));
+            Assert.That(signingJson, Does.Contain("\"level\":\"Verified\""));
             Assert.That(signingJson, Does.Not.Contain("signatureValue"));
             Assert.That(signingJson, Does.Not.Contain("private-marker"));
         });
@@ -127,6 +135,54 @@ public sealed class SignedLiveBadgeTests
         });
     }
 
+    [Test]
+    public async Task Trust_badge_projects_independently_verified_certificate_state_into_signing_request()
+    {
+        var signing = new StubBadgeSigningService(
+            new HipLiveBadgeSigningResult(HipLiveBadgeSignatureStatus.SignerUnavailable));
+        var certificate = CertificateTestData.SignedCertificate();
+        var publicCertificate = new PublicDomainCertificateResponse(
+            PublicDomainCertificateService.SchemaVersion,
+            certificate,
+            DomainCertificateStatus.Active,
+            PublicDomainCertificateSignatureStatus.Verified,
+            PublicDomainCertificateValidityStatus.Current,
+            true,
+            Now,
+            certificate.Payload.RevocationStatusUrl,
+            certificate.Payload.PublicCertificateUrl);
+        var service = new TrustBadgeService(
+            new StubLookupService(),
+            signing,
+            new StubPublicCertificateService(new PublicDomainCertificateLookupResult(
+                PublicDomainCertificateLookupStatus.Found,
+                publicCertificate)));
+
+        var result = await service.GetDomainBadgeAsync("example.com", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Certificate?.CertificateId, Is.EqualTo(certificate.Payload.CertificateId));
+            Assert.That(result.Certificate?.IsActive, Is.True);
+            Assert.That(signing.Request?.Certificate, Is.EqualTo(result.Certificate));
+            Assert.That(result.BadgeText, Does.Contain("Certificate: Active"));
+        });
+    }
+    [Test]
+    public void Active_badge_certificate_state_requires_verified_signature_and_normalized_domain()
+    {
+        Assert.That(
+            () => new HipLiveBadgeCertificateState(
+                "hip-domain-cert-0001",
+                "Example.com",
+                DomainCertificateLevel.Verified,
+                DomainCertificateStatus.Active,
+                PublicDomainCertificateSignatureStatus.Invalid,
+                Now.AddDays(30),
+                "https://hiptrust.com/certificate/hip-domain-cert-0001",
+                true),
+            Throws.ArgumentException);
+    }
     private static HipLiveBadgeSigningService CreateService(
         RecordingSigner? signer = null,
         RecordingVerifier? verifier = null,
@@ -146,7 +202,16 @@ public sealed class SignedLiveBadgeTests
         true,
         "Verified",
         "Verified means the domain identity is known; current safety remains a separate decision.",
-        Now.AddMinutes(-1));
+        Now.AddMinutes(-1),
+        new HipLiveBadgeCertificateState(
+            "hip-domain-cert-0001",
+            "example.com",
+            DomainCertificateLevel.Verified,
+            DomainCertificateStatus.Active,
+            PublicDomainCertificateSignatureStatus.Verified,
+            Now.AddDays(30),
+            "https://hiptrust.com/certificate/hip-domain-cert-0001",
+            true));
 
     private static HipTrustReceiptIssuerPolicy AuthorizedIssuerPolicy() => new(
         [new HipTrustReceiptAuthorizedSigner(IssuerId, KeyId)]);
@@ -197,8 +262,26 @@ public sealed class SignedLiveBadgeTests
 
     private sealed class StubBadgeSigningService(HipLiveBadgeSigningResult result) : IHipLiveBadgeSigningService
     {
+        public HipLiveBadgeSigningRequest? Request { get; private set; }
+
         public Task<HipLiveBadgeSigningResult> SignAsync(
             HipLiveBadgeSigningRequest request,
+            CancellationToken cancellationToken)
+        {
+            Request = request;
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class StubPublicCertificateService(PublicDomainCertificateLookupResult result)
+        : IPublicDomainCertificateService
+    {
+        public Task<PublicDomainCertificateLookupResult> GetByIdAsync(
+            string certificateId,
+            CancellationToken cancellationToken) => Task.FromResult(result);
+
+        public Task<PublicDomainCertificateLookupResult> GetByDomainAsync(
+            string domain,
             CancellationToken cancellationToken) => Task.FromResult(result);
     }
 

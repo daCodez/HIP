@@ -18,4 +18,5 @@ public sealed record PublicBadgeResponse(
     string? ResponseSignature,
     HipLiveBadgeDocument? SignedBadge = null,
     string SignatureStatus = "Unavailable",
-    bool IsAvailable = false);
+    bool IsAvailable = false,
+    HipLiveBadgeCertificateState? Certificate = null);

@@ -339,6 +339,28 @@ test("loading summary view model shows explicit pending indicators", () => {
   assert.equal(viewModel.lastSubmittedText, "Pending");
 });
 
+test("popup shows independently verified certificate state separately from risk score", () => {
+  const view = buildPopupViewModel(
+    { domain: "example.com", finalHipScore: 42, status: "Unknown" },
+    {},
+    { webBaseUrl: "https://hiptrust.com" },
+    "https://example.com",
+    {
+      level: "Verified",
+      status: "Suspended",
+      signatureStatus: "Verified",
+      validityStatus: "Current",
+      expiresAtUtc: "2026-08-24T00:00:00Z",
+      publicCertificateUrl: "https://hiptrust.com/certificate/hip-domain-cert-0001",
+      isActive: false
+    });
+
+  assert.equal(view.scoreText, "42/100");
+  assert.equal(view.certificateLevelText, "Verified");
+  assert.equal(view.certificateStatusText, "Suspended");
+  assert.equal(view.certificateVerificationText, "HIP signature verified");
+  assert.equal(view.lookupUrl, "https://hiptrust.com/certificate/hip-domain-cert-0001");
+});
 test("popup distinguishes an observed matching badge from verification", () => {
   assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: true }), "Found for this site");
   assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: false }), "Found for another site");

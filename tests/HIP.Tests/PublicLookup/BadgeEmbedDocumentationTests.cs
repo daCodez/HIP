@@ -16,15 +16,19 @@ public sealed class BadgeEmbedDocumentationTests
         Assert.That(script, Does.Contain("HIP Badge Domain Mismatch"));
         Assert.That(script, Does.Contain("badge.domain"));
         Assert.That(script, Does.Contain("window.location.hostname"));
+        Assert.That(script, Does.Contain("payload.certificate"));
+        Assert.That(script, Does.Contain("certificate.isActive"));
+        Assert.That(script, Does.Contain("Verified domain"));
     }
 
     /// <summary>
     /// Finds the repository root from any test output folder so file-based tests work with isolated build output.
     /// </summary>
     /// <returns>The absolute repository root.</returns>
-    private static string FindRepositoryRoot()
+    private static string FindRepositoryRoot(
+        [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "")
     {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        var current = new DirectoryInfo(Path.GetDirectoryName(sourceFilePath)!);
 
         while (current is not null)
         {

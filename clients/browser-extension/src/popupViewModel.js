@@ -188,7 +188,7 @@ export function reasonsFor(lookup) {
 /**
  * Builds the primary popup model from public-safe lookup data and content-script scan counts.
  */
-export function buildPopupViewModel(lookup, summary, settings, currentUrl) {
+export function buildPopupViewModel(lookup, summary, settings, currentUrl, certificate = null) {
   const score = lookup?.score ?? lookup?.finalHipScore ?? null;
   const status = displayStatus(lookup?.status, score);
   const domainTrustScore = lookup?.domainTrustScore ?? componentScore(lookup, "DomainTrustScore");
@@ -212,6 +212,12 @@ export function buildPopupViewModel(lookup, summary, settings, currentUrl) {
     finalHipScoreExplanation: safeDisplayText(lookup?.finalHipScoreExplanation || "Final HIP score is based on separate domain, page, and content scores."),
     verifiedText: lookup?.verificationStatus === "Verified" ? "Yes" : "No",
     identityText: lookup?.identityVerificationStatus || lookup?.signedIdentityStatus || "Unknown",
+    certificateLevelText: certificate?.level || "None verified",
+    certificateStatusText: certificate?.status || "Not verified",
+    certificateVerificationText: certificate?.signatureStatus === "Verified"
+      ? "HIP signature verified"
+      : "Unavailable",
+    certificateExpiryText: formatDate(certificate?.expiresAtUtc),
     lastCheckedText: formatDate(lookup?.lastCheckedUtc),
     reasons: reasonsFor(lookup),
     linksScanned: summary?.linksScanned ?? 0,
@@ -224,7 +230,8 @@ export function buildPopupViewModel(lookup, summary, settings, currentUrl) {
     lastScanText: formatDate(summary?.lastScanUtc || summary?.updatedAt),
     lastSubmittedText: submissionText(summary),
     dataSourceText: assessmentSourceText(lookup, summary),
-    lookupUrl: buildPublicLookupUrl(settings?.webBaseUrl, lookup?.domain, lookup?.publicLookupUrl),
+    lookupUrl: certificate?.publicCertificateUrl ||
+      buildPublicLookupUrl(settings?.webBaseUrl, lookup?.domain, lookup?.publicLookupUrl),
     safetyDetailsUrl: buildSafetyDetailsUrl(settings?.webBaseUrl, currentUrl, status)
   };
 }

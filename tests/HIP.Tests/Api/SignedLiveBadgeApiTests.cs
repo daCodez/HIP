@@ -38,6 +38,9 @@ public sealed class SignedLiveBadgeApiTests
             Assert.That(script, Does.Contain("/api/v1/badge/verify"));
             Assert.That(script, Does.Contain("badge.isAvailable !== true"));
             Assert.That(script, Does.Contain("payload.score !== badge.score"));
+            Assert.That(script, Does.Contain("payload.certificate"));
+            Assert.That(script, Does.Contain("certificate.domain !== domain"));
+            Assert.That(script, Does.Contain("certificate.isActive"));
             Assert.That(script, Does.Contain("expiresAt <= Date.now()"));
             Assert.That(script, Does.Contain("HIP Unavailable"));
         });

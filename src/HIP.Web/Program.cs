@@ -3775,7 +3775,8 @@ public sealed record PublicBadgeApiResponse(
     string? ResponseSignature,
     HipLiveBadgeDocument? SignedBadge,
     string SignatureStatus,
-    bool IsAvailable)
+    bool IsAvailable,
+    HipLiveBadgeCertificateState? Certificate)
 {
     public static PublicBadgeApiResponse From(PublicBadgeResponse badge) =>
         new(
@@ -3795,7 +3796,8 @@ public sealed record PublicBadgeApiResponse(
             badge.ResponseSignature,
             badge.SignedBadge,
             badge.SignatureStatus,
-            badge.IsAvailable);
+            badge.IsAvailable,
+            badge.Certificate);
 }
 
 public sealed record PublicLookupApiResponse(
@@ -4202,6 +4204,10 @@ public partial class Program
   }
 
   ensureStyles();
+  if (normalizeDomain(window.location.hostname) !== domain) {
+    container.innerHTML = `<a class="hip-live-badge hip-live-badge-mismatch" href="${apiBase}/lookup/${encodeURIComponent(domain)}" target="_blank" rel="noopener noreferrer"><strong>HIP Badge Domain Mismatch</strong><span>Certificate unavailable for this hostname</span></a>`;
+    return;
+  }
   fetch(`${apiBase}/api/v1/badge/${encodeURIComponent(domain)}`, { headers: { "Accept": "application/json" } })
     .then(response => {
       if (!response.ok) {
@@ -4216,16 +4222,30 @@ public partial class Program
     });
 
   function render(badge) {
-    const variant = String(badge.badgeVariant || badge.status || "unknown").replace(/[^a-z0-9]/gi, "").toLowerCase();
+    const certificate = badge.certificate;
+    const active = certificate && certificate.isActive === true && certificate.domain === domain;
+    const variant = certificate ? String(active ? certificate.level : certificate.status).toLowerCase() : "unknown";
     const checked = badge.lastCheckedUtc ? new Date(badge.lastCheckedUtc).toLocaleDateString() : "Unknown";
-    const lookupUrl = new URL(badge.lookupUrl || badge.publicLookupUrl || `/lookup/${badge.domain}`, apiBase).toString();
-    container.innerHTML = `<a class="hip-live-badge hip-live-badge-${variant}" href="${escapeAttribute(lookupUrl)}" target="_blank" rel="noopener noreferrer"><strong>${badge.verified ? "HIP Verified" : "HIP Warning"}</strong><span>Score: ${escapeHtml(badge.score)}/100</span><span>Status: ${escapeHtml(badge.status)}</span><span>Verified domain: ${badge.verifiedDomain ? "Yes" : "No"}</span><small>Last checked: ${escapeHtml(checked)}</small><small>Verified identity does not automatically mean safe.</small></a>`;
+    const lookupUrl = new URL(certificate?.publicCertificateUrl || badge.lookupUrl || badge.publicLookupUrl || `/lookup/${badge.domain}`, apiBase).toString();
+    const label = active ? `HIP ${certificate.level}` : certificate ? `HIP ${certificate.status}` : "HIP Unverified";
+    container.innerHTML = `<a class="hip-live-badge hip-live-badge-${variant}" href="${escapeAttribute(lookupUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttribute(label)} for ${escapeAttribute(domain)}"><strong>${escapeHtml(label)}</strong><span>Certificate: ${escapeHtml(certificate?.status || "Not issued")}</span><span>Level: ${escapeHtml(certificate?.level || "None")}</span><span>Verified domain: ${escapeHtml(certificate?.domain || "Unavailable")}</span><span>HIP risk score: ${escapeHtml(badge.score)}/100 (${escapeHtml(badge.status)})</span><small>Last checked: ${escapeHtml(checked)}</small><small>A HIP certificate does not automatically mean safe.</small></a>`;
   }
-
   function verify(badge) {
     const signed = badge && badge.signedBadge;
     const payload = signed && signed.payload;
     const expiresAt = payload && Date.parse(payload.expiresAtUtc);
+    const certificate = badge && badge.certificate;
+    const signedCertificate = payload && payload.certificate;
+    const certificateMatches = (!certificate && !signedCertificate) ||
+      (certificate && signedCertificate &&
+       certificate.certificateId === signedCertificate.certificateId &&
+       certificate.domain === signedCertificate.domain &&
+       certificate.level === signedCertificate.level &&
+       certificate.status === signedCertificate.status &&
+       certificate.signatureStatus === signedCertificate.signatureStatus &&
+       certificate.expiresAtUtc === signedCertificate.expiresAtUtc &&
+       certificate.publicCertificateUrl === signedCertificate.publicCertificateUrl &&
+       certificate.isActive === signedCertificate.isActive);
     if (!badge || badge.isAvailable !== true || badge.signatureStatus !== "Verified" ||
         !signed || !payload || !signed.signature ||
         payload.documentType !== "hip-live-badge" || payload.version !== "1.0" ||
@@ -4233,7 +4253,9 @@ public partial class Program
         payload.score !== badge.score || payload.status !== badge.status ||
         payload.verifiedDomain !== badge.verifiedDomain ||
         payload.identityVerificationStatus !== badge.identityVerificationStatus ||
-        payload.verifiedMeaning !== badge.verifiedMeaning ||
+        payload.verifiedMeaning !== badge.verifiedMeaning || !certificateMatches ||
+        (certificate && certificate.domain !== domain) ||
+        (certificate?.isActive === true && (certificate.status !== "Active" || certificate.signatureStatus !== "Verified")) ||
         !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       throw new Error("HIP badge signature state is unavailable or inconsistent.");
     }
@@ -4261,8 +4283,12 @@ public partial class Program
     }
     const style = document.createElement("style");
     style.id = "hip-live-badge-style";
-    style.textContent = ".hip-live-badge{display:inline-grid;gap:2px;min-width:168px;padding:10px 12px;border:1px solid #cbd5e1;border-left:5px solid #64748b;border-radius:8px;background:#fff;color:#111827;font:12px/1.3 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-decoration:none;box-shadow:0 6px 16px rgba(15,23,42,.12)}.hip-live-badge strong{font-size:13px;text-transform:uppercase}.hip-live-badge span{font-size:12px}.hip-live-badge small{font-size:11px;color:#475569}.hip-live-badge-trusted{border-left-color:#047857}.hip-live-badge-probablysafe{border-left-color:#0f766e}.hip-live-badge-caution{border-left-color:#ca8a04}.hip-live-badge-highrisk{border-left-color:#ea580c}.hip-live-badge-dangerous,.hip-live-badge-critical{border-left-color:#b91c1c}.hip-live-badge-unknown{border-left-color:#64748b}";
+    style.textContent = ".hip-live-badge{display:inline-grid;gap:2px;min-width:168px;padding:10px 12px;border:1px solid #cbd5e1;border-left:5px solid #64748b;border-radius:8px;background:#fff;color:#111827;font:12px/1.3 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-decoration:none;box-shadow:0 6px 16px rgba(15,23,42,.12)}.hip-live-badge strong{font-size:13px;text-transform:uppercase}.hip-live-badge span{font-size:12px}.hip-live-badge small{font-size:11px;color:#475569}.hip-live-badge-trusted{border-left-color:#047857}.hip-live-badge-probablysafe{border-left-color:#0f766e}.hip-live-badge-caution{border-left-color:#ca8a04}.hip-live-badge-highrisk{border-left-color:#ea580c}.hip-live-badge-dangerous,.hip-live-badge-critical{border-left-color:#b91c1c}.hip-live-badge-unknown,.hip-live-badge-expired{border-left-color:#64748b}.hip-live-badge-registered,.hip-live-badge-verified{border-left-color:#0f766e}.hip-live-badge-monitored{border-left-color:#047857}.hip-live-badge-suspended,.hip-live-badge-renewalrequired{border-left-color:#ca8a04}.hip-live-badge-revoked,.hip-live-badge-mismatch{border-left-color:#b91c1c}@media(prefers-color-scheme:dark){.hip-live-badge{background:#111827;border-color:#475569;color:#f8fafc}.hip-live-badge small{color:#cbd5e1} } @media(prefers-reduced-motion:reduce){.hip-live-badge{transition:none!important;animation:none!important} }";
     document.head.appendChild(style);
+  }
+
+  function normalizeDomain(value) {
+    return String(value || "").trim().replace(/\.$/, "").toLowerCase();
   }
 
   function escapeHtml(value) {

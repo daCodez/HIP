@@ -72,7 +72,8 @@ public sealed class HipLiveBadgeSigningService(
                 request.VerifiedMeaning,
                 lastCheckedUtc,
                 issuedAtUtc,
-                issuedAtUtc + badgePolicy.ValidityPeriod);
+                issuedAtUtc + badgePolicy.ValidityPeriod,
+                request.Certificate);
             var issuer = new HipProtocolIssuer(signingKey.IssuerId);
             var unsignedSignature = Signature(signingKey, UnsignedPlaceholder);
             var unsignedDocument = new HipLiveBadgeDocument(payload, issuer, unsignedSignature);

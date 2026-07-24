@@ -53,6 +53,13 @@ public interface IPublicDomainCertificateService
     Task<PublicDomainCertificateLookupResult> GetByIdAsync(
         string certificateId,
         CancellationToken cancellationToken);
+
+    /// <summary>Gets the current public certificate for one exact canonical domain.</summary>
+    Task<PublicDomainCertificateLookupResult> GetByDomainAsync(
+        string domain,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(new PublicDomainCertificateLookupResult(
+            PublicDomainCertificateLookupStatus.NotFound));
 }
 
 /// <summary>Builds fail-closed public certificate responses from durable signed records.</summary>
@@ -79,6 +86,58 @@ public sealed class PublicDomainCertificateService(
         try
         {
             stored = await repository.GetByIdAsync(certificateId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new PublicDomainCertificateLookupResult(
+                PublicDomainCertificateLookupStatus.Unavailable);
+        }
+
+        if (stored is null)
+        {
+            return new PublicDomainCertificateLookupResult(
+                PublicDomainCertificateLookupStatus.NotFound);
+        }
+
+        var certificate = stored.Certificate;
+        var now = clock.GetUtcNow();
+        var validity = Validity(certificate.Payload, now);
+        var signatureStatus = await VerifyAsync(certificate, cancellationToken).ConfigureAwait(false);
+        var effectiveStatus = validity == PublicDomainCertificateValidityStatus.Expired &&
+                              stored.CurrentStatus == DomainCertificateStatus.Active
+            ? DomainCertificateStatus.Expired
+            : stored.CurrentStatus;
+        var isActive = signatureStatus == PublicDomainCertificateSignatureStatus.Verified &&
+                       validity == PublicDomainCertificateValidityStatus.Current &&
+                       effectiveStatus == DomainCertificateStatus.Active;
+        return new PublicDomainCertificateLookupResult(
+            PublicDomainCertificateLookupStatus.Found,
+            new PublicDomainCertificateResponse(
+                SchemaVersion,
+                certificate,
+                effectiveStatus,
+                signatureStatus,
+                validity,
+                isActive,
+                now,
+                certificate.Payload.RevocationStatusUrl,
+                certificate.Payload.PublicCertificateUrl));
+    }
+    /// <inheritdoc />
+    public async Task<PublicDomainCertificateLookupResult> GetByDomainAsync(
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        var normalizedDomain = DomainInputValidator.ValidateAndNormalize(domain);
+        HipStoredDomainCertificate? stored;
+        try
+        {
+            stored = await repository.GetCurrentByDomainAsync(normalizedDomain, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

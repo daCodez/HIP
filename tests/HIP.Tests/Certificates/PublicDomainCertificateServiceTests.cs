@@ -86,6 +86,23 @@ public sealed class PublicDomainCertificateServiceTests
         });
     }
 
+    [Test]
+    public async Task Current_domain_lookup_verifies_the_same_public_certificate_contract()
+    {
+        var stored = Stored();
+        var service = Service(stored, HipSignedDocumentVerificationStatus.Verified);
+
+        var result = await service.GetByDomainAsync("example.com", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(PublicDomainCertificateLookupStatus.Found));
+            Assert.That(result.Certificate?.SignedCertificate.Payload.Domain, Is.EqualTo("example.com"));
+            Assert.That(result.Certificate?.SignatureStatus, Is.EqualTo(PublicDomainCertificateSignatureStatus.Verified));
+            Assert.That(result.Certificate?.IsActive, Is.True);
+        });
+    }
+
     private static PublicDomainCertificateService Service(
         HipStoredDomainCertificate stored,
         HipSignedDocumentVerificationStatus verificationStatus) =>

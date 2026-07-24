@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HIP.Application.Certificates;
+using HIP.Domain.Certificates;
 using HIP.Domain.Protocol;
 using HIP.Domain.Risk;
 
@@ -45,8 +47,93 @@ public sealed record HipLiveBadgeSigningRequest(
     bool VerifiedDomain,
     string IdentityVerificationStatus,
     string VerifiedMeaning,
-    DateTimeOffset LastCheckedUtc);
+    DateTimeOffset LastCheckedUtc,
+    HipLiveBadgeCertificateState? Certificate = null);
 
+/// <summary>Public certificate facts independently verified by HIP and bound into the short-lived badge signature.</summary>
+public sealed record HipLiveBadgeCertificateState
+{
+    [JsonConstructor]
+    public HipLiveBadgeCertificateState(
+        string certificateId,
+        string domain,
+        DomainCertificateLevel level,
+        DomainCertificateStatus status,
+        PublicDomainCertificateSignatureStatus signatureStatus,
+        DateTimeOffset expiresAtUtc,
+        string publicCertificateUrl,
+        bool isActive)
+    {
+        if (string.IsNullOrWhiteSpace(certificateId) ||
+            certificateId.Length > 128 ||
+            certificateId.Any(character =>
+                !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.' or ':')))
+        {
+            throw new ArgumentException("HIP badge certificate identifier is invalid.", nameof(certificateId));
+        }
+
+        var normalizedDomain = DomainInputValidator.ValidateAndNormalize(domain);
+        if (!string.Equals(domain, normalizedDomain, StringComparison.Ordinal) ||
+            !Enum.IsDefined(level) ||
+            !Enum.IsDefined(status) ||
+            !Enum.IsDefined(signatureStatus) ||
+            expiresAtUtc.Offset != TimeSpan.Zero ||
+            !Uri.TryCreate(publicCertificateUrl, UriKind.Absolute, out var publicUrl) ||
+            publicUrl.Scheme != Uri.UriSchemeHttps ||
+            !string.IsNullOrEmpty(publicUrl.UserInfo) ||
+            !string.IsNullOrEmpty(publicUrl.Query) ||
+            !string.IsNullOrEmpty(publicUrl.Fragment) ||
+            (isActive && (status != DomainCertificateStatus.Active ||
+                          signatureStatus != PublicDomainCertificateSignatureStatus.Verified)))
+        {
+            throw new ArgumentException("HIP badge certificate state is invalid.", nameof(domain));
+        }
+
+        CertificateId = certificateId;
+        Domain = normalizedDomain;
+        Level = level;
+        Status = status;
+        SignatureStatus = signatureStatus;
+        ExpiresAtUtc = expiresAtUtc;
+        PublicCertificateUrl = publicUrl.AbsoluteUri;
+        IsActive = isActive;
+    }
+
+    [JsonPropertyName("certificateId")]
+    [JsonPropertyOrder(0)]
+    public string CertificateId { get; }
+
+    [JsonPropertyName("domain")]
+    [JsonPropertyOrder(1)]
+    public string Domain { get; }
+
+    [JsonPropertyName("level")]
+    [JsonPropertyOrder(2)]
+    [JsonConverter(typeof(JsonStringEnumConverter<DomainCertificateLevel>))]
+    public DomainCertificateLevel Level { get; }
+
+    [JsonPropertyName("status")]
+    [JsonPropertyOrder(3)]
+    [JsonConverter(typeof(JsonStringEnumConverter<DomainCertificateStatus>))]
+    public DomainCertificateStatus Status { get; }
+
+    [JsonPropertyName("signatureStatus")]
+    [JsonPropertyOrder(4)]
+    [JsonConverter(typeof(JsonStringEnumConverter<PublicDomainCertificateSignatureStatus>))]
+    public PublicDomainCertificateSignatureStatus SignatureStatus { get; }
+
+    [JsonPropertyName("expiresAtUtc")]
+    [JsonPropertyOrder(5)]
+    public DateTimeOffset ExpiresAtUtc { get; }
+
+    [JsonPropertyName("publicCertificateUrl")]
+    [JsonPropertyOrder(6)]
+    public string PublicCertificateUrl { get; }
+
+    [JsonPropertyName("isActive")]
+    [JsonPropertyOrder(7)]
+    public bool IsActive { get; }
+}
 /// <summary>Versioned public facts cryptographically bound into a live badge.</summary>
 public sealed record HipLiveBadgePayload
 {
@@ -65,7 +152,8 @@ public sealed record HipLiveBadgePayload
         string verifiedMeaning,
         DateTimeOffset lastCheckedUtc,
         DateTimeOffset issuedAtUtc,
-        DateTimeOffset expiresAtUtc)
+        DateTimeOffset expiresAtUtc,
+        HipLiveBadgeCertificateState? certificate = null)
     {
         if (!string.Equals(documentType, LiveBadgeDocumentType, StringComparison.Ordinal))
         {
@@ -106,6 +194,7 @@ public sealed record HipLiveBadgePayload
         LastCheckedUtc = RequiredUtcMillisecond(lastCheckedUtc, nameof(lastCheckedUtc));
         IssuedAtUtc = RequiredUtcMillisecond(issuedAtUtc, nameof(issuedAtUtc));
         ExpiresAtUtc = RequiredUtcMillisecond(expiresAtUtc, nameof(expiresAtUtc));
+        Certificate = certificate;
 
         if (LastCheckedUtc > IssuedAtUtc)
         {
@@ -162,6 +251,10 @@ public sealed record HipLiveBadgePayload
     [JsonPropertyName("expiresAtUtc")]
     [JsonPropertyOrder(10)]
     public DateTimeOffset ExpiresAtUtc { get; }
+
+    [JsonPropertyName("certificate")]
+    [JsonPropertyOrder(11)]
+    public HipLiveBadgeCertificateState? Certificate { get; }
 
     private static string RequiredPublicText(string? value, string parameterName)
     {
