@@ -56,6 +56,59 @@ public sealed class HipExternalClaimsMapperTests
     }
 
     [Test]
+    public void Verified_external_contact_maps_only_a_privacy_safe_boolean_marker()
+    {
+        var mapper = CreateMapper();
+        var claims = mapper.Map(ExternalPrincipal(
+            "https://identity.hip.test/tenant/v2.0",
+            "opaque-provider-subject-1001",
+            new Claim(ClaimTypes.Email, "private@example.test"),
+            new Claim("email_verified", "true", ClaimValueTypes.Boolean)));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                claims.Single(claim =>
+                    claim.Type == HipAuthenticationClaimTypes.AccountContactVerified).Value,
+                Is.EqualTo("true"));
+            Assert.That(
+                claims.Single(claim =>
+                    claim.Type == HipAuthenticationClaimTypes.AccountContactVerified).ValueType,
+                Is.EqualTo(ClaimValueTypes.Boolean));
+            Assert.That(claims.Any(claim => claim.Value == "private@example.test"), Is.False);
+        });
+    }
+
+    [TestCase("false")]
+    [TestCase("not-a-boolean")]
+    public void Unverified_or_malformed_external_contact_does_not_create_a_hip_marker(string value)
+    {
+        var mapper = CreateMapper();
+        var claims = mapper.Map(ExternalPrincipal(
+            "https://identity.hip.test/tenant/v2.0",
+            "opaque-provider-subject-1001",
+            new Claim("email_verified", value)));
+
+        Assert.That(
+            claims.Any(claim => claim.Type == HipAuthenticationClaimTypes.AccountContactVerified),
+            Is.False);
+    }
+
+    [Test]
+    public void Ambiguous_external_contact_verification_does_not_create_a_hip_marker()
+    {
+        var mapper = CreateMapper();
+        var claims = mapper.Map(ExternalPrincipal(
+            "https://identity.hip.test/tenant/v2.0",
+            "opaque-provider-subject-1001",
+            new Claim("email_verified", "true"),
+            new Claim("email_verified", "true")));
+
+        Assert.That(
+            claims.Any(claim => claim.Type == HipAuthenticationClaimTypes.AccountContactVerified),
+            Is.False);
+    }
+    [Test]
     public void Issuer_and_subject_are_both_part_of_the_stable_hip_actor_id()
     {
         var mapper = CreateMapper();

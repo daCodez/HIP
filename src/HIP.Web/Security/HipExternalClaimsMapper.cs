@@ -22,6 +22,9 @@ public static class HipAuthenticationClaimTypes
     /// <summary>Gets the compatibility claim used by the existing consumer portal.</summary>
     public const string ConsumerId = "hip_consumer_id";
 
+    /// <summary>Gets HIP's boolean marker that the external provider verified an account contact.</summary>
+    public const string AccountContactVerified = "hip_account_contact_verified";
+
     /// <summary>Gets HIP's boolean claim proving accepted multi-factor evidence was present.</summary>
     public const string MultiFactorAuthenticated = "hip_mfa";
 
@@ -108,8 +111,26 @@ public sealed class HipExternalClaimsMapper
             new(HipAuthenticationClaimTypes.ActorId, actorId),
             new(HipAuthenticationClaimTypes.ConsumerId, actorId)
         };
+        if (HasVerifiedAccountContact(externalPrincipal))
+        {
+            claims.Add(new Claim(
+                HipAuthenticationClaimTypes.AccountContactVerified,
+                "true",
+                ClaimValueTypes.Boolean));
+        }
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
         return claims.ToArray();
+    }
+
+    private static bool HasVerifiedAccountContact(ClaimsPrincipal principal)
+    {
+        var matches = principal.Claims
+            .Where(claim => string.Equals(claim.Type, "email_verified", StringComparison.Ordinal))
+            .Take(2)
+            .ToArray();
+        return matches.Length == 1 &&
+               bool.TryParse(matches[0].Value, out var verified) &&
+               verified;
     }
 
     private static string RequiredUniqueClaim(

@@ -137,6 +137,10 @@ public sealed class HipDevHeaderAuthenticationHandler(
             claims.Add(new Claim(
                 HipAuthenticationClaimTypes.ConsumerId,
                 DevelopmentConsumerId(user)));
+            claims.Add(new Claim(
+                HipAuthenticationClaimTypes.AccountContactVerified,
+                "true",
+                ClaimValueTypes.Boolean));
         }
 
         var identity = new ClaimsIdentity(claims, SchemeName);
@@ -161,7 +165,11 @@ public sealed class HipDevHeaderAuthenticationHandler(
         var claims = new[]
         {
             new Claim(ClaimTypes.Name, consumerId),
-            new Claim(HipAuthenticationClaimTypes.ConsumerId, consumerId)
+            new Claim(HipAuthenticationClaimTypes.ConsumerId, consumerId),
+            new Claim(
+                HipAuthenticationClaimTypes.AccountContactVerified,
+                "true",
+                ClaimValueTypes.Boolean)
         };
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);

@@ -125,6 +125,9 @@ public sealed class ConsumerAccountDerivedAuthenticationTests
             Assert.That(principal, Is.Not.Null);
             Assert.That(principal!.FindAll(HipAuthenticationClaimTypes.ActorId).Count(), Is.EqualTo(1));
             Assert.That(principal.FindAll(HipAuthenticationClaimTypes.ConsumerId).Count(), Is.EqualTo(1));
+            Assert.That(
+                principal.FindFirstValue(HipAuthenticationClaimTypes.AccountContactVerified),
+                Is.EqualTo("true"));
             Assert.That(principal.IsInRole(AdminRoles.Owner), Is.True);
             Assert.That(
                 principal.FindFirstValue(HipAuthenticationClaimTypes.ConsumerId),
