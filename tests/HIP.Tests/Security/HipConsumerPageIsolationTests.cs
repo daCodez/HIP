@@ -243,9 +243,15 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(certificates, Does.Contain("Current HIP score"));
             Assert.That(certificates, Does.Contain("Certificate expiration"));
             Assert.That(certificates, Does.Contain("Domain added"));
-            Assert.That(certificates, Does.Contain("DNS verified"));
-            Assert.That(certificates, Does.Contain("Website verified"));
-            Assert.That(certificates, Does.Contain("Identity completed"));
+            Assert.That(certificates, Does.Contain(
+                """@ProgressStep("DNS verified", "Check DNS", item.DnsVerifiedAtUtc is not null, item, 1)"""));
+            Assert.That(certificates, Does.Contain(
+                """@ProgressStep("Website verified", "Verify website", item.WebsiteVerifiedAtUtc is not null, item, 2)"""));
+            Assert.That(certificates, Does.Contain(
+                """@ProgressStep("Identity completed", "Complete identity", item.IdentityCompletedAtUtc is not null, item, 3)"""));
+            Assert.That(certificates, Does.Contain(
+                "A checkmark means complete. The highlighted numbered step is the next action."));
+            Assert.That(certificates, Does.Contain("var label = complete ? completedLabel : incompleteLabel;"));
             Assert.That(certificates, Does.Contain("item.ApplicationSubmittedAtUtc is not null"));
             Assert.That(certificates, Does.Contain(
                 "item.ApplicationStatus == DomainCertificateApplicationStatus.Approved"));

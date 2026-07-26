@@ -80,6 +80,11 @@
     overflow-x: auto;
 }
 
+.verification-progress-help {
+    margin: .5rem 0 0;
+    color: var(--muted);
+}
+
 .verification-progress ::deep .progress-step {
     display: grid;
     grid-template-columns: 1.8rem minmax(0, 1fr);
