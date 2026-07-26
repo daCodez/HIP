@@ -22,7 +22,13 @@ public sealed class DomainCertificateProvisioningServiceTests
             Now.AddHours(-1),
             Now.AddMinutes(-30),
             "Example Site",
-            "Example Org");
+            "Example Org") with
+        {
+            ApplicationStatus = DomainCertificateApplicationStatus.Approved,
+            ApplicationSubmittedAtUtc = Now.AddMinutes(-20),
+            ApplicationReviewedAtUtc = Now.AddMinutes(-10),
+            ApplicantAttestationDigest = $"sha256:{new string('a', 64)}"
+        };
         var repository = new RecordingEnrollmentRepository(enrollment);
         var evaluation = new DomainCertificatePolicyEvaluator(DomainCertificatePolicy.V1).Evaluate(
             new DomainCertificatePolicyEvaluationRequest(

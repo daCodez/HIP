@@ -69,7 +69,11 @@ public sealed class EfDomainCertificateRepository(
                 item.PublicOrganizationName,
                 item.SecurityReviewCompletedAtUtc,
                 item.CurrentScore,
-                item.UnresolvedCriticalFindings))
+                item.UnresolvedCriticalFindings,
+                item.ApplicationStatus,
+                item.ApplicationSubmittedAtUtc,
+                item.ApplicationReviewedAtUtc,
+                item.ApplicantAttestationDigest))
             .SingleOrDefaultAsync(cancellationToken);
     }
 
@@ -121,7 +125,11 @@ public sealed class EfDomainCertificateRepository(
                     certificate == null ? null : certificate.Level,
                     certificate == null ? null : certificate.IssuedAtUtc,
                     certificate == null ? null : certificate.ExpiresAtUtc,
-                    certificate == null ? null : certificate.LastVerificationAtUtc))
+                    certificate == null ? null : certificate.LastVerificationAtUtc,
+                    enrollment.ApplicationStatus,
+                    enrollment.ApplicationSubmittedAtUtc,
+                    enrollment.ApplicationReviewedAtUtc,
+                    enrollment.ApplicantAttestationDigest))
             .ToListAsync(cancellationToken);
     }
     /// <inheritdoc />
@@ -169,7 +177,11 @@ public sealed class EfDomainCertificateRepository(
                     certificate == null ? null : certificate.Level,
                     certificate == null ? null : certificate.IssuedAtUtc,
                     certificate == null ? null : certificate.ExpiresAtUtc,
-                    certificate == null ? null : certificate.LastVerificationAtUtc))
+                    certificate == null ? null : certificate.LastVerificationAtUtc,
+                    enrollment.ApplicationStatus,
+                    enrollment.ApplicationSubmittedAtUtc,
+                    enrollment.ApplicationReviewedAtUtc,
+                    enrollment.ApplicantAttestationDigest))
             .ToListAsync(cancellationToken);
     }
 
@@ -514,6 +526,164 @@ public sealed class EfDomainCertificateRepository(
     }
 
     /// <inheritdoc />
+    public async Task<DomainEnrollmentTransitionWriteResult> TrySubmitApplicationAsync(
+        DomainCertificateApplicationSubmissionRecord submission,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(submission);
+        ValidateIdentifier(submission.EnrollmentId, 128);
+        ValidateIdentifier(submission.OwnerId, 256);
+        ValidateIdentifier(submission.AttestationVersion, 128);
+        ValidateIdentifier(submission.AuditEventId, 128);
+        if (!IsDigest(submission.AttestationDigest) ||
+            submission.SubmittedAtUtc.Offset != TimeSpan.Zero ||
+            HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(submission.Domain) != submission.Domain)
+        {
+            throw new ArgumentException("Certificate application submission is invalid.", nameof(submission));
+        }
+
+        var enrollment = await dbContext.DomainEnrollments.SingleOrDefaultAsync(
+            item => item.EnrollmentId == submission.EnrollmentId &&
+                    item.OwnerId == submission.OwnerId &&
+                    item.Domain == submission.Domain &&
+                    item.IsCurrent,
+            cancellationToken);
+        if (enrollment is null)
+        {
+            return new(DomainEnrollmentTransitionWriteStatus.NotFound);
+        }
+        if (enrollment.ApplicationStatus == DomainCertificateApplicationStatus.Submitted &&
+            enrollment.ApplicantAttestationDigest == submission.AttestationDigest)
+        {
+            return new(DomainEnrollmentTransitionWriteStatus.AlreadyApplied);
+        }
+        if (enrollment.Status != DomainEnrollmentStatus.PendingSecurityReview ||
+            enrollment.IdentityCompletedAtUtc is null ||
+            enrollment.DnsVerifiedAtUtc is null ||
+            enrollment.WebsiteVerifiedAtUtc is null ||
+            enrollment.ApplicationStatus is not DomainCertificateApplicationStatus.Draft
+                and not DomainCertificateApplicationStatus.ChangesRequested)
+        {
+            return new(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+        if (await dbContext.DomainCertificateEvents.AnyAsync(
+                item => item.EventId == submission.AuditEventId,
+                cancellationToken))
+        {
+            return new(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+
+        enrollment.ApplicationStatus = DomainCertificateApplicationStatus.Submitted;
+        enrollment.ApplicationSubmittedAtUtc = submission.SubmittedAtUtc;
+        enrollment.ApplicationReviewedAtUtc = null;
+        enrollment.ApplicantAttestationDigest = submission.AttestationDigest;
+        enrollment.ApplicationDecisionReason = null;
+        enrollment.UpdatedAtUtc = submission.SubmittedAtUtc;
+        enrollment.AggregateVersion++;
+        dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+        {
+            EventId = submission.AuditEventId,
+            EnrollmentId = enrollment.EnrollmentId,
+            EventType = "CertificateApplicationSubmitted",
+            PreviousStatus = DomainCertificateApplicationStatus.Draft.ToString(),
+            CurrentStatus = DomainCertificateApplicationStatus.Submitted.ToString(),
+            ActorId = submission.OwnerId,
+            ReasonCode = submission.AttestationVersion,
+            PublicSummary = "The authenticated domain representative submitted a certificate application.",
+            PolicyVersion = enrollment.PolicyVersion,
+            EvidenceDigest = submission.AttestationDigest,
+            OccurredAtUtc = submission.SubmittedAtUtc
+        });
+        return await SaveApplicationTransitionAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<DomainEnrollmentTransitionWriteResult> TryDecideApplicationAsync(
+        DomainCertificateApplicationDecisionRecord decision,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+        ValidateIdentifier(decision.EnrollmentId, 128);
+        ValidateIdentifier(decision.ActorId, 256);
+        ValidateIdentifier(decision.AuditEventId, 128);
+        ValidateProfileText(decision.Reason, 500, required: true);
+        if (decision.Decision is not DomainCertificateApplicationStatus.Approved
+                and not DomainCertificateApplicationStatus.ChangesRequested
+                and not DomainCertificateApplicationStatus.Denied ||
+            decision.DecidedAtUtc.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException("Certificate application decision is invalid.", nameof(decision));
+        }
+
+        var enrollment = await dbContext.DomainEnrollments.SingleOrDefaultAsync(
+            item => item.EnrollmentId == decision.EnrollmentId && item.IsCurrent,
+            cancellationToken);
+        if (enrollment is null)
+        {
+            return new(DomainEnrollmentTransitionWriteStatus.NotFound);
+        }
+        if (enrollment.ApplicationStatus == decision.Decision)
+        {
+            return new(DomainEnrollmentTransitionWriteStatus.AlreadyApplied);
+        }
+        if (enrollment.ApplicationStatus != DomainCertificateApplicationStatus.Submitted ||
+            enrollment.ApplicantAttestationDigest is null ||
+            await dbContext.DomainCertificateEvents.AnyAsync(
+                item => item.EventId == decision.AuditEventId,
+                cancellationToken))
+        {
+            return new(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+
+        var previous = enrollment.ApplicationStatus;
+        enrollment.ApplicationStatus = decision.Decision;
+        enrollment.ApplicationReviewedAtUtc = decision.DecidedAtUtc;
+        enrollment.ApplicationDecisionReason = decision.Reason;
+        enrollment.UpdatedAtUtc = decision.DecidedAtUtc;
+        enrollment.AggregateVersion++;
+        dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+        {
+            EventId = decision.AuditEventId,
+            EnrollmentId = enrollment.EnrollmentId,
+            EventType = decision.Decision switch
+            {
+                DomainCertificateApplicationStatus.Approved => "CertificateApplicationApproved",
+                DomainCertificateApplicationStatus.ChangesRequested => "CertificateApplicationChangesRequested",
+                _ => "CertificateApplicationDenied"
+            },
+            PreviousStatus = previous.ToString(),
+            CurrentStatus = decision.Decision.ToString(),
+            ActorId = decision.ActorId,
+            ReasonCode = decision.Decision.ToString(),
+            PublicSummary = decision.Decision switch
+            {
+                DomainCertificateApplicationStatus.Approved => "HIP approved the authenticated certificate application.",
+                DomainCertificateApplicationStatus.ChangesRequested => "HIP requested changes to the certificate application.",
+                _ => "HIP denied the certificate application."
+            },
+            PolicyVersion = enrollment.PolicyVersion,
+            EvidenceDigest = enrollment.ApplicantAttestationDigest,
+            OccurredAtUtc = decision.DecidedAtUtc
+        });
+        return await SaveApplicationTransitionAsync(cancellationToken);
+    }
+
+    private async Task<DomainEnrollmentTransitionWriteResult> SaveApplicationTransitionAsync(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return new(DomainEnrollmentTransitionWriteStatus.Updated);
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            return new(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<DomainEnrollmentTransitionWriteResult> TryApplySecurityReviewAsync(
         DomainCertificateSecurityReviewRecord review,
         CancellationToken cancellationToken)
@@ -549,7 +719,8 @@ public sealed class EfDomainCertificateRepository(
         }
         if (enrollment.Status != DomainEnrollmentStatus.PendingSecurityReview ||
             enrollment.IdentityCompletedAtUtc is null || enrollment.DnsVerifiedAtUtc is null ||
-            enrollment.WebsiteVerifiedAtUtc is null)
+            enrollment.WebsiteVerifiedAtUtc is null ||
+            enrollment.ApplicationStatus != DomainCertificateApplicationStatus.Approved)
         {
             return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Conflict);
         }

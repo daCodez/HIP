@@ -40,6 +40,11 @@ internal static class HipDevelopmentCertificateSchema
                 "PublicOrganizationName" character varying(200) NULL,
                 "PublicWebsiteContact" character varying(320) NULL,
                 "SecurityContactHash" character varying(71) NULL,
+                "ApplicationStatus" character varying(32) NOT NULL DEFAULT 'Draft',
+                "ApplicationSubmittedAtUtc" timestamp with time zone NULL,
+                "ApplicationReviewedAtUtc" timestamp with time zone NULL,
+                "ApplicantAttestationDigest" character varying(71) NULL,
+                "ApplicationDecisionReason" character varying(500) NULL,
                 CONSTRAINT "PK_hip_domain_enrollments" PRIMARY KEY ("EnrollmentId")
             );
             """,
@@ -52,7 +57,12 @@ internal static class HipDevelopmentCertificateSchema
                 ADD COLUMN IF NOT EXISTS "PublicDisplayName" character varying(200) NULL,
                 ADD COLUMN IF NOT EXISTS "PublicOrganizationName" character varying(200) NULL,
                 ADD COLUMN IF NOT EXISTS "PublicWebsiteContact" character varying(320) NULL,
-                ADD COLUMN IF NOT EXISTS "SecurityContactHash" character varying(71) NULL;
+                ADD COLUMN IF NOT EXISTS "SecurityContactHash" character varying(71) NULL,
+                ADD COLUMN IF NOT EXISTS "ApplicationStatus" character varying(32) NOT NULL DEFAULT 'Draft',
+                ADD COLUMN IF NOT EXISTS "ApplicationSubmittedAtUtc" timestamp with time zone NULL,
+                ADD COLUMN IF NOT EXISTS "ApplicationReviewedAtUtc" timestamp with time zone NULL,
+                ADD COLUMN IF NOT EXISTS "ApplicantAttestationDigest" character varying(71) NULL,
+                ADD COLUMN IF NOT EXISTS "ApplicationDecisionReason" character varying(500) NULL;
             """,
             cancellationToken);
 
@@ -147,6 +157,8 @@ internal static class HipDevelopmentCertificateSchema
             ON hip_domain_enrollments ("OwnerId");
             CREATE INDEX IF NOT EXISTS "IX_hip_domain_enrollments_Status"
             ON hip_domain_enrollments ("Status");
+            CREATE INDEX IF NOT EXISTS "IX_hip_domain_enrollments_ApplicationStatus"
+            ON hip_domain_enrollments ("ApplicationStatus");
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_hip_domain_certificates_Domain"
             ON hip_domain_certificates ("Domain")
             WHERE "IsCurrent" = TRUE;

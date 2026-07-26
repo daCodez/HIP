@@ -22,7 +22,11 @@ public sealed record OwnerDomainCertificateSummary(
     DomainCertificateLevel? BadgeLevel,
     DateTimeOffset? IssuedAtUtc,
     DateTimeOffset? ExpiresAtUtc,
-    DateTimeOffset? LastVerificationAtUtc);
+    DateTimeOffset? LastVerificationAtUtc,
+    DomainCertificateApplicationStatus ApplicationStatus = DomainCertificateApplicationStatus.Draft,
+    DateTimeOffset? ApplicationSubmittedAtUtc = null,
+    DateTimeOffset? ApplicationReviewedAtUtc = null,
+    string? ApplicantAttestationDigest = null);
 
 /// <summary>Reads paged domain-certificate progress for exactly one authenticated owner.</summary>
 public interface IDomainCertificateOwnerQuery

@@ -67,7 +67,8 @@ public sealed class DomainCertificateProvisioningService(
             enrollment.DnsVerifiedAtUtc is null ||
             enrollment.WebsiteVerifiedAtUtc is null ||
             enrollment.IdentityCompletedAtUtc is null ||
-            string.IsNullOrWhiteSpace(enrollment.PublicDisplayName))
+            string.IsNullOrWhiteSpace(enrollment.PublicDisplayName) ||
+            enrollment.ApplicationStatus != DomainCertificateApplicationStatus.Approved)
         {
             return Result(DomainCertificateProvisioningStatus.NotReady);
         }

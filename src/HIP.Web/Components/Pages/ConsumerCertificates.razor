@@ -6,6 +6,7 @@
 @using System.Text.Json
 @inject IDomainCertificateOwnerQuery CertificateQuery
 @inject IDomainCertificateEnrollmentService EnrollmentService
+@inject IDomainCertificateApplicationService ApplicationService
 @inject IDomainCertificateProvisioningService ProvisioningService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthorizationService AuthorizationService
@@ -99,6 +100,7 @@
                 <section class="owner-certificate-facts" aria-label="Current certificate facts">
                     <article><span>Domain ownership</span><strong>@OwnershipStatus(item)</strong></article>
                     <article><span>Certificate status</span><strong>@CertificateStatus(item)</strong></article>
+                    <article><span>Application status</span><strong>@item.ApplicationStatus</strong></article>
                     <article><span>Badge level</span><strong>@(item.BadgeLevel?.ToString() ?? "Not issued")</strong></article>
                     <article><span>Current HIP score</span><strong>@(item.CurrentScore?.ToString() ?? "Not available")</strong></article>
                     <article><span>Monitoring status</span><strong>@MonitoringStatus(item)</strong></article>
@@ -114,9 +116,11 @@
                         @ProgressStep("DNS verified", item.DnsVerifiedAtUtc is not null, item, 1)
                         @ProgressStep("Website verified", item.WebsiteVerifiedAtUtc is not null, item, 2)
                         @ProgressStep("Identity completed", item.IdentityCompletedAtUtc is not null, item, 3)
-                        @ProgressStep("Security review completed", item.SecurityReviewCompletedAtUtc is not null, item, 4)
-                        @ProgressStep("Certificate issued", item.CertificateId is not null, item, 5)
-                        @ProgressStep("Monitoring active", item.EnrollmentStatus == DomainEnrollmentStatus.Monitored, item, 6)
+                        @ProgressStep("Application submitted", item.ApplicationSubmittedAtUtc is not null, item, 4)
+                        @ProgressStep("Application approved", item.ApplicationStatus == DomainCertificateApplicationStatus.Approved, item, 5)
+                        @ProgressStep("Security review completed", item.SecurityReviewCompletedAtUtc is not null, item, 6)
+                        @ProgressStep("Certificate issued", item.CertificateId is not null, item, 7)
+                        @ProgressStep("Monitoring active", item.EnrollmentStatus == DomainEnrollmentStatus.Monitored, item, 8)
                     </ol>
                 </section>
 
@@ -167,6 +171,30 @@
                         }
                     }
                     @if (item.IdentityCompletedAtUtc is not null && item.CertificateId is null &&
+                         item.ApplicationStatus is DomainCertificateApplicationStatus.Draft or DomainCertificateApplicationStatus.ChangesRequested)
+                    {
+                        <section class="certificate-application-attestation" aria-label="Certificate application declarations">
+                            <h3>Submit certificate application</h3>
+                            <p>HIP binds these declarations to your authenticated account, verified domain, identity profile, policy version, and an integrity digest.</p>
+                            <label class="certificate-privacy-choice"><input @bind="_authorityConfirmed" type="checkbox" /> @DomainCertificateApplicantAttestation.AuthorityStatement</label>
+                            <label class="certificate-privacy-choice"><input @bind="_accuracyConfirmed" type="checkbox" /> @DomainCertificateApplicantAttestation.AccuracyStatement</label>
+                            <button class="btn btn-primary" type="button"
+                                    disabled="@(_submittingApplication || !_authorityConfirmed || !_accuracyConfirmed)"
+                                    @onclick="() => SubmitApplicationAsync(item)">
+                                @(_submittingApplication ? "Submitting…" : "Submit application")
+                            </button>
+                        </section>
+                    }
+                    else if (item.ApplicationStatus == DomainCertificateApplicationStatus.Submitted)
+                    {
+                        <p class="admin-message" role="status">Application submitted. An authorized HIP reviewer must approve it before certificate evaluation.</p>
+                    }
+                    else if (item.ApplicationStatus == DomainCertificateApplicationStatus.Denied)
+                    {
+                        <p class="admin-error" role="alert">This application was denied. Contact HIP support before submitting new evidence.</p>
+                    }
+                    @if (item.IdentityCompletedAtUtc is not null && item.CertificateId is null &&
+                         item.ApplicationStatus == DomainCertificateApplicationStatus.Approved &&
                          item.EnrollmentStatus is DomainEnrollmentStatus.PendingSecurityReview or DomainEnrollmentStatus.Verified)
                     {
                         <button class="btn btn-primary" type="button" disabled="@(_reviewingEnrollmentId is not null)"
@@ -212,6 +240,9 @@
     private bool _publishOrganization;
     private bool _publishCountry;
     private bool _savingIdentity;
+    private bool _submittingApplication;
+    private bool _authorityConfirmed;
+    private bool _accuracyConfirmed;
     protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
@@ -463,6 +494,51 @@
         finally
         {
             _savingIdentity = false;
+        }
+    }
+
+    private async Task SubmitApplicationAsync(OwnerDomainCertificateSummary item)
+    {
+        _submittingApplication = true;
+        _certificateActionError = null;
+        _certificateActionMessage = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                ConsumerPolicies.CanUseConsumerPortal,
+                consumerId => ApplicationService.SubmitAsync(
+                    consumerId,
+                    item.Domain,
+                    _authorityConfirmed,
+                    _accuracyConfirmed,
+                    CancellationToken.None));
+            if (!access.Succeeded || access.Value is null)
+            {
+                _certificateActionError = HipConsumerPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            if (access.Value.Status is DomainCertificateApplicationSubmissionStatus.Submitted or
+                DomainCertificateApplicationSubmissionStatus.Existing)
+            {
+                _certificateActionMessage = "Application submitted with an authenticated attestation digest.";
+                _authorityConfirmed = false;
+                _accuracyConfirmed = false;
+                await LoadAsync();
+            }
+            else
+            {
+                _certificateActionError = access.Value.Status == DomainCertificateApplicationSubmissionStatus.NotReady
+                    ? "Complete domain, website, and identity verification before submitting."
+                    : "HIP could not submit this application right now.";
+            }
+        }
+        finally
+        {
+            _submittingApplication = false;
         }
     }
 

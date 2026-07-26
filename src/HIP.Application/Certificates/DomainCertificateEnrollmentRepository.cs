@@ -48,7 +48,11 @@ public sealed record DomainEnrollmentStateRecord(
     string? PublicOrganizationName = null,
     DateTimeOffset? SecurityReviewCompletedAtUtc = null,
     int? CurrentScore = null,
-    int UnresolvedCriticalFindings = 0);
+    int UnresolvedCriticalFindings = 0,
+    DomainCertificateApplicationStatus ApplicationStatus = DomainCertificateApplicationStatus.Draft,
+    DateTimeOffset? ApplicationSubmittedAtUtc = null,
+    DateTimeOffset? ApplicationReviewedAtUtc = null,
+    string? ApplicantAttestationDigest = null);
 
 /// <summary>Authoritative HTTPS website-control verification applied to an owner enrollment.</summary>
 public sealed record DomainWebsiteVerificationRecord(
@@ -82,6 +86,25 @@ public sealed record DomainCertificateSecurityReviewRecord(
     int UnresolvedCriticalFindings,
     string EvidenceDigest,
     DateTimeOffset ReviewedAtUtc,
+    string AuditEventId);
+
+/// <summary>Authenticated applicant declarations bound to the current identity and domain evidence.</summary>
+public sealed record DomainCertificateApplicationSubmissionRecord(
+    string EnrollmentId,
+    string OwnerId,
+    string Domain,
+    string AttestationVersion,
+    string AttestationDigest,
+    DateTimeOffset SubmittedAtUtc,
+    string AuditEventId);
+
+/// <summary>Authorized application decision stored with a privacy-safe reason and permanent audit event.</summary>
+public sealed record DomainCertificateApplicationDecisionRecord(
+    string EnrollmentId,
+    DomainCertificateApplicationStatus Decision,
+    string Reason,
+    string ActorId,
+    DateTimeOffset DecidedAtUtc,
     string AuditEventId);
 
 
@@ -129,4 +152,16 @@ public interface IDomainEnrollmentRepository
     Task<DomainEnrollmentTransitionWriteResult> TryApplySecurityReviewAsync(
         DomainCertificateSecurityReviewRecord review,
         CancellationToken cancellationToken);
+
+    /// <summary>Stores an authenticated applicant attestation and permanent submission event.</summary>
+    Task<DomainEnrollmentTransitionWriteResult> TrySubmitApplicationAsync(
+        DomainCertificateApplicationSubmissionRecord submission,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.NotFound));
+
+    /// <summary>Stores an authorized application decision and permanent decision event.</summary>
+    Task<DomainEnrollmentTransitionWriteResult> TryDecideApplicationAsync(
+        DomainCertificateApplicationDecisionRecord decision,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.NotFound));
 }

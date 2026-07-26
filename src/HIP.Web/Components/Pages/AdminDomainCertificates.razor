@@ -6,6 +6,7 @@
 @using HIP.Domain.Certificates
 @inject IDomainCertificateAdminQuery CertificateQuery
 @inject IDomainCertificateLifecycleService LifecycleService
+@inject IDomainCertificateApplicationService ApplicationService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthorizationService AuthorizationService
 @inject IHostEnvironment HostEnvironment
@@ -58,14 +59,15 @@
                 <div class="table-scroll" tabindex="0" aria-label="Domain certificate operations table">
                     <table>
                         <thead>
-                            <tr><th>Domain</th><th>Enrollment</th><th>Certificate</th><th>Badge</th><th>HIP score</th><th>Unresolved</th><th>Policy version</th><th>Updated UTC</th><th>Actions</th></tr>
+                            <tr><th>Domain</th><th>Enrollment</th><th>Application</th><th>Certificate</th><th>Badge</th><th>HIP score</th><th>Unresolved</th><th>Policy version</th><th>Updated UTC</th><th>Actions</th></tr>
                         </thead>
                         <tbody>
                             @foreach (var item in _items)
                             {
                                 <tr>
                                     <td>@item.Domain</td>
-                                    <td>@item.EnrollmentStatus</td>
+                                                                        <td>@item.EnrollmentStatus</td>
+                                    <td>@item.ApplicationStatus</td>
                                     <td>@(item.CertificateStatus?.ToString() ?? "Not issued")</td>
                                     <td>@(item.BadgeLevel?.ToString() ?? "None")</td>
                                     <td>@(item.CurrentScore?.ToString() ?? "—")</td>
@@ -74,6 +76,12 @@
                                     <td>@item.UpdatedAtUtc.ToString("u")</td>
                                     <td>
                                         <a href="@($"/admin/identity/websites?domain={Uri.EscapeDataString(item.Domain)}")">Verification</a>
+                                        @if (item.ApplicationStatus == DomainCertificateApplicationStatus.Submitted)
+                                        {
+                                            <span aria-hidden="true"> · </span><button type="button" class="hip-secondary-action" @onclick="() => BeginApplicationDecision(item, DomainCertificateApplicationStatus.Approved)" disabled="@_submitting">Approve application</button>
+                                            <span aria-hidden="true"> · </span><button type="button" class="hip-secondary-action" @onclick="() => BeginApplicationDecision(item, DomainCertificateApplicationStatus.ChangesRequested)" disabled="@_submitting">Request changes</button>
+                                            <span aria-hidden="true"> · </span><button type="button" class="danger-button" @onclick="() => BeginApplicationDecision(item, DomainCertificateApplicationStatus.Denied)" disabled="@_submitting">Deny application</button>
+                                        }
                                         @if (item.CertificateId is not null)
                                         {
                                             <span aria-hidden="true"> · </span><a href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">Public certificate</a>
@@ -133,6 +141,29 @@
                 </div>
             </section>
         }
+
+        @if (_selectedItem is not null && _targetApplicationStatus is not null)
+        {
+            <section class="lookup-result certificate-action-confirmation" aria-labelledby="application-decision-title">
+                <h2 id="application-decision-title">Confirm application decision</h2>
+                <p><strong>@ApplicationDecisionLabel(_targetApplicationStatus.Value)</strong> the authenticated certificate application for <strong>@_selectedItem.Domain</strong>.</p>
+                <p>The decision, reviewer identity, reason, attestation digest, and timestamp are permanently audited.</p>
+                <div class="form-group">
+                    <label for="application-decision-reason">Decision reason</label>
+                    <textarea id="application-decision-reason" @bind="_reason" maxlength="500" rows="4" required></textarea>
+                    <p>Enter 5–500 privacy-safe characters. Do not include private evidence or secrets.</p>
+                </div>
+                <div class="service-client-actions">
+                    <button type="button"
+                            class="@(_targetApplicationStatus == DomainCertificateApplicationStatus.Denied ? "danger-button" : "hip-primary-action")"
+                            @onclick="ConfirmApplicationDecisionAsync"
+                            disabled="@(_submitting || !ReasonIsValid)">
+                        @(_submitting ? "Saving…" : $"Confirm {ApplicationDecisionLabel(_targetApplicationStatus.Value).ToLowerInvariant()}")
+                    </button>
+                    <button type="button" class="hip-secondary-action" @onclick="CancelApplicationDecision" disabled="@_submitting">Cancel</button>
+                </div>
+            </section>
+        }
     }
 </main>
 
@@ -145,6 +176,7 @@
     private string? _statusMessage;
     private AdminDomainCertificateSummary? _selectedItem;
     private DomainCertificateStatus? _targetStatus;
+    private DomainCertificateApplicationStatus? _targetApplicationStatus;
     private string _reason = string.Empty;
     private string? _operationId;
 
@@ -193,10 +225,30 @@
     {
         _selectedItem = item;
         _targetStatus = targetStatus;
+        _targetApplicationStatus = null;
         _reason = string.Empty;
         _operationId = Guid.NewGuid().ToString("N");
         _error = null;
         _statusMessage = null;
+    }
+
+    private void BeginApplicationDecision(
+        AdminDomainCertificateSummary item,
+        DomainCertificateApplicationStatus targetStatus)
+    {
+        _selectedItem = item;
+        _targetStatus = null;
+        _targetApplicationStatus = targetStatus;
+        _reason = string.Empty;
+        _error = null;
+        _statusMessage = null;
+    }
+
+    private void CancelApplicationDecision()
+    {
+        _selectedItem = null;
+        _targetApplicationStatus = null;
+        _reason = string.Empty;
     }
 
     private void CancelAction()
@@ -280,6 +332,58 @@
         }
     }
 
+    private async Task ConfirmApplicationDecisionAsync()
+    {
+        if (_selectedItem is null || _targetApplicationStatus is not { } targetStatus || !ReasonIsValid)
+        {
+            _error = "Enter a privacy-safe decision reason of at least 5 characters.";
+            return;
+        }
+
+        _submitting = true;
+        _error = null;
+        _statusMessage = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipAdminPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                HostEnvironment,
+                [AdminPolicies.CanManageDomainVerifications],
+                (actorId, cancellationToken) => ApplicationService.DecideAsync(
+                    _selectedItem.EnrollmentId,
+                    targetStatus,
+                    _reason,
+                    actorId,
+                    cancellationToken),
+                _pageCancellation.Token);
+            if (!access.Succeeded || access.Value is null)
+            {
+                _error = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            if (access.Value.Status is DomainCertificateApplicationDecisionStatus.Approved or
+                DomainCertificateApplicationDecisionStatus.ChangesRequested or
+                DomainCertificateApplicationDecisionStatus.Denied or
+                DomainCertificateApplicationDecisionStatus.Existing)
+            {
+                var domain = _selectedItem.Domain;
+                CancelApplicationDecision();
+                _statusMessage = $"{domain} application decision saved.";
+                await LoadAsync();
+                return;
+            }
+
+            _error = "HIP could not save the application decision right now.";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
     private bool ReasonIsValid
     {
         get
@@ -288,6 +392,14 @@
             return trimmed.Length is >= 5 and <= 500 && !trimmed.Any(char.IsControl);
         }
     }
+
+    private static string ApplicationDecisionLabel(DomainCertificateApplicationStatus targetStatus) => targetStatus switch
+    {
+        DomainCertificateApplicationStatus.Approved => "Approve",
+        DomainCertificateApplicationStatus.ChangesRequested => "Request changes for",
+        DomainCertificateApplicationStatus.Denied => "Deny",
+        _ => "Decide"
+    };
 
     private static string ActionLabel(DomainCertificateStatus targetStatus) => targetStatus switch
     {

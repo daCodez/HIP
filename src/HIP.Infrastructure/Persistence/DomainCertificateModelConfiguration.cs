@@ -23,6 +23,10 @@ internal static class DomainCertificateModelConfiguration
             entity.Property(item => item.PublicWebsiteContact).HasMaxLength(320);
             entity.Property(item => item.PublicCountryOrRegion).HasMaxLength(100);
             entity.Property(item => item.SecurityContactHash).HasMaxLength(71);
+            entity.Property(item => item.ApplicationStatus).HasConversion<string>().HasMaxLength(32).HasDefaultValue(HIP.Domain.Certificates.DomainCertificateApplicationStatus.Draft);
+            entity.Property(item => item.ApplicantAttestationDigest).HasMaxLength(71);
+            entity.Property(item => item.ApplicationDecisionReason).HasMaxLength(500);
+            entity.HasIndex(item => item.ApplicationStatus);
             entity.Property(item => item.AggregateVersion).IsConcurrencyToken();
             entity.HasIndex(item => item.Domain).IsUnique().HasFilter("\"IsCurrent\" = TRUE");
             entity.HasIndex(item => item.OwnerId);

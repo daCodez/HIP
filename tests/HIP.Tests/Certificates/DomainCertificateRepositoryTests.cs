@@ -364,6 +364,10 @@ public sealed class DomainCertificateRepositoryTests
             WebsiteVerifiedAtUtc = Now,
             IdentityCompletedAtUtc = Now,
             PublicDisplayName = "Review Example",
+            ApplicationStatus = DomainCertificateApplicationStatus.Approved,
+            ApplicationSubmittedAtUtc = Now.AddMinutes(2),
+            ApplicationReviewedAtUtc = Now.AddMinutes(5),
+            ApplicantAttestationDigest = $"sha256:{new string('a', 64)}",
             AggregateVersion = 1
         });
         await context.SaveChangesAsync();

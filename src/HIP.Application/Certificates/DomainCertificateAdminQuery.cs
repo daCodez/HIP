@@ -21,7 +21,11 @@ public sealed record AdminDomainCertificateSummary(
     DomainCertificateLevel? BadgeLevel,
     DateTimeOffset? IssuedAtUtc,
     DateTimeOffset? ExpiresAtUtc,
-    DateTimeOffset? LastVerificationAtUtc);
+    DateTimeOffset? LastVerificationAtUtc,
+    DomainCertificateApplicationStatus ApplicationStatus = DomainCertificateApplicationStatus.Draft,
+    DateTimeOffset? ApplicationSubmittedAtUtc = null,
+    DateTimeOffset? ApplicationReviewedAtUtc = null,
+    string? ApplicantAttestationDigest = null);
 
 /// <summary>Reads paged cross-owner certificate operations state without owner identifiers.</summary>
 public interface IDomainCertificateAdminQuery

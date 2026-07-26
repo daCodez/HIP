@@ -23,11 +23,13 @@ The implemented policy identifier is `hip-domain-certificate-v1`. Policy values 
 The owner portal is `/consumer/certificates`.
 
 1. Add a public registrable domain. HIP canonicalizes case and international names, removes URL components, and rejects IP, localhost, private/internal, malformed, and public-suffix-only values.
-2. Publish the generated TXT record at `_hip-challenge.<domain>`. The challenge is single-use, expires, has a bounded attempt count, and is stored as a digest rather than plaintext.
+2. Publish the generated TXT record at `_hip.<domain>`. The challenge is single-use, expires, has a bounded attempt count, and is stored as a digest rather than plaintext.
 3. Ask HIP to check DNS. Successful ownership verification is persisted with an audit event.
 4. Publish the exact HTTPS control document at `https://<domain>/.well-known/hip.json` when the website-verification step is requested. HIP does not fetch arbitrary owner-supplied paths.
-5. Complete the permitted public identity fields and security review. Private contacts, internal notes, raw scans, provider payloads, and challenge values do not belong in the public certificate.
-6. When policy evaluation is eligible, HIP signs, self-verifies, and atomically stores the certificate and issuance event. Review-required decisions remain non-issued.
+5. Complete the permitted public identity fields. Private contacts, internal notes, raw scans, provider payloads, and challenge values do not belong in the public certificate.
+6. Submit the application from the authenticated owner account. HIP binds the fixed authority and accuracy declarations to the enrollment, verified domain, selected identity fields, policy version, and a SHA-256 attestation digest.
+7. An authorized HIP reviewer approves, requests changes, or denies the application with a required privacy-safe reason. The reviewer identity, decision, attestation digest, and timestamp are permanently audited.
+8. Only an approved application may run the server-owned security review. When the evidence is eligible, HIP signs, self-verifies, and atomically stores the certificate and issuance event. Review-required and ineligible decisions remain non-issued.
 
 The HTTPS fetcher uses HTTPS only, bounded redirects, safe ports, response limits, strict timeouts, registrable-domain redirect checks, and address validation before and after connection to resist SSRF and DNS rebinding.
 
