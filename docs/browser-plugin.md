@@ -125,6 +125,10 @@ The browser popup explains the core HIP relationship in plain language:
 
 The popup shows the active tab domain, final HIP website score, status badge, plain-English reasons, links scanned, risky links, last scan time, public lookup link, and safety details link when the current site is risky.
 
+### HIP Domain Trust Certificate verification
+
+When HIP has a certificate for the exact active-tab hostname, the popup displays its level and lifecycle state separately from the risk score. The extension retrieves the signed badge and certificate directly from HIP, verifies the signed badge through HIP, binds the displayed certificate fields to the signed payload, and confirms the public certificate ID, domain, level, state, signature status, expiry, URL, and active flag. Page-controlled badge markup is only an observed signal and is never proof by itself. Verification failure leaves the certificate unavailable without interrupting the existing automatic Site Safety scan.
+
 The popup is the primary HIP details surface. It should be where users see the full trust result without forcing a page banner onto normal sites.
 
 The popup shows the layered score components:
