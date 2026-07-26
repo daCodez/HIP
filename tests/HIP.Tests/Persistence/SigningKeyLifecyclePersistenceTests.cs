@@ -117,6 +117,8 @@ public sealed class SigningKeyLifecyclePersistenceTests
         Assert.Multiple(() =>
         {
             Assert.That(source, Does.Contain("ExecuteUpdateAsync"));
+            Assert.That(source, Does.Contain("Database.CreateExecutionStrategy()"));
+            Assert.That(source, Does.Contain("executionStrategy.ExecuteAsync(ExecuteTransactionAsync)"));
             Assert.That(source, Does.Contain("record.AggregateVersion == expectedVersion"));
             Assert.That(source, Does.Contain("keyRing.Version").Or.Contain("newVersion"));
             Assert.That(source, Does.Contain("return false;"));

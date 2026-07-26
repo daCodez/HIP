@@ -300,74 +300,81 @@ public sealed class HipRecordStore(HipDbContext dbContext, IHipRecordEncryptor? 
         var isolationLevel = resolvedVersionGuards.Count > 1
             ? IsolationLevel.Serializable
             : IsolationLevel.ReadCommitted;
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(
-            isolationLevel,
-            cancellationToken);
-        try
-        {
-            if (!await VersionGuardsMatchAsync(resolvedVersionGuards, cancellationToken).ConfigureAwait(false))
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                return false;
-            }
+        var executionStrategy = dbContext.Database.CreateExecutionStrategy();
+        return await executionStrategy.ExecuteAsync(ExecuteTransactionAsync).ConfigureAwait(false);
 
-            if (expectedVersion == 0)
+        async Task<bool> ExecuteTransactionAsync()
+        {
+            dbContext.ChangeTracker.Clear();
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(
+                isolationLevel,
+                cancellationToken);
+            try
             {
-                dbContext.Records.Add(new HipDbRecord
-                {
-                    Partition = partition,
-                    Id = id,
-                    Json = protectedPayload,
-                    AggregateVersion = newVersion,
-                    CreatedAtUtc = now,
-                    UpdatedAtUtc = now
-                });
-            }
-            else
-            {
-                var affectedRows = await dbContext.Records
-                    .Where(record =>
-                        record.Partition == partition &&
-                        record.Id == id &&
-                        record.AggregateVersion == expectedVersion)
-                    .ExecuteUpdateAsync(
-                        setters => setters
-                            .SetProperty(record => record.Json, protectedPayload)
-                            .SetProperty(record => record.AggregateVersion, newVersion)
-                            .SetProperty(record => record.UpdatedAtUtc, now),
-                        cancellationToken);
-                if (affectedRows != 1)
+                if (!await VersionGuardsMatchAsync(resolvedVersionGuards, cancellationToken).ConfigureAwait(false))
                 {
                     await transaction.RollbackAsync(cancellationToken);
                     return false;
                 }
-            }
 
-            dbContext.Records.AddRange(encryptedRelatedRecords);
-            await dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return true;
-        }
-        catch (DbUpdateException exception) when (IsDuplicateKeyViolation(exception))
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            dbContext.ChangeTracker.Clear();
-            return false;
-        }
-        catch (DbUpdateException exception) when (
-            exception.InnerException is PostgresException postgresException &&
-            postgresException.SqlState == PostgresErrorCodes.SerializationFailure)
-        {
-            await transaction.RollbackAsync(CancellationToken.None);
-            dbContext.ChangeTracker.Clear();
-            return false;
-        }
-        catch (PostgresException exception) when (
-            exception.SqlState == PostgresErrorCodes.SerializationFailure)
-        {
-            await transaction.RollbackAsync(CancellationToken.None);
-            dbContext.ChangeTracker.Clear();
-            return false;
+                if (expectedVersion == 0)
+                {
+                    dbContext.Records.Add(new HipDbRecord
+                    {
+                        Partition = partition,
+                        Id = id,
+                        Json = protectedPayload,
+                        AggregateVersion = newVersion,
+                        CreatedAtUtc = now,
+                        UpdatedAtUtc = now
+                    });
+                }
+                else
+                {
+                    var affectedRows = await dbContext.Records
+                        .Where(record =>
+                            record.Partition == partition &&
+                            record.Id == id &&
+                            record.AggregateVersion == expectedVersion)
+                        .ExecuteUpdateAsync(
+                            setters => setters
+                                .SetProperty(record => record.Json, protectedPayload)
+                                .SetProperty(record => record.AggregateVersion, newVersion)
+                                .SetProperty(record => record.UpdatedAtUtc, now),
+                            cancellationToken);
+                    if (affectedRows != 1)
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        return false;
+                    }
+                }
+
+                dbContext.Records.AddRange(encryptedRelatedRecords);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return true;
+            }
+            catch (DbUpdateException exception) when (IsDuplicateKeyViolation(exception))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                dbContext.ChangeTracker.Clear();
+                return false;
+            }
+            catch (DbUpdateException exception) when (
+                exception.InnerException is PostgresException postgresException &&
+                postgresException.SqlState == PostgresErrorCodes.SerializationFailure)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                dbContext.ChangeTracker.Clear();
+                return false;
+            }
+            catch (PostgresException exception) when (
+                exception.SqlState == PostgresErrorCodes.SerializationFailure)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                dbContext.ChangeTracker.Clear();
+                return false;
+            }
         }
     }
 
