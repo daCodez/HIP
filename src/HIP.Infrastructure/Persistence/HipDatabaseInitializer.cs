@@ -204,6 +204,7 @@ public static class HipDatabaseInitializer
             """,
             cancellationToken);
 
+        await HipDevelopmentCertificateSchema.EnsureAsync(dbContext, cancellationToken);
         await CreateIndexesAsync(dbContext, cancellationToken);
     }
 
