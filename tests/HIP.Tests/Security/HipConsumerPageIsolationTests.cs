@@ -281,6 +281,11 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(devices, Does.Contain("browser profile is blocking local device-key storage"));
             Assert.That(devices, Does.Contain("ReconcileLocalKeysAsync"));
 
+            var deviceFirstRender = Section(
+                devices, "protected override async Task OnAfterRenderAsync", "private async Task RegisterAsync()");
+            Assert.That(deviceFirstRender, Does.Contain("_ = await ReconcileLocalKeysAsync();"));
+            Assert.That(deviceFirstRender, Does.Contain("StateHasChanged();"));
+            Assert.That(deviceFirstRender, Does.Not.Contain("if (await ReconcileLocalKeysAsync())"));
             var register = Section(devices, "private async Task RegisterAsync()", "private async Task RevokeAsync");
             AssertGateBeforeMutation(
                 register,

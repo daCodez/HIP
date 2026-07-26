@@ -61,10 +61,8 @@ public partial class ConsumerDevices : IAsyncDisposable
 
         _canUseJavaScript = true;
         await InspectBrowserSupportAsync();
-        if (await ReconcileLocalKeysAsync())
-        {
-            StateHasChanged();
-        }
+        _ = await ReconcileLocalKeysAsync();
+        StateHasChanged();
     }
 
     private async Task RegisterAsync()
