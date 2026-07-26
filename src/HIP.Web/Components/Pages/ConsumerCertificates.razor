@@ -119,6 +119,24 @@
                     </ol>
                 </section>
 
+                @if (item.EnrollmentStatus == DomainEnrollmentStatus.PendingSecurityReview && item.IdentityCompletedAtUtc is null)
+                {
+                    <section class="certificate-identity-panel" aria-labelledby="@IdentityHeadingId(item)">
+                        <h3 id="@IdentityHeadingId(item)">Identity details</h3>
+                        <p>Only fields marked for public display can appear on the public certificate. HIP stores only a one-way marker for the private security contact.</p>
+                        <form @onsubmit="() => CompleteIdentityProfileAsync(item)" @onsubmit:preventDefault>
+                            <label>Public display name<input @bind="_identityDisplayName" maxlength="200" required /></label>
+                            <label>Organization name<input @bind="_identityOrganizationName" maxlength="200" /></label>
+                            <label>Public contact URL<input @bind="_identityPublicContact" type="url" maxlength="320" placeholder="https://example.com/contact" /></label>
+                            <label>Private security email<input @bind="_identitySecurityContact" type="email" maxlength="320" required autocomplete="email" /></label>
+                            <label>Country or region<input @bind="_identityCountry" maxlength="100" /></label>
+                            <label class="certificate-privacy-choice"><input @bind="_publishOrganization" type="checkbox" /> Show organization on the public certificate</label>
+                            <label class="certificate-privacy-choice"><input @bind="_publishCountry" type="checkbox" /> Show country or region on the public certificate</label>
+                            <button class="btn btn-primary" type="submit" disabled="@_savingIdentity">@(_savingIdentity ? "Saving…" : "Save identity details")</button>
+                        </form>
+                    </section>
+                }
+
                 <footer class="owner-certificate-actions">
                     @if (item.EnrollmentStatus == DomainEnrollmentStatus.PendingOwnership && item.DnsVerifiedAtUtc is null)
                     {
@@ -176,6 +194,14 @@
     private string? _websiteDocumentJson;
     private string? _certificateActionMessage;
     private string? _certificateActionError;
+    private string _identityDisplayName = string.Empty;
+    private string _identityOrganizationName = string.Empty;
+    private string _identityPublicContact = string.Empty;
+    private string _identitySecurityContact = string.Empty;
+    private string _identityCountry = string.Empty;
+    private bool _publishOrganization;
+    private bool _publishCountry;
+    private bool _savingIdentity;
     protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
@@ -387,6 +413,49 @@
         }
     }
 
+    private async Task CompleteIdentityProfileAsync(OwnerDomainCertificateSummary item)
+    {
+        _savingIdentity = true;
+        _certificateActionError = null;
+        _certificateActionMessage = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                ConsumerPolicies.CanUseConsumerPortal,
+                consumerId => EnrollmentService.CompleteIdentityProfileAsync(
+                    consumerId,
+                    item.Domain,
+                    new DomainCertificateIdentityProfileRequest(
+                        _identityDisplayName, _identityOrganizationName, _identityPublicContact,
+                        _identitySecurityContact, _identityCountry, _publishOrganization, _publishCountry),
+                    CancellationToken.None));
+            if (!access.Succeeded || access.Value is null)
+            {
+                _certificateActionError = HipConsumerPageAccess.AccessUnavailableMessage;
+                return;
+            }
+            if (access.Value.Status is DomainCertificateIdentityProfileStatus.Completed or DomainCertificateIdentityProfileStatus.Existing)
+            {
+                _certificateActionMessage = "Identity details saved. HIP can now evaluate stored security evidence.";
+                _identitySecurityContact = string.Empty;
+                await LoadAsync();
+            }
+            else
+            {
+                _certificateActionError = access.Value.Status == DomainCertificateIdentityProfileStatus.InvalidRequest
+                    ? "Check the identity fields and use an HTTPS public contact URL."
+                    : "HIP could not save the identity details right now.";
+            }
+        }
+        finally
+        {
+            _savingIdentity = false;
+        }
+    }
+
     private string WebsiteDocumentDownloadUrl() =>
         $"data:application/hip+json;charset=utf-8,{Uri.EscapeDataString(_websiteDocumentJson ?? string.Empty)}";
 
@@ -450,6 +519,8 @@
             : item.LastMonitoringAtUtc is null ? "Not active" : $"Last checked {FormatDate(item.LastMonitoringAtUtc)}";
 
     private static string FormatDate(DateTimeOffset? timestamp) => timestamp?.ToString("u") ?? "Not available";
+    private static string IdentityHeadingId(OwnerDomainCertificateSummary item) => $"identity-{SafeId(item.EnrollmentId)}";
+
     private static string HeadingId(OwnerDomainCertificateSummary item) => $"certificate-{SafeId(item.EnrollmentId)}";
     private static string ProgressHeadingId(OwnerDomainCertificateSummary item) => $"progress-{SafeId(item.EnrollmentId)}";
     private static string SafeId(string value) => string.Concat(value.Select(character => char.IsLetterOrDigit(character) ? character : '-'));

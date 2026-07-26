@@ -120,8 +120,45 @@
     outline-offset: .2rem;
 }
 
+.certificate-identity-panel {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+}
+
+.certificate-identity-panel form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .75rem;
+}
+
+.certificate-identity-panel label:not(.certificate-privacy-choice) {
+    display: grid;
+    gap: .35rem;
+}
+
+.certificate-identity-panel input:not([type="checkbox"]) {
+    width: 100%;
+    min-height: 2.65rem;
+}
+
+.certificate-privacy-choice {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+}
+
+.certificate-privacy-choice input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    min-height: 0;
+    flex: 0 0 1rem;
+}
+
 @media (max-width: 44rem) {
     .owner-certificate-facts { grid-template-columns: 1fr; }
+    .certificate-identity-panel form { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -77,6 +77,29 @@ public sealed record DomainCertificateWebsiteCheckResult(
     DomainCertificateWebsiteCheckStatus Status,
     DateTimeOffset? VerifiedAtUtc = null);
 
+/// <summary>Owner-supplied identity fields with explicit public disclosure choices.</summary>
+public sealed record DomainCertificateIdentityProfileRequest(
+    string PublicDisplayName,
+    string? OrganizationName,
+    string? PublicWebsiteContact,
+    string SecurityContact,
+    string? CountryOrRegion,
+    bool PublishOrganization,
+    bool PublishCountryOrRegion);
+
+public enum DomainCertificateIdentityProfileStatus
+{
+    InvalidRequest,
+    NotFound,
+    NotReady,
+    Conflict,
+    Completed,
+    Existing,
+    Unavailable
+}
+
+public sealed record DomainCertificateIdentityProfileResult(DomainCertificateIdentityProfileStatus Status);
+
 /// <summary>Owner-authorized facade for starting formal domain certificate enrollment.</summary>
 public interface IDomainCertificateEnrollmentService
 {
@@ -98,6 +121,12 @@ public interface IDomainCertificateEnrollmentService
     Task<DomainCertificateWebsiteCheckResult> CheckWebsiteAsync(
         string ownerId,
         string domain,
+        CancellationToken cancellationToken);
+
+    Task<DomainCertificateIdentityProfileResult> CompleteIdentityProfileAsync(
+        string ownerId,
+        string domain,
+        DomainCertificateIdentityProfileRequest request,
         CancellationToken cancellationToken);
 }
 
@@ -530,6 +559,96 @@ public sealed class DomainCertificateEnrollmentService(
         var documentKeys = document.PublicKeys.OrderBy(key => key.KeyId, StringComparer.Ordinal).ToArray();
         var websiteKeys = website.PublicKeys.OrderBy(key => key.KeyId, StringComparer.Ordinal).ToArray();
         return tokenMatches && documentKeys.SequenceEqual(websiteKeys);
+    }
+
+    public async Task<DomainCertificateIdentityProfileResult> CompleteIdentityProfileAsync(
+        string ownerId,
+        string domain,
+        DomainCertificateIdentityProfileRequest request,
+        CancellationToken cancellationToken)
+    {
+        string normalized;
+        string displayName;
+        string? organization;
+        string? publicContact;
+        string securityContact;
+        string? country;
+        try
+        {
+            ValidateIdentifier(ownerId, 256);
+            ArgumentNullException.ThrowIfNull(request);
+            normalized = normalizer.Normalize(domain);
+            displayName = NormalizeProfileValue(request.PublicDisplayName, 200, required: true)!;
+            organization = NormalizeProfileValue(request.OrganizationName, 200);
+            country = NormalizeProfileValue(request.CountryOrRegion, 100);
+            securityContact = new System.Net.Mail.MailAddress(request.SecurityContact.Trim()).Address.ToLowerInvariant();
+            if (securityContact.Length > 320)
+            {
+                throw new ArgumentException("Security contact is invalid.");
+            }
+            publicContact = NormalizeProfileValue(request.PublicWebsiteContact, 320);
+            if (publicContact is not null && (!Uri.TryCreate(publicContact, UriKind.Absolute, out var contactUri) ||
+                contactUri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(contactUri.UserInfo)))
+            {
+                throw new ArgumentException("Public website contact must be an HTTPS URL.");
+            }
+        }
+        catch (Exception exception) when (exception is ArgumentException or FormatException)
+        {
+            return new DomainCertificateIdentityProfileResult(DomainCertificateIdentityProfileStatus.InvalidRequest);
+        }
+
+        try
+        {
+            var enrollment = await enrollmentRepository.GetCurrentAsync(ownerId, normalized, cancellationToken).ConfigureAwait(false);
+            if (enrollment is null)
+            {
+                return new DomainCertificateIdentityProfileResult(DomainCertificateIdentityProfileStatus.NotFound);
+            }
+            if (enrollment.Status != DomainEnrollmentStatus.PendingSecurityReview ||
+                enrollment.DnsVerifiedAtUtc is null || enrollment.WebsiteVerifiedAtUtc is null)
+            {
+                return new DomainCertificateIdentityProfileResult(DomainCertificateIdentityProfileStatus.NotReady);
+            }
+
+            var securityHash = $"sha256:{Digest(securityContact)}";
+            var publicOrganization = request.PublishOrganization ? organization : null;
+            var publicCountry = request.PublishCountryOrRegion ? country : null;
+            var identity = Digest($"{ownerId}\n{normalized}");
+            var profileDigest = Digest($"{displayName}\n{publicOrganization}\n{publicContact}\n{publicCountry}\n{securityHash}");
+            var write = await enrollmentRepository.TryCompleteIdentityProfileAsync(
+                new DomainCertificateIdentityProfileRecord(
+                    enrollment.EnrollmentId, ownerId, normalized, displayName, publicOrganization,
+                    publicContact, publicCountry, securityHash, timeProvider.GetUtcNow(),
+                    $"certificate-event:{Digest($"identity-profile\n{identity}\n{profileDigest}")}"),
+                cancellationToken).ConfigureAwait(false);
+            return new DomainCertificateIdentityProfileResult(write.Status switch
+            {
+                DomainEnrollmentTransitionWriteStatus.Updated => DomainCertificateIdentityProfileStatus.Completed,
+                DomainEnrollmentTransitionWriteStatus.AlreadyApplied => DomainCertificateIdentityProfileStatus.Existing,
+                DomainEnrollmentTransitionWriteStatus.NotFound => DomainCertificateIdentityProfileStatus.NotFound,
+                _ => DomainCertificateIdentityProfileStatus.Conflict
+            });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new DomainCertificateIdentityProfileResult(DomainCertificateIdentityProfileStatus.Unavailable);
+        }
+    }
+
+    private static string? NormalizeProfileValue(string? value, int maximumLength, bool required = false)
+    {
+        var normalized = value?.Trim();
+        if ((required && string.IsNullOrWhiteSpace(normalized)) || normalized?.Length > maximumLength ||
+            normalized?.Any(character => char.IsControl(character) || char.IsSurrogate(character)) == true)
+        {
+            throw new ArgumentException("Certificate identity profile text is invalid.");
+        }
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
     }
 
     private static string Digest(string value) =>

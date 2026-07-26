@@ -122,6 +122,41 @@ public sealed class DomainCertificateWebsiteVerificationTests
         });
     }
 
+    [Test]
+    public async Task Identity_profile_hashes_private_contact_and_omits_unpublished_fields()
+    {
+        const string domain = "example.com";
+        const string owner = "owner-1";
+        var website = new WebsiteIdentity(
+            domain, "hip:web:example.com", [], VerificationStatus.Verified,
+            VerificationMethod.DnsTxt, Now.AddDays(-1), Now.AddHours(-1));
+        var enrollments = new StubEnrollmentRepository(new DomainEnrollmentStateRecord(
+            "enrollment-1", owner, domain, DomainEnrollmentStatus.PendingSecurityReview,
+            Now.AddHours(-2), Now.AddHours(-1)));
+        var challenges = new StubVerificationRequests(new DomainVerificationRequest(
+            domain, VerificationMethod.WellKnownHipJson, "used", VerificationStatus.Verified,
+            Now.AddHours(-1), Now.AddHours(-1), Now.AddHours(1)));
+        var service = CreateService(website, enrollments, new StubDomainVerificationService(challenges), challenges, new StubFetcher());
+
+        var result = await service.CompleteIdentityProfileAsync(
+            owner, domain,
+            new DomainCertificateIdentityProfileRequest(
+                "Example", "Private Org", "https://example.com/contact", "Security@Example.com", "CA",
+                PublishOrganization: false, PublishCountryOrRegion: false),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateIdentityProfileStatus.Completed));
+            Assert.That(enrollments.AppliedIdentityProfile?.PublicDisplayName, Is.EqualTo("Example"));
+            Assert.That(enrollments.AppliedIdentityProfile?.PublicOrganizationName, Is.Null);
+            Assert.That(enrollments.AppliedIdentityProfile?.PublicCountryOrRegion, Is.Null);
+            Assert.That(enrollments.AppliedIdentityProfile?.PublicWebsiteContact, Is.EqualTo("https://example.com/contact"));
+            Assert.That(enrollments.AppliedIdentityProfile?.SecurityContactHash, Does.StartWith("sha256:"));
+            Assert.That(enrollments.AppliedIdentityProfile?.SecurityContactHash, Does.Not.Contain("Security@Example.com"));
+        });
+    }
+
     private static DomainCertificateEnrollmentService CreateService(
         WebsiteIdentity website,
         StubEnrollmentRepository enrollments,
@@ -160,6 +195,7 @@ public sealed class DomainCertificateWebsiteVerificationTests
         : IDomainEnrollmentRepository
     {
         public DomainWebsiteVerificationRecord? AppliedWebsiteVerification { get; private set; }
+        public DomainCertificateIdentityProfileRecord? AppliedIdentityProfile { get; private set; }
 
         public Task<DomainEnrollmentStateRecord?> GetCurrentAsync(
             string ownerId,
@@ -184,6 +220,15 @@ public sealed class DomainCertificateWebsiteVerificationTests
         public Task<DomainEnrollmentTransitionWriteResult> TryApplyOwnershipVerificationAsync(
             DomainOwnershipVerificationRecord verification,
             CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<DomainEnrollmentTransitionWriteResult> TryCompleteIdentityProfileAsync(
+            DomainCertificateIdentityProfileRecord profile,
+            CancellationToken cancellationToken)
+        {
+            AppliedIdentityProfile = profile;
+            return Task.FromResult(new DomainEnrollmentTransitionWriteResult(
+                DomainEnrollmentTransitionWriteStatus.Updated));
+        }
     }
 
     private sealed class StubVerificationRequests(DomainVerificationRequest request)

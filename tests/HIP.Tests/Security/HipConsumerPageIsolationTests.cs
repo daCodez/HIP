@@ -243,6 +243,10 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(certificates, Does.Contain("DNS verified"));
             Assert.That(certificates, Does.Contain("Website verified"));
             Assert.That(certificates, Does.Contain("Identity completed"));
+            Assert.That(certificates, Does.Contain("EnrollmentService.CompleteIdentityProfileAsync"));
+            Assert.That(certificates, Does.Contain("Private security email"));
+            Assert.That(certificates, Does.Contain("Show organization on the public certificate"));
+            Assert.That(certificates, Does.Contain("certificate-privacy-choice"));
             Assert.That(certificates, Does.Contain("Security review completed"));
             Assert.That(certificates, Does.Contain("Certificate issued"));
             Assert.That(certificates, Does.Contain("Monitoring active"));

@@ -35,6 +35,27 @@ public sealed class DomainCertificateMigrationTests
     }
 
     [Test]
+    public void Identity_profile_migration_adds_only_nullable_bounded_columns()
+    {
+        var migration = new AddDomainCertificateIdentityProfile();
+        var addedColumns = migration.UpOperations.OfType<AddColumnOperation>().ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(addedColumns.Select(column => column.Name), Is.EquivalentTo(new[]
+            {
+                "PublicCountryOrRegion", "PublicDisplayName", "PublicOrganizationName",
+                "PublicWebsiteContact", "SecurityContactHash"
+            }));
+            Assert.That(addedColumns.All(column => column.IsNullable), Is.True);
+            Assert.That(addedColumns.All(column => column.Table == "hip_domain_enrollments"), Is.True);
+            Assert.That(migration.UpOperations.OfType<DropColumnOperation>(), Is.Empty);
+            Assert.That(migration.UpOperations.OfType<AlterColumnOperation>(), Is.Empty);
+            Assert.That(migration.UpOperations.OfType<SqlOperation>(), Is.Empty);
+        });
+    }
+
+    [Test]
     public void Migration_adds_only_the_three_certificate_tables_and_indexes()
     {
         var migration = new AddDomainTrustCertificates();

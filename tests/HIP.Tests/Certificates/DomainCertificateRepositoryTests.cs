@@ -304,6 +304,49 @@ public sealed class DomainCertificateRepositoryTests
     }
 
     [Test]
+    public async Task Identity_profile_stores_only_privacy_filtered_fields_and_appends_audit()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        context.DomainEnrollments.Add(new HipDomainEnrollmentEntity
+        {
+            EnrollmentId = "enrollment-profile",
+            OwnerId = "owner-1",
+            Domain = "profile.example",
+            Status = DomainEnrollmentStatus.PendingSecurityReview,
+            PolicyVersion = DomainCertificatePolicy.V1.Version,
+            CreatedAtUtc = Now,
+            UpdatedAtUtc = Now,
+            DnsVerifiedAtUtc = Now,
+            WebsiteVerifiedAtUtc = Now,
+            AggregateVersion = 1
+        });
+        await context.SaveChangesAsync();
+        var profile = new DomainCertificateIdentityProfileRecord(
+            "enrollment-profile", "owner-1", "profile.example", "Example", "Example Org",
+            "https://profile.example/contact", null, $"sha256:{new string('a', 64)}",
+            Now.AddMinutes(5), "certificate-event:profile-complete");
+
+        var applied = await repository.TryCompleteIdentityProfileAsync(profile, CancellationToken.None);
+        var retry = await repository.TryCompleteIdentityProfileAsync(profile, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied.Status, Is.EqualTo(DomainEnrollmentTransitionWriteStatus.Updated));
+            Assert.That(retry.Status, Is.EqualTo(DomainEnrollmentTransitionWriteStatus.AlreadyApplied));
+            var enrollment = context.DomainEnrollments.Single(item => item.EnrollmentId == "enrollment-profile");
+            Assert.That(enrollment.PublicDisplayName, Is.EqualTo("Example"));
+            Assert.That(enrollment.PublicOrganizationName, Is.EqualTo("Example Org"));
+            Assert.That(enrollment.PublicWebsiteContact, Is.EqualTo("https://profile.example/contact"));
+            Assert.That(enrollment.SecurityContactHash, Is.EqualTo(profile.SecurityContactHash));
+            Assert.That(enrollment.IdentityCompletedAtUtc, Is.EqualTo(Now.AddMinutes(5)));
+            var auditEvent = context.DomainCertificateEvents.Single(item => item.EventType == "IdentityProfileCompleted");
+            Assert.That(auditEvent.PublicSummary, Does.Not.Contain(profile.SecurityContactHash));
+            Assert.That(auditEvent.PublicSummary, Does.Not.Contain("contact"));
+        });
+    }
+
+    [Test]
     public async Task Admin_summary_query_pages_real_cross_owner_state_without_owner_identifiers()
     {
         await using var context = Context();

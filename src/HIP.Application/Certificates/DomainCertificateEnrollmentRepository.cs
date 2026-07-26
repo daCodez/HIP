@@ -53,6 +53,19 @@ public sealed record DomainWebsiteVerificationRecord(
     DateTimeOffset VerifiedAtUtc,
     string AuditEventId);
 
+/// <summary>Privacy-filtered public profile plus a one-way private security-contact marker.</summary>
+public sealed record DomainCertificateIdentityProfileRecord(
+    string EnrollmentId,
+    string OwnerId,
+    string Domain,
+    string PublicDisplayName,
+    string? PublicOrganizationName,
+    string? PublicWebsiteContact,
+    string? PublicCountryOrRegion,
+    string SecurityContactHash,
+    DateTimeOffset CompletedAtUtc,
+    string AuditEventId);
+
 /// <summary>Outcome of an idempotent enrollment lifecycle transition.</summary>
 public enum DomainEnrollmentTransitionWriteStatus
 {
@@ -87,5 +100,10 @@ public interface IDomainEnrollmentRepository
     /// <summary>Advances a DNS-verified enrollment after challenge-bound HTTPS verification.</summary>
     Task<DomainEnrollmentTransitionWriteResult> TryApplyWebsiteVerificationAsync(
         DomainWebsiteVerificationRecord verification,
+        CancellationToken cancellationToken);
+
+    /// <summary>Stores a privacy-filtered identity profile and its permanent audit event.</summary>
+    Task<DomainEnrollmentTransitionWriteResult> TryCompleteIdentityProfileAsync(
+        DomainCertificateIdentityProfileRecord profile,
         CancellationToken cancellationToken);
 }

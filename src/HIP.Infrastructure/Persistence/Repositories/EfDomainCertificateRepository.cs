@@ -424,6 +424,99 @@ public sealed class EfDomainCertificateRepository(
     }
 
     /// <inheritdoc />
+    public async Task<DomainEnrollmentTransitionWriteResult> TryCompleteIdentityProfileAsync(
+        DomainCertificateIdentityProfileRecord profile,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ValidateIdentifier(profile.EnrollmentId, 128);
+        ValidateIdentifier(profile.OwnerId, 256);
+        ValidateIdentifier(profile.AuditEventId, 128);
+        ValidateProfileText(profile.PublicDisplayName, 200, required: true);
+        ValidateProfileText(profile.PublicOrganizationName, 200);
+        ValidateProfileText(profile.PublicWebsiteContact, 320);
+        ValidateProfileText(profile.PublicCountryOrRegion, 100);
+        if (profile.SecurityContactHash.Length != 71 ||
+            !profile.SecurityContactHash.StartsWith("sha256:", StringComparison.Ordinal) ||
+            !profile.SecurityContactHash[7..].All(Uri.IsHexDigit) ||
+            profile.CompletedAtUtc.Offset != TimeSpan.Zero ||
+            HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(profile.Domain) != profile.Domain)
+        {
+            throw new ArgumentException("Certificate identity profile is invalid.", nameof(profile));
+        }
+
+        var enrollment = await dbContext.DomainEnrollments.SingleOrDefaultAsync(
+            item => item.EnrollmentId == profile.EnrollmentId && item.OwnerId == profile.OwnerId &&
+                    item.Domain == profile.Domain && item.IsCurrent,
+            cancellationToken);
+        if (enrollment is null)
+        {
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.NotFound);
+        }
+        if (enrollment.Status != DomainEnrollmentStatus.PendingSecurityReview ||
+            enrollment.DnsVerifiedAtUtc is null || enrollment.WebsiteVerifiedAtUtc is null)
+        {
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+        if (enrollment.IdentityCompletedAtUtc is not null)
+        {
+            var exact = enrollment.PublicDisplayName == profile.PublicDisplayName &&
+                enrollment.PublicOrganizationName == profile.PublicOrganizationName &&
+                enrollment.PublicWebsiteContact == profile.PublicWebsiteContact &&
+                enrollment.PublicCountryOrRegion == profile.PublicCountryOrRegion &&
+                enrollment.SecurityContactHash == profile.SecurityContactHash;
+            return new DomainEnrollmentTransitionWriteResult(exact
+                ? DomainEnrollmentTransitionWriteStatus.AlreadyApplied
+                : DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+        if (await dbContext.DomainCertificateEvents.AnyAsync(item => item.EventId == profile.AuditEventId, cancellationToken))
+        {
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+
+        enrollment.PublicDisplayName = profile.PublicDisplayName;
+        enrollment.PublicOrganizationName = profile.PublicOrganizationName;
+        enrollment.PublicWebsiteContact = profile.PublicWebsiteContact;
+        enrollment.PublicCountryOrRegion = profile.PublicCountryOrRegion;
+        enrollment.SecurityContactHash = profile.SecurityContactHash;
+        enrollment.IdentityCompletedAtUtc = profile.CompletedAtUtc;
+        enrollment.UpdatedAtUtc = profile.CompletedAtUtc;
+        enrollment.AggregateVersion++;
+        dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+        {
+            EventId = profile.AuditEventId,
+            EnrollmentId = enrollment.EnrollmentId,
+            CertificateId = null,
+            EventType = "IdentityProfileCompleted",
+            PreviousStatus = enrollment.Status.ToString(),
+            CurrentStatus = enrollment.Status.ToString(),
+            ActorId = profile.OwnerId,
+            PublicSummary = "The certificate identity profile was completed with owner-selected public fields.",
+            PolicyVersion = enrollment.PolicyVersion,
+            OccurredAtUtc = profile.CompletedAtUtc
+        });
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Updated);
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+    }
+
+    private static void ValidateProfileText(string? value, int maximumLength, bool required = false)
+    {
+        if ((required && string.IsNullOrWhiteSpace(value)) || value?.Length > maximumLength ||
+            value?.Any(character => char.IsControl(character) || char.IsSurrogate(character)) == true)
+        {
+            throw new ArgumentException("Certificate identity profile text is invalid.");
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<DomainCertificateTransitionWriteResult> TryTransitionStatusAsync(
         DomainCertificateStatusTransition transition,
         CancellationToken cancellationToken)

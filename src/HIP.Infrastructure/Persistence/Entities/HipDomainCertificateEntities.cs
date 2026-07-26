@@ -16,6 +16,11 @@ public sealed class HipDomainEnrollmentEntity
     public DateTimeOffset? DnsVerifiedAtUtc { get; set; }
     public DateTimeOffset? WebsiteVerifiedAtUtc { get; set; }
     public DateTimeOffset? IdentityCompletedAtUtc { get; set; }
+    public string? PublicDisplayName { get; set; }
+    public string? PublicOrganizationName { get; set; }
+    public string? PublicWebsiteContact { get; set; }
+    public string? PublicCountryOrRegion { get; set; }
+    public string? SecurityContactHash { get; set; }
     public DateTimeOffset? SecurityReviewCompletedAtUtc { get; set; }
     public DateTimeOffset? LastMonitoringAtUtc { get; set; }
     public int? CurrentScore { get; set; }

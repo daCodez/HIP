@@ -18,6 +18,11 @@ internal static class DomainCertificateModelConfiguration
             entity.Property(item => item.Domain).HasMaxLength(253).IsRequired();
             entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(64);
             entity.Property(item => item.PolicyVersion).HasMaxLength(128).IsRequired();
+            entity.Property(item => item.PublicDisplayName).HasMaxLength(200);
+            entity.Property(item => item.PublicOrganizationName).HasMaxLength(200);
+            entity.Property(item => item.PublicWebsiteContact).HasMaxLength(320);
+            entity.Property(item => item.PublicCountryOrRegion).HasMaxLength(100);
+            entity.Property(item => item.SecurityContactHash).HasMaxLength(71);
             entity.Property(item => item.AggregateVersion).IsConcurrencyToken();
             entity.HasIndex(item => item.Domain).IsUnique().HasFilter("\"IsCurrent\" = TRUE");
             entity.HasIndex(item => item.OwnerId);
