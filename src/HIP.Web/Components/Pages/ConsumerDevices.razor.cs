@@ -21,7 +21,7 @@ public partial class ConsumerDevices : IAsyncDisposable
 
     private IReadOnlyList<DeviceRegistrationDeviceResponse> _devices = [];
     private IJSObjectReference? _deviceModule;
-    private string _friendlyName = "This browser";
+    private string _friendlyName = "This device";
     private string? _accessError;
     private string? _statusMessage;
     private string? _confirmingDeviceId;
@@ -41,8 +41,8 @@ public partial class ConsumerDevices : IAsyncDisposable
     private bool RegistrationDisabled => _isBusy || AtDeviceLimit || string.IsNullOrWhiteSpace(_friendlyName) ||
                                          !_browserSupportChecked || !_browserRegistrationSupported;
     private string BrowserReadinessLabel => !_browserSupportChecked
-        ? "Checking browser key storage"
-        : _browserRegistrationSupported ? "Private key stays in this browser" : "Secure key storage unavailable";
+        ? "Checking device credential storage"
+        : _browserRegistrationSupported ? "Private key stays on this device" : "Secure key storage unavailable";
     private string BrowserReadinessShortLabel => !_browserSupportChecked ? "Checking" : _browserRegistrationSupported ? "Ready" : "Unavailable";
     private string BrowserReadinessDescription => !_browserSupportChecked
         ? "HIP is checking whether this browser can create and retain a non-exportable key."
@@ -61,6 +61,11 @@ public partial class ConsumerDevices : IAsyncDisposable
 
         _canUseJavaScript = true;
         await InspectBrowserSupportAsync();
+        if (string.Equals(_friendlyName, "This device", StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(_browserSupport?.SuggestedDeviceName))
+        {
+            _friendlyName = _browserSupport.SuggestedDeviceName;
+        }
         _ = await ReconcileLocalKeysAsync();
         StateHasChanged();
     }
@@ -82,7 +87,7 @@ public partial class ConsumerDevices : IAsyncDisposable
 
         try
         {
-            SetRegistrationProgress("creating a non-exportable browser key");
+            SetRegistrationProgress("creating a non-exportable device credential");
             var module = await GetDeviceModuleAsync();
             prepared = await module.InvokeAsync<PreparedDeviceKey>("prepareDeviceKey");
             SetRegistrationProgress("requesting a short-lived HIP challenge");
@@ -114,7 +119,7 @@ public partial class ConsumerDevices : IAsyncDisposable
             }
 
             var challenge = issued.Challenge;
-            SetRegistrationProgress("storing the private key in this browser profile");
+            SetRegistrationProgress("storing the private key on this device");
             await module.InvokeVoidAsync("stageDeviceKey", prepared.Handle, challenge.DeviceId);
             prepared = null;
             stagedDeviceId = challenge.DeviceId;
@@ -149,17 +154,17 @@ public partial class ConsumerDevices : IAsyncDisposable
             }
 
             registrationCompleted = true;
-            SetRegistrationProgress("activating this browser's local key");
+            SetRegistrationProgress("activating this device's local credential");
             await module.InvokeVoidAsync("activateDeviceKey", challenge.DeviceId);
             stagedDeviceId = null;
-            _friendlyName = "This browser";
-            SetSuccess("This browser is registered. Its private key remains non-exportable in this browser profile.");
+            _friendlyName = _browserSupport?.SuggestedDeviceName ?? "This device";
+            SetSuccess("This device is registered. Its private key remains non-exportable in this browser profile.");
             await LoadDevicesAsync();
         }
         catch (JSException exception)
         {
             SetError(registrationCompleted
-                ? "The device was registered, but this browser could not activate its local key. Revoke it before trying again."
+                ? "The device was registered, but this browser could not activate its local credential. Revoke it before trying again."
                 : BrowserRegistrationError(exception.Message, _registrationStage));
             if (registrationCompleted)
             {
@@ -169,8 +174,8 @@ public partial class ConsumerDevices : IAsyncDisposable
         catch (Exception)
         {
             SetError(registrationCompleted
-                ? "The device was registered, but this browser could not finish local key storage. Revoke it before trying again."
-                : "This browser could not complete secure device registration. No private key was sent to HIP.");
+                ? "The device was registered, but this browser could not finish local credential storage. Revoke it before trying again."
+                : "This device could not complete secure registration in this browser. No private key was sent to HIP.");
             if (registrationCompleted)
             {
                 await LoadDevicesAsync();
@@ -339,7 +344,7 @@ public partial class ConsumerDevices : IAsyncDisposable
             if (result.Activated > 0)
             {
                 SetSuccess(result.Activated == 1
-                    ? "Recovered this browser's registered device key after an interrupted activation."
+                    ? "Recovered this device's registered credential after an interrupted activation."
                     : $"Recovered {result.Activated} registered device keys after interrupted activation.");
                 return true;
             }
@@ -359,7 +364,7 @@ public partial class ConsumerDevices : IAsyncDisposable
         : "Proof unavailable";
     private static string PlatformLabel(DevicePlatformType platform) => platform switch
     {
-        DevicePlatformType.BrowserExtension => "Browser profile",
+        DevicePlatformType.BrowserExtension => "Web credential",
         DevicePlatformType.SecondLifeHud => "Second Life HUD",
         _ => "HIP client"
     };
@@ -412,5 +417,6 @@ public partial class ConsumerDevices : IAsyncDisposable
         [property: JsonPropertyName("secureContext")] bool SecureContext,
         [property: JsonPropertyName("webCryptoAvailable")] bool WebCryptoAvailable,
         [property: JsonPropertyName("keyStorageAvailable")] bool KeyStorageAvailable,
-        [property: JsonPropertyName("extensionAvailable")] bool ExtensionAvailable);
+        [property: JsonPropertyName("extensionAvailable")] bool ExtensionAvailable,
+        [property: JsonPropertyName("suggestedDeviceName")] string SuggestedDeviceName);
 }

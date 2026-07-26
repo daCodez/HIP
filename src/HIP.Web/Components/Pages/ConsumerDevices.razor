@@ -11,7 +11,7 @@
         <div>
             <span class="hip-eyebrow">Consumer portal · device security</span>
             <h1>Devices</h1>
-            <p>Register this browser with a private key that stays on this device, then revoke the registration whenever you need to.</p>
+            <p>Register the phones, tablets, and computers you use with HIP, then revoke access whenever you need to.</p>
         </div>
         <span class="device-key-note">@BrowserReadinessLabel</span>
     </section>
@@ -35,23 +35,23 @@
         <section class="device-summary-grid" aria-label="Device summary">
             <article class="device-summary-card active">
                 <span>Active devices</span><strong>@ActiveDeviceCount</strong>
-                <p>Proof-of-possession registrations currently active for this consumer account.</p>
+                <p>Devices with an active proof-of-possession credential for this consumer account.</p>
             </article>
             <article class="device-summary-card revoked">
                 <span>Revoked devices</span><strong>@RevokedDeviceCount</strong>
                 <p>Terminal records retained so old keys cannot be registered again.</p>
             </article>
             <article class="device-summary-card assurance">
-                <span>Browser key storage</span><strong>@BrowserReadinessShortLabel</strong>
+                <span>This device</span><strong>@BrowserReadinessShortLabel</strong>
                 <p>@BrowserReadinessDescription</p>
             </article>
         </section>
 
         <section class="hip-panel padded device-registration-panel">
             <div class="device-registration-copy">
-                <span class="device-section-label">Register this browser</span>
-                <h2>Create a device identity</h2>
-                <p>HIP creates a non-exportable private key in this browser profile and sends only the public key to the server.</p>
+                <span class="device-section-label">Add this device</span>
+                <h2>Register this phone, tablet, or computer</h2>
+                <p>HIP creates a credential for this device in the current browser. The private key stays here; only its public key is sent to HIP.</p>
             </div>
             <div class="device-registration-form">
                 <label for="device-friendly-name">Device name</label>
@@ -65,7 +65,7 @@
                         class="hip-primary-action"
                         @onclick="RegisterAsync"
                         disabled="@RegistrationDisabled">
-                    @(_isRegistering ? "Registering…" : "Register this browser")
+                    @(_isRegistering ? "Registering…" : "Register this device")
                 </button>
                 @if (!_browserSupportChecked)
                 {
@@ -103,15 +103,15 @@
             {
                 <div class="device-empty" role="status">
                     <h3>No devices registered</h3>
-                    <p>Use “Register this browser” above to create your first proof-of-possession key.</p>
+                    <p>Use “Register this device” above to add your first phone, tablet, or computer.</p>
                 </div>
             }
             else
             {
                 <div class="device-table-wrap">
-                    <p class="device-activity-note">Recorded activity currently starts at registration and does not prove later device use.</p>
+                    <p class="device-activity-note">Each listed device currently has one browser-held credential. Recorded activity starts at registration and does not prove later device use.</p>
                     <table class="hip-data-table device-table">
-                        <thead><tr><th>Device</th><th>Proof</th><th>Status</th><th>Registered</th><th>Recorded activity</th><th>Registration</th></tr></thead>
+                        <thead><tr><th>Device</th><th>Credential</th><th>Status</th><th>Registered</th><th>Recorded activity</th><th>Access</th></tr></thead>
                         <tbody>
                         @foreach (var device in _devices)
                         {

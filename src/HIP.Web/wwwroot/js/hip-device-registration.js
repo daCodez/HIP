@@ -29,8 +29,38 @@ export async function inspectDeviceRegistrationSupport() {
         secureContext,
         webCryptoAvailable,
         keyStorageAvailable,
-        extensionAvailable
+        extensionAvailable,
+        suggestedDeviceName: suggestDeviceName(globalThis.navigator?.userAgent)
     };
+}
+
+/**
+ * Suggests a broad, user-editable physical-device label without collecting a unique identifier.
+ *
+ * @param {string | undefined} userAgent Browser user-agent value used only in the current page.
+ * @returns {string} A non-unique physical-device label.
+ */
+export function suggestDeviceName(userAgent) {
+    const value = typeof userAgent === "string" ? userAgent : "";
+    if (/\biPad\b/u.test(value) || (/\bMacintosh\b/u.test(value) && /\bMobile\b/u.test(value))) {
+        return "My iPad";
+    }
+    if (/\biPhone\b/u.test(value)) {
+        return "My iPhone";
+    }
+    if (/\bAndroid\b/u.test(value)) {
+        return /\bMobile\b/u.test(value) ? "My Android phone" : "My Android tablet";
+    }
+    if (/\bWindows\b/u.test(value)) {
+        return "My Windows PC";
+    }
+    if (/\bMacintosh\b|\bMac OS X\b/u.test(value)) {
+        return "My Mac";
+    }
+    if (/\bLinux\b/u.test(value)) {
+        return "My Linux computer";
+    }
+    return "This device";
 }
 
 export async function prepareDeviceKey() {
@@ -156,18 +186,23 @@ export async function reconcileDeviceKeys(activeDeviceIds) {
     let removed = 0;
     const stalePendingCutoff = Date.now() - 10 * 60 * 1000;
     for (const stored of storedKeys) {
-        if (!stored || stored.state !== "pending" || typeof stored.deviceId !== "string") {
+        if (!stored || typeof stored.deviceId !== "string") {
             continue;
         }
 
-        if (activeIds.has(stored.deviceId)) {
+        if (stored.state === "pending" && activeIds.has(stored.deviceId)) {
             await putDeviceKey({ ...stored, state: "active", activatedAtUtc: new Date().toISOString() });
             activated += 1;
             continue;
         }
 
+        if (stored.state === "active" && activeIds.has(stored.deviceId)) {
+            continue;
+        }
+
         const createdAt = Date.parse(stored.createdAtUtc);
-        if (Number.isFinite(createdAt) && createdAt <= stalePendingCutoff) {
+        if (stored.state === "active" ||
+            (stored.state === "pending" && Number.isFinite(createdAt) && createdAt <= stalePendingCutoff)) {
             await removeDeviceKey(stored.deviceId);
             removed += 1;
         }
