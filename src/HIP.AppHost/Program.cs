@@ -64,7 +64,8 @@ if (coreDns is not null)
 
 var web = builder.AddProject<Projects.HIP_Web>("hip-web", launchProfileName: "http")
     .WithExternalHttpEndpoints()
-    // Add the admin shell as an Aspire dashboard action; the base URL remains available separately.
+    // Keep both authenticated portals discoverable from the Aspire dashboard.
+    .WithUrlForEndpoint("http", _ => new() { Url = "/consumer", DisplayText = "Consumer" })
     .WithUrlForEndpoint("http", _ => new() { Url = "/admin", DisplayText = "Admin" })
     .WithReference(hipDatabase)
     .WaitFor(hipDatabase)

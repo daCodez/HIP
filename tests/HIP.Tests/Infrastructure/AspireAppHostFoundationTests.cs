@@ -13,10 +13,15 @@ public sealed class AspireAppHostFoundationTests
     {
         var source = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "HIP.AppHost", "Program.cs"));
 
-        Assert.That(source, Does.Contain("AddProject<Projects.HIP_ApiService>(\"hip-api\", launchProfileName: \"http\")"));
-        Assert.That(source, Does.Contain("AddProject<Projects.HIP_Web>(\"hip-web\", launchProfileName: \"http\")"));
-        Assert.That(source, Does.Contain(".WithExternalHttpEndpoints()"));
-        Assert.That(source, Does.Contain(".WaitFor(apiService)"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("AddProject<Projects.HIP_ApiService>(\"hip-api\", launchProfileName: \"http\")"));
+            Assert.That(source, Does.Contain("AddProject<Projects.HIP_Web>(\"hip-web\", launchProfileName: \"http\")"));
+            Assert.That(source, Does.Contain(".WithExternalHttpEndpoints()"));
+            Assert.That(source, Does.Contain(".WithUrlForEndpoint(\"http\", _ => new() { Url = \"/consumer\", DisplayText = \"Consumer\" })"));
+            Assert.That(source, Does.Contain(".WithUrlForEndpoint(\"http\", _ => new() { Url = \"/admin\", DisplayText = \"Admin\" })"));
+            Assert.That(source, Does.Contain(".WaitFor(apiService)"));
+        });
     }
 
     /// <summary>
