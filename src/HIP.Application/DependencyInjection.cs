@@ -59,7 +59,23 @@ public static class DependencyInjection
         services.AddMediatR(configuration => configuration.RegisterServicesFromAssembly(assembly));
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(DomainCertificatePolicy.V1);
-        services.TryAddSingleton(new DomainCertificateSigningAuthorityPolicy([]));
+        var developmentSigningMaterial = allowDevelopmentCryptoProvider
+            ? DevelopmentManagedTrustReceiptSigningMaterial.Create()
+            : null;
+        if (developmentSigningMaterial is null)
+        {
+            services.TryAddSingleton(new DomainCertificateSigningAuthorityPolicy([]));
+        }
+        else
+        {
+            services.AddSingleton(developmentSigningMaterial);
+            services.AddSingleton(new DomainCertificateSigningAuthorityPolicy(
+            [
+                new DomainCertificateAuthorizedSigner(
+                    DevelopmentManagedTrustReceiptSigningMaterial.IssuerId,
+                    developmentSigningMaterial.KeyId)
+            ]));
+        }
         services.AddSingleton<DomainRegistrationNormalizer>();
         services.AddSingleton<IDomainCertificatePolicyEvaluator, DomainCertificatePolicyEvaluator>();
         services.AddScoped<IDomainCertificateSigningService, DomainCertificateSigningService>();
@@ -160,9 +176,28 @@ public static class DependencyInjection
         services.AddScoped<IHipSignedDocumentVerifier, HipSignedDocumentVerifier>();
         services.AddScoped<IHipEnvelopeVerificationService, HipEnvelopeVerificationService>();
         services.TryAddSingleton(HipTrustReceiptPolicy.Default);
-        services.TryAddSingleton(HipTrustReceiptIssuerPolicy.Default);
+        if (developmentSigningMaterial is null)
+        {
+            services.TryAddSingleton(HipTrustReceiptIssuerPolicy.Default);
+        }
+        else
+        {
+            services.AddSingleton(new HipTrustReceiptIssuerPolicy(
+            [
+                new HipTrustReceiptAuthorizedSigner(
+                    DevelopmentManagedTrustReceiptSigningMaterial.IssuerId,
+                    developmentSigningMaterial.KeyId)
+            ]));
+        }
         services.TryAddSingleton(HipLiveBadgePolicy.Default);
-        services.TryAddScoped<IManagedTrustReceiptSigner, UnavailableManagedTrustReceiptSigner>();
+        if (developmentSigningMaterial is null)
+        {
+            services.TryAddScoped<IManagedTrustReceiptSigner, UnavailableManagedTrustReceiptSigner>();
+        }
+        else
+        {
+            services.AddScoped<IManagedTrustReceiptSigner, DevelopmentManagedTrustReceiptSigner>();
+        }
         services.AddScoped<IHipLiveBadgeSigningService, HipLiveBadgeSigningService>();
         services.AddScoped<IHipLiveBadgeVerificationService, HipLiveBadgeVerificationService>();
         services.AddScoped<IHipTrustReceiptAuthoritativeEvaluationService, HipTrustReceiptAuthoritativeEvaluationService>();
