@@ -110,6 +110,7 @@ public sealed class DomainCertificateSecurityScanServiceTests
             scanner,
             writer,
             new DomainCertificatePolicyEvaluator(DomainCertificatePolicy.V1),
+            new ExternalSiteEvidenceOptions(),
             new FixedTimeProvider(Now));
 
     private static DomainCertificateSecurityScanRequest Request() =>

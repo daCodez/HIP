@@ -44,6 +44,7 @@ public sealed class DomainCertificateSecurityScanService(
     ISiteSafetyScanner siteSafetyScanner,
     IBrowserScanResultWriteService scanResultWriter,
     IDomainCertificatePolicyEvaluator policyEvaluator,
+    ExternalSiteEvidenceOptions externalEvidenceOptions,
     TimeProvider timeProvider) : IDomainCertificateSecurityScanService
 {
     public async Task<DomainCertificateSecurityScanResult> ScanAsync(
@@ -62,6 +63,9 @@ public sealed class DomainCertificateSecurityScanService(
         SiteSafetyScanResult scan;
         try
         {
+            var scanOptions = externalEvidenceOptions.GetEffectiveOptions().Clone();
+            scanOptions.RunExternalProvidersOnRequestPath = true;
+            using var providerScope = externalEvidenceOptions.UseScopedOverride(scanOptions);
             scan = await siteSafetyScanner.ScanAsync(
                     new SiteSafetyScanRequest(origin),
                     cancellationToken)
