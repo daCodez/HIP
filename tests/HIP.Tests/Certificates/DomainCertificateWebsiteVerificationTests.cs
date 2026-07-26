@@ -50,6 +50,92 @@ public sealed class DomainCertificateWebsiteVerificationTests
             Assert.That(enrollments.StartedEnrollment?.Domain, Is.EqualTo(domain));
         });
     }
+
+    [Test]
+    public async Task Development_enrollment_recovers_a_legacy_local_owner_claim_for_the_same_authenticated_session()
+    {
+        const string domain = "example.com";
+        const string owner = "local-account-owner";
+        const string domainActor = "hip-dev-admin";
+        var website = new WebsiteIdentity(
+            domain, "hip:web:example.com", [], VerificationStatus.Pending,
+            VerificationMethod.DnsTxt, Now, null);
+        var challenge = new DomainVerificationRequest(
+            domain, VerificationMethod.DnsTxt, "dns-challenge", VerificationStatus.Pending,
+            Now, null, Now.AddHours(1));
+        var enrollments = new StubEnrollmentRepository(new DomainEnrollmentStateRecord(
+            "unused", owner, domain, DomainEnrollmentStatus.PendingOwnership, Now, null));
+        var requests = new StubVerificationRequests(challenge);
+        var websiteIdentities = new StubWebsiteIdentityService(website, challenge)
+        {
+            RequiredActorId = "system:legacy-website-registration"
+        };
+        var service = CreateService(
+            website,
+            enrollments,
+            new StubDomainVerificationService(requests),
+            requests,
+            new StubFetcher(),
+            websiteIdentities,
+            DomainCertificateEnrollmentOwnershipPolicy.Development);
+
+        var result = await service.StartAsync(
+            owner,
+            domainActor,
+            new DomainCertificateEnrollmentStartRequest(domain, "Example", VerificationMethod.DnsTxt),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateEnrollmentStartStatus.Started));
+            Assert.That(
+                websiteIdentities.ActorIds,
+                Is.EqualTo(new[] { domainActor, "system:legacy-website-registration" }));
+        });
+    }
+
+    [Test]
+    public async Task Production_enrollment_does_not_accept_the_legacy_local_owner_alias()
+    {
+        const string domain = "example.com";
+        const string owner = "local-account-owner";
+        const string domainActor = "hip-dev-admin";
+        var website = new WebsiteIdentity(
+            domain, "hip:web:example.com", [], VerificationStatus.Pending,
+            VerificationMethod.DnsTxt, Now, null);
+        var challenge = new DomainVerificationRequest(
+            domain, VerificationMethod.DnsTxt, "dns-challenge", VerificationStatus.Pending,
+            Now, null, Now.AddHours(1));
+        var enrollments = new StubEnrollmentRepository(new DomainEnrollmentStateRecord(
+            "unused", owner, domain, DomainEnrollmentStatus.PendingOwnership, Now, null));
+        var requests = new StubVerificationRequests(challenge);
+        var websiteIdentities = new StubWebsiteIdentityService(website, challenge)
+        {
+            RequiredActorId = "system:legacy-website-registration"
+        };
+        var service = CreateService(
+            website,
+            enrollments,
+            new StubDomainVerificationService(requests),
+            requests,
+            new StubFetcher(),
+            websiteIdentities,
+            DomainCertificateEnrollmentOwnershipPolicy.Default);
+
+        var result = await service.StartAsync(
+            owner,
+            domainActor,
+            new DomainCertificateEnrollmentStartRequest(domain, "Example", VerificationMethod.DnsTxt),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateEnrollmentStartStatus.Conflict));
+            Assert.That(websiteIdentities.ActorIds, Is.EqualTo(new[] { domainActor }));
+            Assert.That(enrollments.StartedEnrollment, Is.Null);
+        });
+    }
+
     [Test]
     public async Task Prepare_and_check_use_an_owner_bound_single_use_https_challenge()
     {
@@ -204,7 +290,8 @@ public sealed class DomainCertificateWebsiteVerificationTests
         StubDomainVerificationService verification,
         StubVerificationRequests requests,
         StubFetcher fetcher,
-        StubWebsiteIdentityService? websiteIdentities = null) =>
+        StubWebsiteIdentityService? websiteIdentities = null,
+        DomainCertificateEnrollmentOwnershipPolicy? ownershipPolicy = null) =>
         new(
             new DomainRegistrationNormalizer(new TestPublicSuffixResolver()),
             websiteIdentities ?? new StubWebsiteIdentityService(website),
@@ -213,7 +300,8 @@ public sealed class DomainCertificateWebsiteVerificationTests
             requests,
             fetcher,
             DomainCertificatePolicy.V1,
-            new FixedTimeProvider(Now));
+            new FixedTimeProvider(Now),
+            ownershipPolicy: ownershipPolicy);
 
     private sealed class TestPublicSuffixResolver : IPublicSuffixResolver
     {
@@ -348,6 +436,8 @@ public sealed class DomainCertificateWebsiteVerificationTests
         DomainVerificationRequest? registrationChallenge = null) : IWebsiteIdentityService
     {
         public string? LastActorId { get; private set; }
+        public List<string> ActorIds { get; } = [];
+        public string? RequiredActorId { get; init; }
 
         public Task<WebsiteIdentity?> GetAsync(
             string domain,
@@ -356,6 +446,8 @@ public sealed class DomainCertificateWebsiteVerificationTests
             CancellationToken cancellationToken)
         {
             LastActorId = actorId;
+            ActorIds.Add(actorId);
+            EnsureActor(actorId);
             return Task.FromResult<WebsiteIdentity?>(website.Domain == domain ? website : null);
         }
 
@@ -368,6 +460,8 @@ public sealed class DomainCertificateWebsiteVerificationTests
             CancellationToken cancellationToken)
         {
             LastActorId = actorId;
+            ActorIds.Add(actorId);
+            EnsureActor(actorId);
             return Task.FromResult(new WebsiteIdentityRegistrationResponse(
                 website,
                 registrationChallenge ?? throw new InvalidOperationException("A registration challenge was not configured."),
@@ -376,6 +470,16 @@ public sealed class DomainCertificateWebsiteVerificationTests
                 IsRecovery: true,
                 RequiresSigningKeyRotation: false));
         }
+
+        private void EnsureActor(string actorId)
+        {
+            if (RequiredActorId is not null &&
+                !string.Equals(actorId, RequiredActorId, StringComparison.Ordinal))
+            {
+                throw new WebsiteIdentityRegistrationConflictException("Test owner mismatch.");
+            }
+        }
+
         public Task<WebsiteIdentity> VerifyAsync(WebsiteVerificationRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<WebsiteIdentity> VerifyAsync(WebsiteVerificationRequest request, string actorId, string actorRole, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<WebsiteIdentity?> GetAsync(string domain, CancellationToken cancellationToken) => throw new NotSupportedException();

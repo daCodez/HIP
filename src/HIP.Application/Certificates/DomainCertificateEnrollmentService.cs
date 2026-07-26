@@ -100,6 +100,16 @@ public enum DomainCertificateIdentityProfileStatus
 
 public sealed record DomainCertificateIdentityProfileResult(DomainCertificateIdentityProfileStatus Status);
 
+/// <summary>
+/// Controls narrowly scoped compatibility with website ownership claims created by the legacy local registration API.
+/// </summary>
+public sealed record DomainCertificateEnrollmentOwnershipPolicy(
+    bool AllowLegacyDevelopmentWebsiteOwnerAlias)
+{
+    public static DomainCertificateEnrollmentOwnershipPolicy Default { get; } = new(false);
+    public static DomainCertificateEnrollmentOwnershipPolicy Development { get; } = new(true);
+}
+
 /// <summary>Owner-authorized facade for starting formal domain certificate enrollment.</summary>
 public interface IDomainCertificateEnrollmentService
 {
@@ -161,10 +171,14 @@ public sealed class DomainCertificateEnrollmentService(
     IWellKnownHipDocumentFetcher wellKnownFetcher,
     DomainCertificatePolicy policy,
     TimeProvider timeProvider,
-    DomainVerificationLifecycleOptions? lifecycleOptions = null) : IDomainCertificateEnrollmentService
+    DomainVerificationLifecycleOptions? lifecycleOptions = null,
+    DomainCertificateEnrollmentOwnershipPolicy? ownershipPolicy = null) : IDomainCertificateEnrollmentService
 {
+    private const string LegacyWebsiteOwnerActorId = "system:legacy-website-registration";
     private readonly DomainVerificationLifecycleOptions verificationLifecycle =
         (lifecycleOptions ?? DomainVerificationLifecycleOptions.Default).Validate();
+    private readonly DomainCertificateEnrollmentOwnershipPolicy ownership =
+        ownershipPolicy ?? DomainCertificateEnrollmentOwnershipPolicy.Default;
 
     public Task<DomainCertificateEnrollmentStartResult> StartAsync(
         string ownerId,
@@ -202,10 +216,10 @@ public sealed class DomainCertificateEnrollmentService(
         WebsiteIdentityRegistrationResponse website;
         try
         {
-            website = await websiteIdentityService.RegisterAsync(
-                new WebsiteIdentityRegistrationRequest(domain, displayName, request.VerificationMethod),
+            website = await RegisterWebsiteIdentityAsync(
+                ownerId,
                 websiteOwnerActorId,
-                "Consumer",
+                new WebsiteIdentityRegistrationRequest(domain, displayName, request.VerificationMethod),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (WebsiteIdentityRegistrationConflictException)
@@ -284,10 +298,10 @@ public sealed class DomainCertificateEnrollmentService(
         WebsiteIdentity? website;
         try
         {
-            website = await websiteIdentityService.GetAsync(
-                normalized,
+            website = await GetWebsiteIdentityAsync(
+                ownerId,
                 websiteOwnerActorId,
-                "Consumer",
+                normalized,
                 cancellationToken).ConfigureAwait(false);
         }
         catch (WebsiteIdentityRegistrationConflictException)
@@ -323,10 +337,10 @@ public sealed class DomainCertificateEnrollmentService(
         WebsiteIdentity verified;
         try
         {
-            verified = await websiteIdentityService.VerifyAsync(
-                new WebsiteVerificationRequest(normalized, VerificationMethod.DnsTxt, challenge.Token),
+            verified = await VerifyWebsiteIdentityAsync(
+                ownerId,
                 websiteOwnerActorId,
-                "Consumer",
+                new WebsiteVerificationRequest(normalized, VerificationMethod.DnsTxt, challenge.Token),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -414,7 +428,11 @@ public sealed class DomainCertificateEnrollmentService(
                 return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.NotReady);
             }
 
-            var website = await websiteIdentityService.GetAsync(normalized, websiteOwnerActorId, "Consumer", cancellationToken).ConfigureAwait(false);
+            var website = await GetWebsiteIdentityAsync(
+                ownerId,
+                websiteOwnerActorId,
+                normalized,
+                cancellationToken).ConfigureAwait(false);
             if (website is null || website.VerificationStatus != VerificationStatus.Verified)
             {
                 return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.NotReady);
@@ -496,7 +514,11 @@ public sealed class DomainCertificateEnrollmentService(
                 return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.NotReady);
             }
 
-            var website = await websiteIdentityService.GetAsync(normalized, websiteOwnerActorId, "Consumer", cancellationToken).ConfigureAwait(false);
+            var website = await GetWebsiteIdentityAsync(
+                ownerId,
+                websiteOwnerActorId,
+                normalized,
+                cancellationToken).ConfigureAwait(false);
             var challenge = await domainVerificationService.GetAsync(
                 normalized,
                 VerificationMethod.WellKnownHipJson,
@@ -616,6 +638,85 @@ public sealed class DomainCertificateEnrollmentService(
         var websiteKeys = website.PublicKeys.OrderBy(key => key.KeyId, StringComparer.Ordinal).ToArray();
         return tokenMatches && documentKeys.SequenceEqual(websiteKeys);
     }
+
+    private async Task<WebsiteIdentityRegistrationResponse> RegisterWebsiteIdentityAsync(
+        string ownerId,
+        string websiteOwnerActorId,
+        WebsiteIdentityRegistrationRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await websiteIdentityService.RegisterAsync(
+                request,
+                websiteOwnerActorId,
+                "Consumer",
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (WebsiteIdentityRegistrationConflictException) when (
+            CanUseLegacyDevelopmentOwnerAlias(ownerId, websiteOwnerActorId))
+        {
+            return await websiteIdentityService.RegisterAsync(
+                request,
+                LegacyWebsiteOwnerActorId,
+                "Consumer",
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<WebsiteIdentity?> GetWebsiteIdentityAsync(
+        string ownerId,
+        string websiteOwnerActorId,
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await websiteIdentityService.GetAsync(
+                domain,
+                websiteOwnerActorId,
+                "Consumer",
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (WebsiteIdentityRegistrationConflictException) when (
+            CanUseLegacyDevelopmentOwnerAlias(ownerId, websiteOwnerActorId))
+        {
+            return await websiteIdentityService.GetAsync(
+                domain,
+                LegacyWebsiteOwnerActorId,
+                "Consumer",
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<WebsiteIdentity> VerifyWebsiteIdentityAsync(
+        string ownerId,
+        string websiteOwnerActorId,
+        WebsiteVerificationRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await websiteIdentityService.VerifyAsync(
+                request,
+                websiteOwnerActorId,
+                "Consumer",
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (WebsiteIdentityRegistrationConflictException) when (
+            CanUseLegacyDevelopmentOwnerAlias(ownerId, websiteOwnerActorId))
+        {
+            return await websiteIdentityService.VerifyAsync(
+                request,
+                LegacyWebsiteOwnerActorId,
+                "Consumer",
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private bool CanUseLegacyDevelopmentOwnerAlias(string ownerId, string websiteOwnerActorId) =>
+        ownership.AllowLegacyDevelopmentWebsiteOwnerAlias &&
+        !string.Equals(ownerId, websiteOwnerActorId, StringComparison.Ordinal);
 
     public async Task<DomainCertificateIdentityProfileResult> CompleteIdentityProfileAsync(
         string ownerId,

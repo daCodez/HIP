@@ -60,6 +60,10 @@ public static class DependencyInjection
         services.AddMediatR(configuration => configuration.RegisterServicesFromAssembly(assembly));
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(DomainCertificatePolicy.V1);
+        services.TryAddSingleton(
+            allowDevelopmentCryptoProvider
+                ? DomainCertificateEnrollmentOwnershipPolicy.Development
+                : DomainCertificateEnrollmentOwnershipPolicy.Default);
         var developmentSigningMaterial = allowDevelopmentCryptoProvider
             ? DevelopmentManagedTrustReceiptSigningMaterial.Create()
             : null;
