@@ -46,6 +46,37 @@ public sealed record DomainCertificateDnsCheckResult(
     DomainCertificateDnsCheckStatus Status,
     DateTimeOffset? VerifiedAtUtc = null);
 
+/// <summary>Safe outcome of preparing the fixed HTTPS website-control challenge.</summary>
+public enum DomainCertificateWebsitePrepareStatus
+{
+    InvalidRequest,
+    NotFound,
+    NotReady,
+    Ready,
+    Unavailable
+}
+
+/// <summary>Owner-downloadable public challenge document; it contains no private key or account data.</summary>
+public sealed record DomainCertificateWebsitePrepareResult(
+    DomainCertificateWebsitePrepareStatus Status,
+    HipWellKnownDocument? Document = null);
+
+/// <summary>Safe outcome of checking challenge-bound HTTPS website control.</summary>
+public enum DomainCertificateWebsiteCheckStatus
+{
+    InvalidRequest,
+    NotFound,
+    NotReady,
+    Pending,
+    Verified,
+    Conflict,
+    Unavailable
+}
+
+public sealed record DomainCertificateWebsiteCheckResult(
+    DomainCertificateWebsiteCheckStatus Status,
+    DateTimeOffset? VerifiedAtUtc = null);
+
 /// <summary>Owner-authorized facade for starting formal domain certificate enrollment.</summary>
 public interface IDomainCertificateEnrollmentService
 {
@@ -58,6 +89,16 @@ public interface IDomainCertificateEnrollmentService
         string ownerId,
         string domain,
         CancellationToken cancellationToken);
+
+    Task<DomainCertificateWebsitePrepareResult> PrepareWebsiteVerificationAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken);
+
+    Task<DomainCertificateWebsiteCheckResult> CheckWebsiteAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken);
 }
 
 
@@ -67,9 +108,15 @@ public sealed class DomainCertificateEnrollmentService(
     IWebsiteIdentityService websiteIdentityService,
     IDomainEnrollmentRepository enrollmentRepository,
     IDomainVerificationService domainVerificationService,
+    IDomainVerificationRequestRepository verificationRequests,
+    IWellKnownHipDocumentFetcher wellKnownFetcher,
     DomainCertificatePolicy policy,
-    TimeProvider timeProvider) : IDomainCertificateEnrollmentService
+    TimeProvider timeProvider,
+    DomainVerificationLifecycleOptions? lifecycleOptions = null) : IDomainCertificateEnrollmentService
 {
+    private readonly DomainVerificationLifecycleOptions verificationLifecycle =
+        (lifecycleOptions ?? DomainVerificationLifecycleOptions.Default).Validate();
+
     public async Task<DomainCertificateEnrollmentStartResult> StartAsync(
         string ownerId,
         DomainCertificateEnrollmentStartRequest request,
@@ -261,6 +308,228 @@ public sealed class DomainCertificateEnrollmentService(
                 new DomainCertificateDnsCheckResult(DomainCertificateDnsCheckStatus.NotFound),
             _ => new DomainCertificateDnsCheckResult(DomainCertificateDnsCheckStatus.Conflict)
         };
+    }
+
+    public async Task<DomainCertificateWebsitePrepareResult> PrepareWebsiteVerificationAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        string normalized;
+        try
+        {
+            ValidateIdentifier(ownerId, 256);
+            normalized = normalizer.Normalize(domain);
+        }
+        catch (ArgumentException)
+        {
+            return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.InvalidRequest);
+        }
+
+        try
+        {
+            var enrollment = await enrollmentRepository.GetCurrentAsync(ownerId, normalized, cancellationToken).ConfigureAwait(false);
+            if (enrollment is null)
+            {
+                return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.NotFound);
+            }
+            if (enrollment.Status != DomainEnrollmentStatus.OwnershipVerified || enrollment.DnsVerifiedAtUtc is null)
+            {
+                return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.NotReady);
+            }
+
+            var website = await websiteIdentityService.GetAsync(normalized, ownerId, "Consumer", cancellationToken).ConfigureAwait(false);
+            if (website is null || website.VerificationStatus != VerificationStatus.Verified)
+            {
+                return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.NotReady);
+            }
+
+            var challenge = await domainVerificationService.GetOrStartAsync(
+                normalized,
+                VerificationMethod.WellKnownHipJson,
+                cancellationToken).ConfigureAwait(false);
+            if (challenge.Status is VerificationStatus.Revoked or VerificationStatus.Expired or VerificationStatus.Suspended ||
+                challenge.VerificationAttemptCount >= verificationLifecycle.MaximumVerificationAttempts ||
+                challenge.ExpiresAtUtc is null || challenge.ExpiresAtUtc <= timeProvider.GetUtcNow())
+            {
+                return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.NotReady);
+            }
+
+            var document = new HipWellKnownDocument(
+                normalized,
+                website.HipIdentityId,
+                website.PublicKeys,
+                timeProvider.GetUtcNow(),
+                SchemaVersion: "1",
+                VerificationChallenge: challenge.Token,
+                ExpiresAtUtc: challenge.ExpiresAtUtc);
+            return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.Ready, document);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (WebsiteIdentityRegistrationConflictException)
+        {
+            return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.NotFound);
+        }
+        catch
+        {
+            return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.Unavailable);
+        }
+    }
+
+    public async Task<DomainCertificateWebsiteCheckResult> CheckWebsiteAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        string normalized;
+        try
+        {
+            ValidateIdentifier(ownerId, 256);
+            normalized = normalizer.Normalize(domain);
+        }
+        catch (ArgumentException)
+        {
+            return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.InvalidRequest);
+        }
+
+        try
+        {
+            var enrollment = await enrollmentRepository.GetCurrentAsync(ownerId, normalized, cancellationToken).ConfigureAwait(false);
+            if (enrollment is null)
+            {
+                return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.NotFound);
+            }
+            if (enrollment.WebsiteVerifiedAtUtc is { } existingVerifiedAt)
+            {
+                return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.Verified, existingVerifiedAt);
+            }
+            if (enrollment.Status != DomainEnrollmentStatus.OwnershipVerified || enrollment.DnsVerifiedAtUtc is null)
+            {
+                return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.NotReady);
+            }
+
+            var website = await websiteIdentityService.GetAsync(normalized, ownerId, "Consumer", cancellationToken).ConfigureAwait(false);
+            var challenge = await domainVerificationService.GetAsync(
+                normalized,
+                VerificationMethod.WellKnownHipJson,
+                cancellationToken).ConfigureAwait(false);
+            if (website is null || website.VerificationStatus != VerificationStatus.Verified || challenge is null)
+            {
+                return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.NotReady);
+            }
+
+            var now = timeProvider.GetUtcNow();
+            if (challenge.ExpiresAtUtc is null || challenge.ExpiresAtUtc <= now ||
+                challenge.Status is VerificationStatus.Revoked or VerificationStatus.Expired or VerificationStatus.Suspended ||
+                challenge.VerificationAttemptCount >= verificationLifecycle.MaximumVerificationAttempts)
+            {
+                return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.NotReady);
+            }
+
+            var document = await wellKnownFetcher.FetchAsync(normalized, cancellationToken).ConfigureAwait(false);
+            if (!MatchesWebsiteChallenge(document, website, challenge, now))
+            {
+                var attemptCount = checked(challenge.VerificationAttemptCount + 1);
+                var failed = challenge with
+                {
+                    Status = attemptCount >= verificationLifecycle.MaximumVerificationAttempts
+                        ? VerificationStatus.Suspended
+                        : VerificationStatus.Unverified,
+                    LastCheckedAtUtc = now,
+                    LastCheckMessage = attemptCount >= verificationLifecycle.MaximumVerificationAttempts
+                        ? "The website verification attempt limit was reached; regenerate the challenge before retrying."
+                        : "The fixed HTTPS well-known document did not match the active challenge.",
+                    VerificationAttemptCount = attemptCount,
+                    LastAttemptOutcome = DomainVerificationAttemptOutcome.Failed
+                };
+                if (!await verificationRequests.TryUpdateAsync(challenge, failed, cancellationToken).ConfigureAwait(false))
+                {
+                    return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.Conflict);
+                }
+                return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.Pending);
+            }
+
+            var verifiedAt = challenge.VerifiedAtUtc ?? now;
+            if (challenge.Status != VerificationStatus.Verified)
+            {
+                var consumed = challenge with
+                {
+                    Status = VerificationStatus.Verified,
+                    VerifiedAtUtc = verifiedAt,
+                    LastCheckedAtUtc = now,
+                    LastCheckMessage = "HIP verified the challenge-bound document at the fixed HTTPS well-known path.",
+                    VerificationAttemptCount = checked(challenge.VerificationAttemptCount + 1),
+                    ConsumedAtUtc = now,
+                    LastAttemptOutcome = DomainVerificationAttemptOutcome.Succeeded
+                };
+                if (!await verificationRequests.TryUpdateAsync(challenge, consumed, cancellationToken).ConfigureAwait(false))
+                {
+                    var current = await verificationRequests.GetAsync(normalized, VerificationMethod.WellKnownHipJson, cancellationToken).ConfigureAwait(false);
+                    if (current?.Status != VerificationStatus.Verified || current.VerifiedAtUtc is null)
+                    {
+                        return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.Conflict);
+                    }
+                    verifiedAt = current.VerifiedAtUtc.Value;
+                }
+            }
+
+            var identity = Digest($"{ownerId}\n{normalized}");
+            var write = await enrollmentRepository.TryApplyWebsiteVerificationAsync(
+                new DomainWebsiteVerificationRecord(
+                    enrollment.EnrollmentId,
+                    ownerId,
+                    normalized,
+                    VerificationMethod.WellKnownHipJson,
+                    verifiedAt,
+                    $"certificate-event:{Digest($"website-verified\n{identity}")}"),
+                cancellationToken).ConfigureAwait(false);
+            return write.Status switch
+            {
+                DomainEnrollmentTransitionWriteStatus.Updated or DomainEnrollmentTransitionWriteStatus.AlreadyApplied =>
+                    new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.Verified, verifiedAt),
+                DomainEnrollmentTransitionWriteStatus.NotFound =>
+                    new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.NotFound),
+                _ => new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.Conflict)
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (WebsiteIdentityRegistrationConflictException)
+        {
+            return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.NotFound);
+        }
+        catch
+        {
+            return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.Unavailable);
+        }
+    }
+
+    private static bool MatchesWebsiteChallenge(
+        HipWellKnownDocument? document,
+        WebsiteIdentity website,
+        DomainVerificationRequest challenge,
+        DateTimeOffset now)
+    {
+        if (document is null || document.SchemaVersion != "1" || document.Domain != website.Domain ||
+            document.HipIdentityId != website.HipIdentityId || document.ExpiresAtUtc is null ||
+            document.ExpiresAtUtc <= now || document.ExpiresAtUtc > challenge.ExpiresAtUtc ||
+            document.IssuedAtUtc < challenge.CreatedAtUtc || document.IssuedAtUtc > now.AddMinutes(5) ||
+            document.VerificationChallenge is null)
+        {
+            return false;
+        }
+
+        var tokenMatches = CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(document.VerificationChallenge),
+            Encoding.UTF8.GetBytes(challenge.Token));
+        var documentKeys = document.PublicKeys.OrderBy(key => key.KeyId, StringComparer.Ordinal).ToArray();
+        var websiteKeys = website.PublicKeys.OrderBy(key => key.KeyId, StringComparer.Ordinal).ToArray();
+        return tokenMatches && documentKeys.SequenceEqual(websiteKeys);
     }
 
     private static string Digest(string value) =>

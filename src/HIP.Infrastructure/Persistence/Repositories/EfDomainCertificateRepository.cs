@@ -48,6 +48,26 @@ public sealed class EfDomainCertificateRepository(
         return entity is null ? null : await FromEntityAsync(entity, cancellationToken);
     }
     /// <inheritdoc />
+    public async Task<DomainEnrollmentStateRecord?> GetCurrentAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        ValidateIdentifier(ownerId, 256);
+        var normalized = HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(domain);
+        return await dbContext.DomainEnrollments.AsNoTracking()
+            .Where(item => item.OwnerId == ownerId && item.Domain == normalized && item.IsCurrent)
+            .Select(item => new DomainEnrollmentStateRecord(
+                item.EnrollmentId,
+                item.OwnerId,
+                item.Domain,
+                item.Status,
+                item.DnsVerifiedAtUtc,
+                item.WebsiteVerifiedAtUtc))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<OwnerDomainCertificateSummary>> ListForOwnerAsync(
         string ownerId,
         int offset,
@@ -313,6 +333,81 @@ public sealed class EfDomainCertificateRepository(
             CurrentStatus = enrollment.Status.ToString(),
             ActorId = verification.OwnerId,
             PublicSummary = "HIP verified domain control through DNS.",
+            PolicyVersion = enrollment.PolicyVersion,
+            OccurredAtUtc = verification.VerifiedAtUtc
+        });
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Updated);
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<DomainEnrollmentTransitionWriteResult> TryApplyWebsiteVerificationAsync(
+        DomainWebsiteVerificationRecord verification,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(verification);
+        ValidateIdentifier(verification.EnrollmentId, 128);
+        ValidateIdentifier(verification.OwnerId, 256);
+        ValidateIdentifier(verification.AuditEventId, 128);
+        var domain = HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(verification.Domain);
+        if (domain != verification.Domain ||
+            verification.Method != HIP.Domain.Identity.VerificationMethod.WellKnownHipJson ||
+            verification.VerifiedAtUtc.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException("Website verification state is invalid.", nameof(verification));
+        }
+
+        var enrollment = await dbContext.DomainEnrollments.SingleOrDefaultAsync(
+            item => item.EnrollmentId == verification.EnrollmentId &&
+                    item.OwnerId == verification.OwnerId &&
+                    item.Domain == verification.Domain &&
+                    item.IsCurrent,
+            cancellationToken);
+        if (enrollment is null)
+        {
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.NotFound);
+        }
+        if (enrollment.Status != DomainEnrollmentStatus.OwnershipVerified)
+        {
+            return new DomainEnrollmentTransitionWriteResult(
+                enrollment.WebsiteVerifiedAtUtc is not null &&
+                enrollment.Status is DomainEnrollmentStatus.PendingSecurityReview or DomainEnrollmentStatus.Verified or DomainEnrollmentStatus.Monitored
+                    ? DomainEnrollmentTransitionWriteStatus.AlreadyApplied
+                    : DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+        if (enrollment.DnsVerifiedAtUtc is null || await dbContext.DomainCertificateEvents.AnyAsync(
+                item => item.EventId == verification.AuditEventId,
+                cancellationToken))
+        {
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+
+        DomainEnrollmentLifecycle.RequireTransition(
+            enrollment.Status,
+            DomainEnrollmentStatus.PendingSecurityReview);
+        var previous = enrollment.Status;
+        enrollment.Status = DomainEnrollmentStatus.PendingSecurityReview;
+        enrollment.WebsiteVerifiedAtUtc = verification.VerifiedAtUtc;
+        enrollment.UpdatedAtUtc = verification.VerifiedAtUtc;
+        enrollment.AggregateVersion++;
+        dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+        {
+            EventId = verification.AuditEventId,
+            EnrollmentId = enrollment.EnrollmentId,
+            CertificateId = null,
+            EventType = "WebsiteControlVerified",
+            PreviousStatus = previous.ToString(),
+            CurrentStatus = enrollment.Status.ToString(),
+            ActorId = verification.OwnerId,
+            PublicSummary = "HIP verified website control through the fixed HTTPS well-known path.",
             PolicyVersion = enrollment.PolicyVersion,
             OccurredAtUtc = verification.VerifiedAtUtc
         });

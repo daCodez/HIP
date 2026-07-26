@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @using HIP.Application.Certificates
 @using HIP.Domain.Certificates
+@using System.Text.Json
 @inject IDomainCertificateOwnerQuery CertificateQuery
 @inject IDomainCertificateEnrollmentService EnrollmentService
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -75,6 +76,14 @@
     }
     else
     {
+        @if (_certificateActionError is not null)
+        {
+            <p class="admin-error" role="alert">@_certificateActionError</p>
+        }
+        else if (_certificateActionMessage is not null)
+        {
+            <p class="admin-message" role="status">@_certificateActionMessage</p>
+        }
         @foreach (var item in _items)
         {
             <article class="domain-certificate-card @StatusClass(item)" aria-labelledby="@HeadingId(item)">
@@ -118,6 +127,26 @@
                             @(_checkingEnrollmentId == item.EnrollmentId ? "Checking…" : "Check DNS")
                         </button>
                     }
+                    @if (item.EnrollmentStatus == DomainEnrollmentStatus.OwnershipVerified &&
+                         item.DnsVerifiedAtUtc is not null &&
+                         item.WebsiteVerifiedAtUtc is null)
+                    {
+                        <button class="btn btn-primary" type="button" disabled="@(_preparingWebsiteEnrollmentId is not null)"
+                                @onclick="() => PrepareWebsiteVerificationAsync(item)">
+                            @(_preparingWebsiteEnrollmentId == item.EnrollmentId ? "Preparing…" : "Prepare website file")
+                        </button>
+                        @if (_websiteEnrollmentId == item.EnrollmentId && _websiteDocumentJson is not null)
+                        {
+                            <div class="website-verification-instructions">
+                                <p>Download this public challenge file and publish it at <code>https://@item.Domain/.well-known/hip.json</code>.</p>
+                                <a class="btn" href="@WebsiteDocumentDownloadUrl()" download="hip.json">Download hip.json</a>
+                                <button class="btn btn-primary" type="button" disabled="@(_checkingWebsiteEnrollmentId is not null)"
+                                        @onclick="() => CheckWebsiteAsync(item)">
+                                    @(_checkingWebsiteEnrollmentId == item.EnrollmentId ? "Checking…" : "Check website")
+                                </button>
+                            </div>
+                        }
+                    }
                     @if (item.CertificateId is not null)
                     {
                         <a class="btn btn-primary" href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">View public certificate</a>
@@ -141,6 +170,12 @@
     private string? _enrollmentError;
     private DomainCertificateEnrollmentStartResult? _challenge;
     private string? _checkingEnrollmentId;
+    private string? _preparingWebsiteEnrollmentId;
+    private string? _checkingWebsiteEnrollmentId;
+    private string? _websiteEnrollmentId;
+    private string? _websiteDocumentJson;
+    private string? _certificateActionMessage;
+    private string? _certificateActionError;
     protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
@@ -265,6 +300,96 @@
             _checkingEnrollmentId = null;
         }
     }
+    private async Task PrepareWebsiteVerificationAsync(OwnerDomainCertificateSummary item)
+    {
+        _preparingWebsiteEnrollmentId = item.EnrollmentId;
+        _certificateActionError = null;
+        _certificateActionMessage = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                ConsumerPolicies.CanUseConsumerPortal,
+                consumerId => EnrollmentService.PrepareWebsiteVerificationAsync(
+                    consumerId,
+                    item.Domain,
+                    CancellationToken.None));
+            if (!access.Succeeded || access.Value is null)
+            {
+                _certificateActionError = HipConsumerPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            if (access.Value.Status == DomainCertificateWebsitePrepareStatus.Ready && access.Value.Document is not null)
+            {
+                _websiteEnrollmentId = item.EnrollmentId;
+                _websiteDocumentJson = JsonSerializer.Serialize(
+                    access.Value.Document,
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
+                _certificateActionMessage = "Website challenge ready. Publish the downloaded file, then check the website.";
+            }
+            else
+            {
+                _certificateActionError = access.Value.Status == DomainCertificateWebsitePrepareStatus.NotReady
+                    ? "Complete DNS verification before preparing the website challenge."
+                    : "HIP could not prepare the website challenge right now.";
+            }
+        }
+        finally
+        {
+            _preparingWebsiteEnrollmentId = null;
+        }
+    }
+
+    private async Task CheckWebsiteAsync(OwnerDomainCertificateSummary item)
+    {
+        _checkingWebsiteEnrollmentId = item.EnrollmentId;
+        _certificateActionError = null;
+        _certificateActionMessage = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                ConsumerPolicies.CanUseConsumerPortal,
+                consumerId => EnrollmentService.CheckWebsiteAsync(
+                    consumerId,
+                    item.Domain,
+                    CancellationToken.None));
+            if (!access.Succeeded || access.Value is null)
+            {
+                _certificateActionError = HipConsumerPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            if (access.Value.Status == DomainCertificateWebsiteCheckStatus.Verified)
+            {
+                _certificateActionMessage = "HTTPS website control verified. HIP moved this enrollment to security review.";
+                _websiteEnrollmentId = null;
+                _websiteDocumentJson = null;
+                await LoadAsync();
+            }
+            else if (access.Value.Status == DomainCertificateWebsiteCheckStatus.Pending)
+            {
+                _certificateActionMessage = "HIP did not find the matching challenge file yet. Confirm the fixed HTTPS path and try again.";
+            }
+            else
+            {
+                _certificateActionError = "HIP could not verify the website right now. The enrollment was not advanced.";
+            }
+        }
+        finally
+        {
+            _checkingWebsiteEnrollmentId = null;
+        }
+    }
+
+    private string WebsiteDocumentDownloadUrl() =>
+        $"data:application/hip+json;charset=utf-8,{Uri.EscapeDataString(_websiteDocumentJson ?? string.Empty)}";
+
     private static RenderFragment ProgressStep(
         string label,
         bool complete,

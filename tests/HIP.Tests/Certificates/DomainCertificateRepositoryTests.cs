@@ -268,6 +268,42 @@ public sealed class DomainCertificateRepositoryTests
     }
 
     [Test]
+    public async Task Website_verification_is_owner_scoped_advances_once_and_appends_an_audit_event()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        var started = new DomainEnrollmentStartRecord(
+            "enrollment-website", "owner-1", "website.example", DomainEnrollmentStatus.PendingOwnership,
+            DomainCertificatePolicy.V1.Version, Now, "certificate-event:enrollment-website");
+        await repository.TryStartEnrollmentAsync(started, CancellationToken.None);
+        await repository.TryApplyOwnershipVerificationAsync(
+            new DomainOwnershipVerificationRecord(
+                "enrollment-website", "owner-1", "website.example", VerificationMethod.DnsTxt,
+                Now.AddMinutes(5), "certificate-event:ownership-website"),
+            CancellationToken.None);
+        var verification = new DomainWebsiteVerificationRecord(
+            "enrollment-website", "owner-1", "website.example", VerificationMethod.WellKnownHipJson,
+            Now.AddMinutes(10), "certificate-event:website-verify");
+
+        var hidden = await repository.GetCurrentAsync("owner-other", "website.example", CancellationToken.None);
+        var applied = await repository.TryApplyWebsiteVerificationAsync(verification, CancellationToken.None);
+        var retry = await repository.TryApplyWebsiteVerificationAsync(verification, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(hidden, Is.Null);
+            Assert.That(applied.Status, Is.EqualTo(DomainEnrollmentTransitionWriteStatus.Updated));
+            Assert.That(retry.Status, Is.EqualTo(DomainEnrollmentTransitionWriteStatus.AlreadyApplied));
+            var enrollment = context.DomainEnrollments.Single(item => item.EnrollmentId == "enrollment-website");
+            Assert.That(enrollment.Status, Is.EqualTo(DomainEnrollmentStatus.PendingSecurityReview));
+            Assert.That(enrollment.WebsiteVerifiedAtUtc, Is.EqualTo(Now.AddMinutes(10)));
+            var auditEvent = context.DomainCertificateEvents.Single(item => item.EventType == "WebsiteControlVerified");
+            Assert.That(auditEvent.ActorId, Is.EqualTo("owner-1"));
+            Assert.That(auditEvent.PublicSummary, Does.Not.Contain("challenge"));
+        });
+    }
+
+    [Test]
     public async Task Admin_summary_query_pages_real_cross_owner_state_without_owner_identifiers()
     {
         await using var context = Context();
