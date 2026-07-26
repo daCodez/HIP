@@ -10,6 +10,47 @@ public sealed class DomainCertificateWebsiteVerificationTests
     private static readonly DateTimeOffset Now = new(2026, 7, 26, 12, 0, 0, TimeSpan.Zero);
 
     [Test]
+    public async Task Enrollment_start_keeps_consumer_scope_separate_from_the_authenticated_domain_actor()
+    {
+        const string domain = "example.com";
+        const string owner = "local-account-owner";
+        const string domainActor = "hip-dev-admin";
+        var website = new WebsiteIdentity(
+            domain, "hip:web:example.com", [], VerificationStatus.Pending,
+            VerificationMethod.DnsTxt, Now, null);
+        var challenge = new DomainVerificationRequest(
+            domain, VerificationMethod.DnsTxt, "dns-challenge", VerificationStatus.Pending,
+            Now, null, Now.AddHours(1));
+        var enrollments = new StubEnrollmentRepository(new DomainEnrollmentStateRecord(
+            "unused", owner, domain, DomainEnrollmentStatus.PendingOwnership, Now, null));
+        var requests = new StubVerificationRequests(challenge);
+        var websiteIdentities = new StubWebsiteIdentityService(website, challenge);
+        var service = CreateService(
+            website,
+            enrollments,
+            new StubDomainVerificationService(requests),
+            requests,
+            new StubFetcher(),
+            websiteIdentities);
+
+        var result = await service.StartAsync(
+            owner,
+            domainActor,
+            new DomainCertificateEnrollmentStartRequest(
+                domain,
+                "Example",
+                VerificationMethod.DnsTxt),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateEnrollmentStartStatus.Started));
+            Assert.That(websiteIdentities.LastActorId, Is.EqualTo(domainActor));
+            Assert.That(enrollments.StartedEnrollment?.OwnerId, Is.EqualTo(owner));
+            Assert.That(enrollments.StartedEnrollment?.Domain, Is.EqualTo(domain));
+        });
+    }
+    [Test]
     public async Task Prepare_and_check_use_an_owner_bound_single_use_https_challenge()
     {
         const string domain = "example.com";
@@ -162,10 +203,11 @@ public sealed class DomainCertificateWebsiteVerificationTests
         StubEnrollmentRepository enrollments,
         StubDomainVerificationService verification,
         StubVerificationRequests requests,
-        StubFetcher fetcher) =>
+        StubFetcher fetcher,
+        StubWebsiteIdentityService? websiteIdentities = null) =>
         new(
             new DomainRegistrationNormalizer(new TestPublicSuffixResolver()),
-            new StubWebsiteIdentityService(website),
+            websiteIdentities ?? new StubWebsiteIdentityService(website),
             enrollments,
             verification,
             requests,
@@ -196,6 +238,7 @@ public sealed class DomainCertificateWebsiteVerificationTests
     {
         public DomainWebsiteVerificationRecord? AppliedWebsiteVerification { get; private set; }
         public DomainCertificateIdentityProfileRecord? AppliedIdentityProfile { get; private set; }
+        public DomainEnrollmentStartRecord? StartedEnrollment { get; private set; }
 
         public Task<DomainEnrollmentStateRecord?> GetCurrentAsync(
             string ownerId,
@@ -215,7 +258,13 @@ public sealed class DomainCertificateWebsiteVerificationTests
 
         public Task<DomainEnrollmentRepositoryWriteResult> TryStartEnrollmentAsync(
             DomainEnrollmentStartRecord enrollment,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
+            CancellationToken cancellationToken)
+        {
+            StartedEnrollment = enrollment;
+            return Task.FromResult(new DomainEnrollmentRepositoryWriteResult(
+                DomainEnrollmentRepositoryWriteStatus.Created,
+                enrollment));
+        }
 
         public Task<DomainEnrollmentTransitionWriteResult> TryApplyOwnershipVerificationAsync(
             DomainOwnershipVerificationRecord verification,
@@ -294,17 +343,39 @@ public sealed class DomainCertificateWebsiteVerificationTests
             throw new NotSupportedException();
     }
 
-    private sealed class StubWebsiteIdentityService(WebsiteIdentity website) : IWebsiteIdentityService
+    private sealed class StubWebsiteIdentityService(
+        WebsiteIdentity website,
+        DomainVerificationRequest? registrationChallenge = null) : IWebsiteIdentityService
     {
+        public string? LastActorId { get; private set; }
+
         public Task<WebsiteIdentity?> GetAsync(
             string domain,
             string actorId,
             string actorRole,
-            CancellationToken cancellationToken) =>
-            Task.FromResult<WebsiteIdentity?>(website.Domain == domain ? website : null);
+            CancellationToken cancellationToken)
+        {
+            LastActorId = actorId;
+            return Task.FromResult<WebsiteIdentity?>(website.Domain == domain ? website : null);
+        }
 
         public Task<WebsiteIdentityRegistrationResponse> RegisterAsync(WebsiteIdentityRegistrationRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<WebsiteIdentityRegistrationResponse> RegisterAsync(WebsiteIdentityRegistrationRequest request, string actorId, string actorRole, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<WebsiteIdentityRegistrationResponse> RegisterAsync(
+            WebsiteIdentityRegistrationRequest request,
+            string actorId,
+            string actorRole,
+            CancellationToken cancellationToken)
+        {
+            LastActorId = actorId;
+            return Task.FromResult(new WebsiteIdentityRegistrationResponse(
+                website,
+                registrationChallenge ?? throw new InvalidOperationException("A registration challenge was not configured."),
+                DevelopmentPrivateKey: null,
+                Warning: "Test registration recovery.",
+                IsRecovery: true,
+                RequiresSigningKeyRotation: false));
+        }
         public Task<WebsiteIdentity> VerifyAsync(WebsiteVerificationRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<WebsiteIdentity> VerifyAsync(WebsiteVerificationRequest request, string actorId, string actorRole, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<WebsiteIdentity?> GetAsync(string domain, CancellationToken cancellationToken) => throw new NotSupportedException();

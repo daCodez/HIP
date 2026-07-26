@@ -107,9 +107,19 @@ public interface IDomainCertificateEnrollmentService
         string ownerId,
         DomainCertificateEnrollmentStartRequest request,
         CancellationToken cancellationToken);
+    Task<DomainCertificateEnrollmentStartResult> StartAsync(
+        string ownerId,
+        string websiteOwnerActorId,
+        DomainCertificateEnrollmentStartRequest request,
+        CancellationToken cancellationToken);
 
     Task<DomainCertificateDnsCheckResult> CheckDnsAsync(
         string ownerId,
+        string domain,
+        CancellationToken cancellationToken);
+    Task<DomainCertificateDnsCheckResult> CheckDnsAsync(
+        string ownerId,
+        string websiteOwnerActorId,
         string domain,
         CancellationToken cancellationToken);
 
@@ -117,9 +127,19 @@ public interface IDomainCertificateEnrollmentService
         string ownerId,
         string domain,
         CancellationToken cancellationToken);
+    Task<DomainCertificateWebsitePrepareResult> PrepareWebsiteVerificationAsync(
+        string ownerId,
+        string websiteOwnerActorId,
+        string domain,
+        CancellationToken cancellationToken);
 
     Task<DomainCertificateWebsiteCheckResult> CheckWebsiteAsync(
         string ownerId,
+        string domain,
+        CancellationToken cancellationToken);
+    Task<DomainCertificateWebsiteCheckResult> CheckWebsiteAsync(
+        string ownerId,
+        string websiteOwnerActorId,
         string domain,
         CancellationToken cancellationToken);
 
@@ -146,8 +166,16 @@ public sealed class DomainCertificateEnrollmentService(
     private readonly DomainVerificationLifecycleOptions verificationLifecycle =
         (lifecycleOptions ?? DomainVerificationLifecycleOptions.Default).Validate();
 
+    public Task<DomainCertificateEnrollmentStartResult> StartAsync(
+        string ownerId,
+        DomainCertificateEnrollmentStartRequest request,
+        CancellationToken cancellationToken) =>
+        StartAsync(ownerId, ownerId, request, cancellationToken);
+
+    /// <summary>Starts enrollment while keeping account storage scope separate from the authenticated website owner actor.</summary>
     public async Task<DomainCertificateEnrollmentStartResult> StartAsync(
         string ownerId,
+        string websiteOwnerActorId,
         DomainCertificateEnrollmentStartRequest request,
         CancellationToken cancellationToken)
     {
@@ -156,6 +184,7 @@ public sealed class DomainCertificateEnrollmentService(
         try
         {
             ValidateIdentifier(ownerId, 256);
+            ValidateIdentifier(websiteOwnerActorId, 256);
             ArgumentNullException.ThrowIfNull(request);
             domain = normalizer.Normalize(request.Domain);
             displayName = request.DisplayName?.Trim() ?? string.Empty;
@@ -175,7 +204,7 @@ public sealed class DomainCertificateEnrollmentService(
         {
             website = await websiteIdentityService.RegisterAsync(
                 new WebsiteIdentityRegistrationRequest(domain, displayName, request.VerificationMethod),
-                ownerId,
+                websiteOwnerActorId,
                 "Consumer",
                 cancellationToken).ConfigureAwait(false);
         }
@@ -227,8 +256,16 @@ public sealed class DomainCertificateEnrollmentService(
             website.VerificationRequest.ExpiresAtUtc);
     }
 
+    public Task<DomainCertificateDnsCheckResult> CheckDnsAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken) =>
+        CheckDnsAsync(ownerId, ownerId, domain, cancellationToken);
+
+    /// <summary>Checks DNS for an account enrollment using the authenticated website owner actor.</summary>
     public async Task<DomainCertificateDnsCheckResult> CheckDnsAsync(
         string ownerId,
+        string websiteOwnerActorId,
         string domain,
         CancellationToken cancellationToken)
     {
@@ -236,6 +273,7 @@ public sealed class DomainCertificateEnrollmentService(
         try
         {
             ValidateIdentifier(ownerId, 256);
+            ValidateIdentifier(websiteOwnerActorId, 256);
             normalized = normalizer.Normalize(domain);
         }
         catch (ArgumentException)
@@ -248,7 +286,7 @@ public sealed class DomainCertificateEnrollmentService(
         {
             website = await websiteIdentityService.GetAsync(
                 normalized,
-                ownerId,
+                websiteOwnerActorId,
                 "Consumer",
                 cancellationToken).ConfigureAwait(false);
         }
@@ -287,7 +325,7 @@ public sealed class DomainCertificateEnrollmentService(
         {
             verified = await websiteIdentityService.VerifyAsync(
                 new WebsiteVerificationRequest(normalized, VerificationMethod.DnsTxt, challenge.Token),
-                ownerId,
+                websiteOwnerActorId,
                 "Consumer",
                 cancellationToken).ConfigureAwait(false);
         }
@@ -339,8 +377,16 @@ public sealed class DomainCertificateEnrollmentService(
         };
     }
 
+    public Task<DomainCertificateWebsitePrepareResult> PrepareWebsiteVerificationAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken) =>
+        PrepareWebsiteVerificationAsync(ownerId, ownerId, domain, cancellationToken);
+
+    /// <summary>Prepares website verification using the authenticated website owner actor.</summary>
     public async Task<DomainCertificateWebsitePrepareResult> PrepareWebsiteVerificationAsync(
         string ownerId,
+        string websiteOwnerActorId,
         string domain,
         CancellationToken cancellationToken)
     {
@@ -348,6 +394,7 @@ public sealed class DomainCertificateEnrollmentService(
         try
         {
             ValidateIdentifier(ownerId, 256);
+            ValidateIdentifier(websiteOwnerActorId, 256);
             normalized = normalizer.Normalize(domain);
         }
         catch (ArgumentException)
@@ -367,7 +414,7 @@ public sealed class DomainCertificateEnrollmentService(
                 return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.NotReady);
             }
 
-            var website = await websiteIdentityService.GetAsync(normalized, ownerId, "Consumer", cancellationToken).ConfigureAwait(false);
+            var website = await websiteIdentityService.GetAsync(normalized, websiteOwnerActorId, "Consumer", cancellationToken).ConfigureAwait(false);
             if (website is null || website.VerificationStatus != VerificationStatus.Verified)
             {
                 return new DomainCertificateWebsitePrepareResult(DomainCertificateWebsitePrepareStatus.NotReady);
@@ -408,8 +455,16 @@ public sealed class DomainCertificateEnrollmentService(
         }
     }
 
+    public Task<DomainCertificateWebsiteCheckResult> CheckWebsiteAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken) =>
+        CheckWebsiteAsync(ownerId, ownerId, domain, cancellationToken);
+
+    /// <summary>Checks website control using the authenticated website owner actor.</summary>
     public async Task<DomainCertificateWebsiteCheckResult> CheckWebsiteAsync(
         string ownerId,
+        string websiteOwnerActorId,
         string domain,
         CancellationToken cancellationToken)
     {
@@ -417,6 +472,7 @@ public sealed class DomainCertificateEnrollmentService(
         try
         {
             ValidateIdentifier(ownerId, 256);
+            ValidateIdentifier(websiteOwnerActorId, 256);
             normalized = normalizer.Normalize(domain);
         }
         catch (ArgumentException)
@@ -440,7 +496,7 @@ public sealed class DomainCertificateEnrollmentService(
                 return new DomainCertificateWebsiteCheckResult(DomainCertificateWebsiteCheckStatus.NotReady);
             }
 
-            var website = await websiteIdentityService.GetAsync(normalized, ownerId, "Consumer", cancellationToken).ConfigureAwait(false);
+            var website = await websiteIdentityService.GetAsync(normalized, websiteOwnerActorId, "Consumer", cancellationToken).ConfigureAwait(false);
             var challenge = await domainVerificationService.GetAsync(
                 normalized,
                 VerificationMethod.WellKnownHipJson,

@@ -224,6 +224,9 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(certificates, Does.Contain("HipConsumerPageAccess.ExecuteAuthorizedAsync"));
             Assert.That(certificates, Does.Contain("ConsumerPolicies.CanUseConsumerPortal"));
             Assert.That(certificates, Does.Contain("EnrollmentService.StartAsync"));
+            Assert.That(certificates, Does.Contain("HipAuthenticationClaimTypes.ActorId"));
+            Assert.That(certificates, Does.Contain("linked to a different HIP account"));
+            Assert.That(certificates, Does.Contain("could not save this enrollment"));
             Assert.That(certificates, Does.Contain("Start verification"));
             Assert.That(certificates, Does.Contain("Copy DNS record"));
             Assert.That(certificates, Does.Contain("EnrollmentService.CheckDnsAsync"));

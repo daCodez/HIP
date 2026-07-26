@@ -4,6 +4,7 @@
 @using HIP.Application.Certificates
 @using HIP.Domain.Certificates
 @using System.Text.Json
+@using System.Security.Claims
 @inject IDomainCertificateOwnerQuery CertificateQuery
 @inject IDomainCertificateEnrollmentService EnrollmentService
 @inject IDomainCertificateApplicationService ApplicationService
@@ -283,6 +284,7 @@
                 ConsumerPolicies.CanUseConsumerPortal,
                 consumerId => EnrollmentService.StartAsync(
                     consumerId,
+                    WebsiteOwnerActorId(authenticationState.User, consumerId),
                     new DomainCertificateEnrollmentStartRequest(
                         _domain,
                         _displayName,
@@ -303,9 +305,16 @@
             }
             else
             {
-                _enrollmentError = _challenge.Status == DomainCertificateEnrollmentStartStatus.InvalidRequest
-                    ? "Enter a valid public domain and display name."
-                    : "HIP could not start this enrollment. The domain may already be claimed or storage may be unavailable.";
+                _enrollmentError = _challenge.Status switch
+                {
+                    DomainCertificateEnrollmentStartStatus.InvalidRequest =>
+                        "Enter a valid public domain and display name.",
+                    DomainCertificateEnrollmentStartStatus.Conflict =>
+                        "This domain is linked to a different HIP account. Sign in with that account or use domain ownership recovery.",
+                    DomainCertificateEnrollmentStartStatus.PersistenceUnavailable =>
+                        "HIP could not save this enrollment right now. The existing domain identity was not changed; retry in a moment.",
+                    _ => "HIP could not start this enrollment right now."
+                };
             }
         }
         finally
@@ -340,6 +349,7 @@
                 ConsumerPolicies.CanUseConsumerPortal,
                 consumerId => EnrollmentService.CheckDnsAsync(
                     consumerId,
+                    WebsiteOwnerActorId(authenticationState.User, consumerId),
                     item.Domain,
                     CancellationToken.None));
             if (!access.Succeeded || access.Value is null)
@@ -381,6 +391,7 @@
                 ConsumerPolicies.CanUseConsumerPortal,
                 consumerId => EnrollmentService.PrepareWebsiteVerificationAsync(
                     consumerId,
+                    WebsiteOwnerActorId(authenticationState.User, consumerId),
                     item.Domain,
                     CancellationToken.None));
             if (!access.Succeeded || access.Value is null)
@@ -424,6 +435,7 @@
                 ConsumerPolicies.CanUseConsumerPortal,
                 consumerId => EnrollmentService.CheckWebsiteAsync(
                     consumerId,
+                    WebsiteOwnerActorId(authenticationState.User, consumerId),
                     item.Domain,
                     CancellationToken.None));
             if (!access.Succeeded || access.Value is null)
@@ -591,6 +603,11 @@
         }
     }
 
+    /// <summary>Uses the authenticated actor for website ownership while retaining consumer account storage scope.</summary>
+    private static string WebsiteOwnerActorId(ClaimsPrincipal principal, string consumerId) =>
+        principal.FindFirst(HipAuthenticationClaimTypes.ActorId)?.Value is { Length: > 0 } actorId
+            ? actorId
+            : consumerId;
     private string WebsiteDocumentDownloadUrl() =>
         $"data:application/hip+json;charset=utf-8,{Uri.EscapeDataString(_websiteDocumentJson ?? string.Empty)}";
 
