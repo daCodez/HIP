@@ -6,6 +6,7 @@
 @using System.Text.Json
 @inject IDomainCertificateOwnerQuery CertificateQuery
 @inject IDomainCertificateEnrollmentService EnrollmentService
+@inject IDomainCertificateProvisioningService ProvisioningService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthorizationService AuthorizationService
 @inject IJSRuntime JavaScript
@@ -165,6 +166,14 @@
                             </div>
                         }
                     }
+                    @if (item.IdentityCompletedAtUtc is not null && item.CertificateId is null &&
+                         item.EnrollmentStatus is DomainEnrollmentStatus.PendingSecurityReview or DomainEnrollmentStatus.Verified)
+                    {
+                        <button class="btn btn-primary" type="button" disabled="@(_reviewingEnrollmentId is not null)"
+                                @onclick="() => ReviewAndIssueAsync(item)">
+                            @(_reviewingEnrollmentId == item.EnrollmentId ? "Reviewing…" : "Run security review")
+                        </button>
+                    }
                     @if (item.CertificateId is not null)
                     {
                         <a class="btn btn-primary" href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">View public certificate</a>
@@ -188,6 +197,7 @@
     private string? _enrollmentError;
     private DomainCertificateEnrollmentStartResult? _challenge;
     private string? _checkingEnrollmentId;
+    private string? _reviewingEnrollmentId;
     private string? _preparingWebsiteEnrollmentId;
     private string? _checkingWebsiteEnrollmentId;
     private string? _websiteEnrollmentId;
@@ -453,6 +463,55 @@
         finally
         {
             _savingIdentity = false;
+        }
+    }
+
+    private async Task ReviewAndIssueAsync(OwnerDomainCertificateSummary item)
+    {
+        _reviewingEnrollmentId = item.EnrollmentId;
+        _certificateActionError = null;
+        _certificateActionMessage = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var contactVerified = string.Equals(
+                authenticationState.User.FindFirst(HIP.Web.Security.HipAuthenticationClaimTypes.AccountContactVerified)?.Value,
+                "true",
+                StringComparison.Ordinal);
+            var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                ConsumerPolicies.CanUseConsumerPortal,
+                consumerId => ProvisioningService.ReviewAndIssueAsync(
+                    consumerId,
+                    item.Domain,
+                    contactVerified,
+                    CancellationToken.None));
+            if (!access.Succeeded || access.Value is null)
+            {
+                _certificateActionError = HipConsumerPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            _certificateActionMessage = access.Value.Status switch
+            {
+                DomainCertificateProvisioningStatus.Issued or DomainCertificateProvisioningStatus.Existing =>
+                    "Security review passed and the signed HIP certificate is available.",
+                DomainCertificateProvisioningStatus.ReviewRequired =>
+                    "HIP stored the scan, but an authorized reviewer must decide this case.",
+                DomainCertificateProvisioningStatus.Ineligible =>
+                    "HIP stored the scan. One or more certificate requirements still need attention.",
+                _ => null
+            };
+            if (_certificateActionMessage is null)
+            {
+                _certificateActionError = "HIP could not complete certificate review right now. No trust assertion was issued.";
+            }
+            await LoadAsync();
+        }
+        finally
+        {
+            _reviewingEnrollmentId = null;
         }
     }
 
