@@ -132,49 +132,34 @@ HIP must not claim real-world safety until live reputation, rule simulation, ver
 
 A verified identity does not automatically mean safe. It means HIP knows who signed or owns the domain or content. The trust score still matters.
 
-Future signed website support is expected to use DNS TXT and `.well-known/hip.json` verification. The public lookup response already includes placeholders for signed identity status, verification method, verified organization, and signature status.
+HIP Domain Trust Certificate enrollment uses DNS TXT and HTTPS `.well-known/hip.json` verification. Public lookup keeps certificate identity evidence separate from the current risk score; certificate details are published through the dedicated public certificate response and page.
 
 ## Live Trust Badges
 
-HIP badges are live data widgets, not static images. A badge must always show the score and status so a site cannot hide a low trust score behind a generic "verified" label.
+HIP badges are certificate-bound live data widgets, not static trust images. Certificate level and lifecycle state are displayed separately from the current HIP risk score. A certificate or verified identity does not automatically mean safe.
 
-Badge API:
+Badge and certificate routes:
 
-- `/api/v1/badge/{domain}`
-- `/api/v1/badge/{domain}/script`
-- `/api/v1/public/badge/domain/{domain}`
+- `GET /api/v1/badge/{domain}`
+- `GET /api/v1/badge/{domain}/script`
+- `GET /api/v1/public/badge/domain/{domain}`
+- `POST /api/v1/public/badge/verify`
+- `GET /api/v1/public/certificates/{certificateId}`
+- `/certificate/{certificateId}`
 
-The response always includes:
+A badge response includes the public lookup facts, a short-lived signed `hip-live-badge` document, signature status, and—when one exists—the current public certificate ID, exact domain, level, lifecycle state, signature status, expiry, public URL, and active flag. HIP derives this projection from the persisted certificate and verifies its signature before release.
 
-- domain
-- score
-- status
-- verified domain state
-- last checked UTC
-- public lookup URL / lookup URL
-- badge text
-- badge variant
-
-## Embed Example
-
-Preferred MVP embed:
+## Embed example
 
 ```html
 <div data-hip-badge="example.com"></div>
-<script src="https://hip.example.com/api/v1/badge/example.com/script"></script>
+<script
+  src="https://hip.example.com/api/v1/badge/example.com/script"
+  async>
+</script>
 ```
 
-Static shared script alternative:
-
-```html
-<div
-  class="hip-trust-badge"
-  data-domain="example.com">
-</div>
-<script src="https://hip.example.com/hip-badge.js"></script>
-```
-
-For local development:
+For the shared script in local development:
 
 ```html
 <div
@@ -185,25 +170,21 @@ For local development:
 <script src="https://localhost:7053/hip-badge.js"></script>
 ```
 
-## Anti-Fake Foundation
+Use the exact canonical hostname. HIP does not silently treat `www.example.com` and `example.com` as the same certificate domain.
 
-The badge API returns the domain it verified. The badge script compares the requested domain with the current page hostname where possible. If they do not match, it renders:
+## Anti-fake behavior
 
-`HIP Badge Domain Mismatch`
+The generated and shared scripts compare the current page hostname with the requested domain, require a current signed badge document, bind displayed certificate fields to that signed payload, and call HIP's badge verification endpoint. Active presentation additionally requires an Active certificate with Verified signature state. Failure, expiry, revocation, suspension, unavailable verification, or domain mismatch renders a non-active state.
 
-Every badge links to the official public HIP lookup page.
+The browser extension independently retrieves the badge and public certificate from HIP, verifies the signed badge through HIP, and compares certificate ID, exact domain, level, lifecycle state, signature status, expiry, public URL, and active flag. It never trusts the website's visual badge by itself.
 
-The badge is live data, not a static image. It must always show the score or status. A site must not be able to display only `Verified by HIP` because verified identity does not automatically mean safe.
+A screenshot can imitate any visual. It cannot create a current signed, domain-matched HIP certificate response. Every real badge shows the verified domain, links to the public certificate, and keeps the current risk score visible.
 
-The browser plugin is expected to later detect fake, hidden, or altered badges by comparing page badge data with official HIP lookup data.
+The badge sends no page text, form values, visitor identity, cookies, or browsing history. See [HIP Domain Trust Certificates](domain-trust-certificates.md) for enrollment, lifecycle, signing, privacy, CSP, extension, and Aspire guidance.
 
-## Known Limitations
+## Operational limitations
 
-- Badge responses are not cryptographically signed yet.
-- Domain matching is exact after removing a leading `www.`.
-- Badge data follows public lookup and may show Unknown when no stored browser scan exists.
-- A future browser plugin check should detect fake, hidden, or altered badges.
-
-## Future Signed Badge Responses
-
-The badge response model includes a signature placeholder so HIP can later sign badge payloads. Clients should eventually verify the signature before trusting rendered badge data.
+- Online verification is required; local cached presentation never creates an active state.
+- The default managed signer and certificate authority allowlist fail closed until a deployment explicitly configures approved key custody and authoritative public key state.
+- Extension verification is server-authoritative and online, not offline cryptographic verification inside the extension.
+- The current signing implementation must not be described as quantum-resistant.
