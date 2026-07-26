@@ -638,11 +638,16 @@
             item.DnsVerifiedAtUtc is not null,
             item.WebsiteVerifiedAtUtc is not null,
             item.IdentityCompletedAtUtc is not null,
+            item.ApplicationSubmittedAtUtc is not null,
+            item.ApplicationStatus == DomainCertificateApplicationStatus.Approved,
             item.SecurityReviewCompletedAtUtc is not null,
             item.CertificateId is not null,
             item.EnrollmentStatus == DomainEnrollmentStatus.Monitored
         };
-        return !completed[index] && Array.FindIndex(completed, value => !value) == index;
+        return index >= 0 &&
+               index < completed.Length &&
+               !completed[index] &&
+               Array.FindIndex(completed, value => !value) == index;
     }
 
     private static bool IsFailed(OwnerDomainCertificateSummary item) =>
