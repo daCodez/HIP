@@ -662,10 +662,26 @@
                 ? "domain-certificate-caution"
                 : "domain-certificate-inactive";
 
-    private static string OwnershipStatus(OwnerDomainCertificateSummary item) =>
-        item.DnsVerifiedAtUtc is not null || item.WebsiteVerifiedAtUtc is not null
-            ? "Verified"
-            : item.EnrollmentStatus.ToString();
+    private static string OwnershipStatus(OwnerDomainCertificateSummary item)
+    {
+        if (item.DnsVerifiedAtUtc is not null || item.WebsiteVerifiedAtUtc is not null)
+        {
+            return "Verified";
+        }
+
+        return item.EnrollmentStatus switch
+        {
+            DomainEnrollmentStatus.Draft => "Not started",
+            DomainEnrollmentStatus.PendingOwnership => "Verification pending",
+            DomainEnrollmentStatus.OwnershipVerified or
+            DomainEnrollmentStatus.PendingSecurityReview or
+            DomainEnrollmentStatus.Verified or
+            DomainEnrollmentStatus.Monitored => "Verified",
+            DomainEnrollmentStatus.Suspended => "Verification suspended",
+            DomainEnrollmentStatus.Revoked => "Verification revoked",
+            _ => "Not verified"
+        };
+    }
 
     private static string CertificateStatus(OwnerDomainCertificateSummary item) =>
         item.CertificateStatus?.ToString() ?? "Not issued";

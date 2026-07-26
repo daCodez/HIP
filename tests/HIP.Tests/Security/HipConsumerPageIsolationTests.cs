@@ -250,6 +250,7 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(certificates, Does.Contain(
                 "item.ApplicationStatus == DomainCertificateApplicationStatus.Approved"));
             Assert.That(certificates, Does.Contain("index < completed.Length"));
+            Assert.That(certificates, Does.Contain("\"Verification pending\""));
             Assert.That(certificates, Does.Contain("EnrollmentService.CompleteIdentityProfileAsync"));
             Assert.That(certificates, Does.Contain("Private security email"));
             Assert.That(certificates, Does.Contain("Show organization on the public certificate"));
@@ -258,6 +259,21 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(certificates, Does.Contain("Certificate issued"));
             Assert.That(certificates, Does.Contain("Monitoring active"));
             Assert.That(certificates, Does.Not.Contain("OwnerId"));
+
+            var certificateStyles = File.ReadAllText(Path.Combine(
+                root,
+                "src",
+                "HIP.Web",
+                "Components",
+                "Pages",
+                "ConsumerCertificates.razor.css"));
+            Assert.That(
+                certificateStyles,
+                Does.Contain("grid-template-columns: repeat(9, minmax(9rem, 1fr))"));
+            Assert.That(
+                certificateStyles,
+                Does.Contain(".verification-progress ::deep .progress-step"));
+            Assert.That(certificateStyles, Does.Contain("@media (max-width: 44rem)"));
 
             var navigation = File.ReadAllText(Path.Combine(
                 root,

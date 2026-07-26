@@ -72,7 +72,7 @@
 
 .verification-progress ol {
     display: grid;
-    grid-template-columns: repeat(7, minmax(7rem, 1fr));
+    grid-template-columns: repeat(9, minmax(9rem, 1fr));
     gap: .35rem;
     margin: 1rem 0;
     padding: 0;
@@ -80,26 +80,32 @@
     overflow-x: auto;
 }
 
-.progress-step {
-    min-width: 7rem;
-    padding: .75rem;
+.verification-progress ::deep .progress-step {
+    display: grid;
+    grid-template-columns: 1.8rem minmax(0, 1fr);
+    align-items: start;
+    gap: .6rem;
+    min-width: 9rem;
+    padding: .75rem .5rem .75rem 0;
     border-top: .2rem solid #7d8ba1;
     color: var(--muted);
+    line-height: 1.35;
 }
 
-.progress-step span {
+.verification-progress ::deep .progress-step span {
     display: grid;
     width: 1.7rem;
     height: 1.7rem;
-    margin-bottom: .45rem;
     place-items: center;
     border: 1px solid currentColor;
     border-radius: 50%;
+    font-size: .8rem;
+    font-weight: 700;
 }
 
-.progress-complete { border-color: #00c9c8; color: #00aead; }
-.progress-current { border-color: #f0ad3d; color: #bd7b00; font-weight: 700; }
-.progress-failed { border-color: #f14968; color: #d92f52; font-weight: 700; }
+.verification-progress ::deep .progress-complete { border-color: #00c9c8; color: #00aead; }
+.verification-progress ::deep .progress-current { border-color: #f0ad3d; color: #bd7b00; font-weight: 700; }
+.verification-progress ::deep .progress-failed { border-color: #f14968; color: #d92f52; font-weight: 700; }
 
 .owner-certificate-actions {
     display: flex;
@@ -156,9 +162,17 @@
     flex: 0 0 1rem;
 }
 
+@media (max-width: 70rem) {
+    .verification-progress ol {
+        grid-template-columns: repeat(3, minmax(10rem, 1fr));
+        overflow-x: visible;
+    }
+}
+
 @media (max-width: 44rem) {
     .owner-certificate-facts { grid-template-columns: 1fr; }
     .certificate-identity-panel form { grid-template-columns: 1fr; }
+    .verification-progress ol { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
