@@ -63,7 +63,13 @@ public sealed class EfDomainCertificateRepository(
                 item.Domain,
                 item.Status,
                 item.DnsVerifiedAtUtc,
-                item.WebsiteVerifiedAtUtc))
+                item.WebsiteVerifiedAtUtc,
+                item.IdentityCompletedAtUtc,
+                item.PublicDisplayName,
+                item.PublicOrganizationName,
+                item.SecurityReviewCompletedAtUtc,
+                item.CurrentScore,
+                item.UnresolvedCriticalFindings))
             .SingleOrDefaultAsync(cancellationToken);
     }
 
@@ -507,6 +513,97 @@ public sealed class EfDomainCertificateRepository(
         }
     }
 
+    /// <inheritdoc />
+    public async Task<DomainEnrollmentTransitionWriteResult> TryApplySecurityReviewAsync(
+        DomainCertificateSecurityReviewRecord review,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(review);
+        ValidateIdentifier(review.EnrollmentId, 128);
+        ValidateIdentifier(review.OwnerId, 256);
+        ValidateIdentifier(review.AuditEventId, 128);
+        if (review.CurrentScore is < 0 or > 100 || review.UnresolvedCriticalFindings < 0 ||
+            review.ReviewedAtUtc.Offset != TimeSpan.Zero || !IsDigest(review.EvidenceDigest) ||
+            HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(review.Domain) != review.Domain)
+        {
+            throw new ArgumentException("Certificate security review is invalid.", nameof(review));
+        }
+
+        var existingEvent = await dbContext.DomainCertificateEvents.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.EventId == review.AuditEventId, cancellationToken);
+        if (existingEvent is not null)
+        {
+            return new DomainEnrollmentTransitionWriteResult(
+                existingEvent.EnrollmentId == review.EnrollmentId && existingEvent.EvidenceDigest == review.EvidenceDigest
+                    ? DomainEnrollmentTransitionWriteStatus.AlreadyApplied
+                    : DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+
+        var enrollment = await dbContext.DomainEnrollments.SingleOrDefaultAsync(
+            item => item.EnrollmentId == review.EnrollmentId && item.OwnerId == review.OwnerId &&
+                    item.Domain == review.Domain && item.IsCurrent,
+            cancellationToken);
+        if (enrollment is null)
+        {
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.NotFound);
+        }
+        if (enrollment.Status != DomainEnrollmentStatus.PendingSecurityReview ||
+            enrollment.IdentityCompletedAtUtc is null || enrollment.DnsVerifiedAtUtc is null ||
+            enrollment.WebsiteVerifiedAtUtc is null)
+        {
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+
+        var previous = enrollment.Status;
+        if (review.Decision == DomainCertificatePolicyDecision.Eligible)
+        {
+            DomainEnrollmentLifecycle.RequireTransition(previous, DomainEnrollmentStatus.Verified);
+            enrollment.Status = DomainEnrollmentStatus.Verified;
+        }
+        enrollment.SecurityReviewCompletedAtUtc = review.ReviewedAtUtc;
+        enrollment.CurrentScore = review.CurrentScore;
+        enrollment.UnresolvedCriticalFindings = review.UnresolvedCriticalFindings;
+        enrollment.UpdatedAtUtc = review.ReviewedAtUtc;
+        enrollment.AggregateVersion++;
+        var eventType = review.Decision switch
+        {
+            DomainCertificatePolicyDecision.Eligible => "SecurityReviewPassed",
+            DomainCertificatePolicyDecision.RequiresReview => "SecurityReviewQueued",
+            _ => "SecurityReviewRequirementsMissing"
+        };
+        dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+        {
+            EventId = review.AuditEventId,
+            EnrollmentId = enrollment.EnrollmentId,
+            CertificateId = null,
+            EventType = eventType,
+            PreviousStatus = previous.ToString(),
+            CurrentStatus = enrollment.Status.ToString(),
+            ActorId = review.OwnerId,
+            ReasonCode = review.Decision.ToString(),
+            PublicSummary = review.Decision switch
+            {
+                DomainCertificatePolicyDecision.Eligible =>
+                    "HIP's server-owned security review satisfied the requested certificate policy.",
+                DomainCertificatePolicyDecision.RequiresReview =>
+                    "HIP's server-owned security review requires an authorized decision.",
+                _ => "HIP's server-owned security review found missing certificate requirements."
+            },
+            PolicyVersion = enrollment.PolicyVersion,
+            EvidenceDigest = review.EvidenceDigest,
+            OccurredAtUtc = review.ReviewedAtUtc
+        });
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Updated);
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            return new DomainEnrollmentTransitionWriteResult(DomainEnrollmentTransitionWriteStatus.Conflict);
+        }
+    }
     private static void ValidateProfileText(string? value, int maximumLength, bool required = false)
     {
         if ((required && string.IsNullOrWhiteSpace(value)) || value?.Length > maximumLength ||

@@ -347,6 +347,49 @@ public sealed class DomainCertificateRepositoryTests
     }
 
     [Test]
+    public async Task Eligible_security_review_updates_projection_and_appends_digest_bound_audit()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        context.DomainEnrollments.Add(new HipDomainEnrollmentEntity
+        {
+            EnrollmentId = "enrollment-review",
+            OwnerId = "owner-1",
+            Domain = "review.example",
+            Status = DomainEnrollmentStatus.PendingSecurityReview,
+            PolicyVersion = DomainCertificatePolicy.V1.Version,
+            CreatedAtUtc = Now,
+            UpdatedAtUtc = Now,
+            DnsVerifiedAtUtc = Now,
+            WebsiteVerifiedAtUtc = Now,
+            IdentityCompletedAtUtc = Now,
+            PublicDisplayName = "Review Example",
+            AggregateVersion = 1
+        });
+        await context.SaveChangesAsync();
+        var review = new DomainCertificateSecurityReviewRecord(
+            "enrollment-review", "owner-1", "review.example",
+            DomainCertificatePolicyDecision.Eligible, 84, 0,
+            $"sha256:{new string('d', 64)}", Now.AddMinutes(10),
+            "certificate-event:security-review");
+
+        var applied = await repository.TryApplySecurityReviewAsync(review, CancellationToken.None);
+        var retry = await repository.TryApplySecurityReviewAsync(review, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied.Status, Is.EqualTo(DomainEnrollmentTransitionWriteStatus.Updated));
+            Assert.That(retry.Status, Is.EqualTo(DomainEnrollmentTransitionWriteStatus.AlreadyApplied));
+            var enrollment = context.DomainEnrollments.Single(item => item.EnrollmentId == "enrollment-review");
+            Assert.That(enrollment.Status, Is.EqualTo(DomainEnrollmentStatus.Verified));
+            Assert.That(enrollment.CurrentScore, Is.EqualTo(84));
+            Assert.That(enrollment.SecurityReviewCompletedAtUtc, Is.EqualTo(Now.AddMinutes(10)));
+            var auditEvent = context.DomainCertificateEvents.Single(item => item.EventType == "SecurityReviewPassed");
+            Assert.That(auditEvent.EvidenceDigest, Is.EqualTo(review.EvidenceDigest));
+            Assert.That(auditEvent.ActorId, Is.EqualTo("owner-1"));
+        });
+    }
+    [Test]
     public async Task Admin_summary_query_pages_real_cross_owner_state_without_owner_identifiers()
     {
         await using var context = Context();

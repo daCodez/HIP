@@ -42,7 +42,13 @@ public sealed record DomainEnrollmentStateRecord(
     string Domain,
     DomainEnrollmentStatus Status,
     DateTimeOffset? DnsVerifiedAtUtc,
-    DateTimeOffset? WebsiteVerifiedAtUtc);
+    DateTimeOffset? WebsiteVerifiedAtUtc,
+    DateTimeOffset? IdentityCompletedAtUtc = null,
+    string? PublicDisplayName = null,
+    string? PublicOrganizationName = null,
+    DateTimeOffset? SecurityReviewCompletedAtUtc = null,
+    int? CurrentScore = null,
+    int UnresolvedCriticalFindings = 0);
 
 /// <summary>Authoritative HTTPS website-control verification applied to an owner enrollment.</summary>
 public sealed record DomainWebsiteVerificationRecord(
@@ -66,7 +72,19 @@ public sealed record DomainCertificateIdentityProfileRecord(
     DateTimeOffset CompletedAtUtc,
     string AuditEventId);
 
-/// <summary>Outcome of an idempotent enrollment lifecycle transition.</summary>
+/// <summary>Reproducible server-owned certificate security decision and enrollment projection.</summary>
+public sealed record DomainCertificateSecurityReviewRecord(
+    string EnrollmentId,
+    string OwnerId,
+    string Domain,
+    DomainCertificatePolicyDecision Decision,
+    int CurrentScore,
+    int UnresolvedCriticalFindings,
+    string EvidenceDigest,
+    DateTimeOffset ReviewedAtUtc,
+    string AuditEventId);
+
+
 public enum DomainEnrollmentTransitionWriteStatus
 {
     Updated,
@@ -105,5 +123,10 @@ public interface IDomainEnrollmentRepository
     /// <summary>Stores a privacy-filtered identity profile and its permanent audit event.</summary>
     Task<DomainEnrollmentTransitionWriteResult> TryCompleteIdentityProfileAsync(
         DomainCertificateIdentityProfileRecord profile,
+        CancellationToken cancellationToken);
+
+    /// <summary>Stores one server-owned security decision, score projection, and permanent audit event.</summary>
+    Task<DomainEnrollmentTransitionWriteResult> TryApplySecurityReviewAsync(
+        DomainCertificateSecurityReviewRecord review,
         CancellationToken cancellationToken);
 }

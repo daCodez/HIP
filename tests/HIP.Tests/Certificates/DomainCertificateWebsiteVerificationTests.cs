@@ -229,6 +229,10 @@ public sealed class DomainCertificateWebsiteVerificationTests
             return Task.FromResult(new DomainEnrollmentTransitionWriteResult(
                 DomainEnrollmentTransitionWriteStatus.Updated));
         }
+
+        public Task<DomainEnrollmentTransitionWriteResult> TryApplySecurityReviewAsync(
+            DomainCertificateSecurityReviewRecord review,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private sealed class StubVerificationRequests(DomainVerificationRequest request)
