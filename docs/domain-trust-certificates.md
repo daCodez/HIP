@@ -33,6 +33,14 @@ The owner portal is `/consumer/certificates`.
 
 The HTTPS fetcher uses HTTPS only, bounded redirects, safe ports, response limits, strict timeouts, registrable-domain redirect checks, and address validation before and after connection to resist SSRF and DNS rebinding.
 
+## Monitoring and score progression
+
+After an active Verified certificate exists, the authenticated owner can opt in to continuous monitoring. HIP immediately runs a server-owned scan of the fixed HTTPS origin and, when storage or evidence providers are temporarily unavailable, records bounded retry state without publishing a monitoring claim. The background coordinator checks due enrollments hourly; each successful domain check schedules the next check 24 hours later. Failures use bounded exponential backoff up to 24 hours.
+
+Completed account, DNS, website-control, and identity checks provide authenticated non-safety trust context to the existing scoring pipeline. That context removes the missing-trust-data cap; it does not add a safety claim, suppress a negative finding, or offset malware, phishing, TLS, redirect, download, script, or policy risk. HIP persists the server-produced domain, page, content-safety, and final score components together and rejects incomplete, out-of-range, or internally inconsistent score metadata during public projection.
+
+The V1 Monitored level requires a current active certificate, monitoring enabled, evidence no older than seven days, a current score of at least 70, and no unresolved critical findings. A successful immediate or scheduled check updates the owner dashboard, public evidence confidence, and browser popup. The public numeric score remains withheld when authenticated evidence coverage is insufficient; identity status remains independently visible.
+
 ## Lifecycle and operations
 
 Certificate states are Draft, PendingVerification, PendingReview, Active, Suspended, Revoked, Expired, and RenewalRequired. Enrollment states are distinct and follow their own explicit transition rules.
@@ -121,6 +129,6 @@ A successful Aspire start proves orchestration and health wiring, not production
 
 ## Current implementation boundary
 
-The repository has enrollment, DNS and HTTPS verification services, policy evaluation, signed issuance/persistence abstractions, public verification, owner/admin/public pages, audited suspend/reinstate/revoke controls, certificate-bound live badges, extension verification, and real dashboard projections.
+The repository has enrollment, DNS and HTTPS verification services, policy evaluation, signed issuance/persistence abstractions, public verification, owner/admin/public pages, audited suspend/reinstate/revoke controls, owner opt-in and recurring authenticated monitoring, certificate-bound live badges, extension verification, and real dashboard projections.
 
 Still required before a production launch: an audited managed signer deployment, authorized key bootstrap/rotation runbook, owner-facing renewal coordinator and reminders, broader end-to-end browser/UI automation, production retention/export decisions, and environment-specific load/monitoring evidence. These gaps do not justify weakening the fail-closed behavior or making unsupported compliance or quantum-resistance claims.
