@@ -4261,7 +4261,7 @@ public partial class Program
     container.innerHTML = `
       <div class="hip-badge-widget" data-hip-state="expanded">
         <button type="button" class="hip-badge-shield" data-hip-action="toggle" aria-label="Minimize HIP trust details" aria-expanded="true" aria-controls="${escapeAttribute(panelId)}">
-          ${shieldMarkup(new URL("/hip-logo.svg?v=42985490", apiBase).toString())}
+          ${shieldMarkup(new URL("/hip-logo.svg?v=44dd2573", apiBase).toString())}
         </button>
         <section id="${escapeAttribute(panelId)}" class="hip-badge-panel" aria-label="${escapeAttribute(label)} for ${escapeAttribute(domain)}">
           <div class="hip-badge-toolbar">
