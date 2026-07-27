@@ -69,7 +69,10 @@ public sealed class DomainCertificateSecurityScanService(
             scanOptions.RunExternalProvidersOnRequestPath = true;
             using var providerScope = externalEvidenceOptions.UseScopedOverride(scanOptions);
             scan = await siteSafetyScanner.ScanAsync(
-                    new SiteSafetyScanRequest(origin),
+                    new SiteSafetyScanRequest(
+                        origin,
+                    new SiteSafetyObservedSignals(
+                        TrustDataAvailable: HasAuthenticatedTrustContext(request))),
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -186,6 +189,17 @@ public sealed class DomainCertificateSecurityScanService(
             $"sha256:{SiteSafetyEvidenceHashing.HashUrl(origin)}",
             PluginVersion: null);
     }
+
+    /// <summary>
+    /// Treats completed owner, domain, website, and identity verification as non-safety trust context.
+    /// This removes the missing-evidence cap but does not suppress or offset any safety finding.
+    /// </summary>
+    private static bool HasAuthenticatedTrustContext(DomainCertificateSecurityScanRequest request) =>
+        request.AccountContactVerified &&
+        request.DomainControlVerifiedAtUtc is not null &&
+        request.DnsVerifiedAtUtc is not null &&
+        request.WebsiteVerifiedAtUtc is not null &&
+        request.IdentityInformationCompleted;
 
     private static bool HasAuthoritativeTlsEvidence(
         SiteSafetyScanResult scan,

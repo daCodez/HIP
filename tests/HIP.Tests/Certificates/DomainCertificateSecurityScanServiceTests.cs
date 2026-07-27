@@ -25,7 +25,7 @@ public sealed class DomainCertificateSecurityScanServiceTests
         Assert.Multiple(() =>
         {
             Assert.That(scanner.Request?.Url, Is.EqualTo("https://example.com/"));
-            Assert.That(scanner.Request?.ObservedSignals, Is.Null);
+            Assert.That(scanner.Request?.ObservedSignals?.TrustDataAvailable, Is.True);
             Assert.That(result.Status, Is.EqualTo(DomainCertificateSecurityScanStatus.Evaluated));
             Assert.That(result.Evaluation?.Decision, Is.EqualTo(DomainCertificatePolicyDecision.Eligible));
             Assert.That(result.PublicRiskClassification, Is.EqualTo(DomainCertificatePublicRiskClassification.Low));

@@ -107,6 +107,27 @@ public sealed class SiteSafetyScannerTests
     }
 
     /// <summary>
+    /// Authenticated identity supplies non-safety trust context without suppressing independent risk evidence.
+    /// </summary>
+    [Test]
+    public async Task Authenticated_identity_context_removes_missing_trust_data_cap_without_proving_safety()
+    {
+        var result = await CreateScanner().ScanAsync(
+            new SiteSafetyScanRequest(
+                "https://verified.example",
+                new SiteSafetyObservedSignals(TrustDataAvailable: true)),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.DomainTrustScore, Is.EqualTo(80));
+            Assert.That(result.FinalHipScore, Is.InRange(70, 95));
+            Assert.That(result.OverallSafetyRiskScore, Is.Zero);
+            Assert.That(result.Reasons, Has.Some.Contains("HTTPS"));
+        });
+    }
+
+    /// <summary>
     /// Executable download links carry materially higher safety risk than ordinary links.
     /// </summary>
     [Test]
