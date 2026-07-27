@@ -159,16 +159,17 @@ A badge response includes the public lookup facts, a short-lived signed `hip-liv
 </script>
 ```
 
-For the shared script in local development:
+For local development, copy the environment-correct embed from the active certificate in the owner portal. For the default HIP Web HTTP profile it resembles:
 
 ```html
-<div
-  class="hip-trust-badge"
-  data-domain="example.com"
-  data-api-base="https://localhost:7053">
-</div>
-<script src="https://localhost:7053/hip-badge.js"></script>
+<div data-hip-badge="example.com"></div>
+<script
+  src="http://localhost:5123/api/v1/badge/example.com/script"
+  async>
+</script>
 ```
+
+A loopback embed is a local preview only: it works only while HIP is running on that computer. A visitor-facing badge requires a publicly reachable HTTPS HIP origin.
 
 Use the exact canonical hostname. HIP does not silently treat `www.example.com` and `example.com` as the same certificate domain.
 
