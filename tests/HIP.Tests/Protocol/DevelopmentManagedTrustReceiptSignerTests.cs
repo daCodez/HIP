@@ -3,6 +3,7 @@ using HIP.Application.Certificates;
 using HIP.Application.Identity;
 using HIP.Application.Protocol;
 using HIP.Application.Review;
+using HIP.Domain.Certificates;
 using HIP.Domain.Identity;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -55,6 +56,50 @@ public sealed class DevelopmentManagedTrustReceiptSignerTests
         });
     }
 
+    [Test]
+    public async Task Development_certificate_signer_self_verifies_eligible_certificate()
+    {
+        var repository = new InMemorySigningKeyLifecycleRepository();
+        var services = Services(repository, allowDevelopmentCryptoProvider: true);
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var now = DateTimeOffset.UtcNow.ToUniversalTime();
+        var evaluation = new DomainCertificatePolicyEvaluationResult(
+            "example.com",
+            DomainCertificateLevel.Verified,
+            DomainCertificatePolicy.V1.Version,
+            DomainCertificatePolicyDecision.Eligible,
+            "This domain completed HIP identity and baseline security verification.",
+            [],
+            now.AddMinutes(-1));
+        var draft = new DomainCertificateSigningDraft(
+            "hip-domain-cert-development-integration",
+            1,
+            "example.com",
+            DomainCertificateLevel.Verified,
+            "Example Site",
+            "Example Organization",
+            null,
+            [VerificationMethod.DnsTxt, VerificationMethod.WellKnownHipJson],
+            DomainCertificatePublicRiskClassification.Low,
+            [],
+            "https://hiptrust.com/api/v1/certificates/hip-domain-cert-development-integration/status",
+            "https://hiptrust.com/certificate/hip-domain-cert-development-integration",
+            now.AddMinutes(-10),
+            null,
+            evaluation);
+
+        var result = await scope.ServiceProvider
+            .GetRequiredService<IDomainCertificateSigningService>()
+            .SignAsync(draft, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateSigningStatus.Signed));
+            Assert.That(result.Certificate, Is.Not.Null);
+            Assert.That(result.Certificate!.Signature.Value, Is.Not.Empty);
+        });
+    }
     [Test]
     public async Task Development_restart_rotates_process_key_and_preserves_historical_public_key()
     {

@@ -16,6 +16,7 @@ public sealed class DomainCertificateApplicationPageTests
             Assert.That(page, Does.Contain("ApplicationStatus == DomainCertificateApplicationStatus.Approved"));
             Assert.That(page, Does.Contain("Run security review and issue certificate"));
             Assert.That(page, Does.Contain("ProvisioningService.ReviewAndIssueAsync"));
+            Assert.That(page, Does.Contain("The security review passed, but HIP could not sign and store the certificate."));
         });
     }
 

@@ -181,10 +181,10 @@ public sealed class DomainCertificateSigningService(
             return Result(DomainCertificateSigningStatus.ReviewRequired);
         }
 
-        DomainTrustCertificatePayload payload;
         try
         {
-            payload = Prepare(draft, clock.GetUtcNow());
+            // Reject invalid public input before reaching managed key custody.
+            _ = Prepare(draft, clock.GetUtcNow());
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
@@ -208,6 +208,18 @@ public sealed class DomainCertificateSigningService(
         if (!authorities.IsAuthorized(key.IssuerId, key.KeyId))
         {
             return Result(DomainCertificateSigningStatus.SignerNotAuthorized);
+        }
+
+        DomainTrustCertificatePayload payload;
+        try
+        {
+            // Key bootstrap or rotation can establish a later validity boundary.
+            // Stamp the signed payload only after the selected key is active.
+            payload = Prepare(draft, clock.GetUtcNow());
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            return Result(DomainCertificateSigningStatus.InvalidRequest);
         }
 
         SignedDomainTrustCertificate certificate;
@@ -358,7 +370,7 @@ public sealed class DomainCertificateSigningService(
     }
 
     private static string Sha256(ReadOnlySpan<byte> content) =>
-        Convert.ToHexStringLower(SHA256.HashData(content));
+        $"sha256:{Convert.ToHexStringLower(SHA256.HashData(content))}";
 
     private static DomainCertificateSigningResult Result(DomainCertificateSigningStatus status) =>
         new(status);

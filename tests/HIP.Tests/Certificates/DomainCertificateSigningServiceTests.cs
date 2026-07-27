@@ -34,6 +34,7 @@ public sealed class DomainCertificateSigningServiceTests
             Assert.That(result.Certificate.Signature.AuthorityId, Is.EqualTo(AuthorityId));
             Assert.That(result.Certificate.Signature.KeyId, Is.EqualTo(KeyId));
             Assert.That(signer.SignCount, Is.EqualTo(1));
+            Assert.That(signer.LastContentHash, Does.Match("^sha256:[0-9a-f]{64}$"));
             Assert.That(verifier.LastRequest?.IssuerId, Is.EqualTo(AuthorityId));
             Assert.That(verifier.LastRequest?.KeyId, Is.EqualTo(KeyId));
         });
@@ -189,6 +190,7 @@ public sealed class DomainCertificateSigningServiceTests
     {
         public int GetKeyCount { get; private set; }
         public int SignCount { get; private set; }
+        public string? LastContentHash { get; private set; }
 
         public Task<HipManagedTrustReceiptSigningKey> GetSigningKeyAsync(CancellationToken cancellationToken)
         {
@@ -206,6 +208,7 @@ public sealed class DomainCertificateSigningServiceTests
             CancellationToken cancellationToken)
         {
             SignCount++;
+            LastContentHash = contentHash;
             return Task.FromResult($"signature:{contentHash}");
         }
     }

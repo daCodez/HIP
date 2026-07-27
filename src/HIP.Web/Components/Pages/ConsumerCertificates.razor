@@ -721,10 +721,22 @@
                     "HIP stored the scan. One or more certificate requirements still need attention.",
                 _ => null
             };
-            if (_certificateActionMessage is null)
+            _certificateActionError = access.Value.Status switch
             {
-                _certificateActionError = "HIP could not complete certificate review right now. No trust assertion was issued.";
-            }
+                DomainCertificateProvisioningStatus.NotFound =>
+                    "HIP could not find the current domain enrollment for this account.",
+                DomainCertificateProvisioningStatus.NotReady =>
+                    "This application is not ready for security review. Complete every required verification and approval step.",
+                DomainCertificateProvisioningStatus.ScanUnavailable =>
+                    "HIP could not complete the security scan. No trust assertion was issued; retry when scanning is available.",
+                DomainCertificateProvisioningStatus.PersistenceUnavailable =>
+                    "HIP could not store the security review. No trust assertion was issued; retry when storage is available.",
+                DomainCertificateProvisioningStatus.Conflict =>
+                    "The certificate application changed while HIP was reviewing it. The latest state was loaded; review it and retry.",
+                DomainCertificateProvisioningStatus.IssuanceUnavailable =>
+                    "The security review passed, but HIP could not sign and store the certificate. The approved review is saved and issuance can be retried.",
+                _ => null
+            };
             await LoadAsync();
         }
         finally
