@@ -67,6 +67,11 @@ public sealed record PublicDomainLookupResponse(
     string DataSource,
     string Message)
 {
+    /// <summary>Public-safe application decision state, without reviewer identity, reasons, or evidence.</summary>
+    public string CertificateApplicationStatus { get; init; } = "NotStarted";
+
+    /// <summary>Plain-English certificate lifecycle progress suitable for public clients.</summary>
+    public string CertificateProgressStatus { get; init; } = "No certificate application";
     /// <summary>Optional provider-assisted wording; it never replaces HIP's deterministic score or explanation.</summary>
     public string? AssistedExplanation { get; init; }
 

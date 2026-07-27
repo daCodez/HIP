@@ -211,7 +211,7 @@
                     }
                     else if (item.ApplicationStatus == DomainCertificateApplicationStatus.Submitted)
                     {
-                        <p class="admin-message" role="status">Application submitted. An authorized HIP reviewer must approve it before certificate evaluation.</p>
+                        <p class="admin-message" role="status">Application submitted. After an authorized HIP reviewer approves it, you can run HIP's security review. Eligible reviews issue the signed certificate automatically.</p>
                     }
                     else if (item.ApplicationStatus == DomainCertificateApplicationStatus.Denied)
                     {
@@ -223,7 +223,7 @@
                     {
                         <button class="btn btn-primary" type="button" disabled="@(_reviewingEnrollmentId is not null)"
                                 @onclick="() => ReviewAndIssueAsync(item)">
-                            @(_reviewingEnrollmentId == item.EnrollmentId ? "Reviewing…" : "Run security review")
+                            @(_reviewingEnrollmentId == item.EnrollmentId ? "Reviewing and issuing…" : "Run security review and issue certificate")
                         </button>
                     }
                     @if (item.CertificateId is not null)

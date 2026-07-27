@@ -14,6 +14,8 @@ public sealed class DomainCertificateApplicationPageTests
             Assert.That(page, Does.Contain("DomainCertificateApplicantAttestation.AccuracyStatement"));
             Assert.That(page, Does.Contain("Submit application"));
             Assert.That(page, Does.Contain("ApplicationStatus == DomainCertificateApplicationStatus.Approved"));
+            Assert.That(page, Does.Contain("Run security review and issue certificate"));
+            Assert.That(page, Does.Contain("ProvisioningService.ReviewAndIssueAsync"));
         });
     }
 
@@ -24,9 +26,9 @@ public sealed class DomainCertificateApplicationPageTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(page, Does.Contain("Approve application"));
+            Assert.That(page, Does.Contain(">Approve</button>"));
             Assert.That(page, Does.Contain("Request changes"));
-            Assert.That(page, Does.Contain("Deny application"));
+            Assert.That(page, Does.Contain(">Deny</button>"));
             Assert.That(page, Does.Contain("AdminPolicies.CanManageDomainVerifications"));
             Assert.That(page, Does.Contain("Decision reason"));
             Assert.That(page, Does.Contain("ApplicationService.DecideAsync"));

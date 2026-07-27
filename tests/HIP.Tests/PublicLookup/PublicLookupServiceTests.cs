@@ -1,8 +1,10 @@
 using HIP.Application.Browser;
+using HIP.Application.Certificates;
 using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
 using HIP.Application.Scalability;
+using HIP.Domain.Certificates;
 using HIP.Domain.Identity;
 using HIP.Domain.Risk;
 
@@ -38,6 +40,33 @@ public sealed class PublicLookupServiceTests
         Assert.That(result.DataSource, Is.EqualTo("BrowserPluginScan"));
     }
 
+    [Test]
+    public async Task Lookup_projects_public_certificate_approval_progress_without_review_details()
+    {
+        var progress = new PublicDomainCertificateProgress(
+            "example.com",
+            DomainEnrollmentStatus.PendingSecurityReview,
+            DomainCertificateApplicationStatus.Approved,
+            SecurityReviewCompletedAtUtc: null,
+            UnresolvedCriticalFindings: 0,
+            CertificateStatus: null,
+            CertificateLevel: null);
+        var service = new PublicDomainLookupService(
+            new InMemoryBrowserScanResultRepository(),
+            certificateAdminQuery: new StubCertificateAdminQuery(progress));
+
+        var result = await service.LookupDomainAsync("example.com", CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.CertificateApplicationStatus, Is.EqualTo("Approved"));
+            Assert.That(
+                result.CertificateProgressStatus,
+                Is.EqualTo("Application approved - security review pending"));
+            Assert.That(result.GetType().GetProperties().Select(item => item.Name),
+                Does.Not.Contain("ReviewReason").And.Not.Contain("ReviewerId"));
+        });
+    }
     [Test]
     public async Task LookupDomainAsync_does_not_expose_private_fields()
     {
@@ -301,6 +330,21 @@ public sealed class PublicLookupServiceTests
             DateTimeOffset.UtcNow.AddHours(-1),
             DateTimeOffset.UtcNow.AddHours(-1));
 
+    private sealed class StubCertificateAdminQuery(PublicDomainCertificateProgress progress)
+        : IDomainCertificateAdminQuery
+    {
+        public Task<IReadOnlyList<AdminDomainCertificateSummary>> ListForAdminAsync(
+            int offset,
+            int limit,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<PublicDomainCertificateProgress?> GetPublicProgressAsync(
+            string domain,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<PublicDomainCertificateProgress?>(
+                string.Equals(domain, progress.Domain, StringComparison.Ordinal) ? progress : null);
+    }
     private sealed class StubWebsiteIdentityRepository(params WebsiteIdentity[] identities) : IWebsiteIdentityRepository
     {
         private readonly Dictionary<string, WebsiteIdentity> records =

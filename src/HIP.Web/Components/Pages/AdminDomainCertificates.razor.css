@@ -1,0 +1,106 @@
+.admin-certificate-page {
+    min-width: 0;
+}
+
+.certificate-review-explainer {
+    display: grid;
+    grid-template-columns: minmax(16rem, 0.8fr) minmax(30rem, 1.2fr);
+    gap: 2rem;
+    align-items: start;
+}
+
+.certificate-review-explainer ol {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.certificate-review-explainer li {
+    display: grid;
+    gap: 0.4rem;
+    padding-left: 1rem;
+    border-left: 3px solid var(--primary);
+}
+
+.certificate-review-explainer li span,
+.certificate-next-step,
+.certificate-operations-table small {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+.certificate-table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-gutter: stable;
+}
+
+.certificate-operations-table {
+    width: 100%;
+    min-width: 76rem;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.certificate-operations-table th,
+.certificate-operations-table td {
+    padding: 0.9rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.certificate-operations-table th:nth-child(1) { width: 16%; }
+.certificate-operations-table th:nth-child(2) { width: 11%; }
+.certificate-operations-table th:nth-child(3) { width: 10%; }
+.certificate-operations-table th:nth-child(4) { width: 10%; }
+.certificate-operations-table th:nth-child(5) { width: 7%; }
+.certificate-operations-table th:nth-child(6) { width: 8%; }
+.certificate-operations-table th:nth-child(7) { width: 11%; }
+.certificate-operations-table th:nth-child(8) { width: 11%; }
+.certificate-operations-table th:nth-child(9) { width: 16%; }
+
+.certificate-domain strong,
+.certificate-state {
+    display: block;
+}
+
+.certificate-operations-table code {
+    white-space: normal;
+}
+
+.certificate-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.certificate-row-actions button,
+.certificate-row-actions a {
+    margin: 0;
+}
+
+.certificate-action-confirmation .form-group {
+    display: grid;
+    gap: 0.5rem;
+    max-width: 42rem;
+}
+
+.certificate-action-confirmation textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 8rem;
+    resize: vertical;
+}
+
+@media (max-width: 900px) {
+    .certificate-review-explainer,
+    .certificate-review-explainer ol {
+        grid-template-columns: 1fr;
+    }
+}

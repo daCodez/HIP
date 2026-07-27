@@ -187,6 +187,30 @@ public sealed class EfDomainCertificateRepository(
 
 
     /// <inheritdoc />
+    public async Task<PublicDomainCertificateProgress?> GetPublicProgressAsync(
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        var normalized = HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(domain);
+        var currentCertificates = dbContext.DomainCertificates.AsNoTracking()
+            .Where(item => item.IsCurrent);
+        return await (
+                from enrollment in dbContext.DomainEnrollments.AsNoTracking()
+                    .Where(item => item.Domain == normalized && item.IsCurrent)
+                join certificate in currentCertificates
+                    on enrollment.EnrollmentId equals certificate.EnrollmentId into certificates
+                from certificate in certificates.DefaultIfEmpty()
+                select new PublicDomainCertificateProgress(
+                    enrollment.Domain,
+                    enrollment.Status,
+                    enrollment.ApplicationStatus,
+                    enrollment.SecurityReviewCompletedAtUtc,
+                    enrollment.UnresolvedCriticalFindings,
+                    certificate == null ? null : certificate.Status,
+                    certificate == null ? null : certificate.Level))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+    /// <inheritdoc />
     public async Task<DomainEnrollmentRepositoryWriteResult> TryStartEnrollmentAsync(
         DomainEnrollmentStartRecord enrollment,
         CancellationToken cancellationToken)

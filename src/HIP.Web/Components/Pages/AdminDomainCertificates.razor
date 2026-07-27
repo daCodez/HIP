@@ -43,6 +43,19 @@
             <article class="score-card"><span>Failed verification attempts</span><strong>Open</strong><p><a href="/admin/identity/websites">Open domain verification operations</a></p></article>
         </section>
 
+        <section class="lookup-result certificate-review-explainer" aria-labelledby="security-review-explainer-title">
+            <div>
+                <p class="eyebrow">After application approval</p>
+                <h2 id="security-review-explainer-title">What the security review does</h2>
+                <p>Approval records the reviewer decision; it does not issue a certificate. The authenticated domain owner starts the next step from their Certificates page.</p>
+            </div>
+            <ol>
+                <li><strong>Scan</strong><span>HIP scans the fixed HTTPS origin and collects configured provider and TLS evidence.</span></li>
+                <li><strong>Evaluate</strong><span>HIP applies the versioned certificate policy and stores the score, findings count, and evidence digest.</span></li>
+                <li><strong>Issue</strong><span>If every required check passes, HIP signs and stores the certificate automatically. Otherwise, the case remains pending without a trust assertion.</span></li>
+            </ol>
+        </section>
+
         <section class="lookup-result">
             <header class="certificate-queue-heading">
                 <div>
@@ -56,48 +69,70 @@
             }
             else
             {
-                <div class="table-scroll" tabindex="0" aria-label="Domain certificate operations table">
-                    <table>
+                <div class="table-scroll certificate-table-scroll" tabindex="0" aria-label="Domain certificate operations table">
+                    <table class="certificate-operations-table">
                         <thead>
-                            <tr><th>Domain</th><th>Enrollment</th><th>Application</th><th>Certificate</th><th>Badge</th><th>HIP score</th><th>Unresolved</th><th>Policy version</th><th>Updated UTC</th><th>Actions</th></tr>
+                            <tr>
+                                <th scope="col">Domain</th>
+                                <th scope="col">Enrollment</th>
+                                <th scope="col">Application</th>
+                                <th scope="col">Certificate</th>
+                                <th scope="col">HIP score</th>
+                                <th scope="col">Findings</th>
+                                <th scope="col">Policy</th>
+                                <th scope="col">Updated</th>
+                                <th scope="col">Actions</th>
+                            </tr>
                         </thead>
                         <tbody>
                             @foreach (var item in _items)
                             {
                                 <tr>
-                                    <td>@item.Domain</td>
-                                                                        <td>@item.EnrollmentStatus</td>
-                                    <td>@item.ApplicationStatus</td>
-                                    <td>@(item.CertificateStatus?.ToString() ?? "Not issued")</td>
-                                    <td>@(item.BadgeLevel?.ToString() ?? "None")</td>
-                                    <td>@(item.CurrentScore?.ToString() ?? "—")</td>
+                                    <td class="certificate-domain"><strong>@item.Domain</strong></td>
+                                    <td><span class="certificate-state">@EnrollmentLabel(item.EnrollmentStatus)</span></td>
+                                    <td><span class="certificate-state">@ApplicationLabel(item.ApplicationStatus)</span></td>
+                                    <td>
+                                        <span class="certificate-state">@CertificateLabel(item)</span>
+                                        @if (item.BadgeLevel is not null)
+                                        {
+                                            <small>@item.BadgeLevel badge</small>
+                                        }
+                                    </td>
+                                    <td>@(item.CurrentScore is null ? "—" : $"{item.CurrentScore}/100")</td>
                                     <td>@item.UnresolvedCriticalFindings critical</td>
                                     <td><code>@item.PolicyVersion</code></td>
-                                    <td>@item.UpdatedAtUtc.ToString("u")</td>
+                                    <td><time datetime="@item.UpdatedAtUtc.ToString("O")">@item.UpdatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</time></td>
                                     <td>
-                                        <a href="@($"/admin/identity/websites?domain={Uri.EscapeDataString(item.Domain)}")">Verification</a>
-                                        @if (item.ApplicationStatus == DomainCertificateApplicationStatus.Submitted)
-                                        {
-                                            <span aria-hidden="true"> · </span><button type="button" class="hip-secondary-action" @onclick="() => BeginApplicationDecision(item, DomainCertificateApplicationStatus.Approved)" disabled="@_submitting">Approve application</button>
-                                            <span aria-hidden="true"> · </span><button type="button" class="hip-secondary-action" @onclick="() => BeginApplicationDecision(item, DomainCertificateApplicationStatus.ChangesRequested)" disabled="@_submitting">Request changes</button>
-                                            <span aria-hidden="true"> · </span><button type="button" class="danger-button" @onclick="() => BeginApplicationDecision(item, DomainCertificateApplicationStatus.Denied)" disabled="@_submitting">Deny application</button>
-                                        }
-                                        @if (item.CertificateId is not null)
-                                        {
-                                            <span aria-hidden="true"> · </span><a href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">Public certificate</a>
-                                            @if (item.CertificateStatus == DomainCertificateStatus.Active)
+                                        <div class="certificate-row-actions">
+                                            <a href="@($"/admin/identity/websites?domain={Uri.EscapeDataString(item.Domain)}")">Verification</a>
+                                            @if (item.ApplicationStatus == DomainCertificateApplicationStatus.Submitted)
                                             {
-                                                <span aria-hidden="true"> · </span><button type="button" class="hip-secondary-action" @onclick="() => BeginAction(item, DomainCertificateStatus.Suspended)" disabled="@_submitting">Suspend</button>
+                                                <button type="button" class="hip-secondary-action" @onclick="() => BeginApplicationDecision(item, DomainCertificateApplicationStatus.Approved)" disabled="@_submitting">Approve</button>
+                                                <button type="button" class="hip-secondary-action" @onclick="() => BeginApplicationDecision(item, DomainCertificateApplicationStatus.ChangesRequested)" disabled="@_submitting">Request changes</button>
+                                                <button type="button" class="danger-button" @onclick="() => BeginApplicationDecision(item, DomainCertificateApplicationStatus.Denied)" disabled="@_submitting">Deny</button>
                                             }
-                                            @if (item.CertificateStatus == DomainCertificateStatus.Suspended)
+                                            else if (item.ApplicationStatus == DomainCertificateApplicationStatus.Approved &&
+                                                     item.CertificateId is null)
                                             {
-                                                <span aria-hidden="true"> · </span><button type="button" class="hip-secondary-action" @onclick="() => BeginAction(item, DomainCertificateStatus.Active)" disabled="@_submitting">Reinstate</button>
+                                                <span class="certificate-next-step">Owner can run security review and issuance</span>
                                             }
-                                            @if (item.CertificateStatus is DomainCertificateStatus.Active or DomainCertificateStatus.Suspended)
+                                            @if (item.CertificateId is not null)
                                             {
-                                                <span aria-hidden="true"> · </span><button type="button" class="danger-button" @onclick="() => BeginAction(item, DomainCertificateStatus.Revoked)" disabled="@_submitting">Revoke</button>
+                                                <a href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">Public certificate</a>
+                                                @if (item.CertificateStatus == DomainCertificateStatus.Active)
+                                                {
+                                                    <button type="button" class="hip-secondary-action" @onclick="() => BeginAction(item, DomainCertificateStatus.Suspended)" disabled="@_submitting">Suspend</button>
+                                                }
+                                                @if (item.CertificateStatus == DomainCertificateStatus.Suspended)
+                                                {
+                                                    <button type="button" class="hip-secondary-action" @onclick="() => BeginAction(item, DomainCertificateStatus.Active)" disabled="@_submitting">Reinstate</button>
+                                                }
+                                                @if (item.CertificateStatus is DomainCertificateStatus.Active or DomainCertificateStatus.Suspended)
+                                                {
+                                                    <button type="button" class="danger-button" @onclick="() => BeginAction(item, DomainCertificateStatus.Revoked)" disabled="@_submitting">Revoke</button>
+                                                }
                                             }
-                                        }
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -371,7 +406,9 @@
             {
                 var domain = _selectedItem.Domain;
                 CancelApplicationDecision();
-                _statusMessage = $"{domain} application decision saved.";
+                _statusMessage = targetStatus == DomainCertificateApplicationStatus.Approved
+                    ? $"{domain} application approved. The owner can now run the security review and, if eligible, HIP will issue the certificate automatically."
+                    : $"{domain} application decision saved.";
                 await LoadAsync();
                 return;
             }
@@ -393,6 +430,29 @@
         }
     }
 
+    private static string EnrollmentLabel(DomainEnrollmentStatus status) => status switch
+    {
+        DomainEnrollmentStatus.PendingOwnership => "Ownership pending",
+        DomainEnrollmentStatus.OwnershipVerified => "Ownership verified",
+        DomainEnrollmentStatus.PendingSecurityReview => "Security review pending",
+        DomainEnrollmentStatus.Verified => "Verified",
+        DomainEnrollmentStatus.Monitored => "Monitoring active",
+        DomainEnrollmentStatus.Suspended => "Suspended",
+        DomainEnrollmentStatus.Revoked => "Revoked",
+        _ => "Draft"
+    };
+
+    private static string ApplicationLabel(DomainCertificateApplicationStatus status) => status switch
+    {
+        DomainCertificateApplicationStatus.Submitted => "Awaiting review",
+        DomainCertificateApplicationStatus.ChangesRequested => "Changes requested",
+        DomainCertificateApplicationStatus.Approved => "Approved",
+        DomainCertificateApplicationStatus.Denied => "Denied",
+        _ => "Draft"
+    };
+
+    private static string CertificateLabel(AdminDomainCertificateSummary item) =>
+        item.CertificateStatus?.ToString() ?? "Not issued";
     private static string ApplicationDecisionLabel(DomainCertificateApplicationStatus targetStatus) => targetStatus switch
     {
         DomainCertificateApplicationStatus.Approved => "Approve",

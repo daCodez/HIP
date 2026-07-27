@@ -27,6 +27,15 @@ public sealed record AdminDomainCertificateSummary(
     DateTimeOffset? ApplicationReviewedAtUtc = null,
     string? ApplicantAttestationDigest = null);
 
+/// <summary>Public-safe certificate application progress for one exact normalized domain.</summary>
+public sealed record PublicDomainCertificateProgress(
+    string Domain,
+    DomainEnrollmentStatus EnrollmentStatus,
+    DomainCertificateApplicationStatus ApplicationStatus,
+    DateTimeOffset? SecurityReviewCompletedAtUtc,
+    int UnresolvedCriticalFindings,
+    DomainCertificateStatus? CertificateStatus,
+    DomainCertificateLevel? CertificateLevel);
 /// <summary>Reads paged cross-owner certificate operations state without owner identifiers.</summary>
 public interface IDomainCertificateAdminQuery
 {
@@ -34,4 +43,10 @@ public interface IDomainCertificateAdminQuery
         int offset,
         int limit,
         CancellationToken cancellationToken);
+
+    /// <summary>Returns only public-safe progress for one exact domain.</summary>
+    Task<PublicDomainCertificateProgress?> GetPublicProgressAsync(
+        string domain,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<PublicDomainCertificateProgress?>(null);
 }

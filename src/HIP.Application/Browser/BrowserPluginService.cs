@@ -61,7 +61,11 @@ public sealed class BrowserPluginService(
             lookup.VerificationStatus,
             lookup.SignedIdentityStatus,
             lookup.LastCheckedUtc,
-            lookup.PublicLookupUrl);
+            lookup.PublicLookupUrl)
+        {
+            CertificateApplicationStatus = lookup.CertificateApplicationStatus,
+            CertificateProgressStatus = lookup.CertificateProgressStatus
+        };
     }
 
     /// <summary>

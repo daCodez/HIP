@@ -212,8 +212,12 @@ export function buildPopupViewModel(lookup, summary, settings, currentUrl, certi
     finalHipScoreExplanation: safeDisplayText(lookup?.finalHipScoreExplanation || "Final HIP score is based on separate domain, page, and content scores."),
     verifiedText: lookup?.verificationStatus === "Verified" ? "Yes" : "No",
     identityText: lookup?.identityVerificationStatus || lookup?.signedIdentityStatus || "Unknown",
+    certificateApplicationText: certificateProgressText(lookup),
     certificateLevelText: certificate?.level || "None verified",
-    certificateStatusText: certificate?.status || "Not verified",
+    certificateStatusText: certificate?.status ||
+      (lookup?.certificateApplicationStatus && lookup.certificateApplicationStatus !== "NotStarted"
+        ? "Not issued"
+        : "Not verified"),
     certificateVerificationText: certificate?.signatureStatus === "Verified"
       ? "HIP signature verified"
       : "Unavailable",
@@ -236,6 +240,12 @@ export function buildPopupViewModel(lookup, summary, settings, currentUrl, certi
   };
 }
 
+/**
+ * Shows the public-safe certificate application stage without exposing reviewer details.
+ */
+export function certificateProgressText(lookup = {}) {
+  return safeDisplayText(lookup?.certificateProgressStatus || "No certificate application");
+}
 /**
  * Builds explicit popup loading labels for asynchronous scan stages.
  */

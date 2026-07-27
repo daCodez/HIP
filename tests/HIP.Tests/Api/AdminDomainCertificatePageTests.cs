@@ -13,6 +13,8 @@ public sealed class AdminDomainCertificatePageTests
             "src", "HIP.Web", "Components", "Pages", "AdminDomainCertificates.razor"));
         var navigation = File.ReadAllText(WorkspaceFile(
             "src", "HIP.Web", "Components", "Layout", "ControlCenterNav.razor"));
+        var styles = File.ReadAllText(WorkspaceFile(
+            "src", "HIP.Web", "Components", "Pages", "AdminDomainCertificates.razor.css"));
 
         Assert.Multiple(() =>
         {
@@ -23,7 +25,7 @@ public sealed class AdminDomainCertificatePageTests
             Assert.That(page, Does.Contain("Failed verification attempts"));
             Assert.That(page, Does.Contain("Recently issued certificates"));
             Assert.That(page, Does.Contain("Recently revoked certificates"));
-            Assert.That(page, Does.Contain("Policy version"));
+            Assert.That(page, Does.Contain("<th scope=\"col\">Policy</th>"));
             Assert.That(page, Does.Not.Contain("OwnerId"));
             Assert.That(page, Does.Contain("IDomainCertificateLifecycleService"));
             Assert.That(page, Does.Contain("HipAdminPageAccess.ExecuteAuthorizedAsync"));
@@ -35,6 +37,12 @@ public sealed class AdminDomainCertificatePageTests
             Assert.That(page, Does.Contain("Revoke"));
             Assert.That(page, Does.Contain("Reason"));
             Assert.That(page, Does.Contain("Confirm certificate action"));
+            Assert.That(page, Does.Contain("What the security review does"));
+            Assert.That(page, Does.Contain("Owner can run security review and issuance"));
+            Assert.That(page, Does.Contain("HIP signs and stores the certificate automatically"));
+            Assert.That(styles, Does.Contain("overflow-x: auto"));
+            Assert.That(styles, Does.Contain("min-width: 76rem"));
+            Assert.That(styles, Does.Contain(".certificate-action-confirmation textarea"));
             Assert.That(navigation, Does.Contain("href=\"admin/certificates\""));
             Assert.That(navigation, Does.Contain("Policy=\"@AdminPolicies.CanViewReviews\""));
         });

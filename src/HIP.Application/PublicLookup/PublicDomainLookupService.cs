@@ -1,9 +1,11 @@
 using HIP.Application.Browser;
+using HIP.Application.Certificates;
 using HIP.Application.Identity;
 using HIP.Domain.Risk;
 using HIP.Domain.Scoring;
 using HIP.Application.Explanations;
 using HIP.Domain.Identity;
+using HIP.Domain.Certificates;
 using Microsoft.Extensions.Logging;
 
 namespace HIP.Application.PublicLookup;
@@ -17,7 +19,8 @@ public sealed class PublicDomainLookupService(
     IBrowserScanResultRepository browserScanResultRepository,
     ILogger<PublicDomainLookupService>? logger = null,
     ITrustExplanationAssistant? explanationAssistant = null,
-    IWebsiteIdentityRepository? websiteIdentityRepository = null) : IPublicDomainLookupService
+    IWebsiteIdentityRepository? websiteIdentityRepository = null,
+    IDomainCertificateAdminQuery? certificateAdminQuery = null) : IPublicDomainLookupService
 {
     private static readonly HashSet<string> StrongDomainTrust = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -48,14 +51,13 @@ public sealed class PublicDomainLookupService(
     {
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
         var websiteIdentity = await GetWebsiteIdentitySafelyAsync(normalized, cancellationToken);
+        var certificateProgress = await GetCertificateProgressSafelyAsync(normalized, cancellationToken);
         var storedScan = await GetLatestStoredScanSafelyAsync(normalized, cancellationToken);
-        if (storedScan is null)
-        {
-            return BuildNoStoredDataResponse(normalized, websiteIdentity);
-        }
-
-        var response = BuildStoredScanResponse(normalized, storedScan, websiteIdentity);
-        if (explanationAssistant is null)
+        var response = storedScan is null
+            ? BuildNoStoredDataResponse(normalized, websiteIdentity)
+            : BuildStoredScanResponse(normalized, storedScan, websiteIdentity);
+        response = ApplyCertificateProgress(response, certificateProgress);
+        if (storedScan is null || explanationAssistant is null)
         {
             return response;
         }
@@ -104,6 +106,81 @@ public sealed class PublicDomainLookupService(
         }
     }
 
+    /// <summary>Reads only public-safe certificate progress and degrades cleanly when storage is unavailable.</summary>
+    private async Task<PublicDomainCertificateProgress?> GetCertificateProgressSafelyAsync(
+        string normalizedDomain,
+        CancellationToken cancellationToken)
+    {
+        if (certificateAdminQuery is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await certificateAdminQuery.GetPublicProgressAsync(normalizedDomain, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (IsStorageAvailabilityFailure(exception))
+        {
+            logger?.LogWarning(
+                exception,
+                "HIP public certificate progress read failed for domain {Domain}.",
+                normalizedDomain);
+            return null;
+        }
+    }
+
+    /// <summary>Maps persisted lifecycle state to bounded public wording without review details.</summary>
+    private static PublicDomainLookupResponse ApplyCertificateProgress(
+        PublicDomainLookupResponse response,
+        PublicDomainCertificateProgress? progress)
+    {
+        if (progress is null)
+        {
+            return response;
+        }
+
+        var label = progress.CertificateStatus switch
+        {
+            DomainCertificateStatus.Active => "Certificate active",
+            DomainCertificateStatus.Suspended => "Certificate suspended",
+            DomainCertificateStatus.Revoked => "Certificate revoked",
+            DomainCertificateStatus.Expired => "Certificate expired",
+            DomainCertificateStatus.RenewalRequired => "Certificate renewal required",
+            DomainCertificateStatus.PendingReview => "Certificate review pending",
+            _ => ApplicationProgressLabel(progress)
+        };
+        return response with
+        {
+            CertificateApplicationStatus = progress.ApplicationStatus.ToString(),
+            CertificateProgressStatus = label
+        };
+    }
+
+    private static string ApplicationProgressLabel(PublicDomainCertificateProgress progress) =>
+        progress.ApplicationStatus switch
+        {
+            DomainCertificateApplicationStatus.Submitted => "Application submitted - awaiting HIP review",
+            DomainCertificateApplicationStatus.ChangesRequested => "Application changes requested",
+            DomainCertificateApplicationStatus.Denied => "Application denied",
+            DomainCertificateApplicationStatus.Approved
+                when progress.EnrollmentStatus == DomainEnrollmentStatus.Verified =>
+                "Security review passed - certificate issuance pending",
+            DomainCertificateApplicationStatus.Approved
+                when progress.SecurityReviewCompletedAtUtc is not null &&
+                     progress.UnresolvedCriticalFindings > 0 =>
+                "Security review found requirements to address",
+            DomainCertificateApplicationStatus.Approved
+                when progress.SecurityReviewCompletedAtUtc is not null =>
+                "Security review needs HIP review",
+            DomainCertificateApplicationStatus.Approved =>
+                "Application approved - security review pending",
+            _ => "Certificate application not submitted"
+        };
     private static IReadOnlyCollection<string> BuildExplanationSignalCodes(PublicDomainLookupResponse response)
     {
         var codes = new List<string> { $"status-{response.Status.ToString().ToLowerInvariant()}" };

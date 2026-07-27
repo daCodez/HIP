@@ -38,7 +38,14 @@ public sealed record BrowserScoreSiteResponse(
     string VerificationStatus,
     string SignedIdentityStatus,
     DateTimeOffset LastCheckedUtc,
-    string PublicLookupUrl);
+    string PublicLookupUrl)
+{
+    /// <summary>Public-safe certificate application decision state.</summary>
+    public string CertificateApplicationStatus { get; init; } = "NotStarted";
+
+    /// <summary>Plain-English current certificate lifecycle stage.</summary>
+    public string CertificateProgressStatus { get; init; } = "No certificate application";
+}
 
 /// <summary>
 /// Describes links observed on a page so HIP can classify only the URLs, not the page body.
