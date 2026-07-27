@@ -40,6 +40,7 @@ using HIP.Domain.Safety;
 using HIP.Domain.SelfHealing;
 using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
+using HIP.Infrastructure.Persistence.Repositories;
 using HIP.Web;
 using HIP.Web.Components;
 using HIP.Web.Security;
@@ -71,6 +72,8 @@ builder.Services.AddHipApplication(
     builder.Environment.IsDevelopment() ? "web" : null);
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
+builder.Services.AddScoped<IDomainCertificateMonitoringRepository>(provider =>
+    provider.GetRequiredService<EfDomainCertificateRepository>());
 builder.Services.AddHostedService<DomainVerificationRecheckWorker>();
 builder.Services.AddOptions<HipPerformanceOptions>()
     .Bind(builder.Configuration.GetSection(HipPerformanceOptions.SectionName))

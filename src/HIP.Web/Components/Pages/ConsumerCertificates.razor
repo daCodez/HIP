@@ -9,6 +9,7 @@
 @inject IDomainCertificateEnrollmentService EnrollmentService
 @inject IDomainCertificateApplicationService ApplicationService
 @inject IDomainCertificateProvisioningService ProvisioningService
+@inject IDomainCertificateMonitoringService MonitoringService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthorizationService AuthorizationService
 @inject IJSRuntime JavaScript
@@ -245,6 +246,15 @@
                     {
                         <a class="btn btn-primary" href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">View public certificate</a>
                     }
+                    @if (item.CertificateId is not null && item.CertificateStatus == DomainCertificateStatus.Active)
+                    {
+                        <button class="btn btn-primary" type="button" disabled="@(_monitoringEnrollmentId is not null)"
+                                @onclick="() => StartMonitoringAsync(item)">
+                            @(_monitoringEnrollmentId == item.EnrollmentId
+                                ? "Checking monitoring evidence…"
+                                : item.MonitoringEnabledAtUtc is null ? "Start monitoring" : "Refresh monitoring evidence")
+                        </button>
+                    }
                     <span>Verification and lifecycle actions appear only when the stored state permits them.</span>
                 </footer>
             </article>
@@ -268,6 +278,7 @@
     private string? _replacingDnsEnrollmentId;
     private string? _checkingEnrollmentId;
     private string? _reviewingEnrollmentId;
+    private string? _monitoringEnrollmentId;
     private string? _preparingWebsiteEnrollmentId;
     private string? _checkingWebsiteEnrollmentId;
     private string? _websiteEnrollmentId;
@@ -699,6 +710,64 @@
         }
     }
 
+    private async Task StartMonitoringAsync(OwnerDomainCertificateSummary item)
+    {
+        _monitoringEnrollmentId = item.EnrollmentId;
+        _certificateActionError = null;
+        _certificateActionMessage = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var contactVerified = string.Equals(
+                authenticationState.User.FindFirst(HipAuthenticationClaimTypes.AccountContactVerified)?.Value,
+                "true",
+                StringComparison.Ordinal);
+            var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                ConsumerPolicies.CanUseConsumerPortal,
+                consumerId => MonitoringService.StartAsync(
+                    consumerId,
+                    item.Domain,
+                    contactVerified,
+                    CancellationToken.None));
+            if (!access.Succeeded || access.Value is null)
+            {
+                _certificateActionError = HipConsumerPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            _certificateActionMessage = access.Value.Status switch
+            {
+                DomainCertificateMonitoringStartStatus.Activated =>
+                    $"Monitoring is active. HIP stored fresh authoritative evidence with a score of {access.Value.CurrentScore}/100.",
+                DomainCertificateMonitoringStartStatus.EnabledPendingEvidence when access.Value.CurrentScore is not null =>
+                    $"Monitoring is enabled. The current authenticated evidence score is {access.Value.CurrentScore}/100; HIP will keep checking for the 70-point monitored threshold.",
+                DomainCertificateMonitoringStartStatus.EnabledPendingEvidence =>
+                    "Monitoring is enabled. HIP will retry the authoritative check when evidence providers are available.",
+                DomainCertificateMonitoringStartStatus.Existing =>
+                    "Monitoring was already enabled for this domain.",
+                _ => null
+            };
+            _certificateActionError = access.Value.Status switch
+            {
+                DomainCertificateMonitoringStartStatus.NotFound =>
+                    "HIP could not find an enrollment for this account and domain.",
+                DomainCertificateMonitoringStartStatus.NotReady =>
+                    "Monitoring requires an active verified certificate and completed ownership and identity checks.",
+                DomainCertificateMonitoringStartStatus.Conflict =>
+                    "The certificate changed while monitoring was being enabled. HIP did not overwrite the newer state.",
+                DomainCertificateMonitoringStartStatus.Unavailable =>
+                    "HIP could not save monitoring state right now. No monitoring claim was issued.",
+                _ => null
+            };
+            await LoadAsync();
+        }
+        finally
+        {
+            _monitoringEnrollmentId = null;
+        }
+    }
     private async Task ReviewAndIssueAsync(OwnerDomainCertificateSummary item)
     {
         _reviewingEnrollmentId = item.EnrollmentId;
@@ -878,8 +947,10 @@
 
     private static string MonitoringStatus(OwnerDomainCertificateSummary item) =>
         item.EnrollmentStatus == DomainEnrollmentStatus.Monitored
-            ? $"Active · {FormatDate(item.LastMonitoringAtUtc)}"
-            : item.LastMonitoringAtUtc is null ? "Not active" : $"Last checked {FormatDate(item.LastMonitoringAtUtc)}";
+            ? $"Active · last checked {FormatDate(item.LastMonitoringAtUtc)}"
+            : item.MonitoringEnabledAtUtc is not null
+                ? $"Enabled · gathering evidence · next check {FormatDate(item.MonitoringNextCheckAtUtc)}"
+                : "Not active";
 
     private static string FormatDate(DateTimeOffset? timestamp) => timestamp?.ToString("u") ?? "Not available";
     private static string IdentityHeadingId(OwnerDomainCertificateSummary item) => $"identity-{SafeId(item.EnrollmentId)}";

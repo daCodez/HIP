@@ -12,7 +12,9 @@ public sealed record DomainCertificateSecurityScanRequest(
     DateTimeOffset? DomainControlVerifiedAtUtc,
     DateTimeOffset? DnsVerifiedAtUtc,
     DateTimeOffset? WebsiteVerifiedAtUtc,
-    bool IdentityInformationCompleted);
+    bool IdentityInformationCompleted,
+    bool ContinuousMonitoringEnabled = false,
+    bool CertificateActive = false);
 
 public enum DomainCertificateSecurityScanStatus
 {
@@ -128,7 +130,12 @@ public sealed class DomainCertificateSecurityScanService(
                 HttpsAvailable: request.WebsiteVerifiedAtUtc is not null,
                 TlsCertificateValid: tlsValid,
                 RequiredPoliciesPassed: requiredPoliciesPassed,
-                CurrentTrustScore: scan.FinalHipScore),
+                CurrentTrustScore: scan.FinalHipScore,
+                ContinuousMonitoringEnabled: request.ContinuousMonitoringEnabled,
+                CertificateActive: request.CertificateActive,
+                LastMonitoringAtUtc: request.RequestedLevel == DomainCertificateLevel.Monitored
+                    ? evaluatedAt
+                    : null),
             new DomainCertificateReviewSignals(
                 LowScanConfidence: string.Equals(scan.ConfidenceLevel, "Low", StringComparison.OrdinalIgnoreCase),
                 UnresolvedHighRiskFindings: HasHighRiskFinding(scan)),

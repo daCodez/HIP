@@ -13,7 +13,7 @@ namespace HIP.Infrastructure.Persistence.Repositories;
 /// <summary>Insert-only EF repository for signed domain certificates and their issuance audit events.</summary>
 public sealed class EfDomainCertificateRepository(
     HipDbContext dbContext,
-    ICanonicalJsonService canonicalJsonService) : IDomainCertificateRepository, IDomainCertificateOwnerQuery, IDomainEnrollmentRepository, IDomainCertificateAdminQuery, IDomainCertificateLifecycleRepository
+    ICanonicalJsonService canonicalJsonService) : IDomainCertificateRepository, IDomainCertificateOwnerQuery, IDomainEnrollmentRepository, IDomainCertificateAdminQuery, IDomainCertificateLifecycleRepository, IDomainCertificateMonitoringRepository
 {
     private static readonly JsonSerializerOptions CollectionJsonOptions = CreateCollectionOptions();
     private readonly ICanonicalJsonService canonicalizer =
@@ -78,6 +78,34 @@ public sealed class EfDomainCertificateRepository(
     }
 
     /// <inheritdoc />
+    public async Task<DomainMonitoringEnrollmentState?> GetForMonitoringAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        ValidateIdentifier(ownerId, 256);
+        var normalized = HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(domain);
+        return await (
+                from enrollment in dbContext.DomainEnrollments.AsNoTracking()
+                    .Where(item => item.OwnerId == ownerId && item.Domain == normalized && item.IsCurrent)
+                join certificate in dbContext.DomainCertificates.AsNoTracking().Where(item => item.IsCurrent)
+                    on enrollment.EnrollmentId equals certificate.EnrollmentId
+                select new DomainMonitoringEnrollmentState(
+                    enrollment.EnrollmentId,
+                    enrollment.OwnerId,
+                    enrollment.Domain,
+                    enrollment.Status,
+                    certificate.Status,
+                    certificate.Level,
+                    enrollment.DnsVerifiedAtUtc,
+                    enrollment.WebsiteVerifiedAtUtc,
+                    enrollment.IdentityCompletedAtUtc,
+                    enrollment.MonitoringEnabledAtUtc,
+                    enrollment.LastMonitoringAtUtc,
+                    enrollment.CurrentScore))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+    /// <inheritdoc />
     public async Task<IReadOnlyList<OwnerDomainCertificateSummary>> ListForOwnerAsync(
         string ownerId,
         int offset,
@@ -129,7 +157,10 @@ public sealed class EfDomainCertificateRepository(
                     enrollment.ApplicationStatus,
                     enrollment.ApplicationSubmittedAtUtc,
                     enrollment.ApplicationReviewedAtUtc,
-                    enrollment.ApplicantAttestationDigest))
+                    enrollment.ApplicantAttestationDigest,
+                    enrollment.MonitoringEnabledAtUtc,
+                    enrollment.MonitoringNextCheckAtUtc,
+                    enrollment.MonitoringFailureCount))
             .ToListAsync(cancellationToken);
     }
     /// <inheritdoc />
@@ -181,7 +212,10 @@ public sealed class EfDomainCertificateRepository(
                     enrollment.ApplicationStatus,
                     enrollment.ApplicationSubmittedAtUtc,
                     enrollment.ApplicationReviewedAtUtc,
-                    enrollment.ApplicantAttestationDigest))
+                    enrollment.ApplicantAttestationDigest,
+                    enrollment.MonitoringEnabledAtUtc,
+                    enrollment.MonitoringNextCheckAtUtc,
+                    enrollment.MonitoringFailureCount))
             .ToListAsync(cancellationToken);
     }
 
@@ -707,6 +741,164 @@ public sealed class EfDomainCertificateRepository(
         }
     }
 
+    /// <inheritdoc />
+    public async Task<DomainMonitoringWriteStatus> TryEnableAsync(
+        DomainMonitoringEnableRecord record,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ValidateIdentifier(record.EnrollmentId, 128);
+        ValidateIdentifier(record.OwnerId, 256);
+        ValidateIdentifier(record.AuditEventId, 128);
+        if (record.EnabledAtUtc.Offset != TimeSpan.Zero || record.NextCheckAtUtc < record.EnabledAtUtc ||
+            HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(record.Domain) != record.Domain)
+        {
+            throw new ArgumentException("Domain monitoring opt-in is invalid.", nameof(record));
+        }
+
+        var existingEvent = await dbContext.DomainCertificateEvents.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.EventId == record.AuditEventId, cancellationToken);
+        if (existingEvent is not null)
+        {
+            return existingEvent.EnrollmentId == record.EnrollmentId && existingEvent.EventType == "MonitoringEnabled"
+                ? DomainMonitoringWriteStatus.Existing
+                : DomainMonitoringWriteStatus.Conflict;
+        }
+
+        var enrollment = await dbContext.DomainEnrollments.SingleOrDefaultAsync(
+            item => item.EnrollmentId == record.EnrollmentId && item.OwnerId == record.OwnerId &&
+                    item.Domain == record.Domain && item.IsCurrent,
+            cancellationToken);
+        if (enrollment is null)
+        {
+            return DomainMonitoringWriteStatus.NotFound;
+        }
+        var certificate = await dbContext.DomainCertificates.AsNoTracking().SingleOrDefaultAsync(
+            item => item.EnrollmentId == enrollment.EnrollmentId && item.IsCurrent,
+            cancellationToken);
+        if (certificate is null || certificate.Status != DomainCertificateStatus.Active ||
+            enrollment.Status is not DomainEnrollmentStatus.Verified and not DomainEnrollmentStatus.Monitored)
+        {
+            return DomainMonitoringWriteStatus.Conflict;
+        }
+
+        enrollment.MonitoringEnabledAtUtc ??= record.EnabledAtUtc;
+        enrollment.MonitoringNextCheckAtUtc = record.NextCheckAtUtc;
+        enrollment.MonitoringFailureCount = 0;
+        enrollment.UpdatedAtUtc = record.EnabledAtUtc;
+        enrollment.AggregateVersion++;
+        dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+        {
+            EventId = record.AuditEventId,
+            EnrollmentId = enrollment.EnrollmentId,
+            CertificateId = certificate.CertificateId,
+            EventType = "MonitoringEnabled",
+            PreviousStatus = enrollment.Status.ToString(),
+            CurrentStatus = enrollment.Status.ToString(),
+            ActorId = record.OwnerId,
+            ReasonCode = "OwnerOptIn",
+            PublicSummary = "The authenticated domain owner enabled privacy-safe HIP monitoring.",
+            PolicyVersion = enrollment.PolicyVersion,
+            OccurredAtUtc = record.EnabledAtUtc
+        });
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return DomainMonitoringWriteStatus.Updated;
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            return DomainMonitoringWriteStatus.Conflict;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<DomainMonitoringWriteStatus> TryApplyCheckAsync(
+        DomainMonitoringCheckRecord record,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ValidateIdentifier(record.EnrollmentId, 128);
+        ValidateIdentifier(record.OwnerId, 256);
+        ValidateIdentifier(record.AuditEventId, 128);
+        if (record.CurrentScore is < 0 or > 100 || record.UnresolvedCriticalFindings < 0 ||
+            record.CheckedAtUtc.Offset != TimeSpan.Zero || record.NextCheckAtUtc <= record.CheckedAtUtc ||
+            !IsDigest(record.EvidenceDigest) ||
+            HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(record.Domain) != record.Domain)
+        {
+            throw new ArgumentException("Domain monitoring check is invalid.", nameof(record));
+        }
+        if (record.ExpectedStatus != record.TargetStatus)
+        {
+            DomainEnrollmentLifecycle.RequireTransition(record.ExpectedStatus, record.TargetStatus);
+        }
+
+        var existingEvent = await dbContext.DomainCertificateEvents.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.EventId == record.AuditEventId, cancellationToken);
+        if (existingEvent is not null)
+        {
+            return existingEvent.EnrollmentId == record.EnrollmentId && existingEvent.EvidenceDigest == record.EvidenceDigest
+                ? DomainMonitoringWriteStatus.Existing
+                : DomainMonitoringWriteStatus.Conflict;
+        }
+
+        var enrollment = await dbContext.DomainEnrollments.SingleOrDefaultAsync(
+            item => item.EnrollmentId == record.EnrollmentId && item.OwnerId == record.OwnerId &&
+                    item.Domain == record.Domain && item.IsCurrent,
+            cancellationToken);
+        if (enrollment is null)
+        {
+            return DomainMonitoringWriteStatus.NotFound;
+        }
+        var certificate = await dbContext.DomainCertificates.AsNoTracking().SingleOrDefaultAsync(
+            item => item.EnrollmentId == enrollment.EnrollmentId && item.IsCurrent,
+            cancellationToken);
+        if (certificate is null || certificate.Status != DomainCertificateStatus.Active ||
+            enrollment.MonitoringEnabledAtUtc is null || enrollment.Status != record.ExpectedStatus)
+        {
+            return DomainMonitoringWriteStatus.Conflict;
+        }
+
+        var previous = enrollment.Status;
+        enrollment.Status = record.TargetStatus;
+        enrollment.LastMonitoringAtUtc = record.CheckedAtUtc;
+        enrollment.MonitoringNextCheckAtUtc = record.NextCheckAtUtc;
+        enrollment.MonitoringFailureCount = 0;
+        enrollment.CurrentScore = record.CurrentScore;
+        enrollment.UnresolvedCriticalFindings = record.UnresolvedCriticalFindings;
+        enrollment.UpdatedAtUtc = record.CheckedAtUtc;
+        enrollment.AggregateVersion++;
+        dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+        {
+            EventId = record.AuditEventId,
+            EnrollmentId = enrollment.EnrollmentId,
+            CertificateId = certificate.CertificateId,
+            EventType = record.TargetStatus == DomainEnrollmentStatus.Monitored
+                ? "MonitoringPolicySatisfied"
+                : "MonitoringEvidenceUpdated",
+            PreviousStatus = previous.ToString(),
+            CurrentStatus = record.TargetStatus.ToString(),
+            ActorId = "hip-monitoring-service",
+            ReasonCode = record.TargetStatus == DomainEnrollmentStatus.Monitored ? "Eligible" : "GatheringEvidence",
+            PublicSummary = record.TargetStatus == DomainEnrollmentStatus.Monitored
+                ? "Fresh authoritative evidence satisfied the HIP monitored-domain policy."
+                : "HIP stored a fresh privacy-safe monitoring result; monitored-domain requirements are not yet satisfied.",
+            PolicyVersion = enrollment.PolicyVersion,
+            EvidenceDigest = record.EvidenceDigest,
+            OccurredAtUtc = record.CheckedAtUtc
+        });
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return DomainMonitoringWriteStatus.Updated;
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            return DomainMonitoringWriteStatus.Conflict;
+        }
+    }
     /// <inheritdoc />
     public async Task<DomainEnrollmentTransitionWriteResult> TryApplySecurityReviewAsync(
         DomainCertificateSecurityReviewRecord review,

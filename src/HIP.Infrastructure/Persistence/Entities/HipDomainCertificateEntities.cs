@@ -27,7 +27,10 @@ public sealed class HipDomainEnrollmentEntity
     public string? ApplicantAttestationDigest { get; set; }
     public string? ApplicationDecisionReason { get; set; }
     public DateTimeOffset? SecurityReviewCompletedAtUtc { get; set; }
+    public DateTimeOffset? MonitoringEnabledAtUtc { get; set; }
     public DateTimeOffset? LastMonitoringAtUtc { get; set; }
+    public DateTimeOffset? MonitoringNextCheckAtUtc { get; set; }
+    public int MonitoringFailureCount { get; set; }
     public int? CurrentScore { get; set; }
     public int UnresolvedCriticalFindings { get; set; }
     public long AggregateVersion { get; set; }

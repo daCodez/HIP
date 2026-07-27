@@ -394,6 +394,73 @@ public sealed class DomainCertificateRepositoryTests
         });
     }
     [Test]
+    public async Task Monitoring_opt_in_is_owner_bound_idempotent_and_audited()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        await repository.TryCreateIssuedAsync(Record(), CancellationToken.None);
+        var enabledAt = Now.AddMinutes(20);
+        var record = new DomainMonitoringEnableRecord(
+            "enrollment-1", "owner-1", "example.com", enabledAt, enabledAt,
+            "certificate-event:monitoring-enabled:enrollment-1");
+
+        var applied = await repository.TryEnableAsync(record, CancellationToken.None);
+        var retry = await repository.TryEnableAsync(record, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied, Is.EqualTo(DomainMonitoringWriteStatus.Updated));
+            Assert.That(retry, Is.EqualTo(DomainMonitoringWriteStatus.Existing));
+            var enrollment = context.DomainEnrollments.Single(item => item.EnrollmentId == "enrollment-1");
+            Assert.That(enrollment.MonitoringEnabledAtUtc, Is.EqualTo(enabledAt));
+            Assert.That(enrollment.MonitoringNextCheckAtUtc, Is.EqualTo(enabledAt));
+            Assert.That(enrollment.MonitoringFailureCount, Is.Zero);
+            var auditEvent = context.DomainCertificateEvents.Single(item => item.EventType == "MonitoringEnabled");
+            Assert.That(auditEvent.ActorId, Is.EqualTo("owner-1"));
+            Assert.That(auditEvent.ReasonCode, Is.EqualTo("OwnerOptIn"));
+            Assert.That(auditEvent.PublicSummary, Does.Not.Contain("owner-1"));
+        });
+    }
+
+    [Test]
+    public async Task Monitoring_check_promotes_eligible_enrollment_and_stores_digest_bound_audit()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        await repository.TryCreateIssuedAsync(Record(), CancellationToken.None);
+        var enabledAt = Now.AddMinutes(20);
+        await repository.TryEnableAsync(
+            new DomainMonitoringEnableRecord(
+                "enrollment-1", "owner-1", "example.com", enabledAt, enabledAt,
+                "certificate-event:monitoring-enabled:enrollment-1"),
+            CancellationToken.None);
+        var evidenceDigest = $"sha256:{new string('e', 64)}";
+        var checkedAt = enabledAt.AddMinutes(1);
+        var check = new DomainMonitoringCheckRecord(
+            "enrollment-1", "owner-1", "example.com",
+            DomainEnrollmentStatus.Verified, DomainEnrollmentStatus.Monitored,
+            82, 0, checkedAt, checkedAt.AddHours(24), evidenceDigest,
+            "certificate-event:monitoring-check:eligible");
+
+        var applied = await repository.TryApplyCheckAsync(check, CancellationToken.None);
+        var retry = await repository.TryApplyCheckAsync(check, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied, Is.EqualTo(DomainMonitoringWriteStatus.Updated));
+            Assert.That(retry, Is.EqualTo(DomainMonitoringWriteStatus.Existing));
+            var enrollment = context.DomainEnrollments.Single(item => item.EnrollmentId == "enrollment-1");
+            Assert.That(enrollment.Status, Is.EqualTo(DomainEnrollmentStatus.Monitored));
+            Assert.That(enrollment.CurrentScore, Is.EqualTo(82));
+            Assert.That(enrollment.LastMonitoringAtUtc, Is.EqualTo(checkedAt));
+            Assert.That(enrollment.MonitoringNextCheckAtUtc, Is.EqualTo(checkedAt.AddHours(24)));
+            var auditEvent = context.DomainCertificateEvents.Single(item => item.EventType == "MonitoringPolicySatisfied");
+            Assert.That(auditEvent.ActorId, Is.EqualTo("hip-monitoring-service"));
+            Assert.That(auditEvent.EvidenceDigest, Is.EqualTo(evidenceDigest));
+            Assert.That(auditEvent.PublicSummary, Does.Not.Contain("82"));
+        });
+    }
+    [Test]
     public async Task Admin_summary_query_pages_real_cross_owner_state_without_owner_identifiers()
     {
         await using var context = Context();

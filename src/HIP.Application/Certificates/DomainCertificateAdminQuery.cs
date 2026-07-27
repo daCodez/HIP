@@ -25,7 +25,10 @@ public sealed record AdminDomainCertificateSummary(
     DomainCertificateApplicationStatus ApplicationStatus = DomainCertificateApplicationStatus.Draft,
     DateTimeOffset? ApplicationSubmittedAtUtc = null,
     DateTimeOffset? ApplicationReviewedAtUtc = null,
-    string? ApplicantAttestationDigest = null);
+    string? ApplicantAttestationDigest = null,
+    DateTimeOffset? MonitoringEnabledAtUtc = null,
+    DateTimeOffset? MonitoringNextCheckAtUtc = null,
+    int MonitoringFailureCount = 0);
 
 /// <summary>Public-safe certificate application progress for one exact normalized domain.</summary>
 public sealed record PublicDomainCertificateProgress(

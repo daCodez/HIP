@@ -56,6 +56,28 @@ public sealed class DomainCertificateMigrationTests
     }
 
     [Test]
+    public void Monitoring_migration_is_additive_and_indexes_due_work()
+    {
+        var migration = new AddDomainCertificateMonitoring();
+        var addedColumns = migration.UpOperations.OfType<AddColumnOperation>().ToArray();
+        var indexes = migration.UpOperations.OfType<CreateIndexOperation>().ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(addedColumns.Select(column => column.Name), Is.EquivalentTo(new[]
+            {
+                "MonitoringEnabledAtUtc", "MonitoringFailureCount", "MonitoringNextCheckAtUtc"
+            }));
+            Assert.That(addedColumns.All(column => column.Table == "hip_domain_enrollments"), Is.True);
+            Assert.That(indexes.Single().Name, Is.EqualTo("IX_hip_domain_enrollments_monitoring_due"));
+            Assert.That(indexes.Single().Columns,
+                Is.EqualTo(new[] { "MonitoringEnabledAtUtc", "MonitoringNextCheckAtUtc" }));
+            Assert.That(migration.UpOperations.OfType<DropColumnOperation>(), Is.Empty);
+            Assert.That(migration.UpOperations.OfType<AlterColumnOperation>(), Is.Empty);
+            Assert.That(migration.UpOperations.OfType<SqlOperation>(), Is.Empty);
+        });
+    }
+    [Test]
     public void Migration_adds_only_the_three_certificate_tables_and_indexes()
     {
         var migration = new AddDomainTrustCertificates();

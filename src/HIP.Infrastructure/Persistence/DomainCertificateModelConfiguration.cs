@@ -31,6 +31,8 @@ internal static class DomainCertificateModelConfiguration
             entity.HasIndex(item => item.Domain).IsUnique().HasFilter("\"IsCurrent\" = TRUE");
             entity.HasIndex(item => item.OwnerId);
             entity.HasIndex(item => item.Status);
+            entity.HasIndex(item => new { item.MonitoringEnabledAtUtc, item.MonitoringNextCheckAtUtc })
+                .HasDatabaseName("IX_hip_domain_enrollments_monitoring_due");
         });
 
         modelBuilder.Entity<HipDomainCertificateEntity>(entity =>

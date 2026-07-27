@@ -26,7 +26,10 @@ public sealed record OwnerDomainCertificateSummary(
     DomainCertificateApplicationStatus ApplicationStatus = DomainCertificateApplicationStatus.Draft,
     DateTimeOffset? ApplicationSubmittedAtUtc = null,
     DateTimeOffset? ApplicationReviewedAtUtc = null,
-    string? ApplicantAttestationDigest = null);
+    string? ApplicantAttestationDigest = null,
+    DateTimeOffset? MonitoringEnabledAtUtc = null,
+    DateTimeOffset? MonitoringNextCheckAtUtc = null,
+    int MonitoringFailureCount = 0);
 
 /// <summary>Reads paged domain-certificate progress for exactly one authenticated owner.</summary>
 public interface IDomainCertificateOwnerQuery
