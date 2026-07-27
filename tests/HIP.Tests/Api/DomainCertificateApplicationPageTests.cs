@@ -21,6 +21,21 @@ public sealed class DomainCertificateApplicationPageTests
     }
 
     [Test]
+    public void Owner_page_explains_authenticated_score_progression_and_monitoring()
+    {
+        var page = Read("src", "HIP.Web", "Components", "Pages", "ConsumerCertificates.razor");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(page, Does.Contain("How HIP trust strengthens"));
+            Assert.That(page, Does.Contain("starting it runs an immediate HIP-owned check"));
+            Assert.That(page, Does.Contain("schedules a new check every 24 hours"));
+            Assert.That(page, Does.Contain("Missing evidence is not a low score"));
+            Assert.That(page, Does.Contain("never prove the site is safe"));
+        });
+    }
+
+    [Test]
     public void Admin_page_requires_authorized_reasoned_application_decision()
     {
         var page = Read("src", "HIP.Web", "Components", "Pages", "AdminDomainCertificates.razor");
@@ -36,13 +51,23 @@ public sealed class DomainCertificateApplicationPageTests
         });
     }
 
-    private static string Read(params string[] segments)
+    private static string Read(params string[] segments) =>
+        File.ReadAllText(Path.Combine(FindRepositoryRoot(), Path.Combine(segments)));
+
+    private static string FindRepositoryRoot(
+        [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "")
     {
-        var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "HIP.slnx")))
+        var directory = new DirectoryInfo(Path.GetDirectoryName(sourceFilePath)!);
+        while (directory is not null)
         {
+            if (File.Exists(Path.Combine(directory.FullName, "HIP.slnx")))
+            {
+                return directory.FullName;
+            }
+
             directory = directory.Parent;
         }
-        return File.ReadAllText(Path.Combine(directory!.FullName, Path.Combine(segments)));
+
+        throw new DirectoryNotFoundException("Could not locate the HIP repository root for page contract tests.");
     }
 }

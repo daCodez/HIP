@@ -4,13 +4,25 @@
 }
 
 .domain-certificate-empty,
-.domain-certificate-card {
+.domain-certificate-card,
+.trust-growth-panel {
     --owner-certificate-accent: #7d8ba1;
     padding: clamp(1rem, 3vw, 1.5rem);
     border: 1px solid var(--line);
     border-left: .35rem solid var(--owner-certificate-accent);
     border-radius: .75rem;
     background: var(--panel);
+}
+
+.trust-growth-panel {
+    --owner-certificate-accent: #3c79f5;
+}
+
+.trust-growth-panel ul {
+    display: grid;
+    gap: .6rem;
+    margin-bottom: 0;
+    padding-left: 1.25rem;
 }
 
 .domain-certificate-active { --owner-certificate-accent: #00c9c8; }
