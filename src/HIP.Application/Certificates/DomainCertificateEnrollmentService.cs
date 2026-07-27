@@ -30,6 +30,23 @@ public sealed record DomainCertificateEnrollmentStartResult(
     string? ChallengeToken = null,
     DateTimeOffset? ChallengeExpiresAtUtc = null);
 
+/// <summary>Owner-safe outcome of retrieving the current DNS challenge for an existing enrollment.</summary>
+public enum DomainCertificateDnsChallengeStatus
+{
+    InvalidRequest,
+    NotFound,
+    Available,
+    Expired,
+    Unavailable
+}
+
+/// <summary>Current publishable DNS challenge returned only after enrollment and website-owner checks.</summary>
+public sealed record DomainCertificateDnsChallengeResult(
+    DomainCertificateDnsChallengeStatus Status,
+    string? Domain = null,
+    string? ChallengeToken = null,
+    DateTimeOffset? ChallengeExpiresAtUtc = null);
+
 /// <summary>Safe outcome of checking HIP's stored DNS challenge.</summary>
 public enum DomainCertificateDnsCheckStatus
 {
@@ -121,6 +138,16 @@ public interface IDomainCertificateEnrollmentService
         string ownerId,
         string websiteOwnerActorId,
         DomainCertificateEnrollmentStartRequest request,
+        CancellationToken cancellationToken);
+
+    Task<DomainCertificateDnsChallengeResult> GetCurrentDnsChallengeAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken);
+    Task<DomainCertificateDnsChallengeResult> GetCurrentDnsChallengeAsync(
+        string ownerId,
+        string websiteOwnerActorId,
+        string domain,
         CancellationToken cancellationToken);
 
     Task<DomainCertificateDnsCheckResult> CheckDnsAsync(
@@ -268,6 +295,93 @@ public sealed class DomainCertificateEnrollmentService(
             website.VerificationRequest.Method,
             website.VerificationRequest.Token,
             website.VerificationRequest.ExpiresAtUtc);
+    }
+
+    public Task<DomainCertificateDnsChallengeResult> GetCurrentDnsChallengeAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken) =>
+        GetCurrentDnsChallengeAsync(ownerId, ownerId, domain, cancellationToken);
+
+    /// <summary>
+    /// Retrieves the active DNS challenge only after confirming both account enrollment and website ownership.
+    /// </summary>
+    public async Task<DomainCertificateDnsChallengeResult> GetCurrentDnsChallengeAsync(
+        string ownerId,
+        string websiteOwnerActorId,
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        string normalized;
+        try
+        {
+            ValidateIdentifier(ownerId, 256);
+            ValidateIdentifier(websiteOwnerActorId, 256);
+            normalized = normalizer.Normalize(domain);
+        }
+        catch (ArgumentException)
+        {
+            return new DomainCertificateDnsChallengeResult(DomainCertificateDnsChallengeStatus.InvalidRequest);
+        }
+
+        try
+        {
+            var enrollment = await enrollmentRepository.GetCurrentAsync(ownerId, normalized, cancellationToken)
+                .ConfigureAwait(false);
+            if (enrollment is null ||
+                enrollment.Status != DomainEnrollmentStatus.PendingOwnership ||
+                enrollment.DnsVerifiedAtUtc is not null)
+            {
+                return new DomainCertificateDnsChallengeResult(DomainCertificateDnsChallengeStatus.NotFound);
+            }
+
+            var website = await GetWebsiteIdentityAsync(
+                ownerId,
+                websiteOwnerActorId,
+                normalized,
+                cancellationToken).ConfigureAwait(false);
+            if (website is null || website.PreferredVerificationMethod != VerificationMethod.DnsTxt)
+            {
+                return new DomainCertificateDnsChallengeResult(DomainCertificateDnsChallengeStatus.NotFound);
+            }
+
+            var challenge = await domainVerificationService.GetAsync(
+                normalized,
+                VerificationMethod.DnsTxt,
+                cancellationToken).ConfigureAwait(false);
+            if (challenge is null || challenge.Status == VerificationStatus.Revoked)
+            {
+                return new DomainCertificateDnsChallengeResult(DomainCertificateDnsChallengeStatus.NotFound);
+            }
+
+            if (challenge.ExpiresAtUtc is not { } expiresAtUtc ||
+                expiresAtUtc <= timeProvider.GetUtcNow() ||
+                challenge.Status == VerificationStatus.Expired)
+            {
+                return new DomainCertificateDnsChallengeResult(
+                    DomainCertificateDnsChallengeStatus.Expired,
+                    normalized,
+                    ChallengeExpiresAtUtc: challenge.ExpiresAtUtc);
+            }
+
+            return new DomainCertificateDnsChallengeResult(
+                DomainCertificateDnsChallengeStatus.Available,
+                normalized,
+                challenge.Token,
+                expiresAtUtc);
+        }
+        catch (WebsiteIdentityRegistrationConflictException)
+        {
+            return new DomainCertificateDnsChallengeResult(DomainCertificateDnsChallengeStatus.NotFound);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new DomainCertificateDnsChallengeResult(DomainCertificateDnsChallengeStatus.Unavailable);
+        }
     }
 
     public Task<DomainCertificateDnsCheckResult> CheckDnsAsync(

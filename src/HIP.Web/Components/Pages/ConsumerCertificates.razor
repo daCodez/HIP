@@ -48,18 +48,7 @@
         {
             <p class="admin-message" role="status">@_enrollmentMessage</p>
         }
-        @if (_challenge is not null && _challenge.ChallengeToken is not null)
-        {
-            <div class="dns-challenge">
-                <h3>Add this DNS TXT record</h3>
-                <dl>
-                    <div><dt>Name</dt><dd><code>_hip.@_challenge.Domain</code></dd></div>
-                    <div><dt>Value</dt><dd><code>hip-site-verification=@_challenge.ChallengeToken</code></dd></div>
-                    <div><dt>Expires</dt><dd>@FormatDate(_challenge.ChallengeExpiresAtUtc)</dd></div>
-                </dl>
-                <button class="btn" type="button" @onclick="CopyDnsRecordAsync">Copy DNS record</button>
-            </div>
-        }
+
     </section>
 
     @if (_accessError is not null)
@@ -149,10 +138,36 @@
                 <footer class="owner-certificate-actions">
                     @if (item.EnrollmentStatus == DomainEnrollmentStatus.PendingOwnership && item.DnsVerifiedAtUtc is null)
                     {
-                        <button class="btn btn-primary" type="button" disabled="@(_checkingEnrollmentId is not null)"
-                                @onclick="() => CheckDnsAsync(item)">
-                            @(_checkingEnrollmentId == item.EnrollmentId ? "Checking…" : "Check DNS")
-                        </button>
+                        @if (_dnsChallenges.TryGetValue(item.Domain, out var dnsChallenge) &&
+                             dnsChallenge.Status == DomainCertificateDnsChallengeStatus.Available &&
+                             dnsChallenge.ChallengeToken is not null)
+                        {
+                            <div class="dns-challenge">
+                                <h4>Current DNS TXT record</h4>
+                                <p>Use this exact current value. Replace any earlier HIP verification value for this domain.</p>
+                                <dl>
+                                    <div><dt>Name</dt><dd><code>_hip.@item.Domain</code></dd></div>
+                                    <div><dt>Value</dt><dd><code>hip-site-verification=@dnsChallenge.ChallengeToken</code></dd></div>
+                                    <div><dt>Expires</dt><dd>@FormatDate(dnsChallenge.ChallengeExpiresAtUtc)</dd></div>
+                                </dl>
+                                <button class="btn" type="button"
+                                        @onclick="() => CopyDnsRecordAsync(item.Domain, dnsChallenge.ChallengeToken)">
+                                    Copy current DNS record
+                                </button>
+                            </div>
+                            <button class="btn btn-primary" type="button" disabled="@(_checkingEnrollmentId is not null)"
+                                    @onclick="() => CheckDnsAsync(item)">
+                                @(_checkingEnrollmentId == item.EnrollmentId ? "Checking…" : "Check DNS")
+                            </button>
+                        }
+                        else if (dnsChallenge?.Status == DomainCertificateDnsChallengeStatus.Expired)
+                        {
+                            <p class="admin-error" role="status">This DNS challenge expired. Start verification again to receive a replacement value.</p>
+                        }
+                        else
+                        {
+                            <p class="admin-error" role="status">HIP could not load the current DNS challenge. Retry this page before checking DNS.</p>
+                        }
                     }
                     @if (item.EnrollmentStatus == DomainEnrollmentStatus.OwnershipVerified &&
                          item.DnsVerifiedAtUtc is not null &&
@@ -228,6 +243,8 @@
     private string? _enrollmentMessage;
     private string? _enrollmentError;
     private DomainCertificateEnrollmentStartResult? _challenge;
+    private IReadOnlyDictionary<string, DomainCertificateDnsChallengeResult> _dnsChallenges =
+        new Dictionary<string, DomainCertificateDnsChallengeResult>(StringComparer.Ordinal);
     private string? _checkingEnrollmentId;
     private string? _reviewingEnrollmentId;
     private string? _preparingWebsiteEnrollmentId;
@@ -268,9 +285,57 @@
         else
         {
             _items = access.Value ?? [];
+            await LoadDnsChallengesAsync(authenticationState.User);
         }
 
         _loading = false;
+    }
+
+    /// <summary>Reloads publishable DNS challenges only for pending enrollments owned by this account.</summary>
+    private async Task LoadDnsChallengesAsync(ClaimsPrincipal principal)
+    {
+        var pendingDomains = _items
+            .Where(item => item.EnrollmentStatus == DomainEnrollmentStatus.PendingOwnership &&
+                           item.DnsVerifiedAtUtc is null)
+            .Select(item => item.Domain)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (pendingDomains.Length == 0)
+        {
+            _dnsChallenges = new Dictionary<string, DomainCertificateDnsChallengeResult>(StringComparer.Ordinal);
+            return;
+        }
+
+        var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+            principal,
+            AuthorizationService,
+            ConsumerPolicies.CanUseConsumerPortal,
+            consumerId => LoadDnsChallengesForOwnerAsync(
+                consumerId,
+                WebsiteOwnerActorId(principal, consumerId),
+                pendingDomains));
+        _dnsChallenges = access.Succeeded && access.Value is not null
+            ? access.Value
+            : new Dictionary<string, DomainCertificateDnsChallengeResult>(StringComparer.Ordinal);
+    }
+
+    /// <summary>Loads each owner-bound challenge without exposing it through the public certificate query.</summary>
+    private async Task<IReadOnlyDictionary<string, DomainCertificateDnsChallengeResult>> LoadDnsChallengesForOwnerAsync(
+        string consumerId,
+        string websiteOwnerActorId,
+        IReadOnlyCollection<string> domains)
+    {
+        var challenges = new Dictionary<string, DomainCertificateDnsChallengeResult>(StringComparer.Ordinal);
+        foreach (var domain in domains)
+        {
+            challenges[domain] = await EnrollmentService.GetCurrentDnsChallengeAsync(
+                consumerId,
+                websiteOwnerActorId,
+                domain,
+                CancellationToken.None);
+        }
+
+        return challenges;
     }
 
     private async Task StartVerificationAsync()
@@ -326,16 +391,12 @@
         }
     }
 
-    private async Task CopyDnsRecordAsync()
+    /// <summary>Copies only the current owner-authorized DNS challenge shown on this page.</summary>
+    private async Task CopyDnsRecordAsync(string domain, string challengeToken)
     {
-        if (_challenge?.Domain is null || _challenge.ChallengeToken is null)
-        {
-            return;
-        }
-
-        var record = $"_hip.{_challenge.Domain} TXT \"hip-site-verification={_challenge.ChallengeToken}\"";
+        var record = $"_hip.{domain} TXT \"hip-site-verification={challengeToken}\"";
         await JavaScript.InvokeVoidAsync("navigator.clipboard.writeText", record);
-        _enrollmentMessage = "DNS record copied.";
+        _enrollmentMessage = "Current DNS record copied.";
     }
 
     private async Task CheckDnsAsync(OwnerDomainCertificateSummary item)
