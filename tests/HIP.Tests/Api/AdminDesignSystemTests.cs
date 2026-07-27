@@ -98,7 +98,7 @@ public sealed class AdminDesignSystemTests
             Assert.That(dashboard, Does.Contain("<h1>Overview</h1>"));
             Assert.That(dashboard, Does.Not.Contain("Recent Threats"));
             Assert.That(dashboard, Does.Not.Contain("Quick Links"));
-            Assert.That(navigation, Does.Contain("src=\"/hip-logo.svg?v=44dd2573\""));
+            Assert.That(navigation, Does.Contain("src=\"/hip-logo.svg?v=87b1fcee\""));
             Assert.That(navigation, Does.Contain("alt=\"HIP\""));
             Assert.That(designCss, Does.Contain(".brand .mark{width:40px;height:40px"));
             Assert.That(designCss, Does.Not.Contain(".brand .mark-ring"));
@@ -123,16 +123,16 @@ public sealed class AdminDesignSystemTests
         {
             Assert.That(navigation, Does.Contain("alt=\"HIP\""));
             Assert.That(navigation, Does.Not.Contain("mark-ring"));
-            Assert.That(navigation, Does.Contain("src=\"/hip-logo.svg?v=44dd2573\""));
-            Assert.That(login, Does.Contain("src=\"/hip-logo.svg?v=44dd2573\""));
+            Assert.That(navigation, Does.Contain("src=\"/hip-logo.svg?v=87b1fcee\""));
+            Assert.That(login, Does.Contain("src=\"/hip-logo.svg?v=87b1fcee\""));
             Assert.That(app, Does.Contain("type=\"image/svg+xml\""));
-            Assert.That(app, Does.Contain("href=\"hip-logo.svg?v=44dd2573\""));
+            Assert.That(app, Does.Contain("href=\"hip-logo.svg?v=87b1fcee\""));
             Assert.That(logo, Does.Contain("<svg"));
-            Assert.That(logo, Does.Contain("viewBox=\"0 0 223 228\""));
+            Assert.That(logo, Does.Contain("viewBox=\"0 0 139 165\""));
             Assert.That(logo, Does.Contain("data:image/png;base64,"));
             Assert.That(
                 logoHash,
-                Is.EqualTo("BBBB574CF400E3EF22F10A5463EED04A23843B019190B124199CC85AAC11A723"));
+                Is.EqualTo("155C3D83DDBA1F94D1A3E177B6D30479B4F3E15C319DDB41DC4D492A6DDA0EBB"));
             Assert.That(navigation, Does.Contain("private static RenderFragment Icon"));
             Assert.That(navigation, Does.Contain("\"shield\" => Svg"));
             Assert.That(navigation, Does.Contain("\"eye\" => Svg"));
