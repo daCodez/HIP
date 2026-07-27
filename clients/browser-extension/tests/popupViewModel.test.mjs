@@ -361,6 +361,23 @@ test("popup shows independently verified certificate state separately from risk 
   assert.equal(view.certificateVerificationText, "HIP signature verified");
   assert.equal(view.lookupUrl, "https://hiptrust.com/certificate/hip-domain-cert-0001");
 });
+test("popup shows the current certificate approval stage before issuance", () => {
+  const view = buildPopupViewModel(
+    {
+      domain: "example.com",
+      finalHipScore: 59,
+      status: "LimitedTrustData",
+      certificateApplicationStatus: "Approved",
+      certificateProgressStatus: "Application approved - security review pending"
+    },
+    {},
+    { webBaseUrl: "https://hiptrust.com" },
+    "https://example.com");
+
+  assert.equal(view.certificateApplicationText, "Application approved - security review pending");
+  assert.equal(view.certificateStatusText, "Not issued");
+  assert.equal(view.certificateLevelText, "None verified");
+});
 test("popup distinguishes an observed matching badge from verification", () => {
   assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: true }), "Found for this site");
   assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: false }), "Found for another site");
@@ -372,6 +389,8 @@ test("popup markup contains primary UX fields and feedback controls", () => {
   const popupHtml = readFileSync(new URL("../src/popup.html", import.meta.url), "utf8");
 
   assert.equal(popupHtml.includes("HIP trust score"), true);
+  assert.equal(popupHtml.includes("Certificate application"), true);
+  assert.equal(popupHtml.includes('id="certificateApplication"'), true);
   assert.equal(popupHtml.includes("Domain Trust"), true);
   assert.equal(popupHtml.includes("Page Trust"), true);
   assert.equal(popupHtml.includes("Content Risk"), true);

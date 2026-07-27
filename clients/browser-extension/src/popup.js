@@ -41,6 +41,7 @@ const elements = {
   contentRiskScore: document.getElementById("contentRiskScore"),
   finalHipScoreExplanation: document.getElementById("finalHipScoreExplanation"),
   verified: document.getElementById("verified"),
+  certificateApplication: document.getElementById("certificateApplication"),
   certificateStatus: document.getElementById("certificateStatus"),
   certificateLevel: document.getElementById("certificateLevel"),
   certificateVerification: document.getElementById("certificateVerification"),
@@ -170,6 +171,7 @@ function renderLookup(lookup, summary = {}) {
   elements.finalHipScoreExplanation.textContent = viewModel.finalHipScoreExplanation;
   elements.verified.textContent = viewModel.verifiedText;
   elements.identityStatus.textContent = viewModel.identityText;
+  elements.certificateApplication.textContent = viewModel.certificateApplicationText;
   elements.certificateStatus.textContent = viewModel.certificateStatusText;
   elements.certificateLevel.textContent = viewModel.certificateLevelText;
   elements.certificateVerification.textContent = viewModel.certificateVerificationText;
