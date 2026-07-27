@@ -32,6 +32,9 @@ internal static class HipDevelopmentCertificateSchema
                 "IdentityCompletedAtUtc" timestamp with time zone NULL,
                 "SecurityReviewCompletedAtUtc" timestamp with time zone NULL,
                 "LastMonitoringAtUtc" timestamp with time zone NULL,
+                "MonitoringEnabledAtUtc" timestamp with time zone NULL,
+                "MonitoringNextCheckAtUtc" timestamp with time zone NULL,
+                "MonitoringFailureCount" integer NOT NULL DEFAULT 0,
                 "CurrentScore" integer NULL,
                 "UnresolvedCriticalFindings" integer NOT NULL,
                 "AggregateVersion" bigint NOT NULL,
@@ -62,7 +65,10 @@ internal static class HipDevelopmentCertificateSchema
                 ADD COLUMN IF NOT EXISTS "ApplicationSubmittedAtUtc" timestamp with time zone NULL,
                 ADD COLUMN IF NOT EXISTS "ApplicationReviewedAtUtc" timestamp with time zone NULL,
                 ADD COLUMN IF NOT EXISTS "ApplicantAttestationDigest" character varying(71) NULL,
-                ADD COLUMN IF NOT EXISTS "ApplicationDecisionReason" character varying(500) NULL;
+                ADD COLUMN IF NOT EXISTS "ApplicationDecisionReason" character varying(500) NULL,
+                ADD COLUMN IF NOT EXISTS "MonitoringEnabledAtUtc" timestamp with time zone NULL,
+                ADD COLUMN IF NOT EXISTS "MonitoringNextCheckAtUtc" timestamp with time zone NULL,
+                ADD COLUMN IF NOT EXISTS "MonitoringFailureCount" integer NOT NULL DEFAULT 0;
             """,
             cancellationToken);
 
@@ -159,6 +165,8 @@ internal static class HipDevelopmentCertificateSchema
             ON hip_domain_enrollments ("Status");
             CREATE INDEX IF NOT EXISTS "IX_hip_domain_enrollments_ApplicationStatus"
             ON hip_domain_enrollments ("ApplicationStatus");
+            CREATE INDEX IF NOT EXISTS "IX_hip_domain_enrollments_monitoring_due"
+            ON hip_domain_enrollments ("MonitoringEnabledAtUtc", "MonitoringNextCheckAtUtc");
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_hip_domain_certificates_Domain"
             ON hip_domain_certificates ("Domain")
             WHERE "IsCurrent" = TRUE;

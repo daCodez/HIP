@@ -19,6 +19,13 @@ public sealed class DevelopmentCertificateSchemaTests
             Assert.That(schema, Does.Contain("CREATE TABLE IF NOT EXISTS hip_domain_certificate_events"));
             Assert.That(schema, Does.Contain("ADD COLUMN IF NOT EXISTS \"SignedCertificateJson\""));
             Assert.That(schema, Does.Contain("ADD COLUMN IF NOT EXISTS \"SecurityContactHash\""));
+            Assert.That(schema, Does.Contain("\"MonitoringEnabledAtUtc\" timestamp with time zone NULL"));
+            Assert.That(schema, Does.Contain("\"MonitoringNextCheckAtUtc\" timestamp with time zone NULL"));
+            Assert.That(schema, Does.Contain("\"MonitoringFailureCount\" integer NOT NULL DEFAULT 0"));
+            Assert.That(schema, Does.Contain("ADD COLUMN IF NOT EXISTS \"MonitoringEnabledAtUtc\""));
+            Assert.That(schema, Does.Contain("ADD COLUMN IF NOT EXISTS \"MonitoringNextCheckAtUtc\""));
+            Assert.That(schema, Does.Contain("ADD COLUMN IF NOT EXISTS \"MonitoringFailureCount\" integer NOT NULL DEFAULT 0"));
+            Assert.That(schema, Does.Contain("CREATE INDEX IF NOT EXISTS \"IX_hip_domain_enrollments_monitoring_due\""));
             Assert.That(schema, Does.Contain("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_hip_domain_certificates_Domain\""));
         });
     }
