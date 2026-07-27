@@ -38,6 +38,11 @@ public sealed class PublicLookupServiceTests
         Assert.That(result.Explanations.All(explanation => !string.IsNullOrWhiteSpace(explanation)), Is.True);
         Assert.That(result.Reasons.All(reason => !string.IsNullOrWhiteSpace(reason)), Is.True);
         Assert.That(result.DataSource, Is.EqualTo("BrowserPluginScan"));
+        Assert.That(result.DisplayScore, Is.EqualTo(result.FinalHipScore));
+        Assert.That(result.ScorePresentation, Is.EqualTo(PublicEvidencePresentation.ScoreAvailable));
+        Assert.That(result.EvidenceCoverage, Is.EqualTo(PublicEvidencePresentation.CoverageSufficient));
+        Assert.That(result.EvidenceConfidence, Is.EqualTo(PublicEvidencePresentation.ConfidenceMedium));
+        Assert.That(result.IdentityStatus, Is.EqualTo("Verified"));
     }
 
     [Test]
@@ -134,6 +139,11 @@ public sealed class PublicLookupServiceTests
         {
             Assert.That(result.Status, Is.EqualTo(RiskStatus.LimitedTrustData));
             Assert.That(result.FinalHipScore, Is.InRange(45, 60));
+            Assert.That(result.DisplayScore, Is.Null);
+            Assert.That(result.ScorePresentation, Is.EqualTo(PublicEvidencePresentation.ScoreWithheldInsufficientEvidence));
+            Assert.That(result.EvidenceCoverage, Is.EqualTo(PublicEvidencePresentation.CoverageInsufficient));
+            Assert.That(result.EvidenceConfidence, Is.EqualTo(PublicEvidencePresentation.ConfidenceNone));
+            Assert.That(result.IdentityStatus, Is.EqualTo("Unverified"));
             Assert.That(result.DataSource, Is.EqualTo("NoStoredData"));
             Assert.That(result.Reasons, Has.Some.Contains("no authoritative site-safety assessment"));
             Assert.That(result.RecommendedAction, Is.EqualTo("ShowCaution"));
@@ -171,6 +181,10 @@ public sealed class PublicLookupServiceTests
         {
             Assert.That(result.VerificationStatus, Is.EqualTo("Verified"));
             Assert.That(result.IdentityVerificationStatus, Is.EqualTo("Verified"));
+            Assert.That(result.IdentityStatus, Is.EqualTo("Verified"));
+            Assert.That(result.DisplayScore, Is.Null);
+            Assert.That(result.ScorePresentation, Is.EqualTo(PublicEvidencePresentation.ScoreWithheldInsufficientEvidence));
+            Assert.That(result.EvidenceCoverage, Is.EqualTo(PublicEvidencePresentation.CoverageInsufficient));
             Assert.That(result.VerificationMethod, Is.EqualTo("DnsTxt"));
             Assert.That(result.SignedIdentityStatus, Is.EqualTo("NotConfigured"));
             Assert.That(result.SignatureValid, Is.Null);
@@ -216,6 +230,7 @@ public sealed class PublicLookupServiceTests
         {
             Assert.That(result.VerificationStatus, Is.EqualTo("Revoked"));
             Assert.That(result.IdentityVerificationStatus, Is.EqualTo("Revoked"));
+            Assert.That(result.IdentityStatus, Is.EqualTo("Unverified"));
             Assert.That(result.PublicBadgeEligible, Is.False);
             Assert.That(result.SignatureValid, Is.Null);
         });

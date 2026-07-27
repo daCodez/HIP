@@ -29,6 +29,7 @@ const elements = {
   scorePanel: document.getElementById("scorePanel"),
   reasonsPanel: document.getElementById("reasonsPanel"),
   score: document.getElementById("score"),
+  scoreLabel: document.getElementById("scoreLabel"),
   status: document.getElementById("status"),
   statusBadge: document.getElementById("statusBadge"),
   statusDescription: document.getElementById("statusDescription"),
@@ -41,6 +42,8 @@ const elements = {
   contentRiskScore: document.getElementById("contentRiskScore"),
   finalHipScoreExplanation: document.getElementById("finalHipScoreExplanation"),
   verified: document.getElementById("verified"),
+  evidenceCoverage: document.getElementById("evidenceCoverage"),
+  evidenceConfidence: document.getElementById("evidenceConfidence"),
   certificateApplication: document.getElementById("certificateApplication"),
   certificateStatus: document.getElementById("certificateStatus"),
   certificateLevel: document.getElementById("certificateLevel"),
@@ -156,6 +159,7 @@ function renderLookup(lookup, summary = {}) {
 
   elements.domain.textContent = viewModel.domain;
   elements.score.textContent = viewModel.scoreText;
+  elements.scoreLabel.textContent = viewModel.scoreLabelText;
   elements.status.textContent = viewModel.statusLabel;
   elements.status.dataset.status = viewModel.status;
   elements.statusDescription.textContent = viewModel.statusDescription;
@@ -170,6 +174,8 @@ function renderLookup(lookup, summary = {}) {
   elements.contentRiskScore.textContent = viewModel.contentRiskScoreText;
   elements.finalHipScoreExplanation.textContent = viewModel.finalHipScoreExplanation;
   elements.verified.textContent = viewModel.verifiedText;
+  elements.evidenceCoverage.textContent = viewModel.evidenceCoverageText;
+  elements.evidenceConfidence.textContent = viewModel.evidenceConfidenceText;
   elements.identityStatus.textContent = viewModel.identityText;
   elements.certificateApplication.textContent = viewModel.certificateApplicationText;
   elements.certificateStatus.textContent = viewModel.certificateStatusText;

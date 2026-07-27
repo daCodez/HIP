@@ -19,4 +19,9 @@ public sealed record PublicBadgeResponse(
     HipLiveBadgeDocument? SignedBadge = null,
     string SignatureStatus = "Unavailable",
     bool IsAvailable = false,
-    HipLiveBadgeCertificateState? Certificate = null);
+    HipLiveBadgeCertificateState? Certificate = null,
+    int? DisplayScore = null,
+    string ScorePresentation = PublicEvidencePresentation.ScoreWithheldInsufficientEvidence,
+    string EvidenceCoverage = PublicEvidencePresentation.CoverageInsufficient,
+    string EvidenceConfidence = PublicEvidencePresentation.ConfidenceNone,
+    string IdentityStatus = "Unverified");

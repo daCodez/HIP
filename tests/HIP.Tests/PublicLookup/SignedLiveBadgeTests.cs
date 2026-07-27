@@ -37,6 +37,10 @@ public sealed class SignedLiveBadgeTests
             Assert.That(first.Document.Payload.Version, Is.EqualTo("1.0"));
             Assert.That(first.Document.Payload.Domain, Is.EqualTo("example.com"));
             Assert.That(first.Document.Payload.Score, Is.EqualTo(73));
+            Assert.That(first.Document.Payload.DisplayScore, Is.EqualTo(73));
+            Assert.That(first.Document.Payload.ScorePresentation, Is.EqualTo(PublicEvidencePresentation.ScoreAvailable));
+            Assert.That(first.Document.Payload.EvidenceCoverage, Is.EqualTo(PublicEvidencePresentation.CoverageSufficient));
+            Assert.That(first.Document.Payload.EvidenceConfidence, Is.EqualTo(PublicEvidencePresentation.ConfidenceMedium));
             Assert.That(first.Document.Payload.Status, Is.EqualTo(RiskStatus.MostlyTrusted));
             Assert.That(first.Document.Payload.IdentityVerificationStatus, Is.EqualTo("Verified"));
             Assert.That(first.Document.Payload.VerifiedMeaning, Does.Contain("identity"));
@@ -56,6 +60,10 @@ public sealed class SignedLiveBadgeTests
         {
             Assert.That(signingJson, Does.Contain("\"domain\":\"example.com\""));
             Assert.That(signingJson, Does.Contain("\"score\":73"));
+            Assert.That(signingJson, Does.Contain("\"displayScore\":73"));
+            Assert.That(signingJson, Does.Contain("\"scorePresentation\":\"Available\""));
+            Assert.That(signingJson, Does.Contain("\"evidenceCoverage\":\"Sufficient\""));
+            Assert.That(signingJson, Does.Contain("\"evidenceConfidence\":\"Medium\""));
             Assert.That(signingJson, Does.Contain("\"keyId\":\"badge-key-1\""));
             Assert.That(signingJson, Does.Contain("\"algorithm\":\"test-signature-v1\""));
             Assert.That(signingJson, Does.Contain("\"certificateId\":\"hip-domain-cert-0001\""));
@@ -72,7 +80,7 @@ public sealed class SignedLiveBadgeTests
         var service = CreateService(signer: signer);
 
         await service.SignAsync(Request(), CancellationToken.None);
-        await service.SignAsync(Request() with { Score = 12, Status = RiskStatus.Dangerous }, CancellationToken.None);
+        await service.SignAsync(Request() with { Score = 12, DisplayScore = 12, Status = RiskStatus.Dangerous }, CancellationToken.None);
 
         Assert.That(signer.Hashes, Has.Count.EqualTo(2));
         Assert.That(signer.Hashes[0], Is.Not.EqualTo(signer.Hashes[1]));
@@ -169,6 +177,29 @@ public sealed class SignedLiveBadgeTests
         });
     }
     [Test]
+    public void Live_badge_rejects_available_score_without_sufficient_evidence()
+    {
+        Assert.That(
+            () => new HipLiveBadgePayload(
+                HipLiveBadgePayload.LiveBadgeDocumentType,
+                HipProtocolVersion.CurrentValue,
+                "example.com",
+                73,
+                RiskStatus.MostlyTrusted,
+                true,
+                "Verified",
+                "Identity is verified; safety remains separate.",
+                Now.AddMinutes(-1),
+                Now,
+                Now.AddMinutes(5),
+                displayScore: 73,
+                scorePresentation: PublicEvidencePresentation.ScoreAvailable,
+                evidenceCoverage: PublicEvidencePresentation.CoverageInsufficient,
+                evidenceConfidence: PublicEvidencePresentation.ConfidenceNone),
+            Throws.ArgumentException);
+    }
+
+    [Test]
     public void Active_badge_certificate_state_requires_verified_signature_and_normalized_domain()
     {
         Assert.That(
@@ -211,7 +242,11 @@ public sealed class SignedLiveBadgeTests
             PublicDomainCertificateSignatureStatus.Verified,
             Now.AddDays(30),
             "https://hiptrust.com/certificate/hip-domain-cert-0001",
-            true));
+            true),
+        73,
+        PublicEvidencePresentation.ScoreAvailable,
+        PublicEvidencePresentation.CoverageSufficient,
+        PublicEvidencePresentation.ConfidenceMedium);
 
     private static HipTrustReceiptIssuerPolicy AuthorizedIssuerPolicy() => new(
         [new HipTrustReceiptAuthorizedSigner(IssuerId, KeyId)]);
@@ -257,7 +292,13 @@ public sealed class SignedLiveBadgeTests
                 "example.com", 73, 73, RiskStatus.MostlyTrusted, "MostlyTrusted", "Verified",
                 [], [], [], "Allow", Now.AddMinutes(-1), "Configured", "Dns", "Example Org",
                 "Valid", "Verified", true, true, "/lookup/example.com", 80, 70, 68,
-                "Public-safe score.", [], 1, 0, 0, 0, "BrowserPluginScan", "Current scan."));
+                "Public-safe score.", [], 1, 0, 0, 0, "BrowserPluginScan", "Current scan.")
+            {
+                DisplayScore = 73,
+                ScorePresentation = PublicEvidencePresentation.ScoreAvailable,
+                EvidenceCoverage = PublicEvidencePresentation.CoverageSufficient,
+                EvidenceConfidence = PublicEvidencePresentation.ConfidenceMedium
+            });
     }
 
     private sealed class StubBadgeSigningService(HipLiveBadgeSigningResult result) : IHipLiveBadgeSigningService

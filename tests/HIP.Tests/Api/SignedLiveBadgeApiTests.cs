@@ -38,6 +38,10 @@ public sealed class SignedLiveBadgeApiTests
             Assert.That(script, Does.Contain("/api/v1/badge/verify"));
             Assert.That(script, Does.Contain("badge.isAvailable !== true"));
             Assert.That(script, Does.Contain("payload.score !== badge.score"));
+            Assert.That(script, Does.Contain("payload.displayScore !== badge.displayScore"));
+            Assert.That(script, Does.Contain("payload.evidenceCoverage !== badge.evidenceCoverage"));
+            Assert.That(script, Does.Contain("HIP Identity Verified"));
+            Assert.That(script, Does.Contain("Not enough evidence yet"));
             Assert.That(script, Does.Contain("payload.certificate"));
             Assert.That(script, Does.Contain("certificate.domain !== domain"));
             Assert.That(script, Does.Contain("certificate.isActive"));
@@ -60,7 +64,7 @@ public sealed class SignedLiveBadgeApiTests
     }
 
     [Test]
-    public async Task Default_runtime_fails_closed_when_no_managed_signer_is_configured()
+    public async Task Development_runtime_uses_its_configured_local_signer_without_claiming_safety()
     {
         await using var factory = new HipWebApplicationFactory<Program>();
         using var client = factory.CreateClient();
@@ -71,10 +75,13 @@ public sealed class SignedLiveBadgeApiTests
         Assert.Multiple(() =>
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(json.RootElement.GetProperty("isAvailable").GetBoolean(), Is.False);
-            Assert.That(json.RootElement.GetProperty("signatureStatus").GetString(), Is.EqualTo("SignerUnavailable"));
-            Assert.That(json.RootElement.GetProperty("signedBadge").ValueKind, Is.EqualTo(JsonValueKind.Null));
-            Assert.That(json.RootElement.GetProperty("responseSignature").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(json.RootElement.GetProperty("isAvailable").GetBoolean(), Is.True);
+            Assert.That(json.RootElement.GetProperty("signatureStatus").GetString(), Is.EqualTo("Verified"));
+            Assert.That(json.RootElement.GetProperty("signedBadge").ValueKind, Is.EqualTo(JsonValueKind.Object));
+            Assert.That(json.RootElement.GetProperty("responseSignature").ValueKind, Is.EqualTo(JsonValueKind.String));
+            Assert.That(
+                json.RootElement.GetProperty("signedBadge").GetProperty("payload").GetProperty("displayScore").ValueKind,
+                Is.EqualTo(JsonValueKind.Null));
         });
     }
 
@@ -91,6 +98,11 @@ public sealed class SignedLiveBadgeApiTests
             Assert.That(badgeResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(root.GetProperty("domain").GetString(), Is.EqualTo("example.com"));
             Assert.That(root.GetProperty("score").GetInt32(), Is.EqualTo(73));
+            Assert.That(root.GetProperty("displayScore").GetInt32(), Is.EqualTo(73));
+            Assert.That(root.GetProperty("scorePresentation").GetString(), Is.EqualTo("Available"));
+            Assert.That(root.GetProperty("evidenceCoverage").GetString(), Is.EqualTo("Sufficient"));
+            Assert.That(root.GetProperty("evidenceConfidence").GetString(), Is.EqualTo("Medium"));
+            Assert.That(root.GetProperty("identityStatus").GetString(), Is.EqualTo("Verified"));
             Assert.That(StatusText(root.GetProperty("status")), Is.EqualTo("MostlyTrusted"));
             Assert.That(root.GetProperty("signatureStatus").GetString(), Is.EqualTo("Verified"));
             Assert.That(root.GetProperty("isAvailable").GetBoolean(), Is.True);
@@ -145,7 +157,11 @@ public sealed class SignedLiveBadgeApiTests
                 verifiedMeaning,
                 Now.AddMinutes(-1),
                 Now,
-                Now.AddMinutes(5)),
+                Now.AddMinutes(5),
+                displayScore: 73,
+                scorePresentation: PublicEvidencePresentation.ScoreAvailable,
+                evidenceCoverage: PublicEvidencePresentation.CoverageSufficient,
+                evidenceConfidence: PublicEvidencePresentation.ConfidenceMedium),
             new HipProtocolIssuer("hip:web:badge-issuer.example"),
             new HipProtocolSignature(
                 HipProtocolSignature.OriginAndIntegrityScope,
@@ -170,7 +186,12 @@ public sealed class SignedLiveBadgeApiTests
             document.Signature.Value,
             document,
             HipLiveBadgeSignatureStatus.Verified.ToString(),
-            true);
+            true,
+            DisplayScore: 73,
+            ScorePresentation: PublicEvidencePresentation.ScoreAvailable,
+            EvidenceCoverage: PublicEvidencePresentation.CoverageSufficient,
+            EvidenceConfidence: PublicEvidencePresentation.ConfidenceMedium,
+            IdentityStatus: "Verified");
     }
 
     private sealed class StubTrustBadgeService(PublicBadgeResponse response) : ITrustBadgeService

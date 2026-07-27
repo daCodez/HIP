@@ -3778,7 +3778,12 @@ public sealed record PublicBadgeApiResponse(
     HipLiveBadgeDocument? SignedBadge,
     string SignatureStatus,
     bool IsAvailable,
-    HipLiveBadgeCertificateState? Certificate)
+    HipLiveBadgeCertificateState? Certificate,
+    int? DisplayScore,
+    string ScorePresentation,
+    string EvidenceCoverage,
+    string EvidenceConfidence,
+    string IdentityStatus)
 {
     public static PublicBadgeApiResponse From(PublicBadgeResponse badge) =>
         new(
@@ -3799,7 +3804,12 @@ public sealed record PublicBadgeApiResponse(
             badge.SignedBadge,
             badge.SignatureStatus,
             badge.IsAvailable,
-            badge.Certificate);
+            badge.Certificate,
+            badge.DisplayScore,
+            badge.ScorePresentation,
+            badge.EvidenceCoverage,
+            badge.EvidenceConfidence,
+            badge.IdentityStatus);
 }
 
 public sealed record PublicLookupApiResponse(
@@ -3832,7 +3842,12 @@ public sealed record PublicLookupApiResponse(
     int? SuspiciousLinksFound,
     int? DangerousLinksFound,
     string DataSource,
-    string Message)
+    string Message,
+    string IdentityStatus,
+    int? DisplayScore,
+    string ScorePresentation,
+    string EvidenceCoverage,
+    string EvidenceConfidence)
 {
     /// <summary>
     /// Converts the application lookup response into the API shape while preserving privacy-safe scan summary fields only.
@@ -3870,7 +3885,12 @@ public sealed record PublicLookupApiResponse(
             lookup.SuspiciousLinksFound,
             lookup.DangerousLinksFound,
             lookup.DataSource,
-            lookup.Message);
+            lookup.Message,
+            lookup.IdentityStatus,
+            lookup.DisplayScore,
+            lookup.ScorePresentation,
+            lookup.EvidenceCoverage,
+            lookup.EvidenceConfidence);
 }
 
 public sealed record ScoreBreakdownApiItem(
@@ -4229,8 +4249,10 @@ public partial class Program
     const variant = certificate ? String(active ? certificate.level : certificate.status).toLowerCase() : "unknown";
     const checked = badge.lastCheckedUtc ? new Date(badge.lastCheckedUtc).toLocaleDateString() : "Unknown";
     const lookupUrl = new URL(certificate?.publicCertificateUrl || badge.lookupUrl || badge.publicLookupUrl || `/lookup/${badge.domain}`, apiBase).toString();
-    const label = active ? `HIP ${certificate.level}` : certificate ? `HIP ${certificate.status}` : "HIP Unverified";
-    container.innerHTML = `<a class="hip-live-badge hip-live-badge-${variant}" href="${escapeAttribute(lookupUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttribute(label)} for ${escapeAttribute(domain)}"><strong>${escapeHtml(label)}</strong><span>Certificate: ${escapeHtml(certificate?.status || "Not issued")}</span><span>Level: ${escapeHtml(certificate?.level || "None")}</span><span>Verified domain: ${escapeHtml(certificate?.domain || "Unavailable")}</span><span>HIP risk score: ${escapeHtml(badge.score)}/100 (${escapeHtml(badge.status)})</span><small>Last checked: ${escapeHtml(checked)}</small><small>A HIP certificate does not automatically mean safe.</small></a>`;
+    const identityStatus = badge.identityVerificationStatus === "Verified" ? "Verified" : badge.identityVerificationStatus === "Pending" ? "Pending" : "Unverified";
+    const label = active && identityStatus === "Verified" ? "HIP Identity Verified" : active ? "HIP Identity Pending" : certificate ? `HIP ${certificate.status}` : "HIP Identity Unverified";
+    const safetyAssessment = badge.scorePresentation === "Available" && badge.displayScore !== null && badge.displayScore !== undefined && Number.isFinite(Number(badge.displayScore)) ? `<span>Safety score: ${escapeHtml(badge.displayScore)}/100 (${escapeHtml(badge.status)})</span>` : "<span>Safety assessment: Not enough evidence yet</span>";
+    container.innerHTML = `<a class="hip-live-badge hip-live-badge-${variant}" href="${escapeAttribute(lookupUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttribute(label)} for ${escapeAttribute(domain)}"><strong>${escapeHtml(label)}</strong><span>Certificate: ${escapeHtml(certificate?.status || "Not issued")}</span><span>Level: ${escapeHtml(certificate?.level || "None")}</span><span>Identity: ${escapeHtml(identityStatus)}</span><span>Evidence coverage: ${escapeHtml(badge.evidenceCoverage || "Insufficient")}</span><span>Confidence: ${escapeHtml(badge.evidenceConfidence || "None")}</span>${safetyAssessment}<small>Last checked: ${escapeHtml(checked)}</small><small>Identity verification does not automatically mean safe.</small></a>`;
   }
   function verify(badge) {
     const signed = badge && badge.signedBadge;
@@ -4253,6 +4275,10 @@ public partial class Program
         payload.documentType !== "hip-live-badge" || payload.version !== "1.0" ||
         payload.domain !== domain || badge.domain !== domain ||
         payload.score !== badge.score || payload.status !== badge.status ||
+        payload.displayScore !== badge.displayScore ||
+        payload.scorePresentation !== badge.scorePresentation ||
+        payload.evidenceCoverage !== badge.evidenceCoverage ||
+        payload.evidenceConfidence !== badge.evidenceConfidence ||
         payload.verifiedDomain !== badge.verifiedDomain ||
         payload.identityVerificationStatus !== badge.identityVerificationStatus ||
         payload.verifiedMeaning !== badge.verifiedMeaning || !certificateMatches ||

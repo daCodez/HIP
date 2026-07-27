@@ -48,7 +48,11 @@ public sealed record HipLiveBadgeSigningRequest(
     string IdentityVerificationStatus,
     string VerifiedMeaning,
     DateTimeOffset LastCheckedUtc,
-    HipLiveBadgeCertificateState? Certificate = null);
+    HipLiveBadgeCertificateState? Certificate = null,
+    int? DisplayScore = null,
+    string ScorePresentation = PublicEvidencePresentation.ScoreWithheldInsufficientEvidence,
+    string EvidenceCoverage = PublicEvidencePresentation.CoverageInsufficient,
+    string EvidenceConfidence = PublicEvidencePresentation.ConfidenceNone);
 
 /// <summary>Public certificate facts independently verified by HIP and bound into the short-lived badge signature.</summary>
 public sealed record HipLiveBadgeCertificateState
@@ -153,7 +157,11 @@ public sealed record HipLiveBadgePayload
         DateTimeOffset lastCheckedUtc,
         DateTimeOffset issuedAtUtc,
         DateTimeOffset expiresAtUtc,
-        HipLiveBadgeCertificateState? certificate = null)
+        HipLiveBadgeCertificateState? certificate = null,
+        int? displayScore = null,
+        string scorePresentation = PublicEvidencePresentation.ScoreWithheldInsufficientEvidence,
+        string evidenceCoverage = PublicEvidencePresentation.CoverageInsufficient,
+        string evidenceConfidence = PublicEvidencePresentation.ConfidenceNone)
     {
         if (!string.Equals(documentType, LiveBadgeDocumentType, StringComparison.Ordinal))
         {
@@ -195,6 +203,40 @@ public sealed record HipLiveBadgePayload
         IssuedAtUtc = RequiredUtcMillisecond(issuedAtUtc, nameof(issuedAtUtc));
         ExpiresAtUtc = RequiredUtcMillisecond(expiresAtUtc, nameof(expiresAtUtc));
         Certificate = certificate;
+        ScorePresentation = RequiredPresentationValue(
+            scorePresentation,
+            nameof(scorePresentation),
+            PublicEvidencePresentation.ScoreAvailable,
+            PublicEvidencePresentation.ScoreWithheldInsufficientEvidence);
+        EvidenceCoverage = RequiredPresentationValue(
+            evidenceCoverage,
+            nameof(evidenceCoverage),
+            PublicEvidencePresentation.CoverageInsufficient,
+            PublicEvidencePresentation.CoverageSufficient);
+        EvidenceConfidence = RequiredPresentationValue(
+            evidenceConfidence,
+            nameof(evidenceConfidence),
+            PublicEvidencePresentation.ConfidenceNone,
+            PublicEvidencePresentation.ConfidenceMedium,
+            PublicEvidencePresentation.ConfidenceHigh);
+        DisplayScore = PublicEvidencePresentation.DisplayScore(ScorePresentation, score);
+        if (displayScore != DisplayScore)
+        {
+            throw new ArgumentException("HIP live badge display score does not match its presentation state.", nameof(displayScore));
+        }
+
+        if (ScorePresentation == PublicEvidencePresentation.ScoreAvailable &&
+            (EvidenceCoverage != PublicEvidencePresentation.CoverageSufficient ||
+             EvidenceConfidence == PublicEvidencePresentation.ConfidenceNone))
+        {
+            throw new ArgumentException("Available HIP scores require sufficient authenticated evidence.", nameof(scorePresentation));
+        }
+
+        if (ScorePresentation == PublicEvidencePresentation.ScoreWithheldInsufficientEvidence &&
+            EvidenceCoverage != PublicEvidencePresentation.CoverageInsufficient)
+        {
+            throw new ArgumentException("Withheld HIP scores must report insufficient evidence coverage.", nameof(evidenceCoverage));
+        }
 
         if (LastCheckedUtc > IssuedAtUtc)
         {
@@ -255,6 +297,35 @@ public sealed record HipLiveBadgePayload
     [JsonPropertyName("certificate")]
     [JsonPropertyOrder(11)]
     public HipLiveBadgeCertificateState? Certificate { get; }
+
+    [JsonPropertyName("displayScore")]
+    [JsonPropertyOrder(12)]
+    public int? DisplayScore { get; }
+
+    [JsonPropertyName("scorePresentation")]
+    [JsonPropertyOrder(13)]
+    public string ScorePresentation { get; }
+
+    [JsonPropertyName("evidenceCoverage")]
+    [JsonPropertyOrder(14)]
+    public string EvidenceCoverage { get; }
+
+    [JsonPropertyName("evidenceConfidence")]
+    [JsonPropertyOrder(15)]
+    public string EvidenceConfidence { get; }
+
+    private static string RequiredPresentationValue(
+        string value,
+        string parameterName,
+        params string[] allowedValues)
+    {
+        if (!allowedValues.Contains(value, StringComparer.Ordinal))
+        {
+            throw new ArgumentException("HIP live badge presentation value is unsupported.", parameterName);
+        }
+
+        return value;
+    }
 
     private static string RequiredPublicText(string? value, string parameterName)
     {

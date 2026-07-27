@@ -286,7 +286,13 @@ public sealed class PublicDomainLookupService(
             storedScan.SuspiciousLinksFound,
             storedScan.DangerousLinksFound,
             "BrowserPluginScan",
-            "HIP is showing the latest privacy-safe browser plugin scan for this domain.");
+            "HIP is showing the latest privacy-safe browser plugin scan for this domain.")
+        {
+            DisplayScore = layeredScore.FinalHipScore,
+            ScorePresentation = PublicEvidencePresentation.ScoreAvailable,
+            EvidenceCoverage = PublicEvidencePresentation.CoverageSufficient,
+            EvidenceConfidence = PublicEvidencePresentation.ConfidenceMedium
+        };
     }
 
     /// <summary>
@@ -392,7 +398,13 @@ public sealed class PublicDomainLookupService(
             null,
             null,
             "MvpDangerousTestPattern",
-            message);
+            message)
+        {
+            DisplayScore = 8,
+            ScorePresentation = PublicEvidencePresentation.ScoreAvailable,
+            EvidenceCoverage = PublicEvidencePresentation.CoverageSufficient,
+            EvidenceConfidence = PublicEvidencePresentation.ConfidenceHigh
+        };
     }
 
     /// <summary>

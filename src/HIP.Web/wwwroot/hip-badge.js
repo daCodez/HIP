@@ -67,6 +67,10 @@
         payload.documentType !== "hip-live-badge" || payload.version !== "1.0" ||
         normalizeDomain(payload.domain) !== requestedDomain ||
         payload.score !== badge.score || payload.status !== badge.status ||
+        payload.displayScore !== badge.displayScore ||
+        payload.scorePresentation !== badge.scorePresentation ||
+        payload.evidenceCoverage !== badge.evidenceCoverage ||
+        payload.evidenceConfidence !== badge.evidenceConfidence ||
         payload.verifiedDomain !== badge.verifiedDomain ||
         payload.identityVerificationStatus !== badge.identityVerificationStatus ||
         payload.verifiedMeaning !== badge.verifiedMeaning || !certificateMatches ||
@@ -100,7 +104,15 @@
     const variant = normalizeVariant(certificate ? (active ? certificate.level : certificate.status) : "unknown");
     const lookupUrl = new URL(certificate?.publicCertificateUrl || badge.publicLookupUrl || `/lookup/domain/${badge.domain}`, apiBase).toString();
     const checked = badge.lastCheckedUtc ? new Date(badge.lastCheckedUtc).toLocaleDateString() : "Unknown";
-    const label = active ? `HIP ${certificate.level}` : certificate ? `HIP ${certificate.status}` : "HIP Unverified";
+    const identityStatus = badge.identityVerificationStatus === "Verified" ? "Verified" : badge.identityVerificationStatus === "Pending" ? "Pending" : "Unverified";
+    const label = active && identityStatus === "Verified"
+      ? "HIP Identity Verified"
+      : active
+        ? "HIP Identity Pending"
+        : certificate ? `HIP ${certificate.status}` : "HIP Identity Unverified";
+    const safetyAssessment = badge.scorePresentation === "Available" && badge.displayScore !== null && badge.displayScore !== undefined && Number.isFinite(Number(badge.displayScore))
+      ? `<span>Safety score: ${escapeHtml(badge.displayScore)}/100 (${escapeHtml(badge.status)})</span>`
+      : "<span>Safety assessment: Not enough evidence yet</span>";
 
     container.replaceChildren();
     container.classList.add("hip-badge-rendered", `hip-badge-${variant}`);
@@ -109,10 +121,12 @@
         <span class="hip-badge-label">${escapeHtml(label)}</span>
         <strong>Certificate: ${escapeHtml(certificate?.status || "Not issued")}</strong>
         <span>Level: ${escapeHtml(certificate?.level || "None")}</span>
-        <span>Verified domain: ${escapeHtml(certificate?.domain || "Unavailable")}</span>
-        <span>HIP risk score: ${escapeHtml(badge.score)}/100 (${escapeHtml(badge.status)})</span>
+        <span>Identity: ${escapeHtml(identityStatus)}</span>
+        <span>Evidence coverage: ${escapeHtml(badge.evidenceCoverage || "Insufficient")}</span>
+        <span>Confidence: ${escapeHtml(badge.evidenceConfidence || "None")}</span>
+        ${safetyAssessment}
         <small>Last checked: ${escapeHtml(checked)}</small>
-        <small>A HIP certificate does not automatically mean safe.</small>
+        <small>Identity verification does not automatically mean safe.</small>
       </a>
     `;
   }

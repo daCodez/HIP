@@ -18,7 +18,10 @@ public sealed class BadgeEmbedDocumentationTests
         Assert.That(script, Does.Contain("window.location.hostname"));
         Assert.That(script, Does.Contain("payload.certificate"));
         Assert.That(script, Does.Contain("certificate.isActive"));
-        Assert.That(script, Does.Contain("Verified domain"));
+        Assert.That(script, Does.Contain("HIP Identity Verified"));
+        Assert.That(script, Does.Contain("Evidence coverage"));
+        Assert.That(script, Does.Contain("Not enough evidence yet"));
+        Assert.That(script, Does.Not.Contain("badge.score)}/100"));
     }
 
     /// <summary>

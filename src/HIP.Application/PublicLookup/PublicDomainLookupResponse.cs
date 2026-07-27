@@ -67,6 +67,21 @@ public sealed record PublicDomainLookupResponse(
     string DataSource,
     string Message)
 {
+    /// <summary>Normalized public identity state: Unverified, Pending, or Verified.</summary>
+    public string IdentityStatus => PublicEvidencePresentation.IdentityStatus(IdentityVerificationStatus);
+
+    /// <summary>Nullable user-facing score. Null means HIP must not present the compatibility score.</summary>
+    public int? DisplayScore { get; init; }
+
+    /// <summary>Whether numeric score presentation is available or withheld for insufficient evidence.</summary>
+    public string ScorePresentation { get; init; } = PublicEvidencePresentation.ScoreWithheldInsufficientEvidence;
+
+    /// <summary>Coverage of authenticated safety and trust evidence, separate from identity status.</summary>
+    public string EvidenceCoverage { get; init; } = PublicEvidencePresentation.CoverageInsufficient;
+
+    /// <summary>Confidence in the authenticated evidence used for public presentation.</summary>
+    public string EvidenceConfidence { get; init; } = PublicEvidencePresentation.ConfidenceNone;
+
     /// <summary>Public-safe application decision state, without reviewer identity, reasons, or evidence.</summary>
     public string CertificateApplicationStatus { get; init; } = "NotStarted";
 

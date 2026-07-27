@@ -31,40 +31,40 @@
             </div>
 
             <div class="score-card status-@_lookup.Status.ToString().ToLowerInvariant()">
-                <span>HIP Score</span>
-                <strong>@(_lookup.DataSource == "NoStoredData" ? "Not enough data yet" : $"{_lookup.FinalHipScore}/100")</strong>
-                <p>Status: @_lookup.Status</p>
-                <p>Risk Level: @_lookup.RiskLevel</p>
+                <span>Safety assessment</span>
+                <strong>@(_lookup.DisplayScore is int displayScore ? $"{displayScore}/100" : "Not enough evidence yet")</strong>
+                <p>Identity status: @_lookup.IdentityStatus</p>
+                <p>Evidence coverage: @_lookup.EvidenceCoverage</p>
+                <p>Evidence confidence: @_lookup.EvidenceConfidence</p>
                 <p>Data source: @_lookup.DataSource</p>
-                <p>Verified: @_lookup.VerificationStatus</p>
-                <p>Signed Identity: @_lookup.SignedIdentityStatus</p>
-                <p>Signature Status: @_lookup.SignatureStatus</p>
-                <p>Verification Method: @_lookup.VerificationMethod</p>
-                <p>Recommended Action: @_lookup.RecommendedAction</p>
+                <p>Verification method: @_lookup.VerificationMethod</p>
                 <p>Last checked UTC: @_lookup.LastCheckedUtc.ToString("u")</p>
             </div>
 
-            <section class="lookup-section">
-                <h2>Layered HIP Score</h2>
-                <p>@_lookup.FinalHipScoreExplanation</p>
-                <div class="breakdown-grid">
-                    <article class="breakdown-card">
-                        <h3>DomainTrustScore</h3>
-                        <strong>@_lookup.DomainTrustScore/100</strong>
-                        <p>How trustworthy the root domain is overall. This does not automatically make every page safe.</p>
-                    </article>
-                    <article class="breakdown-card">
-                        <h3>PageTrustScore</h3>
-                        <strong>@_lookup.PageTrustScore/100</strong>
-                        <p>How trustworthy this exact page or URL context is.</p>
-                    </article>
-                    <article class="breakdown-card">
-                        <h3>ContentRiskScore</h3>
-                        <strong>@_lookup.ContentRiskScore/100</strong>
-                        <p>How safe the observed content signals are. Downloads, scripts, forms, and suspicious links are evaluated separately.</p>
-                    </article>
-                </div>
-            </section>
+            @if (_lookup.DisplayScore is not null)
+            {
+                <section class="lookup-section">
+                    <h2>Layered HIP Score</h2>
+                    <p>@_lookup.FinalHipScoreExplanation</p>
+                    <div class="breakdown-grid">
+                        <article class="breakdown-card">
+                            <h3>Domain Trust</h3>
+                            <strong>@_lookup.DomainTrustScore/100</strong>
+                            <p>How trustworthy the root domain is overall. This does not automatically make every page safe.</p>
+                        </article>
+                        <article class="breakdown-card">
+                            <h3>Page Trust</h3>
+                            <strong>@_lookup.PageTrustScore/100</strong>
+                            <p>How trustworthy this exact page or URL context is.</p>
+                        </article>
+                        <article class="breakdown-card">
+                            <h3>Content Risk</h3>
+                            <strong>@_lookup.ContentRiskScore/100 risk</strong>
+                            <p>How risky the observed content signals are. Higher means more risk.</p>
+                        </article>
+                    </div>
+                </section>
+            }
 
             @if (_lookup.DataSource == "BrowserPluginScan")
             {
@@ -102,21 +102,24 @@
 
             <section class="lookup-section">
                 <h2>Important Context</h2>
-                <p>A verified identity does not automatically mean safe. It means HIP knows who signed or owns it. The trust score still matters.</p>
+                <p>Identity verification confirms control or authenticated identity evidence. It does not prove that a site is safe. HIP shows a numeric score only when authenticated safety evidence is sufficient.</p>
             </section>
 
-            <section class="lookup-section">
-                <h2>Score Ranges</h2>
-                <ul class="range-list">
-                    <li>0-9 = Dangerous</li>
-                    <li>10-24 = High Risk</li>
-                    <li>25-39 = Suspicious</li>
-                    <li>40-49 = Unknown</li>
-                    <li>50-69 = Limited Trust Data</li>
-                    <li>70-84 = Mostly Trusted</li>
-                    <li>85-100 = Trusted</li>
-                </ul>
-            </section>
+            @if (_lookup.DisplayScore is not null)
+            {
+                <section class="lookup-section">
+                    <h2>Score Ranges</h2>
+                    <ul class="range-list">
+                        <li>0-9 = Dangerous</li>
+                        <li>10-24 = High Risk</li>
+                        <li>25-39 = Suspicious</li>
+                        <li>40-49 = Unknown</li>
+                        <li>50-69 = Limited Trust Data</li>
+                        <li>70-84 = Mostly Trusted</li>
+                        <li>85-100 = Trusted</li>
+                    </ul>
+                </section>
+            }
 
             @if (_lookup.KnownRisks.Count > 0)
             {
@@ -145,38 +148,49 @@
                 <h2>Signed Identity Foundation</h2>
                 <p>Verification status: @_lookup.IdentityVerificationStatus</p>
                 <p>Verified organization: @(_lookup.VerifiedOrganization ?? "Not configured")</p>
-                <p>DNS TXT and .well-known/hip.json verification are planned for signed website support.</p>
+                <p>HIP verifies domain control through the configured DNS TXT or website challenge and keeps safety evidence separate from that identity result.</p>
             </section>
 
-            <section class="lookup-section">
-                <h2>Score Breakdown</h2>
-                <div class="breakdown-grid">
-                    @foreach (var score in _lookup.ScoreBreakdown.Where(score => score.Category != "Final"))
-                    {
-                        <article class="breakdown-card">
-                            <h3>@score.Category Score</h3>
-                            <strong>@score.Score/100</strong>
-                            <p>Status: @score.Status</p>
-                            <p>@score.Explanation</p>
-                            <ul>
-                                @foreach (var reason in score.Reasons)
-                                {
-                                    <li>@reason</li>
-                                }
-                            </ul>
-                        </article>
-                    }
-                </div>
-            </section>
+            @if (_lookup.DisplayScore is not null)
+            {
+                <section class="lookup-section">
+                    <h2>Score Breakdown</h2>
+                    <div class="breakdown-grid">
+                        @foreach (var score in _lookup.ScoreBreakdown.Where(score => score.Category != "Final"))
+                        {
+                            <article class="breakdown-card">
+                                <h3>@score.Category Score</h3>
+                                <strong>@score.Score/100</strong>
+                                <p>Status: @score.Status</p>
+                                <p>@score.Explanation</p>
+                                <ul>
+                                    @foreach (var reason in score.Reasons)
+                                    {
+                                        <li>@reason</li>
+                                    }
+                                </ul>
+                            </article>
+                        }
+                    </div>
+                </section>
+            }
 
             @if (_lookup.PublicBadgeEligible)
             {
                 <section class="lookup-section">
                     <h2>Badge Preview</h2>
                     <div class="hip-trust-badge-preview">
-                        <span>HIP Verified</span>
-                        <strong>Score: @_lookup.FinalHipScore/100</strong>
-                        <span>Status: @_lookup.Status</span>
+                        <span>@(_lookup.IdentityStatus == "Verified" ? "HIP Identity Verified" : $"HIP Identity {_lookup.IdentityStatus}")</span>
+                        @if (_lookup.DisplayScore is int badgeScore)
+                        {
+                            <strong>Safety score: @badgeScore/100</strong>
+                        }
+                        else
+                        {
+                            <strong>Safety evidence: Not enough evidence yet</strong>
+                        }
+                        <span>Evidence: @_lookup.EvidenceCoverage (@_lookup.EvidenceConfidence confidence)</span>
+                        <small>Identity verification does not automatically mean safe.</small>
                     </div>
                 </section>
             }

@@ -21,10 +21,12 @@ public sealed class TrustBadgeService(
                 ? certificate.Level.ToString().ToLowerInvariant()
                 : certificate.Status.ToString().ToLowerInvariant();
         var label = certificate is null
-            ? "HIP Certificate Unavailable"
-            : certificate.IsActive
-                ? $"HIP {certificate.Level}"
-                : $"HIP {certificate.Status}";
+            ? "HIP Identity Unverified"
+            : certificate.IsActive && lookup.IdentityStatus == "Verified"
+                ? "HIP Identity Verified"
+                : certificate.IsActive
+                    ? "HIP Identity Pending"
+                    : $"HIP {certificate.Status}";
         var verifiedMeaning = certificate is null
             ? "No active HIP Domain Trust Certificate was verified for this domain."
             : Meaning(certificate.Level);
@@ -39,10 +41,17 @@ public sealed class TrustBadgeService(
                     lookup.IdentityVerificationStatus,
                     verifiedMeaning,
                     lookup.LastCheckedUtc,
-                    certificate),
+                    certificate,
+                    lookup.DisplayScore,
+                    lookup.ScorePresentation,
+                    lookup.EvidenceCoverage,
+                    lookup.EvidenceConfidence),
                 cancellationToken);
 
         var publicUrl = certificate?.PublicCertificateUrl ?? lookup.PublicLookupUrl;
+        var assessmentText = lookup.DisplayScore is int displayScore
+            ? $"Safety score: {displayScore}/100 - Status: {lookup.Status}"
+            : $"Safety assessment: Not enough evidence yet - Coverage: {lookup.EvidenceCoverage} - Confidence: {lookup.EvidenceConfidence}";
         return new PublicBadgeResponse(
             lookup.Domain,
             lookup.FinalHipScore,
@@ -51,7 +60,7 @@ public sealed class TrustBadgeService(
             lookup.LastCheckedUtc,
             publicUrl,
             publicUrl,
-            $"{label} - Certificate: {certificate?.Status.ToString() ?? "NotIssued"} - Score: {lookup.FinalHipScore}/100 - Status: {lookup.Status}. A certificate does not automatically mean safe.",
+            $"{label} - Certificate: {certificate?.Status.ToString() ?? "NotIssued"} - {assessmentText}. Identity verification does not automatically mean safe.",
             variant,
             lookup.IdentityVerificationStatus,
             lookup.SignatureValid,
@@ -60,7 +69,12 @@ public sealed class TrustBadgeService(
             signingResult.Document,
             signingResult.Status.ToString(),
             signingResult.IsVerified,
-            certificate);
+            certificate,
+            lookup.DisplayScore,
+            lookup.ScorePresentation,
+            lookup.EvidenceCoverage,
+            lookup.EvidenceConfidence,
+            lookup.IdentityStatus);
     }
 
     private static HipLiveBadgeCertificateState? CertificateState(

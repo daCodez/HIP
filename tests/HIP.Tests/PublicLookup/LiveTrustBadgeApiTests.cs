@@ -30,11 +30,14 @@ public sealed class LiveTrustBadgeApiTests
         var response = await client.GetAsync("/api/v1/badge/verified-example.com");
 
         var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-        Assert.That(json.RootElement.TryGetProperty("score", out _), Is.True);
+        Assert.That(json.RootElement.TryGetProperty("score", out _), Is.True, "Legacy score remains for compatibility.");
         Assert.That(json.RootElement.TryGetProperty("status", out _), Is.True);
+        Assert.That(json.RootElement.GetProperty("displayScore").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        Assert.That(json.RootElement.GetProperty("scorePresentation").GetString(), Is.EqualTo("WithheldInsufficientEvidence"));
+        Assert.That(json.RootElement.GetProperty("evidenceCoverage").GetString(), Is.EqualTo("Insufficient"));
         Assert.That(json.RootElement.GetProperty("lookupUrl").GetString(), Is.EqualTo("/lookup/verified-example.com"));
-        Assert.That(json.RootElement.GetProperty("badgeText").GetString(), Does.Contain("Score:"));
-        Assert.That(json.RootElement.GetProperty("badgeText").GetString(), Does.Contain("Status:"));
+        Assert.That(json.RootElement.GetProperty("badgeText").GetString(), Does.Contain("Not enough evidence yet"));
+        Assert.That(json.RootElement.GetProperty("badgeText").GetString(), Does.Not.Contain("/100"));
     }
 
     [Test]
@@ -73,7 +76,9 @@ public sealed class LiveTrustBadgeApiTests
 
         var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         Assert.That(json.RootElement.GetProperty("score").GetInt32(), Is.LessThanOrEqualTo(40));
-        Assert.That(json.RootElement.GetProperty("badgeText").GetString(), Does.Contain(json.RootElement.GetProperty("score").GetInt32().ToString()));
+        Assert.That(json.RootElement.GetProperty("displayScore").GetInt32(), Is.EqualTo(json.RootElement.GetProperty("score").GetInt32()));
+        Assert.That(json.RootElement.GetProperty("scorePresentation").GetString(), Is.EqualTo("Available"));
+        Assert.That(json.RootElement.GetProperty("badgeText").GetString(), Does.Contain(json.RootElement.GetProperty("displayScore").GetInt32().ToString()));
     }
 
     [Test]
@@ -88,8 +93,10 @@ public sealed class LiveTrustBadgeApiTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/javascript"));
         Assert.That(script, Does.Contain("renderHipLiveTrustBadge"));
-        Assert.That(script, Does.Contain("Score:"));
-        Assert.That(script, Does.Contain("Status:"));
+        Assert.That(script, Does.Contain("HIP Identity Verified"));
+        Assert.That(script, Does.Contain("Not enough evidence yet"));
+        Assert.That(script, Does.Contain("displayScore"));
+        Assert.That(script, Does.Not.Contain("badge.score)}/100"));
         Assert.That(script, Does.Contain("/api/v1/badge/"));
     }
 }
