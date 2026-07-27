@@ -52,11 +52,13 @@ public sealed class AdminFeedbackService(
 {
     private const int MaximumDomains = 100;
     private const int MaximumEvents = 50;
+    private static readonly TimeSpan CurrentEvidenceWindow = TimeSpan.FromDays(14);
 
     /// <inheritdoc />
     public async Task<AdminFeedbackOverview> GetOverviewAsync(CancellationToken cancellationToken)
     {
         var submissions = await repository.ListAsync(cancellationToken).ConfigureAwait(false);
+        var currentEvidenceCutoff = DateTimeOffset.UtcNow.Subtract(CurrentEvidenceWindow);
         var domains = submissions
             .Where(item => !string.IsNullOrWhiteSpace(item.Domain))
             .GroupBy(item => item.Domain.Trim().ToLowerInvariant(), StringComparer.OrdinalIgnoreCase)
@@ -67,7 +69,9 @@ public sealed class AdminFeedbackService(
                 group.Count(item => item.FeedbackType == HipFeedbackType.LooksSuspicious),
                 group.Count(item => item.FeedbackType == HipFeedbackType.ReportIssue),
                 group.Max(item => item.SubmittedAtUtc),
-                group.Count(item => item.FeedbackType is HipFeedbackType.LooksSuspicious or HipFeedbackType.ReportIssue) >= 5))
+                group.Count(item =>
+                    item.SubmittedAtUtc >= currentEvidenceCutoff &&
+                    item.FeedbackType is HipFeedbackType.LooksSuspicious or HipFeedbackType.ReportIssue) >= 5))
             .OrderByDescending(item => item.LatestSubmittedAtUtc)
             .ThenBy(item => item.Domain, StringComparer.Ordinal)
             .Take(MaximumDomains)

@@ -53,18 +53,24 @@ public sealed class AdminFeedbackServiceTests
     public async Task Detail_keeps_older_stored_events_visible_without_counting_them_as_current_weight()
     {
         var repository = new InMemoryWeightedFeedbackRepository();
-        await repository.SaveAsync(
-            Submission("history.example", HipFeedbackType.ReportIssue, DateTimeOffset.UtcNow.AddDays(-30)),
-            CancellationToken.None);
+        for (var index = 0; index < 5; index++)
+        {
+            await repository.SaveAsync(
+                Submission("history.example", HipFeedbackType.ReportIssue, DateTimeOffset.UtcNow.AddDays(-30).AddMinutes(index)),
+                CancellationToken.None);
+        }
+
         var service = new AdminFeedbackService(repository, new WeightedFeedbackAggregationService(repository));
 
+        var overview = await service.GetOverviewAsync(CancellationToken.None);
         var detail = await service.GetDomainAsync("history.example", CancellationToken.None);
 
         Assert.Multiple(() =>
         {
+            Assert.That(overview.Domains.Single().ReviewThresholdReached, Is.False);
             Assert.That(detail, Is.Not.Null);
             Assert.That(detail!.Summary.RecentFeedbackCount, Is.Zero);
-            Assert.That(detail.RecentEvents, Has.Count.EqualTo(1));
+            Assert.That(detail.RecentEvents, Has.Count.EqualTo(5));
         });
     }
 

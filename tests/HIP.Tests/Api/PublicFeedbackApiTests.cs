@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace HIP.Tests.Api;
 
 /// <summary>
@@ -22,9 +24,9 @@ public sealed class PublicFeedbackApiTests
     /// Resolves the repository root from the test output folder.
     /// </summary>
     /// <returns>Absolute repository root path.</returns>
-    private static string RepositoryRoot()
+    private static string RepositoryRoot([CallerFilePath] string sourcePath = "")
     {
-        var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
+        var directory = new FileInfo(sourcePath).Directory;
         while (directory is not null)
         {
             if (File.Exists(Path.Combine(directory.FullName, "HIP.slnx")))
