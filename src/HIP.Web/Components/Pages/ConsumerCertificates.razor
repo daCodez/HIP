@@ -166,7 +166,12 @@
                         }
                         else
                         {
-                            <p class="admin-error" role="status">HIP could not load the current DNS challenge. Retry this page before checking DNS.</p>
+                            <p class="admin-error" role="status">HIP no longer has a current DNS value for this pending enrollment.</p>
+                            <button class="btn btn-primary" type="button"
+                                    disabled="@(_replacingDnsEnrollmentId is not null)"
+                                    @onclick="() => GenerateReplacementDnsChallengeAsync(item)">
+                                @(_replacingDnsEnrollmentId == item.EnrollmentId ? "Generating…" : "Generate replacement DNS value")
+                            </button>
                         }
                     }
                     @if (item.EnrollmentStatus == DomainEnrollmentStatus.OwnershipVerified &&
@@ -245,6 +250,7 @@
     private DomainCertificateEnrollmentStartResult? _challenge;
     private IReadOnlyDictionary<string, DomainCertificateDnsChallengeResult> _dnsChallenges =
         new Dictionary<string, DomainCertificateDnsChallengeResult>(StringComparer.Ordinal);
+    private string? _replacingDnsEnrollmentId;
     private string? _checkingEnrollmentId;
     private string? _reviewingEnrollmentId;
     private string? _preparingWebsiteEnrollmentId;
@@ -391,6 +397,66 @@
         }
     }
 
+    /// <summary>Creates a replacement only after the owner explicitly requests one.</summary>
+    private async Task GenerateReplacementDnsChallengeAsync(OwnerDomainCertificateSummary item)
+    {
+        _replacingDnsEnrollmentId = item.EnrollmentId;
+        _enrollmentError = null;
+        _enrollmentMessage = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                ConsumerPolicies.CanUseConsumerPortal,
+                consumerId => EnrollmentService.StartAsync(
+                    consumerId,
+                    WebsiteOwnerActorId(authenticationState.User, consumerId),
+                    new DomainCertificateEnrollmentStartRequest(
+                        item.Domain,
+                        item.Domain,
+                        VerificationMethod.DnsTxt),
+                    CancellationToken.None));
+            if (!access.Succeeded || access.Value is null)
+            {
+                _enrollmentError = HipConsumerPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            var result = access.Value;
+            if (result.Status is not (
+                    DomainCertificateEnrollmentStartStatus.Started or
+                    DomainCertificateEnrollmentStartStatus.Existing) ||
+                result.ChallengeToken is null ||
+                result.ChallengeExpiresAtUtc is null)
+            {
+                _enrollmentError = result.Status == DomainCertificateEnrollmentStartStatus.Conflict
+                    ? "HIP could not replace this DNS value because the domain ownership binding changed."
+                    : "HIP could not generate a replacement DNS value right now.";
+                return;
+            }
+
+            var challenges = new Dictionary<string, DomainCertificateDnsChallengeResult>(
+                _dnsChallenges.Count + 1,
+                StringComparer.Ordinal);
+            foreach (var challenge in _dnsChallenges)
+            {
+                challenges[challenge.Key] = challenge.Value;
+            }
+            challenges[item.Domain] = new DomainCertificateDnsChallengeResult(
+                DomainCertificateDnsChallengeStatus.Available,
+                item.Domain,
+                result.ChallengeToken,
+                result.ChallengeExpiresAtUtc);
+            _dnsChallenges = challenges;
+            _enrollmentMessage = "Replacement DNS value generated. Copy it below and replace the earlier TXT value.";
+        }
+        finally
+        {
+            _replacingDnsEnrollmentId = null;
+        }
+    }
     /// <summary>Copies only the current owner-authorized DNS challenge shown on this page.</summary>
     private async Task CopyDnsRecordAsync(string domain, string challengeToken)
     {

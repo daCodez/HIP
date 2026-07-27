@@ -171,6 +171,45 @@ public sealed class DomainCertificateWebsiteVerificationTests
     }
 
     [Test]
+    public async Task Development_owner_can_recover_a_legacy_challenge_when_account_and_actor_ids_match()
+    {
+        const string domain = "example.com";
+        const string owner = "local-account-owner";
+        var website = new WebsiteIdentity(
+            domain, "hip:web:example.com", [], VerificationStatus.Pending,
+            VerificationMethod.DnsTxt, Now, null);
+        var challenge = new DomainVerificationRequest(
+            domain, VerificationMethod.DnsTxt, "current-challenge", VerificationStatus.Pending,
+            Now, null, Now.AddHours(1));
+        var enrollments = new StubEnrollmentRepository(new DomainEnrollmentStateRecord(
+            "enrollment-1", owner, domain, DomainEnrollmentStatus.PendingOwnership, null, null));
+        var requests = new StubVerificationRequests(challenge);
+        var websiteIdentities = new StubWebsiteIdentityService(website, challenge)
+        {
+            RequiredActorId = "system:legacy-website-registration"
+        };
+        var service = CreateService(
+            website,
+            enrollments,
+            new StubDomainVerificationService(requests),
+            requests,
+            new StubFetcher(),
+            websiteIdentities,
+            DomainCertificateEnrollmentOwnershipPolicy.Development);
+
+        var result = await service.GetCurrentDnsChallengeAsync(
+            owner, owner, domain, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateDnsChallengeStatus.Available));
+            Assert.That(result.ChallengeToken, Is.EqualTo(challenge.Token));
+            Assert.That(
+                websiteIdentities.ActorIds,
+                Is.EqualTo(new[] { owner, "system:legacy-website-registration" }));
+        });
+    }
+    [Test]
     public async Task Current_dns_challenge_is_not_disclosed_to_a_different_account()
     {
         const string domain = "example.com";

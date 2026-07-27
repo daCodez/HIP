@@ -235,6 +235,9 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(certificates, Does.Contain("Current DNS TXT record"));
             Assert.That(certificates, Does.Contain("Replace any earlier HIP verification value"));
             Assert.That(certificates, Does.Contain("Copy current DNS record"));
+            Assert.That(certificates, Does.Contain("HIP no longer has a current DNS value"));
+            Assert.That(certificates, Does.Contain("Generate replacement DNS value"));
+            Assert.That(certificates, Does.Contain("GenerateReplacementDnsChallengeAsync(item)"));
             Assert.That(certificates, Does.Contain("EnrollmentService.PrepareWebsiteVerificationAsync"));
             Assert.That(certificates, Does.Contain("Prepare website file"));
             Assert.That(certificates, Does.Contain("Download hip.json"));

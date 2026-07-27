@@ -768,7 +768,7 @@ public sealed class DomainCertificateEnrollmentService(
                 cancellationToken).ConfigureAwait(false);
         }
         catch (WebsiteIdentityRegistrationConflictException) when (
-            CanUseLegacyDevelopmentOwnerAlias(ownerId, websiteOwnerActorId))
+            CanUseLegacyDevelopmentOwnerAlias())
         {
             return await websiteIdentityService.RegisterAsync(
                 request,
@@ -793,7 +793,7 @@ public sealed class DomainCertificateEnrollmentService(
                 cancellationToken).ConfigureAwait(false);
         }
         catch (WebsiteIdentityRegistrationConflictException) when (
-            CanUseLegacyDevelopmentOwnerAlias(ownerId, websiteOwnerActorId))
+            CanUseLegacyDevelopmentOwnerAlias())
         {
             return await websiteIdentityService.GetAsync(
                 domain,
@@ -818,7 +818,7 @@ public sealed class DomainCertificateEnrollmentService(
                 cancellationToken).ConfigureAwait(false);
         }
         catch (WebsiteIdentityRegistrationConflictException) when (
-            CanUseLegacyDevelopmentOwnerAlias(ownerId, websiteOwnerActorId))
+            CanUseLegacyDevelopmentOwnerAlias())
         {
             return await websiteIdentityService.VerifyAsync(
                 request,
@@ -828,9 +828,8 @@ public sealed class DomainCertificateEnrollmentService(
         }
     }
 
-    private bool CanUseLegacyDevelopmentOwnerAlias(string ownerId, string websiteOwnerActorId) =>
-        ownership.AllowLegacyDevelopmentWebsiteOwnerAlias &&
-        !string.Equals(ownerId, websiteOwnerActorId, StringComparison.Ordinal);
+    private bool CanUseLegacyDevelopmentOwnerAlias() =>
+        ownership.AllowLegacyDevelopmentWebsiteOwnerAlias;
 
     public async Task<DomainCertificateIdentityProfileResult> CompleteIdentityProfileAsync(
         string ownerId,
