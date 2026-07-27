@@ -461,6 +461,61 @@ public sealed class DomainCertificateRepositoryTests
         });
     }
     [Test]
+    public async Task Due_monitoring_query_returns_only_active_scheduled_certificates()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        await repository.TryCreateIssuedAsync(Record(), CancellationToken.None);
+        var enrollment = context.DomainEnrollments.Single(item => item.EnrollmentId == "enrollment-1");
+        enrollment.MonitoringEnabledAtUtc = Now.AddDays(-1);
+        enrollment.MonitoringNextCheckAtUtc = Now.AddMinutes(-1);
+        await context.SaveChangesAsync();
+
+        var due = await repository.ListDueAsync(Now, 100, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(due, Has.Count.EqualTo(1));
+            Assert.That(due[0].EnrollmentId, Is.EqualTo("enrollment-1"));
+            Assert.That(due[0].MonitoringNextCheckAtUtc, Is.EqualTo(Now.AddMinutes(-1)));
+            Assert.That(due[0].MonitoringFailureCount, Is.Zero);
+        });
+    }
+
+    [Test]
+    public async Task Monitoring_failure_schedules_idempotent_privacy_safe_retry()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        await repository.TryCreateIssuedAsync(Record(), CancellationToken.None);
+        var enabledAt = Now.AddMinutes(20);
+        await repository.TryEnableAsync(
+            new DomainMonitoringEnableRecord(
+                "enrollment-1", "owner-1", "example.com", enabledAt, enabledAt,
+                "certificate-event:monitoring-enabled:enrollment-1"),
+            CancellationToken.None);
+        var failure = new DomainMonitoringFailureRecord(
+            "enrollment-1", "owner-1", "example.com", 0,
+            enabledAt.AddMinutes(1), enabledAt.AddHours(1),
+            "certificate-event:monitoring-deferred:test");
+
+        var applied = await repository.TryRecordFailureAsync(failure, CancellationToken.None);
+        var retry = await repository.TryRecordFailureAsync(failure, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied, Is.EqualTo(DomainMonitoringWriteStatus.Updated));
+            Assert.That(retry, Is.EqualTo(DomainMonitoringWriteStatus.Existing));
+            var enrollment = context.DomainEnrollments.Single(item => item.EnrollmentId == "enrollment-1");
+            Assert.That(enrollment.MonitoringFailureCount, Is.EqualTo(1));
+            Assert.That(enrollment.MonitoringNextCheckAtUtc, Is.EqualTo(enabledAt.AddHours(1)));
+            var auditEvent = context.DomainCertificateEvents.Single(item => item.EventType == "MonitoringCheckDeferred");
+            Assert.That(auditEvent.ActorId, Is.EqualTo("hip-monitoring-service"));
+            Assert.That(auditEvent.ReasonCode, Is.EqualTo("EvidenceUnavailable"));
+            Assert.That(auditEvent.PublicSummary, Does.Not.Contain("exception").IgnoreCase);
+        });
+    }
+    [Test]
     public async Task Admin_summary_query_pages_real_cross_owner_state_without_owner_identifiers()
     {
         await using var context = Context();

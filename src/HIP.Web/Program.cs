@@ -74,7 +74,10 @@ builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configurat
 builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddScoped<IDomainCertificateMonitoringRepository>(provider =>
     provider.GetRequiredService<EfDomainCertificateRepository>());
+builder.Services.AddScoped<IDomainCertificateMonitoringScheduleRepository>(provider =>
+    provider.GetRequiredService<EfDomainCertificateRepository>());
 builder.Services.AddHostedService<DomainVerificationRecheckWorker>();
+builder.Services.AddHostedService<DomainCertificateMonitoringWorker>();
 builder.Services.AddOptions<HipPerformanceOptions>()
     .Bind(builder.Configuration.GetSection(HipPerformanceOptions.SectionName))
     .Validate(ValidateHipPerformanceOptions, "HIP performance options must use positive cache durations and request limits.")

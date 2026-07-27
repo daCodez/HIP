@@ -17,7 +17,9 @@ public sealed record DomainMonitoringEnrollmentState(
     DateTimeOffset? IdentityCompletedAtUtc,
     DateTimeOffset? MonitoringEnabledAtUtc,
     DateTimeOffset? LastMonitoringAtUtc,
-    int? CurrentScore);
+    int? CurrentScore,
+    DateTimeOffset? MonitoringNextCheckAtUtc = null,
+    int MonitoringFailureCount = 0);
 
 /// <summary>Audited owner opt-in that schedules immediate and recurring HIP monitoring.</summary>
 public sealed record DomainMonitoringEnableRecord(

@@ -13,7 +13,7 @@ namespace HIP.Infrastructure.Persistence.Repositories;
 /// <summary>Insert-only EF repository for signed domain certificates and their issuance audit events.</summary>
 public sealed class EfDomainCertificateRepository(
     HipDbContext dbContext,
-    ICanonicalJsonService canonicalJsonService) : IDomainCertificateRepository, IDomainCertificateOwnerQuery, IDomainEnrollmentRepository, IDomainCertificateAdminQuery, IDomainCertificateLifecycleRepository, IDomainCertificateMonitoringRepository
+    ICanonicalJsonService canonicalJsonService) : IDomainCertificateRepository, IDomainCertificateOwnerQuery, IDomainEnrollmentRepository, IDomainCertificateAdminQuery, IDomainCertificateLifecycleRepository, IDomainCertificateMonitoringRepository, IDomainCertificateMonitoringScheduleRepository
 {
     private static readonly JsonSerializerOptions CollectionJsonOptions = CreateCollectionOptions();
     private readonly ICanonicalJsonService canonicalizer =
@@ -102,7 +102,9 @@ public sealed class EfDomainCertificateRepository(
                     enrollment.IdentityCompletedAtUtc,
                     enrollment.MonitoringEnabledAtUtc,
                     enrollment.LastMonitoringAtUtc,
-                    enrollment.CurrentScore))
+                    enrollment.CurrentScore,
+                    enrollment.MonitoringNextCheckAtUtc,
+                    enrollment.MonitoringFailureCount))
             .SingleOrDefaultAsync(cancellationToken);
     }
     /// <inheritdoc />
@@ -741,6 +743,130 @@ public sealed class EfDomainCertificateRepository(
         }
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<DomainMonitoringEnrollmentState>> ListDueAsync(
+        DateTimeOffset dueAtUtc,
+        int maximum,
+        CancellationToken cancellationToken)
+    {
+        if (dueAtUtc.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException("The monitoring due time must be UTC.", nameof(dueAtUtc));
+        }
+        if (maximum is < 1 or > 500)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maximum));
+        }
+
+        return await (
+                from enrollment in dbContext.DomainEnrollments.AsNoTracking()
+                    .Where(item => item.IsCurrent &&
+                                   item.MonitoringEnabledAtUtc != null &&
+                                   item.MonitoringNextCheckAtUtc != null &&
+                                   item.MonitoringNextCheckAtUtc <= dueAtUtc &&
+                                   (item.Status == DomainEnrollmentStatus.Verified ||
+                                    item.Status == DomainEnrollmentStatus.Monitored))
+                join certificate in dbContext.DomainCertificates.AsNoTracking()
+                        .Where(item => item.IsCurrent &&
+                                       item.Status == DomainCertificateStatus.Active &&
+                                       item.ExpiresAtUtc > dueAtUtc)
+                    on enrollment.EnrollmentId equals certificate.EnrollmentId
+                orderby enrollment.MonitoringNextCheckAtUtc, enrollment.EnrollmentId
+                select new DomainMonitoringEnrollmentState(
+                    enrollment.EnrollmentId,
+                    enrollment.OwnerId,
+                    enrollment.Domain,
+                    enrollment.Status,
+                    certificate.Status,
+                    certificate.Level,
+                    enrollment.DnsVerifiedAtUtc,
+                    enrollment.WebsiteVerifiedAtUtc,
+                    enrollment.IdentityCompletedAtUtc,
+                    enrollment.MonitoringEnabledAtUtc,
+                    enrollment.LastMonitoringAtUtc,
+                    enrollment.CurrentScore,
+                    enrollment.MonitoringNextCheckAtUtc,
+                    enrollment.MonitoringFailureCount))
+            .Take(maximum)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<DomainMonitoringWriteStatus> TryRecordFailureAsync(
+        DomainMonitoringFailureRecord record,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ValidateIdentifier(record.EnrollmentId, 128);
+        ValidateIdentifier(record.OwnerId, 256);
+        ValidateIdentifier(record.AuditEventId, 128);
+        if (record.ExpectedFailureCount < 0 ||
+            record.FailedAtUtc.Offset != TimeSpan.Zero ||
+            record.NextCheckAtUtc <= record.FailedAtUtc ||
+            HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(record.Domain) != record.Domain)
+        {
+            throw new ArgumentException("Domain monitoring failure state is invalid.", nameof(record));
+        }
+
+        var existingEvent = await dbContext.DomainCertificateEvents.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.EventId == record.AuditEventId, cancellationToken);
+        if (existingEvent is not null)
+        {
+            return existingEvent.EnrollmentId == record.EnrollmentId &&
+                   existingEvent.EventType == "MonitoringCheckDeferred"
+                ? DomainMonitoringWriteStatus.Existing
+                : DomainMonitoringWriteStatus.Conflict;
+        }
+
+        var enrollment = await dbContext.DomainEnrollments.SingleOrDefaultAsync(
+            item => item.EnrollmentId == record.EnrollmentId &&
+                    item.OwnerId == record.OwnerId &&
+                    item.Domain == record.Domain &&
+                    item.IsCurrent,
+            cancellationToken);
+        if (enrollment is null)
+        {
+            return DomainMonitoringWriteStatus.NotFound;
+        }
+        var certificate = await dbContext.DomainCertificates.AsNoTracking().SingleOrDefaultAsync(
+            item => item.EnrollmentId == enrollment.EnrollmentId && item.IsCurrent,
+            cancellationToken);
+        if (certificate is null || certificate.Status != DomainCertificateStatus.Active ||
+            enrollment.MonitoringEnabledAtUtc is null ||
+            enrollment.MonitoringFailureCount != record.ExpectedFailureCount)
+        {
+            return DomainMonitoringWriteStatus.Conflict;
+        }
+
+        enrollment.MonitoringFailureCount = checked(record.ExpectedFailureCount + 1);
+        enrollment.MonitoringNextCheckAtUtc = record.NextCheckAtUtc;
+        enrollment.UpdatedAtUtc = record.FailedAtUtc;
+        enrollment.AggregateVersion++;
+        dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+        {
+            EventId = record.AuditEventId,
+            EnrollmentId = enrollment.EnrollmentId,
+            CertificateId = certificate.CertificateId,
+            EventType = "MonitoringCheckDeferred",
+            PreviousStatus = enrollment.Status.ToString(),
+            CurrentStatus = enrollment.Status.ToString(),
+            ActorId = "hip-monitoring-service",
+            ReasonCode = "EvidenceUnavailable",
+            PublicSummary = "HIP deferred the monitoring check and scheduled a privacy-safe retry.",
+            PolicyVersion = enrollment.PolicyVersion,
+            OccurredAtUtc = record.FailedAtUtc
+        });
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return DomainMonitoringWriteStatus.Updated;
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            return DomainMonitoringWriteStatus.Conflict;
+        }
+    }
     /// <inheritdoc />
     public async Task<DomainMonitoringWriteStatus> TryEnableAsync(
         DomainMonitoringEnableRecord record,
