@@ -1,8 +1,11 @@
+using HIP.Application;
+using HIP.Application.Certificates;
 using HIP.Application.Reporting;
 using HIP.Application.Security;
 using HIP.Infrastructure.Security;
 using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
+using HIP.Infrastructure.Persistence.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -88,6 +91,46 @@ public sealed class PersistenceRepositoryTests
         services.AddHipInfrastructure(configuration);
 
         Assert.That(services.Any(descriptor => descriptor.ServiceType == typeof(HipDbContext)), Is.True);
+    }
+
+    /// <summary>
+    /// Confirms every runtime host receives both certificate-monitoring persistence boundaries from shared
+    /// infrastructure registration.
+    /// </summary>
+    [Test]
+    public void Infrastructure_registration_exposes_domain_certificate_monitoring_repositories()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:HipDatabase"] = "Host=localhost;Port=5432;Database=hip_tests;Username=hip;Password=hip",
+                ["ConnectionStrings:redis"] = "localhost:6379,abortConnect=false",
+                ["HipInfrastructure:DatabaseProvider"] = "PostgreSQL"
+            })
+            .Build();
+
+        services.AddHipApplication();
+        services.AddHipInfrastructure(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<EfDomainCertificateRepository>();
+        var monitoringService = scope.ServiceProvider.GetRequiredService<IDomainCertificateMonitoringService>();
+        var monitoringCoordinator = scope.ServiceProvider
+            .GetRequiredService<IDomainCertificateMonitoringCoordinator>();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                scope.ServiceProvider.GetRequiredService<IDomainCertificateMonitoringRepository>(),
+                Is.SameAs(repository));
+            Assert.That(
+                scope.ServiceProvider.GetRequiredService<IDomainCertificateMonitoringScheduleRepository>(),
+                Is.SameAs(repository));
+            Assert.That(monitoringService, Is.TypeOf<DomainCertificateMonitoringService>());
+            Assert.That(monitoringCoordinator, Is.TypeOf<DomainCertificateMonitoringCoordinator>());
+        });
     }
 
     [Test]

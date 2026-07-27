@@ -20,7 +20,6 @@ using HIP.Domain.Reputation;
 using HIP.Domain.Scoring;
 using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
-using HIP.Infrastructure.Persistence.Repositories;
 using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -40,10 +39,6 @@ builder.Services.AddHipApplication(
     builder.Environment.IsDevelopment() ? "api" : null);
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
-builder.Services.AddScoped<IDomainCertificateMonitoringRepository>(provider =>
-    provider.GetRequiredService<EfDomainCertificateRepository>());
-builder.Services.AddScoped<IDomainCertificateMonitoringScheduleRepository>(provider =>
-    provider.GetRequiredService<EfDomainCertificateRepository>());
 builder.Services.AddOptions<HipPerformanceOptions>()
     .Bind(builder.Configuration.GetSection(HipPerformanceOptions.SectionName))
     .Validate(ValidateHipPerformanceOptions, "HIP performance options must use positive cache durations and request limits.")
