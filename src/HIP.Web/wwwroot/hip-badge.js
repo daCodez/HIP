@@ -2,6 +2,7 @@
   const BADGE_CLASS = "hip-trust-badge";
   const STYLE_ID = "hip-trust-badge-style";
   const scriptOrigin = getScriptOrigin();
+  let badgeInstance = 0;
 
   ensureStyles();
 
@@ -111,24 +112,78 @@
         ? "HIP Identity Pending"
         : certificate ? `HIP ${certificate.status}` : "HIP Identity Unverified";
     const safetyAssessment = badge.scorePresentation === "Available" && badge.displayScore !== null && badge.displayScore !== undefined && Number.isFinite(Number(badge.displayScore))
-      ? `<span>Safety score: ${escapeHtml(badge.displayScore)}/100 (${escapeHtml(badge.status)})</span>`
-      : "<span>Safety assessment: Not enough evidence yet</span>";
+      ? `<span class="hip-badge-fact"><b>Safety score</b>${escapeHtml(badge.displayScore)}/100 (${escapeHtml(badge.status)})</span>`
+      : '<span class="hip-badge-fact"><b>Safety assessment</b>Not enough evidence yet</span>';
+    const panelId = `hip-badge-panel-${++badgeInstance}`;
 
     container.replaceChildren();
     container.classList.add("hip-badge-rendered", `hip-badge-${variant}`);
     container.innerHTML = `
-      <a class="hip-badge-card" href="${escapeAttribute(lookupUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttribute(label)} for ${escapeAttribute(badge.domain)}">
-        <span class="hip-badge-label">${escapeHtml(label)}</span>
-        <strong>Certificate: ${escapeHtml(certificate?.status || "Not issued")}</strong>
-        <span>Level: ${escapeHtml(certificate?.level || "None")}</span>
-        <span>Identity: ${escapeHtml(identityStatus)}</span>
-        <span>Evidence coverage: ${escapeHtml(badge.evidenceCoverage || "Insufficient")}</span>
-        <span>Confidence: ${escapeHtml(badge.evidenceConfidence || "None")}</span>
-        ${safetyAssessment}
-        <small>Last checked: ${escapeHtml(checked)}</small>
-        <small>Identity verification does not automatically mean safe.</small>
-      </a>
+      <div class="hip-badge-widget" data-hip-state="expanded">
+        <button type="button" class="hip-badge-shield" data-hip-action="toggle" aria-label="Minimize HIP trust details" aria-expanded="true" aria-controls="${escapeAttribute(panelId)}">
+          ${shieldMarkup()}
+        </button>
+        <section id="${escapeAttribute(panelId)}" class="hip-badge-panel" aria-label="${escapeAttribute(label)} for ${escapeAttribute(badge.domain)}">
+          <div class="hip-badge-toolbar">
+            <strong class="hip-badge-label">${escapeHtml(label)}</strong>
+            <span class="hip-badge-controls">
+              <button type="button" data-hip-action="minimize" aria-label="Minimize HIP badge" title="Minimize">−</button>
+              <button type="button" data-hip-action="close" aria-label="Close HIP badge" title="Close">×</button>
+            </span>
+          </div>
+          <span class="hip-badge-fact"><b>Certificate</b>${escapeHtml(certificate?.status || "Not issued")} · ${escapeHtml(certificate?.level || "None")}</span>
+          <span class="hip-badge-fact"><b>Identity</b>${escapeHtml(identityStatus)}</span>
+          <span class="hip-badge-fact"><b>Evidence</b>${escapeHtml(badge.evidenceCoverage || "Insufficient")} · ${escapeHtml(badge.evidenceConfidence || "None")} confidence</span>
+          ${safetyAssessment}
+          <small>Last checked: ${escapeHtml(checked)}</small>
+          <small>Identity verification does not automatically mean safe.</small>
+          <a class="hip-badge-details" href="${escapeAttribute(lookupUrl)}" target="_blank" rel="noopener noreferrer">View HIP details</a>
+        </section>
+        <button type="button" class="hip-badge-show" data-hip-action="show" aria-controls="${escapeAttribute(panelId)}" hidden>Show HIP</button>
+      </div>
     `;
+    initializeWidget(container);
+  }
+
+  /**
+   * Wires accessible expanded, minimized, and closed states without storing visitor data.
+   */
+  function initializeWidget(container) {
+    const widget = container.querySelector(".hip-badge-widget");
+    const panel = widget?.querySelector(".hip-badge-panel");
+    const shield = widget?.querySelector(".hip-badge-shield");
+    const show = widget?.querySelector(".hip-badge-show");
+    const minimize = widget?.querySelector('[data-hip-action="minimize"]');
+    const close = widget?.querySelector('[data-hip-action="close"]');
+    if (!widget || !panel || !shield || !show || !minimize || !close) {
+      throw new Error("HIP badge controls are unavailable.");
+    }
+
+    const setState = (state, focusTarget) => {
+      widget.dataset.hipState = state;
+      const expanded = state === "expanded";
+      panel.hidden = !expanded;
+      show.hidden = expanded;
+      shield.hidden = state === "closed";
+      shield.setAttribute("aria-expanded", String(expanded));
+      shield.setAttribute("aria-label", expanded ? "Minimize HIP trust details" : "Show HIP trust details");
+      if (focusTarget) {
+        focusTarget.focus();
+      }
+    };
+
+    shield.addEventListener("click", () =>
+      setState(widget.dataset.hipState === "expanded" ? "minimized" : "expanded"));
+    minimize.addEventListener("click", () => setState("minimized", show));
+    close.addEventListener("click", () => setState("closed", show));
+    show.addEventListener("click", () => setState("expanded", minimize));
+  }
+
+  /**
+   * Returns the transparent HIP protocol shield used by the floating badge.
+   */
+  function shieldMarkup() {
+    return '<svg class="hip-badge-shield-logo" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><path d="M128 18 214 52v67c0 55-33 96-86 116-53-20-86-61-86-116V52z" fill="#0d1918"/><path d="M87 83v91M169 83v91M87 128h82" fill="none" stroke="#eff8f6" stroke-width="13" stroke-linecap="round"/><path d="M87 102 67 89M169 102l20-13M128 128V74M128 128v67" stroke="#5ad7bb" stroke-width="7" stroke-linecap="round"/><g fill="#5ad7bb"><circle cx="62" cy="86" r="8"/><circle cx="194" cy="86" r="8"/><circle cx="128" cy="68" r="8"/><circle cx="128" cy="201" r="8"/></g></svg>';
   }
   function renderMismatch(container, message) {
     container.replaceChildren();
@@ -164,55 +219,140 @@
     style.id = STYLE_ID;
     style.textContent = `
       .hip-trust-badge.hip-badge-rendered {
-        display: inline-block;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --hip-accent: #5ad7bb;
+        position: fixed !important;
+        right: max(1rem, env(safe-area-inset-right)) !important;
+        bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+        z-index: 2147483000 !important;
+        display: block !important;
+        width: auto !important;
+        max-width: calc(100vw - 2rem) !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border: 0 !important;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+        color: #f8fafc !important;
       }
-      .hip-trust-badge .hip-badge-card {
-        display: inline-grid;
-        gap: 2px;
-        min-width: 158px;
-        padding: 10px 12px;
-        color: #111827;
-        border: 1px solid #cbd5e1;
-        border-left: 5px solid #64748b;
-        border-radius: 8px;
-        background: #fff;
-        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
-        text-decoration: none;
-        line-height: 1.25;
+      .hip-trust-badge .hip-badge-widget {
+        display: grid;
+        justify-items: end;
+        gap: .5rem;
+        background: transparent;
+      }
+      .hip-trust-badge .hip-badge-panel[hidden],
+      .hip-trust-badge .hip-badge-shield[hidden],
+      .hip-trust-badge .hip-badge-show[hidden] { display: none !important; }
+      .hip-trust-badge .hip-badge-shield {
+        all: unset;
+        box-sizing: border-box;
+        width: 4.25rem;
+        height: 4.25rem;
+        cursor: pointer;
+        filter: drop-shadow(0 .4rem .65rem rgba(2, 8, 23, .38));
+        transition: transform .16s ease, filter .16s ease;
+      }
+      .hip-trust-badge .hip-badge-shield:hover { transform: translateY(-.125rem); }
+      .hip-trust-badge .hip-badge-shield-logo { display: block; width: 100%; height: 100%; }
+      .hip-trust-badge .hip-badge-panel {
+        box-sizing: border-box;
+        display: grid;
+        gap: .5rem;
+        width: min(22rem, calc(100vw - 2rem));
+        max-height: calc(100vh - 7rem);
+        overflow: auto;
+        padding: .875rem;
+        color: #f8fafc;
+        border: 1px solid rgba(148, 163, 184, .42);
+        border-left: .25rem solid var(--hip-accent);
+        border-radius: .75rem;
+        background: rgba(7, 18, 34, .82);
+        box-shadow: 0 .75rem 2rem rgba(2, 8, 23, .28);
+        backdrop-filter: blur(1rem) saturate(130%);
+        -webkit-backdrop-filter: blur(1rem) saturate(130%);
+        line-height: 1.35;
+      }
+      .hip-trust-badge .hip-badge-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
       }
       .hip-trust-badge .hip-badge-label {
-        font-size: 12px;
+        font-size: .8125rem;
         font-weight: 800;
+        letter-spacing: .02em;
         text-transform: uppercase;
-        letter-spacing: 0;
       }
-      .hip-trust-badge strong {
-        font-size: 15px;
+      .hip-trust-badge .hip-badge-controls { display: inline-flex; gap: .25rem; }
+      .hip-trust-badge .hip-badge-controls button,
+      .hip-trust-badge .hip-badge-show {
+        all: unset;
+        box-sizing: border-box;
+        cursor: pointer;
+        color: #f8fafc;
+        border: 1px solid rgba(148, 163, 184, .55);
+        background: rgba(15, 23, 42, .4);
       }
-      .hip-trust-badge span,
-      .hip-trust-badge small {
-        font-size: 12px;
+      .hip-trust-badge .hip-badge-controls button {
+        display: inline-grid;
+        place-items: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: .375rem;
+        font-size: 1.125rem;
+        line-height: 1;
       }
-      .hip-badge-trusted .hip-badge-card { border-left-color: #047857; }
-      .hip-badge-probablysafe .hip-badge-card { border-left-color: #0f766e; }
-      .hip-badge-caution .hip-badge-card { border-left-color: #ca8a04; }
-      .hip-badge-highrisk .hip-badge-card { border-left-color: #ea580c; }
-      .hip-badge-dangerous .hip-badge-card,
-      .hip-badge-critical .hip-badge-card,
-      .hip-badge-mismatch .hip-badge-card { border-left-color: #b91c1c; }
-      .hip-badge-unknown .hip-badge-card { border-left-color: #64748b; }
-      .hip-badge-registered .hip-badge-card, .hip-badge-verified .hip-badge-card { border-left-color: #0f766e; }
-      .hip-badge-monitored .hip-badge-card { border-left-color: #047857; }
-      .hip-badge-suspended .hip-badge-card, .hip-badge-renewalrequired .hip-badge-card { border-left-color: #ca8a04; }
-      .hip-badge-revoked .hip-badge-card { border-left-color: #b91c1c; }
-      .hip-badge-expired .hip-badge-card { border-left-color: #64748b; }
-      @media (prefers-color-scheme: dark) { .hip-trust-badge .hip-badge-card { background: #111827; border-color: #475569; color: #f8fafc; } .hip-trust-badge small { color: #cbd5e1; } }
-      @media (prefers-reduced-motion: reduce) { .hip-trust-badge, .hip-trust-badge * { transition: none !important; animation: none !important; } }
+      .hip-trust-badge .hip-badge-show {
+        padding: .5rem .75rem;
+        border-radius: 999px;
+        font: 700 .75rem/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        backdrop-filter: blur(.75rem);
+      }
+      .hip-trust-badge .hip-badge-controls button:hover,
+      .hip-trust-badge .hip-badge-show:hover { background: rgba(30, 41, 59, .72); }
+      .hip-trust-badge button:focus-visible,
+      .hip-trust-badge a:focus-visible { outline: .1875rem solid #67e8f9; outline-offset: .1875rem; }
+      .hip-trust-badge .hip-badge-fact {
+        display: grid;
+        grid-template-columns: 7rem minmax(0, 1fr);
+        gap: .5rem;
+        font-size: .8125rem;
+      }
+      .hip-trust-badge .hip-badge-fact b { color: #a7f3d0; font-weight: 700; }
+      .hip-trust-badge small { color: #cbd5e1; font-size: .75rem; }
+      .hip-trust-badge .hip-badge-details {
+        justify-self: start;
+        color: #67e8f9;
+        font-size: .8125rem;
+        font-weight: 700;
+        text-underline-offset: .1875rem;
+      }
+      .hip-trust-badge .hip-badge-card {
+        display: grid;
+        gap: .25rem;
+        padding: .75rem;
+        color: #f8fafc;
+        border: 1px solid rgba(148, 163, 184, .42);
+        border-radius: .75rem;
+        background: rgba(7, 18, 34, .82);
+        text-decoration: none;
+        backdrop-filter: blur(1rem);
+      }
+      .hip-badge-dangerous, .hip-badge-critical, .hip-badge-mismatch { --hip-accent: #fb7185 !important; }
+      .hip-badge-highrisk, .hip-badge-suspended, .hip-badge-renewalrequired { --hip-accent: #fb923c !important; }
+      .hip-badge-caution { --hip-accent: #fbbf24 !important; }
+      .hip-badge-unknown, .hip-badge-expired { --hip-accent: #94a3b8 !important; }
+      @media (max-width: 30rem) {
+        .hip-trust-badge .hip-badge-panel { width: calc(100vw - 2rem); max-height: calc(100vh - 6rem); }
+        .hip-trust-badge .hip-badge-fact { grid-template-columns: 1fr; gap: .125rem; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .hip-trust-badge, .hip-trust-badge * { transition: none !important; animation: none !important; }
+      }
     `;
     document.head.appendChild(style);
   }
-
   function normalizeDomain(domain) {
     return String(domain || "").trim().replace(/\.$/, "").toLowerCase();
   }

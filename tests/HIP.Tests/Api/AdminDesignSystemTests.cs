@@ -98,9 +98,9 @@ public sealed class AdminDesignSystemTests
             Assert.That(dashboard, Does.Contain("<h1>Overview</h1>"));
             Assert.That(dashboard, Does.Not.Contain("Recent Threats"));
             Assert.That(dashboard, Does.Not.Contain("Quick Links"));
-            Assert.That(navigation, Does.Contain("src=\"/hip-logo-original.png\""));
+            Assert.That(navigation, Does.Contain("src=\"/hip-logo.svg\""));
             Assert.That(navigation, Does.Contain("alt=\"HIP\""));
-            Assert.That(designCss, Does.Contain(".brand .mark{width:40px;height:41px"));
+            Assert.That(designCss, Does.Contain(".brand .mark{width:40px;height:40px"));
             Assert.That(designCss, Does.Not.Contain(".brand .mark-ring"));
             Assert.That(appCss, Does.Not.Contain(".hip-threat-table tr"));
             Assert.That(appCss, Does.Not.Contain(".hip-threat-table tbody tr:hover"));
@@ -109,24 +109,29 @@ public sealed class AdminDesignSystemTests
     }
 
     [Test]
-    public void Brand_kit_updates_ui_without_replacing_original_logo_or_icons()
+    public void Brand_kit_uses_the_accessible_svg_shield_without_replacing_navigation_icons()
     {
         var navigation = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Layout", "ControlCenterNav.razor"));
-        var logoPath = WorkspaceFile("src", "HIP.Web", "wwwroot", "hip-logo-original.png");
-        var logoHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(logoPath)))
-            .ToLowerInvariant();
+        var login = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Pages", "HipLogin.razor"));
+        var app = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "App.razor"));
+        var logo = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "hip-logo.svg"));
 
         Assert.Multiple(() =>
         {
             Assert.That(navigation, Does.Contain("alt=\"HIP\""));
             Assert.That(navigation, Does.Not.Contain("mark-ring"));
-            Assert.That(navigation, Does.Contain("src=\"/hip-logo-original.png\""));
+            Assert.That(navigation, Does.Contain("src=\"/hip-logo.svg\""));
+            Assert.That(login, Does.Contain("src=\"/hip-logo.svg\""));
+            Assert.That(app, Does.Contain("type=\"image/svg+xml\""));
+            Assert.That(app, Does.Contain("href=\"hip-logo.svg\""));
+            Assert.That(logo, Does.Contain("<svg"));
+            Assert.That(logo, Does.Contain("HIP Protocol Shield"));
+            Assert.That(logo, Does.Contain("viewBox=\"0 0 256 256\""));
             Assert.That(navigation, Does.Contain("private static RenderFragment Icon"));
             Assert.That(navigation, Does.Contain("\"shield\" => Svg"));
             Assert.That(navigation, Does.Contain("\"eye\" => Svg"));
             Assert.That(navigation, Does.Contain("\"bolt\" => Svg"));
             Assert.That(navigation, Does.Contain("\"settings\" => Svg"));
-            Assert.That(logoHash, Is.EqualTo("44dd2573c0a0bd53b02b8487b70363b559cbf27b232e896eeac40fe8a194640d"));
             Assert.That(navigation, Does.Not.Contain("brand_kit"));
             Assert.That(navigation, Does.Not.Contain("hip_brand_kit"));
         });
@@ -135,7 +140,7 @@ public sealed class AdminDesignSystemTests
 
     private static string WorkspaceFile(params string[] segments)
     {
-        var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
+        var directory = new DirectoryInfo(Path.GetDirectoryName(SourceFilePath())!);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "HIP.slnx")))
         {
             directory = directory.Parent;
@@ -144,4 +149,8 @@ public sealed class AdminDesignSystemTests
         Assert.That(directory, Is.Not.Null, "Unable to locate the HIP repository root.");
         return Path.Combine([directory!.FullName, .. segments]);
     }
+
+    private static string SourceFilePath(
+        [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "") =>
+        sourceFilePath;
 }

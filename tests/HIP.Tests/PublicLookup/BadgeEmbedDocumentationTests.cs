@@ -19,9 +19,19 @@ public sealed class BadgeEmbedDocumentationTests
         Assert.That(script, Does.Contain("payload.certificate"));
         Assert.That(script, Does.Contain("certificate.isActive"));
         Assert.That(script, Does.Contain("HIP Identity Verified"));
-        Assert.That(script, Does.Contain("Evidence coverage"));
+        Assert.That(script, Does.Contain("<b>Evidence</b>"));
         Assert.That(script, Does.Contain("Not enough evidence yet"));
         Assert.That(script, Does.Not.Contain("badge.score)}/100"));
+        Assert.That(script, Does.Contain("position: fixed"));
+        Assert.That(script, Does.Contain("background: transparent"));
+        Assert.That(script, Does.Contain("shieldMarkup"));
+        Assert.That(script, Does.Contain("viewBox=\"0 0 256 256\""));
+        Assert.That(script, Does.Contain("data-hip-action=\"minimize\""));
+        Assert.That(script, Does.Contain("data-hip-action=\"close\""));
+        Assert.That(script, Does.Contain("data-hip-action=\"show\""));
+        Assert.That(script, Does.Contain("prefers-reduced-motion"));
+        Assert.That(script, Does.Not.Contain("localStorage"));
+        Assert.That(script, Does.Not.Contain("sessionStorage"));
     }
 
     /// <summary>

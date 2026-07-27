@@ -1,7 +1,7 @@
 .login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(24rem, .9fr) minmax(30rem, 1.1fr); background: var(--bg); color: var(--ink); }
 .login-brand-panel { display: flex; flex-direction: column; justify-content: space-between; gap: 3rem; padding: clamp(2rem, 5vw, 4.5rem); background: var(--side); color: var(--side-ink); }
 .login-brand { display: inline-flex; align-items: center; gap: .9rem; width: max-content; color: inherit; text-decoration: none; }
-.login-brand img { width: 3.25rem; height: 3.3rem; object-fit: contain; }
+.login-brand img { width: 3.25rem; height: 3.25rem; object-fit: contain; }
 .login-brand span { display: grid; gap: .15rem; }
 .login-brand strong { font-size: 1.05rem; letter-spacing: .02em; }
 .login-brand small, .login-eyebrow { color: var(--accent); font-family: var(--font-mono); font-size: .7rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
