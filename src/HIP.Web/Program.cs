@@ -66,7 +66,9 @@ const string ConsumerDeviceMutationRateLimitPolicy = "ConsumerDeviceMutationPoli
 
 builder.AddServiceDefaults();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddHipApplication(builder.Environment.IsDevelopment());
+builder.Services.AddHipApplication(
+    builder.Environment.IsDevelopment(),
+    builder.Environment.IsDevelopment() ? "web" : null);
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddHostedService<DomainVerificationRecheckWorker>();

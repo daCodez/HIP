@@ -51,7 +51,7 @@ public sealed class TrustBadgeService(
             lookup.LastCheckedUtc,
             publicUrl,
             publicUrl,
-            $"{label} - Certificate: {certificate?.Status.ToString() ?? "NotIssued"} - Score: {lookup.FinalHipScore}/100 - Risk: {lookup.Status}. A certificate does not automatically mean safe.",
+            $"{label} - Certificate: {certificate?.Status.ToString() ?? "NotIssued"} - Score: {lookup.FinalHipScore}/100 - Status: {lookup.Status}. A certificate does not automatically mean safe.",
             variant,
             lookup.IdentityVerificationStatus,
             lookup.SignatureValid,

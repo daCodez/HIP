@@ -8,7 +8,9 @@ var builder = Host.CreateApplicationBuilder(args);
 // capture logs, traces, and health signals in one local dashboard.
 builder.AddServiceDefaults();
 
-builder.Services.AddHipApplication(builder.Environment.IsDevelopment());
+builder.Services.AddHipApplication(
+    builder.Environment.IsDevelopment(),
+    builder.Environment.IsDevelopment() ? "sandbox" : null);
 builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services
     .AddOptions<SandboxWorkerOptions>()

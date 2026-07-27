@@ -50,7 +50,8 @@ public static class DependencyInjection
     /// <returns>The same service collection for fluent registration.</returns>
     public static IServiceCollection AddHipApplication(
         this IServiceCollection services,
-        bool allowDevelopmentCryptoProvider = false)
+        bool allowDevelopmentCryptoProvider = false,
+        string? developmentSigningAuthorityScope = null)
     {
         var assembly = typeof(DependencyInjection).Assembly;
         services.AddScoped<IDomainCertificateEnrollmentService, DomainCertificateEnrollmentService>();
@@ -65,7 +66,7 @@ public static class DependencyInjection
                 ? DomainCertificateEnrollmentOwnershipPolicy.Development
                 : DomainCertificateEnrollmentOwnershipPolicy.Default);
         var developmentSigningMaterial = allowDevelopmentCryptoProvider
-            ? DevelopmentManagedTrustReceiptSigningMaterial.Create()
+            ? DevelopmentManagedTrustReceiptSigningMaterial.Create(developmentSigningAuthorityScope)
             : null;
         if (developmentSigningMaterial is null)
         {
@@ -77,7 +78,7 @@ public static class DependencyInjection
             services.AddSingleton(new DomainCertificateSigningAuthorityPolicy(
             [
                 new DomainCertificateAuthorizedSigner(
-                    DevelopmentManagedTrustReceiptSigningMaterial.IssuerId,
+                    developmentSigningMaterial.IssuerId,
                     developmentSigningMaterial.KeyId)
             ]));
         }
@@ -193,7 +194,7 @@ public static class DependencyInjection
             services.AddSingleton(new HipTrustReceiptIssuerPolicy(
             [
                 new HipTrustReceiptAuthorizedSigner(
-                    DevelopmentManagedTrustReceiptSigningMaterial.IssuerId,
+                    developmentSigningMaterial.IssuerId,
                     developmentSigningMaterial.KeyId)
             ]));
         }

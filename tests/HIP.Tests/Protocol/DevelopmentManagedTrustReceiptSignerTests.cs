@@ -121,6 +121,52 @@ public sealed class DevelopmentManagedTrustReceiptSignerTests
     }
 
     [Test]
+    public async Task Development_service_scopes_do_not_retire_each_others_signing_keys()
+    {
+        var repository = new InMemorySigningKeyLifecycleRepository();
+        var webServices = Services(
+            repository,
+            allowDevelopmentCryptoProvider: true,
+            developmentSigningAuthorityScope: "web");
+        await using var webProvider = webServices.BuildServiceProvider();
+        await using var webScope = webProvider.CreateAsyncScope();
+        var webSigner = webScope.ServiceProvider.GetRequiredService<IManagedTrustReceiptSigner>();
+        var initialWebKey = await webSigner.GetSigningKeyAsync(CancellationToken.None);
+
+        var apiServices = Services(
+            repository,
+            allowDevelopmentCryptoProvider: true,
+            developmentSigningAuthorityScope: "api");
+        await using var apiProvider = apiServices.BuildServiceProvider();
+        await using var apiScope = apiProvider.CreateAsyncScope();
+        var apiKey = await apiScope.ServiceProvider
+            .GetRequiredService<IManagedTrustReceiptSigner>()
+            .GetSigningKeyAsync(CancellationToken.None);
+        var currentWebKey = await webSigner.GetSigningKeyAsync(CancellationToken.None);
+
+        var webRing = await repository.GetAsync(initialWebKey.IssuerId, CancellationToken.None);
+        var apiRing = await repository.GetAsync(apiKey.IssuerId, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(initialWebKey.IssuerId, Is.EqualTo("hip:development:web-certificate-authority"));
+            Assert.That(apiKey.IssuerId, Is.EqualTo("hip:development:api-certificate-authority"));
+            Assert.That(apiKey.IssuerId, Is.Not.EqualTo(initialWebKey.IssuerId));
+            Assert.That(currentWebKey, Is.EqualTo(initialWebKey));
+            Assert.That(webRing!.GetRequiredKey(initialWebKey.KeyId).Status, Is.EqualTo(SigningKeyStatus.Active));
+            Assert.That(apiRing!.GetRequiredKey(apiKey.KeyId).Status, Is.EqualTo(SigningKeyStatus.Active));
+            Assert.That(
+                webProvider.GetRequiredService<HipTrustReceiptIssuerPolicy>()
+                    .IsAuthorized(initialWebKey.IssuerId, initialWebKey.KeyId),
+                Is.True);
+            Assert.That(
+                apiProvider.GetRequiredService<HipTrustReceiptIssuerPolicy>()
+                    .IsAuthorized(apiKey.IssuerId, apiKey.KeyId),
+                Is.True);
+        });
+    }
+
+    [Test]
     public void Production_registration_keeps_managed_signing_unavailable_and_unauthorized()
     {
         var services = Services(
@@ -158,13 +204,16 @@ public sealed class DevelopmentManagedTrustReceiptSignerTests
 
     private static ServiceCollection Services(
         InMemorySigningKeyLifecycleRepository repository,
-        bool allowDevelopmentCryptoProvider)
+        bool allowDevelopmentCryptoProvider,
+        string? developmentSigningAuthorityScope = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<ISigningKeyLifecycleRepository>(repository);
         services.AddSingleton<IAuditLogRepository>(repository);
-        services.AddHipApplication(allowDevelopmentCryptoProvider);
+        services.AddHipApplication(
+            allowDevelopmentCryptoProvider,
+            developmentSigningAuthorityScope);
         return services;
     }
 }

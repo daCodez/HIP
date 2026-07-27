@@ -10,29 +10,74 @@ namespace HIP.Application.Protocol;
 /// </summary>
 internal sealed class DevelopmentManagedTrustReceiptSigningMaterial
 {
-    public const string IssuerId = "hip:development:certificate-authority";
-    public const string ActorId = "system:development-signing-authority";
+    public const string DefaultIssuerId = "hip:development:certificate-authority";
+    public const string DefaultActorId = "system:development-signing-authority";
 
-    private DevelopmentManagedTrustReceiptSigningMaterial(HipKeyPair keyPair, string keyId)
+    private DevelopmentManagedTrustReceiptSigningMaterial(
+        HipKeyPair keyPair,
+        string keyId,
+        string issuerId,
+        string actorId)
     {
         KeyPair = keyPair;
         KeyId = keyId;
+        IssuerId = issuerId;
+        ActorId = actorId;
     }
 
     public HipKeyPair KeyPair { get; }
 
     public string KeyId { get; }
 
+    /// <summary>Development-only issuer identity isolated to one local service role.</summary>
+    public string IssuerId { get; }
+
+    /// <summary>Development-only audit actor isolated to one local service role.</summary>
+    public string ActorId { get; }
+
     public SemaphoreSlim LifecycleLock { get; } = new(1, 1);
 
-    public static DevelopmentManagedTrustReceiptSigningMaterial Create()
+    public static DevelopmentManagedTrustReceiptSigningMaterial Create(string? authorityScope = null)
     {
+        var scope = NormalizeAuthorityScope(authorityScope);
         var provider = new DevelopmentHipCryptoProvider(
             new DevelopmentHipCryptoProviderOptions(AllowDevelopmentProvider: true));
         var keyPair = provider.GenerateKeyPair();
         var digest = SHA256.HashData(Encoding.UTF8.GetBytes(keyPair.PublicKey));
         var keyId = $"development-{Convert.ToHexString(digest).ToLowerInvariant()[..24]}";
-        return new DevelopmentManagedTrustReceiptSigningMaterial(keyPair, keyId);
+        var issuerId = scope.Length == 0
+            ? DefaultIssuerId
+            : $"hip:development:{scope}-certificate-authority";
+        var actorId = scope.Length == 0
+            ? DefaultActorId
+            : $"system:development-{scope}-signing-authority";
+        return new DevelopmentManagedTrustReceiptSigningMaterial(
+            keyPair,
+            keyId,
+            issuerId,
+            actorId);
+    }
+
+    private static string NormalizeAuthorityScope(string? value)
+    {
+        if (value is null)
+        {
+            return string.Empty;
+        }
+
+        var scope = value.Trim().ToLowerInvariant();
+        if (scope.Length is < 1 or > 32 ||
+            scope[0] == '-' ||
+            scope[^1] == '-' ||
+            scope.Any(character =>
+                !(character is >= 'a' and <= 'z' or >= '0' and <= '9' or '-')))
+        {
+            throw new ArgumentException(
+                "Development signing authority scope must be a bounded lowercase token.",
+                nameof(value));
+        }
+
+        return scope;
     }
 }
 
@@ -62,11 +107,11 @@ internal sealed class DevelopmentManagedTrustReceiptSigner(
         {
             var now = clock.GetUtcNow().ToUniversalTime();
             var identity = await keyRepository.GetRegisteredIdentityAsync(
-                    DevelopmentManagedTrustReceiptSigningMaterial.IssuerId,
+                    signingMaterial.IssuerId,
                     cancellationToken)
                 .ConfigureAwait(false);
             var ring = await keyRepository.GetAsync(
-                    DevelopmentManagedTrustReceiptSigningMaterial.IssuerId,
+                    signingMaterial.IssuerId,
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -79,7 +124,7 @@ internal sealed class DevelopmentManagedTrustReceiptSigner(
             if (identity is null || ring is null)
             {
                 throw new IdentitySigningKeyRegistrationInconsistencyException(
-                    DevelopmentManagedTrustReceiptSigningMaterial.IssuerId,
+                    signingMaterial.IssuerId,
                     identityExists: identity is not null,
                     keyRingExists: ring is not null);
             }
@@ -108,7 +153,7 @@ internal sealed class DevelopmentManagedTrustReceiptSigner(
                         signingMaterial.KeyId,
                         signingMaterial.KeyPair.Algorithm,
                         signingMaterial.KeyPair.PublicKey,
-                        DevelopmentManagedTrustReceiptSigningMaterial.ActorId,
+                        signingMaterial.ActorId,
                         "Rotate the process-confined development signing key after host startup.",
                         now),
                     cancellationToken)
@@ -154,7 +199,7 @@ internal sealed class DevelopmentManagedTrustReceiptSigner(
     private async Task RegisterAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
         var identity = new HipIdentity(
-            DevelopmentManagedTrustReceiptSigningMaterial.IssuerId,
+            signingMaterial.IssuerId,
             IdentitySubjectType.Organization,
             "HIP Development Signing Authority",
             signingMaterial.KeyPair.PublicKey,
@@ -166,7 +211,7 @@ internal sealed class DevelopmentManagedTrustReceiptSigner(
                 new RegisterIdentitySigningKeyRequest(
                     identity,
                     signingMaterial.KeyId,
-                    DevelopmentManagedTrustReceiptSigningMaterial.ActorId,
+                    signingMaterial.ActorId,
                     "Register the process-confined development signing authority.",
                     now),
                 cancellationToken)
@@ -178,11 +223,11 @@ internal sealed class DevelopmentManagedTrustReceiptSigner(
         string.Equals(key.Algorithm, signingMaterial.KeyPair.Algorithm, StringComparison.Ordinal) &&
         string.Equals(key.PublicKey, signingMaterial.KeyPair.PublicKey, StringComparison.Ordinal);
 
-    private static void EnsureVerifiedIdentity(HipIdentity identity)
+    private void EnsureVerifiedIdentity(HipIdentity identity)
     {
         if (!string.Equals(
                 identity.IdentityId,
-                DevelopmentManagedTrustReceiptSigningMaterial.IssuerId,
+                signingMaterial.IssuerId,
                 StringComparison.Ordinal) ||
             identity.VerificationStatus != VerificationStatus.Verified)
         {
@@ -193,7 +238,7 @@ internal sealed class DevelopmentManagedTrustReceiptSigner(
 
     private HipManagedTrustReceiptSigningKey SigningKey() =>
         new(
-            DevelopmentManagedTrustReceiptSigningMaterial.IssuerId,
+            signingMaterial.IssuerId,
             signingMaterial.KeyId,
             signingMaterial.KeyPair.Algorithm,
             crypto.Capabilities.AlgorithmFamily);
