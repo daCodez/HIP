@@ -162,7 +162,8 @@ public static class DependencyInjection
         services.AddSingleton<ISubmissionRateLimiter, DevelopmentSubmissionRateLimiter>();
         services.AddScoped<IOutboxEventWriter, OutboxEventWriter>();
         services.AddSingleton<IReportRetentionPolicyService, ReportRetentionPolicyService>();
-        services.AddSingleton<IPrivacySafeReportService, PrivacySafeReportService>();
+        services.AddSingleton<PrivacySafeReportStore>();
+        services.AddScoped<IPrivacySafeReportService, PrivacySafeReportService>();
         services.AddSingleton<MlDsa65SignatureProvider>();
         services.AddSingleton<IHipSignatureProvider>(provider =>
             provider.GetRequiredService<MlDsa65SignatureProvider>());

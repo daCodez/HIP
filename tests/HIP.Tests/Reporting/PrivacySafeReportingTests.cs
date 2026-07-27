@@ -1,4 +1,6 @@
 using HIP.Application.Reporting;
+using HIP.Application.Reputation;
+using HIP.Domain.Reputation;
 using HIP.Domain.Reporting;
 using HIP.Domain.Risk;
 
@@ -104,6 +106,71 @@ public sealed class PrivacySafeReportingTests
 
         Assert.That(response.Status, Is.EqualTo(ReportStatus.Submitted));
         Assert.That(stored.Single().Status, Is.EqualTo(ReportStatus.Submitted));
+    }
+
+    [Test]
+    public async Task Suspicious_sender_report_updates_the_hashed_sender_profile()
+    {
+        var profiles = new InMemoryReputationProfileRepository();
+        var reputation = new ReputationService(new InMemoryReputationEventRepository(), profiles);
+        var hashing = new Sha256PrivacyHashingService();
+        var service = new PrivacySafeReportService(new PrivacySafeReportValidator(), hashing, reputationService: reputation);
+
+        var response = await service.SubmitAsync(
+            Report() with { ReportType = ReportType.SuspiciousSender },
+            CancellationToken.None);
+        var profile = await profiles.GetAsync(
+            ReputationSubjectType.Sender,
+            hashing.Hash("sender@example"),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Accepted, Is.True);
+            Assert.That(profile, Is.Not.Null);
+            Assert.That(profile!.TargetId, Does.StartWith("sha256:"));
+            Assert.That(profile.TargetId, Does.Not.Contain("sender@example"));
+            Assert.That(profile.EventCount, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task Non_sender_report_does_not_change_sender_reputation()
+    {
+        var profiles = new InMemoryReputationProfileRepository();
+        var reputation = new ReputationService(new InMemoryReputationEventRepository(), profiles);
+        var service = new PrivacySafeReportService(
+            new PrivacySafeReportValidator(),
+            new Sha256PrivacyHashingService(),
+            reputationService: reputation);
+
+        var response = await service.SubmitAsync(Report(), CancellationToken.None);
+        var senderProfiles = await profiles.ListAsync(ReputationSubjectType.Sender, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Accepted, Is.True);
+            Assert.That(senderProfiles, Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task Shared_report_store_keeps_reports_visible_across_service_scopes()
+    {
+        var store = new PrivacySafeReportStore();
+        var firstScope = new PrivacySafeReportService(
+            new PrivacySafeReportValidator(),
+            new Sha256PrivacyHashingService(),
+            reportStore: store);
+        var secondScope = new PrivacySafeReportService(
+            new PrivacySafeReportValidator(),
+            new Sha256PrivacyHashingService(),
+            reportStore: store);
+
+        await firstScope.SubmitAsync(Report(), CancellationToken.None);
+        var stored = await secondScope.ListAsync(CancellationToken.None);
+
+        Assert.That(stored, Has.Count.EqualTo(1));
     }
 
     [Test]
