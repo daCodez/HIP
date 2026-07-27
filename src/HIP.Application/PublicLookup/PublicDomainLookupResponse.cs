@@ -87,6 +87,9 @@ public sealed record PublicDomainLookupResponse(
 
     /// <summary>Plain-English certificate lifecycle progress suitable for public clients.</summary>
     public string CertificateProgressStatus { get; init; } = "No certificate application";
+
+    /// <summary>Public-safe continuous monitoring lifecycle state.</summary>
+    public string MonitoringStatus { get; init; } = "Not enabled";
     /// <summary>Optional provider-assisted wording; it never replaces HIP's deterministic score or explanation.</summary>
     public string? AssistedExplanation { get; init; }
 

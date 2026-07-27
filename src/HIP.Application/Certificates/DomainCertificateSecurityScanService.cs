@@ -156,7 +156,12 @@ public sealed class DomainCertificateSecurityScanService(
         var metadata = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["scanPurpose"] = "DomainCertificateSecurityReview",
-            ["siteSafetyScanId"] = scan.ScanId
+            ["siteSafetyScanId"] = scan.ScanId,
+            ["evidenceConfidence"] = scan.ConfidenceLevel,
+            ["domainTrustScore"] = scan.DomainTrustScore.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["pageTrustScore"] = scan.PageTrustScore.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["contentRiskScore"] = scan.ContentRiskScore.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["finalHipScore"] = scan.FinalHipScore.ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
         var items = scan.ProviderEvidence.SelectMany(item => item.EvidenceItems).ToArray();
         return new BrowserScanResultSaveRequest(

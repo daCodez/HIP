@@ -243,7 +243,11 @@ public sealed class EfDomainCertificateRepository(
                     enrollment.SecurityReviewCompletedAtUtc,
                     enrollment.UnresolvedCriticalFindings,
                     certificate == null ? null : certificate.Status,
-                    certificate == null ? null : certificate.Level))
+                    certificate == null ? null : certificate.Level,
+                    enrollment.MonitoringEnabledAtUtc,
+                    enrollment.LastMonitoringAtUtc,
+                    enrollment.MonitoringNextCheckAtUtc,
+                    enrollment.MonitoringFailureCount))
             .SingleOrDefaultAsync(cancellationToken);
     }
     /// <inheritdoc />

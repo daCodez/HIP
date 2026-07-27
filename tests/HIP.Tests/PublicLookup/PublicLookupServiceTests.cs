@@ -129,6 +129,73 @@ public sealed class PublicLookupServiceTests
     }
 
     [Test]
+    public async Task Lookup_preserves_authenticated_authoritative_score_components()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        var scanResultService = new BrowserScanResultService(
+            repository,
+            new Sha256PrivacyHashingService(),
+            new InMemoryScanResultCache(),
+            new InMemoryDashboardScanAggregateStore());
+        await scanResultService.SaveAsync(new BrowserScanResultSaveRequest(
+            "monitored.example",
+            "https://monitored.example/",
+            86,
+            "Trusted",
+            "Trusted",
+            ["Authenticated monitoring found no material risk."],
+            0,
+            0,
+            0,
+            0,
+            "Allow",
+            new Dictionary<string, string>
+            {
+                ["scanPurpose"] = "DomainCertificateSecurityReview",
+                ["domainTrustScore"] = "88",
+                ["pageTrustScore"] = "84",
+                ["contentRiskScore"] = "90",
+                ["finalHipScore"] = "86"
+            }), CancellationToken.None);
+        var monitoredAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var progress = new PublicDomainCertificateProgress(
+            "monitored.example",
+            DomainEnrollmentStatus.Monitored,
+            DomainCertificateApplicationStatus.Approved,
+            monitoredAtUtc.AddDays(-1),
+            0,
+            DomainCertificateStatus.Active,
+            DomainCertificateLevel.Verified,
+            MonitoringEnabledAtUtc: monitoredAtUtc.AddHours(-1),
+            LastMonitoringAtUtc: monitoredAtUtc,
+            MonitoringNextCheckAtUtc: monitoredAtUtc.AddDays(1),
+            MonitoringFailureCount: 0);
+        var service = new PublicDomainLookupService(
+            repository,
+            certificateAdminQuery: new StubCertificateAdminQuery(progress));
+
+        var result = await service.LookupDomainAsync("monitored.example", CancellationToken.None);
+        var apiResponse = PublicLookupApiResponse.From(result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.DomainTrustScore, Is.EqualTo(88));
+            Assert.That(result.PageTrustScore, Is.EqualTo(84));
+            Assert.That(result.ContentRiskScore, Is.EqualTo(90));
+            Assert.That(result.FinalHipScore, Is.EqualTo(86));
+            Assert.That(result.DisplayScore, Is.EqualTo(86));
+            Assert.That(result.ScorePresentation, Is.EqualTo(PublicEvidencePresentation.ScoreAvailable));
+            Assert.That(result.EvidenceCoverage, Is.EqualTo(PublicEvidencePresentation.CoverageSufficient));
+            Assert.That(result.EvidenceConfidence, Is.EqualTo(PublicEvidencePresentation.ConfidenceHigh));
+            Assert.That(result.MonitoringStatus, Is.EqualTo("Active"));
+            Assert.That(result.CertificateProgressStatus, Is.EqualTo("Certificate active"));
+            Assert.That(apiResponse.CertificateApplicationStatus, Is.EqualTo("Approved"));
+            Assert.That(apiResponse.CertificateProgressStatus, Is.EqualTo("Certificate active"));
+            Assert.That(apiResponse.MonitoringStatus, Is.EqualTo("Active"));
+        });
+    }
+
+    [Test]
     public async Task Lookup_returns_unknown_when_no_stored_data_exists()
     {
         var service = new PublicDomainLookupService(new InMemoryBrowserScanResultRepository());

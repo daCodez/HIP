@@ -34,6 +34,10 @@ public sealed class DomainCertificateSecurityScanServiceTests
             Assert.That(writer.Request.PageUrlHash, Does.Match("^sha256:[0-9a-f]{64}$"));
             Assert.That(writer.Request.PrivacySafeMetadata?["scanPurpose"],
                 Is.EqualTo("DomainCertificateSecurityReview"));
+            Assert.That(writer.Request.PrivacySafeMetadata?["domainTrustScore"], Is.EqualTo("80"));
+            Assert.That(writer.Request.PrivacySafeMetadata?["pageTrustScore"], Is.EqualTo("80"));
+            Assert.That(writer.Request.PrivacySafeMetadata?["contentRiskScore"], Is.EqualTo("90"));
+            Assert.That(writer.Request.PrivacySafeMetadata?["finalHipScore"], Is.EqualTo("85"));
         });
     }
 

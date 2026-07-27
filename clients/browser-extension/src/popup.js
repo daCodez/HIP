@@ -45,6 +45,7 @@ const elements = {
   evidenceCoverage: document.getElementById("evidenceCoverage"),
   evidenceConfidence: document.getElementById("evidenceConfidence"),
   certificateApplication: document.getElementById("certificateApplication"),
+  monitoringStatus: document.getElementById("monitoringStatus"),
   certificateStatus: document.getElementById("certificateStatus"),
   certificateLevel: document.getElementById("certificateLevel"),
   certificateVerification: document.getElementById("certificateVerification"),
@@ -178,6 +179,7 @@ function renderLookup(lookup, summary = {}) {
   elements.evidenceConfidence.textContent = viewModel.evidenceConfidenceText;
   elements.identityStatus.textContent = viewModel.identityText;
   elements.certificateApplication.textContent = viewModel.certificateApplicationText;
+  elements.monitoringStatus.textContent = viewModel.monitoringStatusText;
   elements.certificateStatus.textContent = viewModel.certificateStatusText;
   elements.certificateLevel.textContent = viewModel.certificateLevelText;
   elements.certificateVerification.textContent = viewModel.certificateVerificationText;

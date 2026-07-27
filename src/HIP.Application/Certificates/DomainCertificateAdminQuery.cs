@@ -38,7 +38,11 @@ public sealed record PublicDomainCertificateProgress(
     DateTimeOffset? SecurityReviewCompletedAtUtc,
     int UnresolvedCriticalFindings,
     DomainCertificateStatus? CertificateStatus,
-    DomainCertificateLevel? CertificateLevel);
+    DomainCertificateLevel? CertificateLevel,
+    DateTimeOffset? MonitoringEnabledAtUtc = null,
+    DateTimeOffset? LastMonitoringAtUtc = null,
+    DateTimeOffset? MonitoringNextCheckAtUtc = null,
+    int MonitoringFailureCount = 0);
 /// <summary>Reads paged cross-owner certificate operations state without owner identifiers.</summary>
 public interface IDomainCertificateAdminQuery
 {

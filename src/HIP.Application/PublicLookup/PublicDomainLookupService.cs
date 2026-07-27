@@ -154,10 +154,26 @@ public sealed class PublicDomainLookupService(
             DomainCertificateStatus.PendingReview => "Certificate review pending",
             _ => ApplicationProgressLabel(progress)
         };
+        var monitoringStatus = progress.MonitoringEnabledAtUtc is null
+            ? "Not enabled"
+            : progress.MonitoringFailureCount > 0
+                ? "Retry scheduled"
+                : progress.LastMonitoringAtUtc is null
+                    ? "Starting"
+                    : "Active";
+        var hasCurrentAuthenticatedMonitoringEvidence =
+            monitoringStatus == "Active" &&
+            string.Equals(response.ScorePresentation, PublicEvidencePresentation.ScoreAvailable, StringComparison.Ordinal) &&
+            progress.LastMonitoringAtUtc >= response.LastCheckedUtc.AddMinutes(-5);
+
         return response with
         {
             CertificateApplicationStatus = progress.ApplicationStatus.ToString(),
-            CertificateProgressStatus = label
+            CertificateProgressStatus = label,
+            MonitoringStatus = monitoringStatus,
+            EvidenceConfidence = hasCurrentAuthenticatedMonitoringEvidence
+                ? PublicEvidencePresentation.ConfidenceHigh
+                : response.EvidenceConfidence
         };
     }
 
@@ -496,6 +512,11 @@ public sealed class PublicDomainLookupService(
     /// <returns>Layered score components and final explanation.</returns>
     private static LayeredLookupScore BuildLayeredScore(string domain, BrowserScanResultRecord storedScan)
     {
+        if (TryReadAuthenticatedLayeredScore(storedScan, out var authenticatedScore))
+        {
+            return authenticatedScore;
+        }
+
         var domainTrust = DomainTrustScoreFor(domain, storedScan);
         var pageTrust = PageTrustScoreFor(storedScan);
         var contentScore = ContentRiskScoreFor(storedScan);
@@ -513,6 +534,45 @@ public sealed class PublicDomainLookupService(
 
         var explanation = BuildFinalExplanation(domain, domainTrust, pageTrust, contentScore, final);
         return new LayeredLookupScore(domainTrust, pageTrust, contentScore, final, explanation);
+    }
+
+    /// <summary>Uses server-authenticated score components when the stored projection is complete and internally consistent.</summary>
+    private static bool TryReadAuthenticatedLayeredScore(
+        BrowserScanResultRecord storedScan,
+        out LayeredLookupScore layeredScore)
+    {
+        layeredScore = null!;
+        if (!TryReadScore(storedScan.PrivacySafeMetadata, "domainTrustScore", out var domainTrust) ||
+            !TryReadScore(storedScan.PrivacySafeMetadata, "pageTrustScore", out var pageTrust) ||
+            !TryReadScore(storedScan.PrivacySafeMetadata, "contentRiskScore", out var contentScore) ||
+            !TryReadScore(storedScan.PrivacySafeMetadata, "finalHipScore", out var finalScore) ||
+            finalScore != storedScan.Score)
+        {
+            return false;
+        }
+
+        layeredScore = new LayeredLookupScore(
+            domainTrust,
+            pageTrust,
+            contentScore,
+            finalScore,
+            $"HIP's latest authenticated server evaluation produced a final score of {finalScore}/100 from domain trust ({domainTrust}/100), page trust ({pageTrust}/100), and content safety ({contentScore}/100).");
+        return true;
+    }
+
+    private static bool TryReadScore(
+        IReadOnlyDictionary<string, string> metadata,
+        string key,
+        out int score)
+    {
+        score = 0;
+        return metadata.TryGetValue(key, out var value) &&
+               int.TryParse(
+                   value,
+                   System.Globalization.NumberStyles.None,
+                   System.Globalization.CultureInfo.InvariantCulture,
+                   out score) &&
+               score is >= 0 and <= 100;
     }
 
     /// <summary>

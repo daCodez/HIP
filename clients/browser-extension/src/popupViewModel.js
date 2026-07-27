@@ -232,6 +232,7 @@ export function buildPopupViewModel(lookup, summary, settings, currentUrl, certi
     evidenceCoverageText: lookup?.evidenceCoverage || (scoreAvailable ? "Sufficient" : "Unknown"),
     evidenceConfidenceText: lookup?.evidenceConfidence || "Unknown",
     certificateApplicationText: certificateProgressText(lookup),
+    monitoringStatusText: safeDisplayText(lookup?.monitoringStatus || "Not enabled"),
     certificateLevelText: certificate?.level || "None verified",
     certificateStatusText: certificate?.status ||
       (lookup?.certificateApplicationStatus && lookup.certificateApplicationStatus !== "NotStarted"

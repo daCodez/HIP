@@ -3853,7 +3853,10 @@ public sealed record PublicLookupApiResponse(
     int? DisplayScore,
     string ScorePresentation,
     string EvidenceCoverage,
-    string EvidenceConfidence)
+    string EvidenceConfidence,
+    string CertificateApplicationStatus,
+    string CertificateProgressStatus,
+    string MonitoringStatus)
 {
     /// <summary>
     /// Converts the application lookup response into the API shape while preserving privacy-safe scan summary fields only.
@@ -3896,7 +3899,10 @@ public sealed record PublicLookupApiResponse(
             lookup.DisplayScore,
             lookup.ScorePresentation,
             lookup.EvidenceCoverage,
-            lookup.EvidenceConfidence);
+            lookup.EvidenceConfidence,
+            lookup.CertificateApplicationStatus,
+            lookup.CertificateProgressStatus,
+            lookup.MonitoringStatus);
 }
 
 public sealed record ScoreBreakdownApiItem(

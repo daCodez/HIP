@@ -394,13 +394,15 @@ test("popup shows the current certificate approval stage before issuance", () =>
       finalHipScore: 59,
       status: "LimitedTrustData",
       certificateApplicationStatus: "Approved",
-      certificateProgressStatus: "Application approved - security review pending"
+      certificateProgressStatus: "Application approved - security review pending",
+      monitoringStatus: "Starting"
     },
     {},
     { webBaseUrl: "https://hiptrust.com" },
     "https://example.com");
 
   assert.equal(view.certificateApplicationText, "Application approved - security review pending");
+  assert.equal(view.monitoringStatusText, "Starting");
   assert.equal(view.certificateStatusText, "Not issued");
   assert.equal(view.certificateLevelText, "None verified");
 });
@@ -419,6 +421,8 @@ test("popup markup contains primary UX fields and feedback controls", () => {
   assert.equal(popupHtml.includes('id="evidenceConfidence"'), true);
   assert.equal(popupHtml.includes("Certificate application"), true);
   assert.equal(popupHtml.includes('id="certificateApplication"'), true);
+  assert.equal(popupHtml.includes("Continuous monitoring"), true);
+  assert.equal(popupHtml.includes('id="monitoringStatus"'), true);
   assert.equal(popupHtml.includes("Domain Trust"), true);
   assert.equal(popupHtml.includes("Page Trust"), true);
   assert.equal(popupHtml.includes("Content Risk"), true);
