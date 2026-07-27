@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace HIP.Tests.Infrastructure;
 
 /// <summary>
@@ -137,6 +139,29 @@ public sealed class AspireAppHostFoundationTests
 
         Assert.That(apiLaunchSettings, Does.Contain("\"applicationUrl\": \"http://localhost:5099\""));
         Assert.That(webLaunchSettings, Does.Contain("\"applicationUrl\": \"http://localhost:5123\""));
+    }
+
+    /// <summary>
+    /// Confirms Visual Studio cannot block HIP.Web before application startup on an uncompleted Hot Reload handshake.
+    /// </summary>
+    [Test]
+    public void Web_launch_profiles_disable_hot_reload_startup_hooks()
+    {
+        var launchSettings = File.ReadAllText(Path.Combine(
+            RepositoryRoot(),
+            "src",
+            "HIP.Web",
+            "Properties",
+            "launchSettings.json"));
+        using var document = JsonDocument.Parse(launchSettings);
+        var profiles = document.RootElement.GetProperty("profiles");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(profiles.GetProperty("http").GetProperty("hotReloadEnabled").GetBoolean(), Is.False);
+            Assert.That(profiles.GetProperty("https").GetProperty("hotReloadEnabled").GetBoolean(), Is.False);
+            Assert.That(profiles.GetProperty("maintenance").GetProperty("hotReloadEnabled").GetBoolean(), Is.False);
+        });
     }
 
     /// <summary>

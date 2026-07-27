@@ -3,6 +3,7 @@
     "profiles": {
       "http": {
         "commandName": "Project",
+        "hotReloadEnabled": false,
         "dotnetRunMessages": true,
         "launchBrowser": true,
         "applicationUrl": "http://localhost:5123",
@@ -12,6 +13,7 @@
       },
       "https": {
         "commandName": "Project",
+        "hotReloadEnabled": false,
         "dotnetRunMessages": true,
         "launchBrowser": true,
         "applicationUrl": "https://localhost:7053;http://localhost:5123",
@@ -21,6 +23,7 @@
       },
       "maintenance": {
         "commandName": "Project",
+        "hotReloadEnabled": false,
         "dotnetRunMessages": false,
         "launchBrowser": false,
         "commandLineArgs": "--maintenance=consumer-history-owner-index-backfill --confirm=APPLY-CONSUMER-HISTORY-OWNER-INDEX",
