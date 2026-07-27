@@ -1,37 +1,111 @@
 @page "/consumer/appeals"
 @attribute [Authorize(Policy = ConsumerPolicies.CanUseConsumerPortal)]
 @rendermode InteractiveServer
+@using HIP.Domain.Review
 @inject IConsumerPortalService ConsumerPortalService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthorizationService AuthorizationService
 
 <PageTitle>HIP Consumer Appeals</PageTitle>
 
-@if (_accessError is not null)
-{
-    <p class="admin-error" role="alert">@_accessError</p>
-}
-else
-{
-    <ConsumerTable Title="Appeal Status" Description="Appeal status uses target IDs and privacy-safe summaries. Full private evidence is not shown."
-                   IsEmpty="@(_items.Count == 0)" EmptyMessage="No appeals are recorded for this consumer account yet.">
-        @foreach (var item in _items)
-        {
-            <tr>
-                <td>@item.UpdatedAtUtc.UtcDateTime.ToString("u")</td>
-                <td>@item.TargetType</td>
-                <td>@item.TargetId</td>
-                <td>@item.Status</td>
-                <td>@item.Summary</td>
-            </tr>
-        }
-    </ConsumerTable>
-}
+<main class="admin-rule-page consumer-appeals-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">Consumer portal</p>
+            <h1>Appeals</h1>
+            <p>Ask HIP to review a specific domain, website, sender, device key, organization, content pattern, or URL decision.</p>
+        </div>
+    </section>
+
+    @if (_accessError is not null)
+    {
+        <p class="admin-error" role="alert">@_accessError</p>
+    }
+    else
+    {
+        <section class="appeal-submit-panel" aria-labelledby="submit-appeal-heading">
+            <h2 id="submit-appeal-heading">Submit an appeal</h2>
+            <p>Provide a short public-safe explanation. Do not include passwords, private messages, form values, tokens, or personal evidence.</p>
+            <form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+                <label for="appeal-target-type">Target type</label>
+                <select id="appeal-target-type" @bind="_targetType">
+                    @foreach (var targetType in ConsumerTargetTypes)
+                    {
+                        <option value="@targetType">@TargetTypeLabel(targetType)</option>
+                    }
+                </select>
+                <label for="appeal-target-id">Target identifier</label>
+                <input id="appeal-target-id" @bind="_targetId" maxlength="512" required placeholder="example.com or the HIP reference shown in your result" />
+                <label for="appeal-reason">Reason for review</label>
+                <textarea id="appeal-reason" @bind="_reason" maxlength="1000" required aria-describedby="appeal-reason-help"></textarea>
+                <small id="appeal-reason-help">Maximum 1,000 characters. HIP stores this reason as review and audit evidence.</small>
+                <button class="btn btn-primary" type="submit" disabled="@_submitting">@(_submitting ? "Submitting…" : "Submit appeal")</button>
+            </form>
+            @if (_submissionIsError && _submissionMessage is not null)
+            {
+                <p class="admin-error" role="alert">@_submissionMessage</p>
+            }
+            else if (_submissionMessage is not null)
+            {
+                <p class="admin-message" role="status">@_submissionMessage</p>
+            }
+        </section>
+
+        <section class="lookup-result" aria-labelledby="appeal-status-heading">
+            <h2 id="appeal-status-heading">Appeal status</h2>
+            <p>Only appeals bound to this consumer account are shown. Full private evidence and reviewer identity are not displayed.</p>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Updated</th><th>Target type</th><th>Target</th><th>Status</th><th>Summary</th></tr></thead>
+                    <tbody>
+                        @if (_items.Count == 0)
+                        {
+                            <tr><td colspan="5">No appeals are recorded for this consumer account yet.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var item in _items)
+                            {
+                                <tr>
+                                    <td>@item.UpdatedAtUtc.UtcDateTime.ToString("u")</td>
+                                    <td>@item.TargetType</td>
+                                    <td>@item.TargetId</td>
+                                    <td>@item.Status</td>
+                                    <td>@item.Summary</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+</main>
 
 @code {
+    private static readonly TargetType[] ConsumerTargetTypes =
+    [
+        TargetType.Domain,
+        TargetType.Website,
+        TargetType.Url,
+        TargetType.Sender,
+        TargetType.DeviceKey,
+        TargetType.Organization,
+        TargetType.ContentPattern
+    ];
+
     private IReadOnlyCollection<ConsumerAppealItem> _items = [];
+    private TargetType _targetType = TargetType.Domain;
+    private string _targetId = string.Empty;
+    private string _reason = string.Empty;
+    private bool _submitting;
+    private bool _submissionIsError;
+    private string? _submissionMessage;
     private string? _accessError;
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
     {
         var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var result = await HipConsumerPageAccess.ExecuteAsync(
@@ -43,6 +117,63 @@ else
             return;
         }
 
+        _accessError = null;
         _items = result.Value ?? [];
     }
+
+    private async Task SubmitAsync()
+    {
+        _submitting = true;
+        _submissionMessage = null;
+        _submissionIsError = false;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                ConsumerPolicies.CanUseConsumerPortal,
+                consumerId => ConsumerPortalService.SubmitAppealAsync(
+                    consumerId,
+                    new ConsumerAppealSubmissionRequest(
+                        _targetType,
+                        _targetId,
+                        _reason,
+                        PrivacySafeEvidence: null),
+                    CancellationToken.None));
+            if (!access.Succeeded || access.Value is null)
+            {
+                _submissionIsError = true;
+                _submissionMessage = HipConsumerPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            _submissionMessage = access.Value.Message;
+            _submissionIsError = !access.Value.Accepted;
+            if (!access.Value.Accepted)
+            {
+                return;
+            }
+
+            _targetId = string.Empty;
+            _reason = string.Empty;
+            await LoadAsync();
+        }
+        catch (Exception)
+        {
+            _submissionIsError = true;
+            _submissionMessage = "HIP could not submit this appeal right now. No appeal was recorded.";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private static string TargetTypeLabel(TargetType targetType) => targetType switch
+    {
+        TargetType.DeviceKey => "Device key",
+        TargetType.ContentPattern => "Content pattern",
+        _ => targetType.ToString()
+    };
 }

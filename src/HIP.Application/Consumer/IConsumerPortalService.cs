@@ -12,6 +12,12 @@ public interface IConsumerPortalService
 
     ConsumerAppealSubmissionResult SubmitAppeal(string consumerId, ConsumerAppealSubmissionRequest request);
 
+    Task<ConsumerAppealSubmissionResult> SubmitAppealAsync(
+        string consumerId,
+        ConsumerAppealSubmissionRequest request,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(SubmitAppeal(consumerId, request));
+
     Task<ConsumerSettings> GetSettingsAsync(string consumerId, CancellationToken cancellationToken);
 
     Task<ConsumerSettingsSaveResult> SaveSettingsAsync(

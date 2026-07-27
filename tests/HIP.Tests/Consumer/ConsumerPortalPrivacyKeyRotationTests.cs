@@ -66,7 +66,7 @@ public sealed class ConsumerPortalPrivacyKeyRotationTests
     }
 
     [Test]
-    public void New_consumer_appeals_write_only_the_current_hash()
+    public async Task New_consumer_appeals_write_only_the_current_hash()
     {
         var currentHashing = Hashing(CurrentKey);
         var legacyHashing = Hashing(LegacyKey);
@@ -78,13 +78,14 @@ public sealed class ConsumerPortalPrivacyKeyRotationTests
             deviceRegistrationService: null!,
             appealRepository: new InMemoryAppealRepository());
 
-        var result = service.SubmitAppeal(
+        var result = await service.SubmitAppealAsync(
             "consumer-A",
             new ConsumerAppealSubmissionRequest(
                 TargetType.Domain,
                 "example.com",
                 "Please review the current trust evidence.",
-                new Dictionary<string, string>()));
+                new Dictionary<string, string>()),
+            CancellationToken.None);
         var stored = appeals.Get(result.AppealId)!;
 
         Assert.Multiple(() =>
@@ -92,6 +93,37 @@ public sealed class ConsumerPortalPrivacyKeyRotationTests
             Assert.That(result.Accepted, Is.True);
             Assert.That(stored.SubmittedByHash, Is.EqualTo(currentHashing.Hash("consumer-A")));
             Assert.That(stored.SubmittedByHash, Is.Not.EqualTo(legacyHashing.Hash("consumer-A")));
+        });
+    }
+
+    [Test]
+    public async Task Consumer_appeal_rejects_unbounded_evidence_before_persistence()
+    {
+        var appeals = new StubAppealService([]);
+        var service = new ConsumerPortalService(
+            new InMemoryRiskFindingReportRepository(),
+            appeals,
+            Hashing(CurrentKey),
+            deviceRegistrationService: null!,
+            appealRepository: new InMemoryAppealRepository());
+        var evidence = Enumerable.Range(0, 9).ToDictionary(
+            index => $"fact-{index}",
+            index => $"summary-{index}");
+
+        var result = await service.SubmitAppealAsync(
+            "consumer-A",
+            new ConsumerAppealSubmissionRequest(
+                TargetType.Domain,
+                "example.com",
+                "Please review the current trust evidence.",
+                evidence),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Accepted, Is.False);
+            Assert.That(result.Message, Does.Contain("Privacy-safe evidence"));
+            Assert.That(appeals.List(), Is.Empty);
         });
     }
 

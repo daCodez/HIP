@@ -2096,12 +2096,16 @@ static void MapConsumerApis(RouteGroupBuilder consumerApi)
         CancellationToken cancellationToken) =>
         Results.Ok(await consumerPortalService.GetAppealsAsync(ConsumerId(httpContext), cancellationToken)));
 
-    consumerApi.MapPost("/appeals", (
+    consumerApi.MapPost("/appeals", async (
         HttpContext httpContext,
         ConsumerAppealSubmissionRequest request,
-        IConsumerPortalService consumerPortalService) =>
+        IConsumerPortalService consumerPortalService,
+        CancellationToken cancellationToken) =>
     {
-        var result = consumerPortalService.SubmitAppeal(ConsumerId(httpContext), request);
+        var result = await consumerPortalService.SubmitAppealAsync(
+            ConsumerId(httpContext),
+            request,
+            cancellationToken);
         return result.Accepted ? Results.Ok(result) : Results.BadRequest(result);
     });
 

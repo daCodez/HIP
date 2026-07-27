@@ -31,6 +31,7 @@ public sealed class RazorPageAuthorizationMatrixTests
         Page("DevLauncher", "/dev/launcher", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>HIP Local Launcher</h1>"),
 
         Page("AdminAlerts", "/admin/alerts", AdminPolicies.CanViewReviews, DeniedPrincipal.Consumer, "<h1>Alert Center</h1>"),
+        Page("AdminDomainCertificates", "/admin/certificates", AdminPolicies.CanViewReviews, DeniedPrincipal.Consumer, "<h1>Domain Trust Certificates</h1>"),
         Page("AdminReportsPage", "/admin/reports", AdminPolicies.CanViewReviews, DeniedPrincipal.Consumer, "<h1>Reports</h1>"),
         Page("AdminReview", "/admin/review", AdminPolicies.CanViewReviews, DeniedPrincipal.Consumer, "<h1>Review Queue</h1>"),
         Page("AdminReview", "/admin/review/{ReviewItemId}", "/admin/review/matrix-review", AdminPolicies.CanViewReviews, DeniedPrincipal.Consumer, "<h1>Review Queue</h1>"),
@@ -53,7 +54,8 @@ public sealed class RazorPageAuthorizationMatrixTests
         Page("AdminWebsiteIdentity", "/admin/identity/websites", AdminPolicies.CanManageDomainVerifications, DeniedPrincipal.ReadOnly, "<h1>Domain Verification</h1>"),
         Page("HipStepUp", "/step-up", AdminPolicies.CanRequestPrivilegedStepUp, DeniedPrincipal.Moderator, "Confirm it is still you."),
 
-        Page("ConsumerAppeals", "/consumer/appeals", ConsumerPolicies.CanUseConsumerPortal, DeniedPrincipal.Admin, "Appeal Status"),
+        Page("ConsumerAppeals", "/consumer/appeals", ConsumerPolicies.CanUseConsumerPortal, DeniedPrincipal.Admin, "<h1>Appeals</h1>"),
+        Page("ConsumerCertificates", "/consumer/certificates", ConsumerPolicies.CanUseConsumerPortal, DeniedPrincipal.Admin, "<h1>Domain certificates</h1>"),
         Page("ConsumerAccountSecurity", "/consumer/security", ConsumerPolicies.CanUseConsumerPortal, DeniedPrincipal.Admin, "<h1>Account Security</h1>"),
         Page("ConsumerDevices", "/consumer/devices", ConsumerPolicies.CanUseConsumerPortal, DeniedPrincipal.Admin, "<h1>Devices</h1>"),
         Page("ConsumerHome", "/consumer", ConsumerPolicies.CanUseConsumerPortal, DeniedPrincipal.Admin, "<h1>Consumer Portal</h1>"),
@@ -89,10 +91,10 @@ public sealed class RazorPageAuthorizationMatrixTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(Cases, Has.Length.EqualTo(45), "The maintained matrix must contain every protected route template.");
+            Assert.That(Cases, Has.Length.EqualTo(47), "The maintained matrix must contain every protected route template.");
             Assert.That(
                 Cases.Select(item => item.ComponentName).Distinct(StringComparer.Ordinal).ToArray(),
-                Has.Length.EqualTo(37),
+                Has.Length.EqualTo(39),
                 "The maintained matrix must contain every protected routable component.");
             Assert.That(
                 expected.Select(item => $"{item.ComponentName}|{item.RouteTemplate}"),

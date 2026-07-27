@@ -1,0 +1,64 @@
+.consumer-appeals-page {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.appeal-submit-panel {
+    padding: clamp(1rem, 3vw, 1.5rem);
+    border: 1px solid var(--line);
+    border-left: .35rem solid #3c79f5;
+    border-radius: .75rem;
+    background: var(--panel);
+}
+
+.appeal-submit-panel form {
+    display: grid;
+    grid-template-columns: minmax(10rem, .4fr) minmax(0, 1fr);
+    gap: .65rem 1rem;
+    align-items: start;
+}
+
+.appeal-submit-panel input,
+.appeal-submit-panel select,
+.appeal-submit-panel textarea {
+    width: 100%;
+    min-width: 0;
+}
+
+.appeal-submit-panel textarea {
+    min-height: 8rem;
+    resize: vertical;
+}
+
+.appeal-submit-panel small,
+.appeal-submit-panel button,
+.appeal-submit-panel .admin-error,
+.appeal-submit-panel .admin-message {
+    grid-column: 2;
+}
+
+.appeal-submit-panel button {
+    justify-self: start;
+}
+
+@media (max-width: 44rem) {
+    .appeal-submit-panel form {
+        grid-template-columns: 1fr;
+    }
+
+    .appeal-submit-panel small,
+    .appeal-submit-panel button,
+    .appeal-submit-panel .admin-error,
+    .appeal-submit-panel .admin-message {
+        grid-column: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .consumer-appeals-page *,
+    .consumer-appeals-page *::before,
+    .consumer-appeals-page *::after {
+        transition: none !important;
+        animation: none !important;
+    }
+}

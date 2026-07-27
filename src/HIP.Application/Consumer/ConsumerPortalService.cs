@@ -153,26 +153,65 @@ public sealed class ConsumerPortalService(
             .ToArray();
     }
 
-    public ConsumerAppealSubmissionResult SubmitAppeal(string consumerId, ConsumerAppealSubmissionRequest request)
+    public ConsumerAppealSubmissionResult SubmitAppeal(
+        string consumerId,
+        ConsumerAppealSubmissionRequest request) =>
+        SubmitAppealAsync(consumerId, request, CancellationToken.None).GetAwaiter().GetResult();
+
+    public async Task<ConsumerAppealSubmissionResult> SubmitAppealAsync(
+        string consumerId,
+        ConsumerAppealSubmissionRequest request,
+        CancellationToken cancellationToken)
     {
+        const int maximumTargetIdLength = 512;
+        const int maximumReasonLength = 1000;
+        const int maximumEvidenceItems = 8;
+        const int maximumEvidenceKeyLength = 64;
+        const int maximumEvidenceValueLength = 256;
+
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(request.TargetId) || string.IsNullOrWhiteSpace(request.Reason))
         {
             return new ConsumerAppealSubmissionResult(false, string.Empty, request.TargetType, request.TargetId, AppealStatus.Submitted, "Target ID and reason are required.");
         }
 
-        var appeal = appealService.Submit(new AppealRequest(
+        var targetId = request.TargetId.Trim();
+        var reason = request.Reason.Trim();
+        if (targetId.Length > maximumTargetIdLength || reason.Length > maximumReasonLength)
+        {
+            return new ConsumerAppealSubmissionResult(false, string.Empty, request.TargetType, targetId, AppealStatus.Submitted, "The appeal target or reason is too long.");
+        }
+
+        var suppliedEvidence = request.PrivacySafeEvidence ?? new Dictionary<string, string>();
+        if (suppliedEvidence.Count > maximumEvidenceItems ||
+            suppliedEvidence.Any(item =>
+                string.IsNullOrWhiteSpace(item.Key) ||
+                item.Key.Length > maximumEvidenceKeyLength ||
+                string.IsNullOrWhiteSpace(item.Value) ||
+                item.Value.Length > maximumEvidenceValueLength))
+        {
+            return new ConsumerAppealSubmissionResult(false, string.Empty, request.TargetType, targetId, AppealStatus.Submitted, "Privacy-safe evidence must be short, named summary values.");
+        }
+
+        var privacySafeEvidence = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var item in suppliedEvidence)
+        {
+            privacySafeEvidence[item.Key.Trim()] = item.Value.Trim();
+        }
+
+        var appeal = await appealService.SubmitAsync(new AppealRequest(
             "",
             request.TargetType,
-            request.TargetId.Trim(),
+            targetId,
             ConsumerScopeHash(consumerId),
-            request.Reason.Trim(),
+            reason,
             AppealStatus.Submitted,
             DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow,
             null,
             "AutomatedFirstPass",
-            "MVP automated first pass accepted privacy-safe appeal for human review.",
-            request.PrivacySafeEvidence ?? new Dictionary<string, string>()));
+            "Automated first pass accepted a bounded privacy-safe appeal for human review.",
+            privacySafeEvidence), cancellationToken).ConfigureAwait(false);
 
         return new ConsumerAppealSubmissionResult(true, appeal.AppealId, appeal.TargetType, appeal.TargetId, appeal.Status, "Appeal submitted for HIP review.");
     }
