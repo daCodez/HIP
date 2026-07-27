@@ -1,7 +1,7 @@
 # HIP Current-State Gap Map
 
-Last verified: 2026-07-21
-Backlog package: HIP-0801
+Last verified: 2026-07-27
+Backlog package: HIP-1005
 Repository branch at creation: `codex/complete-backlog`
 
 ## Purpose
@@ -26,9 +26,15 @@ the code is real and reachable but must not be described as production-safe.
 
 ## Executive Summary
 
-HIP is a substantial MVP foundation. The repository contains working site
-safety scanning, layered scoring, public lookup, browser-extension protection,
-privacy-safe feedback, rules and simulation, review workflows, identity and
+The tracked HIP-0001 through HIP-1005 work packages now have implemented
+repository baselines. This is repository-level V1 feature completeness for
+local and controlled evaluation, not a production launch, formal compliance
+certification, or claim that every deployment control has been proven.
+
+The repository contains working site safety scanning, layered scoring, public
+lookup, browser-extension protection, domain-certificate enrollment,
+authenticated issuance, recurring monitoring, privacy-safe feedback, sender
+profiles, rules and simulation, review and appeal workflows, identity and
 development signing, PostgreSQL persistence, admin and consumer portals, and a
 Second Life HUD foundation.
 
@@ -63,9 +69,9 @@ it into microservices is not required for the MVP.
 | Layered HIP scoring | Partial | Versioned, direction-explicit domain/page/content/final stages, separate confidence and freshness, typed privacy-safe evidence, conservative presentation, immutable projections, deterministic composition, trust-receipt/browser projections, and focused regression coverage. | Complete mandatory caps, stable reason catalog, production calibration, and all master-spec regression scenarios. |
 | Site-safety scanning | Partial | Privacy-safe observations, link/download/login risk, rules, feedback evidence, admin-review evidence, and stored results. | Live threat providers, server-side redirect resolution, durable cache, and real sandbox evidence. |
 | External evidence providers | Partial; Needs security review | Provider contracts, resilience, freshness/cache foundation, SSL Labs, and disabled Google Web Risk/VirusTotal foundations. | Normalized result contract, durable slow path, credential handling, operational limits, and production integrations. |
-| Reputation and feedback | Partial; Needs security review | Reputation profiles/events, weighted feedback, decay, public feedback, duplicate guards, and scan evidence integration. | Abuse-resistant reporter identity, distributed dedupe, production tuning, and approved-override mutation. |
+| Reputation and feedback | Complete for V1 foundation; Needs production security review | Durable reputation profiles/events, sender-specific report ingestion, weighted feedback, decay, anonymous-trust enforcement, duplicate guards, current-window admin interpretation, review signals, and scan evidence integration. | Abuse-resistant production reporter identity, distributed dedupe validation, calibration, and approved-override mutation. |
 | Privacy-safe reporting | Partial | Validators, hashing, bounded automated retention cleanup, risk-finding/report ingestion, review/self-healing connections, and encrypted EF storage exist. | Production trust enforcement and durable asynchronous ingestion for every report path. |
-| Review queue and appeals | Partial | Review items, assignment and decisions, appeals, reputation override requests, generated scan signals, audit entries, APIs, and admin pages. | Notifications, complete durable audit policy, two-person critical approvals, and production identity binding. |
+| Review queue and appeals | Complete for V1 foundation | Owner-bound consumer appeal submission and status, review items, assignment and decisions, reputation override requests, generated scan/feedback signals, privacy-safe audit entries, protected APIs, and admin pages are implemented. | Production notifications, complete durable audit policy, two-person critical approvals, and deployed identity-provider validation. |
 | Rules and simulation | Complete for repository-level Phase 6 | JSON rules, typed fields/operators/actions, exact-definition-bound persisted simulations, immutable version history, impact policy, encrypted independent approvals, admin approval/deployment UX, authoritative deployments, watch-first promotion, controlled rollback, legacy high-impact bypass prevention, and immutable simulated AI drafts with a hard human-authority boundary. | Production may still consolidate remaining legacy rule paths and expand cross-record audit correlation. |
 | Self-healing | Partial | Deterministic pattern detection, candidate generation, suggestions, review decisions, simulation, and rollback-plan foundation. | Production clustering, durable metrics, automated rollback execution, signed provenance, and optional AI assistance. |
 | AI risk assistance | Partial; Needs security review | Provider interface, redacted deterministic development analyzer, analysis endpoints, and draft-only suggestions. | Production provider, bounded consumption, operational review, and evidence that model output remains non-authoritative. |
@@ -201,11 +207,11 @@ well-known proof must never automatically produce a Trusted safety result.
 
 | Capability | Status | Remaining gap |
 |---|---|---|
-| Weighted feedback | Partial; Needs security review | Production reporter identity, poisoning resistance, distributed dedupe, and calibration. |
-| Reputation events/profiles | Partial | Durable behavior must be verified end-to-end; override approvals are not fully merged into scoring. |
+| Weighted feedback | Complete for V1 foundation; Needs production security review | Production reporter identity, poisoning resistance validation, distributed dedupe evidence, and calibration. |
+| Reputation events/profiles | Complete for V1 foundation | Approved override mutation is not yet fully merged into production scoring. |
 | Privacy-safe reports | Partial | Automated retention, queueing, and production reporter trust. |
-| Review queue | Partial | Production identity binding, notifications, approval policy, and durable operations review. |
-| Appeals | Partial | Notification/status lifecycle and account isolation. |
+| Review queue | Complete for V1 foundation | Production identity-provider validation, notifications, critical approval policy, and durable operations review. |
+| Appeals | Complete for V1 foundation | External notifications and production operations integration. |
 | Reputation overrides | Partial; Needs security review | Two-person critical approval, durable mutation, expiry, rollback, and audit completeness. |
 | Audit | Partial | Production retention, tamper evidence, export, and complete privileged-action coverage. |
 

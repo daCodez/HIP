@@ -13,6 +13,7 @@ primary source, and optional dependency availability.
 | `AdminAppeals.razor` | Async `IAppealService` reads and actor-authorized decisions | Explicit loading/empty/not-found/error states; decisions require an operator reason, persist asynchronously, and write privacy-safe audit evidence. Sample creation is development-only and labelled. |
 | `AdminAuditLogs.razor` | `IAuditLogService` | Explicit empty/filter states; refresh failures retain rows and show an error. |
 | `AdminDashboard.razor` | `IAdminDashboardService` | Shows snapshot time/source; unavailable metrics use an em dash and dependency health degrades. |
+| `AdminDomainCertificates.razor` | `IDomainCertificateAdminQuery` plus policy-authorized application and lifecycle services | Explicit loading/empty/error states; approval, security review, issuance, suspension, reinstatement, and revocation remain separate persisted operations. Domain control and signatures are not presented as automatic safety claims. |
 | `AdminFeedbackLoop.razor` | Bounded `IAdminFeedbackService` projection over durable weighted-feedback records | Explicit loading/empty/not-found/error states; shows per-domain counts, current 14-day weighted interpretation, and a privacy-safe event timeline. Reporter/page hashes and raw content are excluded. |
 | `AdminLicenseDetail.razor` | `ISetupCodeLicenseService` | Not-found state; mutations remain policy- and step-up-authorized. |
 | `AdminLicenseNew.razor` | `ISetupCodeLicenseService` | No code before creation; creation remains policy- and step-up-authorized. |
