@@ -25,13 +25,21 @@
         <span id="statusBadge" class="status-badge unknown">Unknown</span>
       </div>
       <div class="score-row">
-        <span class="metric-label">HIP trust score<small id="finalHipScoreHelp">Overall result based on the evidence HIP has.</small></span>
-        <strong id="score">--/100</strong>
+        <span class="metric-label"><span id="scoreLabel">Safety assessment</span><small id="finalHipScoreHelp">HIP will show a score when authenticated evidence is sufficient.</small></span>
+        <strong id="score">Not scored</strong>
       </div>
       <p id="statusDescription" class="score-explanation">HIP is checking what this status means.</p>
       <div class="status-row">
-        <span>Identity verified</span>
+        <span>Identity status</span>
         <strong id="verified">Unknown</strong>
+      </div>
+      <div class="status-row">
+        <span>Evidence coverage</span>
+        <strong id="evidenceCoverage">Checking...</strong>
+      </div>
+      <div class="status-row">
+        <span>Evidence confidence</span>
+        <strong id="evidenceConfidence">Checking...</strong>
       </div>
       <div class="status-row">
         <span>Certificate application</span>

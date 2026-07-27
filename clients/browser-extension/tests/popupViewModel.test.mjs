@@ -104,6 +104,32 @@ test("popup distinguishes stored client telemetry from an authoritative HIP asse
   assert.equal(viewModel.dataSourceText, "Client-observed evidence; no authoritative HIP assessment");
 });
 
+test("popup withholds compatibility scores until authenticated evidence is sufficient", () => {
+  const viewModel = buildPopupViewModel({
+    domain: "example.com",
+    score: 56,
+    finalHipScore: 59,
+    displayScore: null,
+    scorePresentation: "WithheldInsufficientEvidence",
+    evidenceCoverage: "Insufficient",
+    evidenceConfidence: "None",
+    identityStatus: "Verified",
+    status: "LimitedTrustData"
+  }, {}, {
+    webBaseUrl: "https://hip.local"
+  }, "https://example.com");
+
+  assert.equal(viewModel.scoreLabelText, "Safety assessment");
+  assert.equal(viewModel.scoreText, "Not scored");
+  assert.equal(viewModel.statusLabel, "Not enough evidence");
+  assert.equal(viewModel.verifiedText, "Verified");
+  assert.equal(viewModel.evidenceCoverageText, "Insufficient");
+  assert.equal(viewModel.evidenceConfidenceText, "None");
+  assert.equal(viewModel.domainTrustScoreText, "Not shown");
+  assert.equal(viewModel.pageTrustScoreText, "Not shown");
+  assert.equal(viewModel.contentRiskScoreText, "Not shown");
+});
+
 test("missing data source is not presented as an authoritative HIP assessment", () => {
   const viewModel = buildPopupViewModel({
     domain: "example.com",
@@ -155,7 +181,7 @@ test("unknown status renders safely", () => {
   }, {}, { webBaseUrl: "https://hip.local" }, "https://unknown.example");
 
   assert.equal(viewModel.statusLabel, "Unknown");
-  assert.equal(viewModel.scoreText, "--/100");
+  assert.equal(viewModel.scoreText, "Not scored");
   assert.equal(viewModel.reasons[0], "HIP returned a trust score without inspecting private page content.");
 });
 
@@ -217,10 +243,10 @@ test("site safety view model displays formal HIP scoring and conservative presen
   assert.equal(viewModel.confidenceLevelText, "Medium");
   assert.equal(viewModel.hasScoringProjection, true);
   assert.equal(viewModel.scoringModelVersionText, "hip-0301-v1");
-  assert.equal(viewModel.finalHipScoreText, "74/100");
-  assert.equal(viewModel.domainTrustScoreText, "84/100");
-  assert.equal(viewModel.pageTrustScoreText, "69/100");
-  assert.equal(viewModel.contentRiskScoreText, "31/100 risk");
+  assert.equal(viewModel.finalHipScoreText, "Not shown");
+  assert.equal(viewModel.domainTrustScoreText, "Not shown");
+  assert.equal(viewModel.pageTrustScoreText, "Not shown");
+  assert.equal(viewModel.contentRiskScoreText, "Not shown");
   assert.equal(viewModel.evidenceFreshnessText, "Mixed");
   assert.equal(viewModel.trustAssertionText, "Withheld: insufficient evidence");
   assert.deepEqual(viewModel.scoringReasons, ["Fresh domain evidence is available."]);
@@ -388,7 +414,9 @@ test("popup distinguishes an observed matching badge from verification", () => {
 test("popup markup contains primary UX fields and feedback controls", () => {
   const popupHtml = readFileSync(new URL("../src/popup.html", import.meta.url), "utf8");
 
-  assert.equal(popupHtml.includes("HIP trust score"), true);
+  assert.equal(popupHtml.includes("Safety assessment"), true);
+  assert.equal(popupHtml.includes('id="evidenceCoverage"'), true);
+  assert.equal(popupHtml.includes('id="evidenceConfidence"'), true);
   assert.equal(popupHtml.includes("Certificate application"), true);
   assert.equal(popupHtml.includes('id="certificateApplication"'), true);
   assert.equal(popupHtml.includes("Domain Trust"), true);

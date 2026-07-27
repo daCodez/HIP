@@ -18,9 +18,10 @@ Routes:
 Public lookup can show:
 
 - domain
-- HIP score
-- status
-- risk level
+- normalized identity status (`Unverified`, `Pending`, or `Verified`)
+- evidence coverage and confidence
+- a display score only when authenticated evidence is sufficient
+- compatibility score and status fields for older clients
 - public verification state
 - signed identity status
 - known public risks
@@ -32,11 +33,11 @@ Public lookup can show:
 - separate score breakdown
 - browser scan counts when available
 - data source
-- signed identity placeholders for future DNS TXT and `.well-known/hip.json` verification
+- current DNS TXT or `.well-known/hip.json` domain-control verification state
 
-Public lookup now prefers stored browser plugin scan results. When HIP has a stored scan for a domain, lookup displays layered HIP scoring, reasons, link scan counts, last checked date, recommended action, and `dataSource = BrowserPluginScan`.
+Public lookup now prefers stored authoritative browser scan results. When HIP has one for a domain, lookup sets `scorePresentation = Available`, publishes `displayScore`, and displays layered HIP scoring, reasons, privacy-safe scan counts, last checked date, recommended action, and `dataSource = BrowserPluginScan`.
 
-When HIP has not scanned a domain yet, lookup returns a no-data MVP state with `status = LimitedTrustData`, `recommendedAction = ShowCaution`, `dataSource = NoStoredData`, and the message `HIP has not scanned this domain yet`. This avoids pretending HIP has real threat intelligence for a domain before it has stored scan data.
+When authenticated evidence is insufficient, lookup returns `displayScore = null`, `scorePresentation = WithheldInsufficientEvidence`, explicit evidence coverage and confidence, and the current identity status. Updated clients must not display the legacy compatibility score or its component scores in that state.
 
 Public lookup must not expose private chat logs, private reports, user identities, private sender names, private scan history, raw user-submitted evidence, full page URLs from browser scans, page URL hashes, form contents, private messages, or raw scan payloads.
 
@@ -52,6 +53,11 @@ Stored browser scan response example:
   "pageTrustScore": 70,
   "contentRiskScore": 65,
   "finalHipScore": 76,
+  "displayScore": 76,
+  "scorePresentation": "Available",
+  "evidenceCoverage": "Sufficient",
+  "evidenceConfidence": "Medium",
+  "identityStatus": "Verified",
   "finalHipScoreExplanation": "GitHub has strong domain trust signals, but individual repositories, downloads, and user-generated content still need separate review.",
   "reasons": [
     "Last browser scan found no dangerous links",
@@ -78,7 +84,12 @@ No stored data response example:
   "pageTrustScore": 55,
   "contentRiskScore": 65,
   "finalHipScore": 56,
-  "finalHipScoreExplanation": "HIP did not find strong trust signals for this website yet. No major risk signals were found, but the site has not earned a high trust score.",
+  "displayScore": null,
+  "scorePresentation": "WithheldInsufficientEvidence",
+  "evidenceCoverage": "Insufficient",
+  "evidenceConfidence": "None",
+  "identityStatus": "Unverified",
+  "finalHipScoreExplanation": "Compatibility projection only; updated clients withhold it until authenticated evidence is sufficient.",
   "reasons": [
     "HIP has not scanned this domain yet"
   ],
@@ -87,11 +98,11 @@ No stored data response example:
 }
 ```
 
-MVP limitation: response compatibility still includes numeric `score` and `finalHipScore`; no-data responses use a conservative limited-data score instead of a nullable score until clients can safely adopt nullable score fields.
+Compatibility note: `score`, `finalHipScore`, and component fields remain numeric for older clients. New clients must use `displayScore` and `scorePresentation`; when presentation is withheld, they must suppress every numeric trust score.
 
 ## Website Scoring MVP
 
-HIP website scoring now uses stored browser plugin scan results when available. Domains without stored scans show an explicit `LimitedTrustData` no-data state until HIP receives real scan data.
+HIP website scoring uses stored authenticated browser scan results when available. Domains without sufficient authenticated evidence show identity and evidence state without a numeric score.
 
 Current score bands:
 
@@ -130,13 +141,13 @@ HIP must not claim real-world safety until live reputation, rule simulation, ver
 
 ## Verified Does Not Mean Safe
 
-A verified identity does not automatically mean safe. It means HIP knows who signed or owns the domain or content. The trust score still matters.
+A verified identity does not automatically mean safe. It means HIP authenticated domain control or identity evidence. Safety evidence remains separate, and HIP shows a numeric trust score only when that evidence is sufficient.
 
 HIP Domain Trust Certificate enrollment uses DNS TXT and HTTPS `.well-known/hip.json` verification. Public lookup keeps certificate identity evidence separate from the current risk score; certificate details are published through the dedicated public certificate response and page.
 
 ## Live Trust Badges
 
-HIP badges are certificate-bound live data widgets, not static trust images. Certificate level and lifecycle state are displayed separately from the current HIP risk score. A certificate or verified identity does not automatically mean safe.
+HIP badges are certificate-bound live data widgets, not static trust images. An active verified identity uses the basic label `HIP Identity Verified`. Evidence coverage and confidence appear separately; a numeric safety score appears only when the signed presentation says authenticated evidence is sufficient. A certificate or verified identity does not automatically mean safe.
 
 Badge and certificate routes:
 
@@ -175,11 +186,11 @@ Use the exact canonical hostname. HIP does not silently treat `www.example.com` 
 
 ## Anti-fake behavior
 
-The generated and shared scripts compare the current page hostname with the requested domain, require a current signed badge document, bind displayed certificate fields to that signed payload, and call HIP's badge verification endpoint. Active presentation additionally requires an Active certificate with Verified signature state. Failure, expiry, revocation, suspension, unavailable verification, or domain mismatch renders a non-active state.
+The generated and shared scripts compare the current page hostname with the requested domain, require a current signed badge document, bind displayed certificate and evidence-presentation fields to that signed payload, and call HIP's badge verification endpoint. Active presentation additionally requires an Active certificate with Verified signature state. Failure, expiry, revocation, suspension, unavailable verification, or domain mismatch renders a non-active state.
 
 The browser extension independently retrieves the badge and public certificate from HIP, verifies the signed badge through HIP, and compares certificate ID, exact domain, level, lifecycle state, signature status, expiry, public URL, and active flag. It never trusts the website's visual badge by itself.
 
-A screenshot can imitate any visual. It cannot create a current signed, domain-matched HIP certificate response. Every real badge shows the verified domain, links to the public certificate, and keeps the current risk score visible.
+A screenshot can imitate any visual. It cannot create a current signed, domain-matched HIP certificate response. Every real badge identifies the verified identity state, links to the public certificate, and withholds the numeric score when evidence is insufficient.
 
 The badge sends no page text, form values, visitor identity, cookies, or browsing history. See [HIP Domain Trust Certificates](domain-trust-certificates.md) for enrollment, lifecycle, signing, privacy, CSP, extension, and Aspire guidance.
 

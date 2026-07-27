@@ -189,29 +189,48 @@ export function reasonsFor(lookup) {
  * Builds the primary popup model from public-safe lookup data and content-script scan counts.
  */
 export function buildPopupViewModel(lookup, summary, settings, currentUrl, certificate = null) {
-  const score = lookup?.score ?? lookup?.finalHipScore ?? null;
+  const hasPresentationContract = typeof lookup?.scorePresentation === "string";
+  const score = hasPresentationContract ? lookup?.displayScore ?? null : lookup?.score ?? lookup?.finalHipScore ?? null;
+  const scoreAvailable = score !== null && score !== undefined && Number.isFinite(Number(score)) &&
+    (!hasPresentationContract || lookup.scorePresentation === "Available");
+  const evidenceWithheld = hasPresentationContract && !scoreAvailable;
   const status = displayStatus(lookup?.status, score);
   const domainTrustScore = lookup?.domainTrustScore ?? componentScore(lookup, "DomainTrustScore");
   const pageTrustScore = lookup?.pageTrustScore ?? componentScore(lookup, "PageTrustScore");
   const contentRiskScore = lookup?.contentRiskScore ?? componentScore(lookup, "ContentRiskScore");
+  const identityStatus = lookup?.identityStatus ||
+    (lookup?.identityVerificationStatus === "Verified" || lookup?.verificationStatus === "Verified"
+      ? "Verified"
+      : lookup?.identityVerificationStatus === "Pending" || lookup?.verificationStatus === "Pending"
+        ? "Pending"
+        : "Unverified");
 
   return {
     domain: lookup?.domain || "Unknown domain",
-    scoreText: score !== null && score !== undefined && Number.isFinite(Number(score)) ? `${score}/100` : "--/100",
+    scoreLabelText: scoreAvailable ? "HIP trust score" : "Safety assessment",
+    scoreText: scoreAvailable ? `${score}/100` : "Not scored",
     status,
-    statusLabel: statusLabel(status),
+    statusLabel: evidenceWithheld ? "Not enough evidence" : statusLabel(status),
     statusClass: statusClass(status),
-    statusDescription: statusDescription(status),
-    finalHipScoreHelp: SCORE_HELP_TEXT.finalHipScore,
+    statusDescription: evidenceWithheld
+      ? "HIP has verified identity separately, but does not yet have enough authenticated safety evidence for a meaningful score."
+      : statusDescription(status),
+    finalHipScoreHelp: evidenceWithheld
+      ? "HIP will show a score after authenticated evidence coverage is sufficient."
+      : SCORE_HELP_TEXT.finalHipScore,
     domainTrustHelp: SCORE_HELP_TEXT.domainTrust,
     pageTrustHelp: SCORE_HELP_TEXT.pageTrust,
     contentRiskHelp: SCORE_HELP_TEXT.contentRisk,
-    domainTrustScoreText: scoreText(domainTrustScore),
-    pageTrustScoreText: scoreText(pageTrustScore),
-    contentRiskScoreText: scoreText(contentRiskScore),
-    finalHipScoreExplanation: safeDisplayText(lookup?.finalHipScoreExplanation || "Final HIP score is based on separate domain, page, and content scores."),
-    verifiedText: lookup?.verificationStatus === "Verified" ? "Yes" : "No",
-    identityText: lookup?.identityVerificationStatus || lookup?.signedIdentityStatus || "Unknown",
+    domainTrustScoreText: evidenceWithheld ? "Not shown" : scoreText(domainTrustScore),
+    pageTrustScoreText: evidenceWithheld ? "Not shown" : scoreText(pageTrustScore),
+    contentRiskScoreText: evidenceWithheld ? "Not shown" : scoreText(contentRiskScore),
+    finalHipScoreExplanation: evidenceWithheld
+      ? "Component scores are withheld until HIP has enough authenticated evidence."
+      : safeDisplayText(lookup?.finalHipScoreExplanation || "Final HIP score is based on separate domain, page, and content scores."),
+    verifiedText: identityStatus,
+    identityText: identityStatus,
+    evidenceCoverageText: lookup?.evidenceCoverage || (scoreAvailable ? "Sufficient" : "Unknown"),
+    evidenceConfidenceText: lookup?.evidenceConfidence || "Unknown",
     certificateApplicationText: certificateProgressText(lookup),
     certificateLevelText: certificate?.level || "None verified",
     certificateStatusText: certificate?.status ||
@@ -276,6 +295,7 @@ export function buildSiteSafetyViewModel(result = {}) {
     ...(scoring?.warnings || [])
   ]);
   const scoringReasons = uniqueDisplayText(scoring?.reasons || []);
+  const scoringWithheld = scoring?.isFormal && scoring.trustAssertionDisposition !== "Allowed";
   return {
     status,
     statusLabel: statusLabel(status),
@@ -291,10 +311,10 @@ export function buildSiteSafetyViewModel(result = {}) {
         ? "Legacy compatibility projection"
         : "Unavailable",
     presentationStatusText: statusLabel(scoring?.presentationStatus || status),
-    finalHipScoreText: scoreText(scoring?.finalHipScore),
-    domainTrustScoreText: scoreText(scoring?.domainTrustScore),
-    pageTrustScoreText: scoreText(scoring?.pageTrustScore),
-    contentRiskScoreText: riskScoreText(scoring?.contentRiskScore),
+    finalHipScoreText: scoringWithheld ? "Not shown" : scoreText(scoring?.finalHipScore),
+    domainTrustScoreText: scoringWithheld ? "Not shown" : scoreText(scoring?.domainTrustScore),
+    pageTrustScoreText: scoringWithheld ? "Not shown" : scoreText(scoring?.pageTrustScore),
+    contentRiskScoreText: scoringWithheld ? "Not shown" : riskScoreText(scoring?.contentRiskScore),
     evidenceFreshnessText: scoring?.evidenceFreshness || "Unknown",
     trustAssertionText: trustAssertionText(scoring),
     scoringReasons,
