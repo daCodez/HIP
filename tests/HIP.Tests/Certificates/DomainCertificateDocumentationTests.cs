@@ -15,7 +15,7 @@ public sealed class DomainCertificateDocumentationTests
             Assert.That(guide, Does.Contain("HIP Registered"));
             Assert.That(guide, Does.Contain("HIP Verified"));
             Assert.That(guide, Does.Contain("HIP Monitored"));
-            Assert.That(guide, Does.Contain("_hip-challenge.<domain>"));
+            Assert.That(guide, Does.Contain("_hip.<domain>"));
             Assert.That(guide, Does.Contain("/.well-known/hip.json"));
             Assert.That(guide, Does.Contain("Renewal"));
             Assert.That(guide, Does.Contain("Revocation"));
@@ -44,6 +44,8 @@ public sealed class DomainCertificateDocumentationTests
             Assert.That(badgeGuide, Does.Contain("POST /api/v1/public/badge/verify"));
             Assert.That(badgeGuide, Does.Contain("exact canonical hostname"));
             Assert.That(badgeGuide, Does.Contain("server-authoritative and online"));
+            Assert.That(badgeGuide, Does.Contain("http://localhost:5123/api/v1/badge/example.com/script"));
+            Assert.That(badgeGuide, Does.Contain("publicly reachable HTTPS HIP origin"));
             Assert.That(badgeGuide, Does.Not.Contain("Badge responses are not cryptographically signed yet"));
             Assert.That(badgeGuide, Does.Not.Contain("future browser plugin check"));
             Assert.That(decision, Does.Contain("## Status"));

@@ -228,6 +228,11 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(certificates, Does.Contain("linked to a different HIP account"));
             Assert.That(certificates, Does.Contain("could not save this enrollment"));
             Assert.That(certificates, Does.Contain("Start verification"));
+            Assert.That(certificates, Does.Contain("Install live badge"));
+            Assert.That(certificates, Does.Contain("Copy badge code"));
+            Assert.That(certificates, Does.Contain("NavigationManager.BaseUri.TrimEnd('/')"));
+            Assert.That(certificates, Does.Contain("item.CertificateStatus == DomainCertificateStatus.Active"));
+            Assert.That(certificates, Does.Contain("This code currently uses a local HIP address"));
 
             Assert.That(certificates, Does.Contain("EnrollmentService.CheckDnsAsync"));
             Assert.That(certificates, Does.Contain("Check DNS"));
@@ -286,6 +291,8 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(
                 certificateStyles,
                 Does.Contain(".verification-progress ::deep .progress-step"));
+            Assert.That(certificateStyles, Does.Contain(".badge-installation"));
+            Assert.That(certificateStyles, Does.Contain("overflow-x: auto"));
             Assert.That(certificateStyles, Does.Contain("@media (max-width: 44rem)"));
 
             var navigation = File.ReadAllText(Path.Combine(

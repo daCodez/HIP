@@ -70,6 +70,36 @@
     overflow-wrap: anywhere;
 }
 
+.badge-installation {
+    margin: 1.25rem 0;
+    padding: 1rem;
+    border: 1px solid #00c9c8;
+    border-radius: .5rem;
+    background: color-mix(in srgb, #00c9c8 7%, var(--panel));
+}
+
+.badge-installation pre {
+    max-width: 100%;
+    margin: .75rem 0;
+    padding: .85rem;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: .35rem;
+    background: color-mix(in srgb, var(--panel) 75%, black);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.badge-installation-notice {
+    color: var(--muted);
+}
+
+.badge-installation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+}
+
 .verification-progress ol {
     display: grid;
     grid-template-columns: repeat(9, minmax(9rem, 1fr));

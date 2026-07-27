@@ -12,6 +12,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthorizationService AuthorizationService
 @inject IJSRuntime JavaScript
+@inject NavigationManager NavigationManager
 
 <PageTitle>HIP Domain Certificates</PageTitle>
 
@@ -98,6 +99,20 @@
                     <article><span>Last successful verification</span><strong>@FormatDate(item.LastVerificationAtUtc ?? item.WebsiteVerifiedAtUtc ?? item.DnsVerifiedAtUtc)</strong></article>
                     <article><span>Unresolved requirements</span><strong>@item.UnresolvedCriticalFindings critical</strong></article>
                 </section>
+
+                @if (item.CertificateStatus == DomainCertificateStatus.Active && item.CertificateId is not null)
+                {
+                    <section class="badge-installation" aria-labelledby="@BadgeInstallationHeadingId(item)">
+                        <h3 id="@BadgeInstallationHeadingId(item)">Install live badge</h3>
+                        <p>Copy this exact code into the public page for <strong>@item.Domain</strong>. The badge stays bound to the current signed certificate and live HIP status.</p>
+                        <pre><code>@BadgeEmbedCode(item.Domain)</code></pre>
+                        <p class="badge-installation-notice">@BadgeInstallationNotice()</p>
+                        <div class="badge-installation-actions">
+                            <button class="btn btn-primary" type="button" @onclick="() => CopyBadgeEmbedAsync(item.Domain)">Copy badge code</button>
+                            <a class="btn" href="@BadgeApiUrl(item.Domain)" target="_blank" rel="noopener noreferrer">Check live badge data</a>
+                        </div>
+                    </section>
+                }
 
                 <section class="verification-progress" aria-labelledby="@ProgressHeadingId(item)">
                     <h3 id="@ProgressHeadingId(item)">Verification progress</h3>
@@ -750,6 +765,34 @@
         principal.FindFirst(HipAuthenticationClaimTypes.ActorId)?.Value is { Length: > 0 } actorId
             ? actorId
             : consumerId;
+
+    /// <summary>Copies an environment-correct, domain-bound badge embed without account data.</summary>
+    private async Task CopyBadgeEmbedAsync(string domain)
+    {
+        await JavaScript.InvokeVoidAsync("navigator.clipboard.writeText", BadgeEmbedCode(domain));
+        _certificateActionMessage = "Badge code copied. Publish it on the exact verified hostname.";
+    }
+
+    private string BadgeEmbedCode(string domain) =>
+        $"<div data-hip-badge=\"{domain}\"></div>{Environment.NewLine}" +
+        $"<script src=\"{BadgeScriptUrl(domain)}\" async></script>";
+
+    private string BadgeApiUrl(string domain) =>
+        $"{HipWebOrigin()}/api/v1/badge/{Uri.EscapeDataString(domain)}";
+
+    private string BadgeScriptUrl(string domain) =>
+        $"{BadgeApiUrl(domain)}/script";
+
+    private string BadgeInstallationNotice()
+    {
+        var origin = new Uri(HipWebOrigin(), UriKind.Absolute);
+        return origin.IsLoopback
+            ? "This code currently uses a local HIP address. It works only in this browser while HIP is running on this computer. Publish a public HTTPS HIP origin before showing the badge to visitors."
+            : "The badge retrieves only public certificate and trust status. It does not receive page text, form values, cookies, or visitor identity.";
+    }
+
+    private string HipWebOrigin() => NavigationManager.BaseUri.TrimEnd('/');
+
     private string WebsiteDocumentDownloadUrl() =>
         $"data:application/hip+json;charset=utf-8,{Uri.EscapeDataString(_websiteDocumentJson ?? string.Empty)}";
 
@@ -843,5 +886,6 @@
 
     private static string HeadingId(OwnerDomainCertificateSummary item) => $"certificate-{SafeId(item.EnrollmentId)}";
     private static string ProgressHeadingId(OwnerDomainCertificateSummary item) => $"progress-{SafeId(item.EnrollmentId)}";
+    private static string BadgeInstallationHeadingId(OwnerDomainCertificateSummary item) => $"badge-installation-{SafeId(item.EnrollmentId)}";
     private static string SafeId(string value) => string.Concat(value.Select(character => char.IsLetterOrDigit(character) ? character : '-'));
 }
