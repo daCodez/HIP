@@ -64,7 +64,10 @@ public sealed class AuditLogIntegrityTests
         {
             Assert.That(export.EntryCount, Is.EqualTo(2));
             Assert.That(export.Sha256, Is.EqualTo(expected));
-            Assert.That(export.EarliestAtUtc, Is.LessThanOrEqualTo(export.LatestAtUtc));
+            Assert.That(export.EarliestAtUtc, Is.Not.Null);
+            Assert.That(export.LatestAtUtc, Is.Not.Null);
+            Assert.That(export.EarliestAtUtc!.Value,
+                Is.LessThanOrEqualTo(export.LatestAtUtc!.Value));
         });
     }
 }
