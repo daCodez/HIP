@@ -4261,7 +4261,7 @@ public partial class Program
     container.innerHTML = `
       <div class="hip-badge-widget" data-hip-state="expanded">
         <button type="button" class="hip-badge-shield" data-hip-action="toggle" aria-label="Minimize HIP trust details" aria-expanded="true" aria-controls="${escapeAttribute(panelId)}">
-          ${shieldMarkup()}
+          ${shieldMarkup(new URL("/hip-logo.svg", apiBase).toString())}
         </button>
         <section id="${escapeAttribute(panelId)}" class="hip-badge-panel" aria-label="${escapeAttribute(label)} for ${escapeAttribute(domain)}">
           <div class="hip-badge-toolbar">
@@ -4321,8 +4321,8 @@ public partial class Program
   /**
    * Returns the transparent HIP protocol shield used by the floating badge.
    */
-  function shieldMarkup() {
-    return '<svg class="hip-badge-shield-logo" viewBox="0 0 128 128" aria-hidden="true" focusable="false"><path fill="#0f766e" d="M64 8 20 24v33.6C20 85.6 38.4 109.6 64 120c25.6-10.4 44-34.4 44-62.4V24L64 8Z"/><path fill="#fff" d="m57.6 86.4-20-20 8.4-8.4 11.6 11.6L84 41.6l8.4 8-34.8 36.8Z"/></svg>';
+  function shieldMarkup(logoUrl) {
+    return `<img class="hip-badge-shield-logo" src="${escapeAttribute(logoUrl)}" alt="" aria-hidden="true">`;
   }
   function verify(badge) {
     const signed = badge && badge.signedBadge;

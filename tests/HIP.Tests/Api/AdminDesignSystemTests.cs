@@ -115,7 +115,9 @@ public sealed class AdminDesignSystemTests
         var login = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Pages", "HipLogin.razor"));
         var app = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "App.razor"));
         var logo = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "hip-logo.svg"));
-        var browserExtensionLogo = File.ReadAllText(WorkspaceFile("clients", "browser-extension", "assets", "icons", "hip-128.svg"));
+        var logoHash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(
+                WorkspaceFile("src", "HIP.Web", "wwwroot", "hip-logo.svg"))));
 
         Assert.Multiple(() =>
         {
@@ -126,9 +128,11 @@ public sealed class AdminDesignSystemTests
             Assert.That(app, Does.Contain("type=\"image/svg+xml\""));
             Assert.That(app, Does.Contain("href=\"hip-logo.svg\""));
             Assert.That(logo, Does.Contain("<svg"));
-            Assert.That(logo, Does.Contain("aria-label=\"HIP\""));
-            Assert.That(logo, Does.Contain("viewBox=\"0 0 128 128\""));
-            Assert.That(logo.Trim(), Is.EqualTo(browserExtensionLogo.Trim()));
+            Assert.That(logo, Does.Contain("viewBox=\"0 0 693 715\""));
+            Assert.That(logo, Does.Contain("data:image/png;base64,"));
+            Assert.That(
+                logoHash,
+                Is.EqualTo("A7F333FD3C74A6BE95200F8851AC5602E7BB9B2243D37DE7E873B1C7CE1340BA"));
             Assert.That(navigation, Does.Contain("private static RenderFragment Icon"));
             Assert.That(navigation, Does.Contain("\"shield\" => Svg"));
             Assert.That(navigation, Does.Contain("\"eye\" => Svg"));
