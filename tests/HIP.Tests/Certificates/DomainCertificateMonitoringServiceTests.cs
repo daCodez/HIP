@@ -13,9 +13,11 @@ public sealed class DomainCertificateMonitoringServiceTests
     public async Task Owner_opt_in_runs_an_immediate_authoritative_check_and_activates_eligible_monitoring()
     {
         var repository = new RecordingEnrollmentRepository(Enrollment());
+        var promotion = new RecordingPromotionService();
         var service = new DomainCertificateMonitoringService(
             repository,
             new FixedSecurityScanService(ScanResult(score: 82)),
+            promotion,
             new FixedTimeProvider(Now));
 
         var result = await service.StartAsync(
@@ -29,9 +31,11 @@ public sealed class DomainCertificateMonitoringServiceTests
             Assert.That(result.Status, Is.EqualTo(DomainCertificateMonitoringStartStatus.Activated));
             Assert.That(result.CurrentScore, Is.EqualTo(82));
             Assert.That(repository.Enabled, Is.Not.Null);
-            Assert.That(repository.Check, Is.Not.Null);
-            Assert.That(repository.Check!.TargetStatus, Is.EqualTo(DomainEnrollmentStatus.Monitored));
-            Assert.That(repository.Check.EvidenceDigest, Does.Match("^sha256:[0-9a-f]{64}$"));
+            Assert.That(repository.Check, Is.Null);
+            Assert.That(promotion.State, Is.EqualTo(Enrollment()));
+            Assert.That(promotion.Check?.TargetStatus, Is.EqualTo(DomainEnrollmentStatus.Monitored));
+            Assert.That(promotion.Check?.EvidenceDigest, Does.Match("^sha256:[0-9a-f]{64}$"));
+            Assert.That(promotion.Scan?.Evaluation?.RequestedLevel, Is.EqualTo(DomainCertificateLevel.Monitored));
         });
     }
 
@@ -39,9 +43,11 @@ public sealed class DomainCertificateMonitoringServiceTests
     public async Task Owner_opt_in_remains_enabled_when_current_evidence_is_below_monitored_threshold()
     {
         var repository = new RecordingEnrollmentRepository(Enrollment());
+        var promotion = new RecordingPromotionService();
         var service = new DomainCertificateMonitoringService(
             repository,
             new FixedSecurityScanService(ScanResult(score: 66)),
+            promotion,
             new FixedTimeProvider(Now));
 
         var result = await service.StartAsync(
@@ -55,6 +61,7 @@ public sealed class DomainCertificateMonitoringServiceTests
             Assert.That(result.Status, Is.EqualTo(DomainCertificateMonitoringStartStatus.EnabledPendingEvidence));
             Assert.That(result.CurrentScore, Is.EqualTo(66));
             Assert.That(repository.Check!.TargetStatus, Is.EqualTo(DomainEnrollmentStatus.Verified));
+            Assert.That(promotion.Check, Is.Null);
         });
     }
 
@@ -66,6 +73,7 @@ public sealed class DomainCertificateMonitoringServiceTests
         var service = new DomainCertificateMonitoringService(
             repository,
             new FixedSecurityScanService(ScanResult(score: 82)),
+            new RecordingPromotionService(),
             new FixedTimeProvider(Now));
 
         var result = await service.StartAsync(
@@ -85,6 +93,7 @@ public sealed class DomainCertificateMonitoringServiceTests
         var service = new DomainCertificateMonitoringService(
             repository,
             new ThrowingSecurityScanService(),
+            new RecordingPromotionService(),
             new FixedTimeProvider(Now));
 
         var result = await service.StartAsync(
@@ -189,8 +198,33 @@ public sealed class DomainCertificateMonitoringServiceTests
             Check = record;
             return Task.FromResult(DomainMonitoringWriteStatus.Updated);
         }
+
+        public Task<DomainMonitoringWriteStatus> TryApplyPromotedCheckAsync(
+            DomainMonitoringCertificatePromotionRecord promotion,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
+
+    private sealed class RecordingPromotionService : IDomainCertificateMonitoringPromotionService
+    {
+        public DomainMonitoringEnrollmentState? State { get; private set; }
+        public DomainCertificateSecurityScanResult? Scan { get; private set; }
+        public DomainMonitoringCheckRecord? Check { get; private set; }
+
+        public Task<DomainCertificateMonitoringPromotionResult> PromoteAsync(
+            DomainMonitoringEnrollmentState state,
+            DomainCertificateSecurityScanResult scan,
+            DomainMonitoringCheckRecord check,
+            CancellationToken cancellationToken)
+        {
+            State = state;
+            Scan = scan;
+            Check = check;
+            return Task.FromResult(new DomainCertificateMonitoringPromotionResult(
+                DomainCertificateMonitoringPromotionStatus.Promoted));
+        }
+    }
     private sealed class FixedSecurityScanService(DomainCertificateSecurityScanResult result)
         : IDomainCertificateSecurityScanService
     {

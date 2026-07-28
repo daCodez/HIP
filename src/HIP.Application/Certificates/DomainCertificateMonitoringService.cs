@@ -43,6 +43,12 @@ public sealed record DomainMonitoringCheckRecord(
     DateTimeOffset NextCheckAtUtc,
     string EvidenceDigest,
     string AuditEventId);
+public sealed record DomainMonitoringCertificatePromotionRecord(
+    DomainMonitoringCheckRecord Check,
+    string ExpectedCertificateId,
+    int ExpectedCertificateVersion,
+    HipStoredDomainCertificate Certificate);
+
 
 public enum DomainMonitoringWriteStatus
 {
@@ -67,6 +73,33 @@ public interface IDomainCertificateMonitoringRepository
 
     Task<DomainMonitoringWriteStatus> TryApplyCheckAsync(
         DomainMonitoringCheckRecord record,
+        CancellationToken cancellationToken);
+
+    Task<DomainMonitoringWriteStatus> TryApplyPromotedCheckAsync(
+        DomainMonitoringCertificatePromotionRecord promotion,
+        CancellationToken cancellationToken);
+}
+
+/// <summary>Outcome of atomically replacing a Verified certificate with a signed Monitored version.</summary>
+public enum DomainCertificateMonitoringPromotionStatus
+{
+    Promoted,
+    Existing,
+    Conflict,
+    Unavailable
+}
+
+public sealed record DomainCertificateMonitoringPromotionResult(
+    DomainCertificateMonitoringPromotionStatus Status,
+    SignedDomainTrustCertificate? Certificate = null);
+
+/// <summary>Signs and atomically persists a monitored certificate version with its evidence update.</summary>
+public interface IDomainCertificateMonitoringPromotionService
+{
+    Task<DomainCertificateMonitoringPromotionResult> PromoteAsync(
+        DomainMonitoringEnrollmentState state,
+        DomainCertificateSecurityScanResult scan,
+        DomainMonitoringCheckRecord check,
         CancellationToken cancellationToken);
 }
 
@@ -99,6 +132,7 @@ public interface IDomainCertificateMonitoringService
 public sealed class DomainCertificateMonitoringService(
     IDomainCertificateMonitoringRepository repository,
     IDomainCertificateSecurityScanService securityScanService,
+    IDomainCertificateMonitoringPromotionService promotionService,
     TimeProvider timeProvider) : IDomainCertificateMonitoringService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(24);
@@ -191,21 +225,35 @@ public sealed class DomainCertificateMonitoringService(
                 : DomainEnrollmentStatus.Verified;
             var checkedAt = scan.Evaluation.EvaluatedAtUtc;
             var digest = EvidenceDigest(scan);
-            var checkWrite = await repository.TryApplyCheckAsync(
-                    new DomainMonitoringCheckRecord(
-                        state.EnrollmentId,
-                        ownerId,
-                        normalized,
-                        state.EnrollmentStatus,
-                        target,
-                        scan.Scan.FinalHipScore,
-                        CriticalFindingCount(scan.Evaluation),
-                        checkedAt,
-                        checkedAt.Add(CheckInterval),
-                        digest,
-                        $"certificate-event:monitoring-check:{digest[7..55]}"),
-                    cancellationToken)
-                .ConfigureAwait(false);
+            var check = new DomainMonitoringCheckRecord(
+                state.EnrollmentId,
+                ownerId,
+                normalized,
+                state.EnrollmentStatus,
+                target,
+                scan.Scan.FinalHipScore,
+                CriticalFindingCount(scan.Evaluation),
+                checkedAt,
+                checkedAt.Add(CheckInterval),
+                digest,
+                $"certificate-event:monitoring-check:{digest[7..55]}");
+            DomainMonitoringWriteStatus checkWrite;
+            if (target == DomainEnrollmentStatus.Monitored)
+            {
+                var promotion = await promotionService.PromoteAsync(state, scan, check, cancellationToken)
+                    .ConfigureAwait(false);
+                checkWrite = promotion.Status switch
+                {
+                    DomainCertificateMonitoringPromotionStatus.Promoted => DomainMonitoringWriteStatus.Updated,
+                    DomainCertificateMonitoringPromotionStatus.Existing => DomainMonitoringWriteStatus.Existing,
+                    DomainCertificateMonitoringPromotionStatus.Conflict => DomainMonitoringWriteStatus.Conflict,
+                    _ => DomainMonitoringWriteStatus.Unavailable
+                };
+            }
+            else
+            {
+                checkWrite = await repository.TryApplyCheckAsync(check, cancellationToken).ConfigureAwait(false);
+            }
             if (checkWrite is DomainMonitoringWriteStatus.Conflict)
             {
                 return Result(DomainCertificateMonitoringStartStatus.Conflict);

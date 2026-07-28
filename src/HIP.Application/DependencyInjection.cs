@@ -88,6 +88,7 @@ public static class DependencyInjection
         services.TryAddSingleton(DomainCertificatePublicEndpointOptions.Default);
         services.AddScoped<IDomainCertificateProvisioningService, DomainCertificateProvisioningService>();
         services.AddScoped<IDomainCertificateMonitoringService, DomainCertificateMonitoringService>();
+        services.AddScoped<IDomainCertificateMonitoringPromotionService, DomainCertificateMonitoringPromotionService>();
         services.AddScoped<IDomainCertificateMonitoringCoordinator, DomainCertificateMonitoringCoordinator>();
         services.AddScoped<IDomainCertificateSigningService, DomainCertificateSigningService>();
         services.AddScoped<IDomainCertificateIssuanceService, DomainCertificateIssuanceService>();

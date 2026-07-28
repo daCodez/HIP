@@ -461,6 +461,56 @@ public sealed class DomainCertificateRepositoryTests
         });
     }
     [Test]
+    public async Task Monitoring_promotion_atomically_replaces_current_signed_certificate_and_is_idempotent()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        await repository.TryCreateIssuedAsync(Record(), CancellationToken.None);
+        var enabledAt = Now.AddMinutes(20);
+        await repository.TryEnableAsync(
+            new DomainMonitoringEnableRecord(
+                "enrollment-1", "owner-1", "example.com", enabledAt, enabledAt,
+                "certificate-event:monitoring-enabled:enrollment-1"),
+            CancellationToken.None);
+        var checkedAt = enabledAt.AddMinutes(1);
+        var check = new DomainMonitoringCheckRecord(
+            "enrollment-1", "owner-1", "example.com",
+            DomainEnrollmentStatus.Verified, DomainEnrollmentStatus.Monitored,
+            82, 0, checkedAt, checkedAt.AddHours(24), $"sha256:{new string('e', 64)}",
+            "certificate-event:monitoring-check:promoted");
+        var promoted = PromotedRecord(checkedAt);
+        var promotion = new DomainMonitoringCertificatePromotionRecord(
+            check, "hip-domain-cert-0001", 1, promoted);
+
+        var applied = await repository.TryApplyPromotedCheckAsync(promotion, CancellationToken.None);
+        context.ChangeTracker.Clear();
+        var retry = await repository.TryApplyPromotedCheckAsync(promotion, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied, Is.EqualTo(DomainMonitoringWriteStatus.Updated));
+            Assert.That(retry, Is.EqualTo(DomainMonitoringWriteStatus.Existing));
+            var certificates = context.DomainCertificates.OrderBy(item => item.CertificateVersion).ToArray();
+            Assert.That(certificates, Has.Length.EqualTo(2));
+            Assert.That(certificates[0].IsCurrent, Is.False);
+            Assert.That(certificates[1].IsCurrent, Is.True);
+            Assert.That(certificates[1].Level, Is.EqualTo(DomainCertificateLevel.Monitored));
+            Assert.That(certificates[1].LastMonitoringAtUtc, Is.EqualTo(checkedAt));
+            var enrollment = context.DomainEnrollments.Single(item => item.EnrollmentId == "enrollment-1");
+            Assert.That(enrollment.Status, Is.EqualTo(DomainEnrollmentStatus.Monitored));
+            Assert.That(enrollment.CurrentScore, Is.EqualTo(82));
+            Assert.That(context.DomainCertificateEvents.Count(item => item.EventType == "CertificateIssued"),
+                Is.EqualTo(2));
+            var monitoringEvent = context.DomainCertificateEvents.Single(
+                item => item.EventType == "MonitoringPolicySatisfied");
+            Assert.That(monitoringEvent.CertificateId, Is.EqualTo("hip-domain-cert-0002"));
+            Assert.That(monitoringEvent.EvidenceDigest, Is.EqualTo(check.EvidenceDigest));
+        });
+
+        var current = await repository.GetCurrentByDomainAsync("example.com", CancellationToken.None);
+        Assert.That(current?.Certificate.Payload.CertificateId, Is.EqualTo("hip-domain-cert-0002"));
+    }
+    [Test]
     public async Task Due_monitoring_query_returns_only_active_scheduled_certificates()
     {
         await using var context = Context();
@@ -621,6 +671,40 @@ public sealed class DomainCertificateRepositoryTests
                 "HIP issued the domain certificate.",
                 Now));
     }
+    private static HipStoredDomainCertificate PromotedRecord(DateTimeOffset checkedAt)
+    {
+        var original = Record();
+        var payload = original.Certificate.Payload with
+        {
+            CertificateId = "hip-domain-cert-0002",
+            CertificateVersion = 2,
+            Level = DomainCertificateLevel.Monitored,
+            IssuedAtUtc = checkedAt,
+            ExpiresAtUtc = checkedAt.AddDays(365),
+            LastMonitoringAtUtc = checkedAt,
+            RevocationStatusUrl = "https://hiptrust.com/api/v1/certificates/hip-domain-cert-0002/status",
+            PublicCertificateUrl = "https://hiptrust.com/certificate/hip-domain-cert-0002"
+        };
+        var certificate = original.Certificate with { Payload = payload };
+        var json = DomainTrustCertificateJson.Serialize(certificate);
+        return new HipStoredDomainCertificate(
+            "enrollment-1",
+            "owner-1",
+            certificate,
+            json,
+            Digest(json),
+            $"sha256:{new string('d', 64)}",
+            new DomainCertificateAuditEvent(
+                "certificate-event-2",
+                "hip-monitoring-service",
+                "CertificateIssued",
+                null,
+                DomainCertificateStatus.Active,
+                null,
+                "HIP issued the monitored domain certificate.",
+                checkedAt));
+    }
+
     private static string Digest(string json)
     {
         var canonical = new Rfc8785CanonicalJsonService()

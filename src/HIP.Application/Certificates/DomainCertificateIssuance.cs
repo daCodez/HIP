@@ -66,7 +66,7 @@ public sealed class DomainCertificateIssuanceService(
         try
         {
             Validate(request);
-            sourceDecisionDigest = SourceDecisionDigest(request.Draft);
+            sourceDecisionDigest = SourceDecisionDigest(request.Draft, canonicalizer);
         }
         catch (Exception exception) when (
             exception is ArgumentException or InvalidOperationException or NullReferenceException)
@@ -119,25 +119,7 @@ public sealed class DomainCertificateIssuanceService(
             return Result(Map(signing.Status));
         }
 
-        var certificateJson = DomainTrustCertificateJson.Serialize(signing.Certificate);
-        var certificateDigest = Digest(Encoding.UTF8.GetBytes(certificateJson));
-        var auditEvent = new DomainCertificateAuditEvent(
-            EventId(signing.Certificate.Payload.CertificateId, sourceDecisionDigest),
-            request.ActorId,
-            "CertificateIssued",
-            null,
-            HIP.Domain.Certificates.DomainCertificateStatus.Active,
-            null,
-            request.Draft.Evaluation.PublicMeaning,
-            signing.Certificate.Payload.IssuedAtUtc);
-        var stored = new HipStoredDomainCertificate(
-            request.EnrollmentId,
-            request.OwnerId,
-            signing.Certificate,
-            certificateJson,
-            certificateDigest,
-            sourceDecisionDigest,
-            auditEvent);
+        var stored = CreateStored(request, signing.Certificate, canonicalizer);
 
         DomainCertificateRepositoryWriteResult write;
         try
@@ -170,7 +152,34 @@ public sealed class DomainCertificateIssuanceService(
         };
     }
 
-    private string SourceDecisionDigest(DomainCertificateSigningDraft draft)
+    internal static HipStoredDomainCertificate CreateStored(
+        DomainCertificateIssuanceRequest request,
+        SignedDomainTrustCertificate certificate,
+        ICanonicalJsonService canonicalizer)
+    {
+        Validate(request);
+        ArgumentNullException.ThrowIfNull(certificate);
+        ArgumentNullException.ThrowIfNull(canonicalizer);
+        var sourceDecisionDigest = SourceDecisionDigest(request.Draft, canonicalizer);
+        var certificateJson = DomainTrustCertificateJson.Serialize(certificate);
+        var certificateDigest = Digest(Encoding.UTF8.GetBytes(certificateJson), canonicalizer);
+        var auditEvent = new DomainCertificateAuditEvent(
+            EventId(certificate.Payload.CertificateId, sourceDecisionDigest),
+            request.ActorId,
+            "CertificateIssued",
+            null,
+            HIP.Domain.Certificates.DomainCertificateStatus.Active,
+            null,
+            request.Draft.Evaluation.PublicMeaning,
+            certificate.Payload.IssuedAtUtc);
+        return new HipStoredDomainCertificate(
+            request.EnrollmentId, request.OwnerId, certificate, certificateJson,
+            certificateDigest, sourceDecisionDigest, auditEvent);
+    }
+
+    private static string SourceDecisionDigest(
+        DomainCertificateSigningDraft draft,
+        ICanonicalJsonService canonicalizer)
     {
         var evaluation = draft.Evaluation;
         var identity = new IssuanceIdentity(
@@ -199,10 +208,12 @@ public sealed class DomainCertificateIssuanceService(
                 .ThenBy(item => item.PublicSummary, StringComparer.Ordinal)
                 .ToArray(),
             evaluation.EvaluatedAtUtc);
-        return Digest(JsonSerializer.SerializeToUtf8Bytes(identity, SourceJsonOptions));
+        return Digest(JsonSerializer.SerializeToUtf8Bytes(identity, SourceJsonOptions), canonicalizer);
     }
 
-    private string Digest(ReadOnlySpan<byte> json) =>
+    private static string Digest(
+        ReadOnlySpan<byte> json,
+        ICanonicalJsonService canonicalizer) =>
         $"sha256:{Convert.ToHexString(
             SHA256.HashData(canonicalizer.Canonicalize(json))).ToLowerInvariant()}";
 

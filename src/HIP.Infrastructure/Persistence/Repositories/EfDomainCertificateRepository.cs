@@ -1029,6 +1029,155 @@ public sealed class EfDomainCertificateRepository(
             return DomainMonitoringWriteStatus.Conflict;
         }
     }
+
+    /// <inheritdoc />
+    public async Task<DomainMonitoringWriteStatus> TryApplyPromotedCheckAsync(
+        DomainMonitoringCertificatePromotionRecord promotion,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(promotion);
+        var record = promotion.Check;
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(promotion.Certificate);
+        ValidateIdentifier(promotion.ExpectedCertificateId, 128);
+        ValidateIdentifier(record.EnrollmentId, 128);
+        ValidateIdentifier(record.OwnerId, 256);
+        ValidateIdentifier(record.AuditEventId, 128);
+        Validate(promotion.Certificate, requireInitialActiveStatus: true);
+        var payload = promotion.Certificate.Certificate.Payload;
+        if (promotion.ExpectedCertificateVersion < 1 ||
+            payload.CertificateVersion != promotion.ExpectedCertificateVersion + 1 ||
+            payload.CertificateId == promotion.ExpectedCertificateId ||
+            payload.Level != DomainCertificateLevel.Monitored ||
+            payload.LastMonitoringAtUtc != record.CheckedAtUtc ||
+            promotion.Certificate.EnrollmentId != record.EnrollmentId ||
+            promotion.Certificate.OwnerId != record.OwnerId ||
+            payload.Domain != record.Domain ||
+            record.ExpectedStatus != DomainEnrollmentStatus.Verified ||
+            record.TargetStatus != DomainEnrollmentStatus.Monitored ||
+            record.CurrentScore is < 0 or > 100 || record.UnresolvedCriticalFindings != 0 ||
+            record.CheckedAtUtc.Offset != TimeSpan.Zero || record.NextCheckAtUtc <= record.CheckedAtUtc ||
+            !IsDigest(record.EvidenceDigest) ||
+            HIP.Application.PublicLookup.DomainInputValidator.ValidateAndNormalize(record.Domain) != record.Domain)
+        {
+            throw new ArgumentException("Monitored certificate promotion is invalid.", nameof(promotion));
+        }
+
+        if (!dbContext.Database.IsRelational())
+        {
+            return await ExecutePromotionAsync(useTransaction: false).ConfigureAwait(false);
+        }
+
+        var strategy = dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(() => ExecutePromotionAsync(useTransaction: true)).ConfigureAwait(false);
+
+        async Task<DomainMonitoringWriteStatus> ExecutePromotionAsync(bool useTransaction)
+        {
+            dbContext.ChangeTracker.Clear();
+            await using var transaction = useTransaction
+                ? await dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
+                : null;
+            try
+            {
+                var existingEvent = await dbContext.DomainCertificateEvents.AsNoTracking()
+                    .SingleOrDefaultAsync(item => item.EventId == record.AuditEventId, cancellationToken)
+                    .ConfigureAwait(false);
+                if (existingEvent is not null)
+                {
+                    var existingCertificate = await dbContext.DomainCertificates.AsNoTracking()
+                        .SingleOrDefaultAsync(
+                            item => item.CertificateId == payload.CertificateId && item.IsCurrent,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    var exact = existingEvent.EnrollmentId == record.EnrollmentId &&
+                                existingEvent.CertificateId == payload.CertificateId &&
+                                existingEvent.EvidenceDigest == record.EvidenceDigest &&
+                                existingCertificate is not null;
+                    if (transaction is not null)
+                    {
+                        await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    return exact ? DomainMonitoringWriteStatus.Existing : DomainMonitoringWriteStatus.Conflict;
+                }
+
+                var enrollment = await dbContext.DomainEnrollments.SingleOrDefaultAsync(
+                    item => item.EnrollmentId == record.EnrollmentId && item.OwnerId == record.OwnerId &&
+                            item.Domain == record.Domain && item.IsCurrent,
+                    cancellationToken).ConfigureAwait(false);
+                var current = await dbContext.DomainCertificates.SingleOrDefaultAsync(
+                    item => item.CertificateId == promotion.ExpectedCertificateId &&
+                            item.EnrollmentId == record.EnrollmentId && item.IsCurrent,
+                    cancellationToken).ConfigureAwait(false);
+                if (enrollment is null || current is null)
+                {
+                    if (transaction is not null)
+                    {
+                        await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    return DomainMonitoringWriteStatus.NotFound;
+                }
+                if (enrollment.MonitoringEnabledAtUtc is null ||
+                    enrollment.Status != record.ExpectedStatus ||
+                    current.Status != DomainCertificateStatus.Active ||
+                    current.Level != DomainCertificateLevel.Verified ||
+                    current.CertificateVersion != promotion.ExpectedCertificateVersion)
+                {
+                    if (transaction is not null)
+                    {
+                        await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    return DomainMonitoringWriteStatus.Conflict;
+                }
+
+                current.IsCurrent = false;
+                if (transaction is not null)
+                {
+                    await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                enrollment.Status = DomainEnrollmentStatus.Monitored;
+                enrollment.LastMonitoringAtUtc = record.CheckedAtUtc;
+                enrollment.MonitoringNextCheckAtUtc = record.NextCheckAtUtc;
+                enrollment.MonitoringFailureCount = 0;
+                enrollment.CurrentScore = record.CurrentScore;
+                enrollment.UnresolvedCriticalFindings = 0;
+                enrollment.UpdatedAtUtc = record.CheckedAtUtc;
+                enrollment.AggregateVersion++;
+                dbContext.DomainCertificates.Add(ToCertificateEntity(promotion.Certificate));
+                dbContext.DomainCertificateEvents.Add(ToEventEntity(promotion.Certificate));
+                dbContext.DomainCertificateEvents.Add(new HipDomainCertificateEventEntity
+                {
+                    EventId = record.AuditEventId,
+                    EnrollmentId = enrollment.EnrollmentId,
+                    CertificateId = payload.CertificateId,
+                    EventType = "MonitoringPolicySatisfied",
+                    PreviousStatus = record.ExpectedStatus.ToString(),
+                    CurrentStatus = record.TargetStatus.ToString(),
+                    ActorId = "hip-monitoring-service",
+                    ReasonCode = "Eligible",
+                    PublicSummary = "Fresh authoritative evidence satisfied the HIP monitored-domain policy.",
+                    PolicyVersion = enrollment.PolicyVersion,
+                    EvidenceDigest = record.EvidenceDigest,
+                    OccurredAtUtc = record.CheckedAtUtc
+                });
+                await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                return DomainMonitoringWriteStatus.Updated;
+            }
+            catch (DbUpdateException)
+            {
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                }
+                dbContext.ChangeTracker.Clear();
+                return DomainMonitoringWriteStatus.Conflict;
+            }
+        }
+    }
     /// <inheritdoc />
     public async Task<DomainEnrollmentTransitionWriteResult> TryApplySecurityReviewAsync(
         DomainCertificateSecurityReviewRecord review,

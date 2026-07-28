@@ -165,7 +165,7 @@ public sealed class PublicLookupServiceTests
             monitoredAtUtc.AddDays(-1),
             0,
             DomainCertificateStatus.Active,
-            DomainCertificateLevel.Verified,
+            DomainCertificateLevel.Monitored,
             MonitoringEnabledAtUtc: monitoredAtUtc.AddHours(-1),
             LastMonitoringAtUtc: monitoredAtUtc,
             MonitoringNextCheckAtUtc: monitoredAtUtc.AddDays(1),

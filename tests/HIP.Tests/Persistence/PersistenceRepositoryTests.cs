@@ -110,6 +110,7 @@ public sealed class PersistenceRepositoryTests
             })
             .Build();
 
+        services.AddLogging();
         services.AddHipApplication();
         services.AddHipInfrastructure(configuration);
 
@@ -117,6 +118,8 @@ public sealed class PersistenceRepositoryTests
         using var scope = provider.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<EfDomainCertificateRepository>();
         var monitoringService = scope.ServiceProvider.GetRequiredService<IDomainCertificateMonitoringService>();
+        var promotionService = scope.ServiceProvider
+            .GetRequiredService<IDomainCertificateMonitoringPromotionService>();
         var monitoringCoordinator = scope.ServiceProvider
             .GetRequiredService<IDomainCertificateMonitoringCoordinator>();
 
@@ -130,6 +133,7 @@ public sealed class PersistenceRepositoryTests
                 Is.SameAs(repository));
             Assert.That(monitoringService, Is.TypeOf<DomainCertificateMonitoringService>());
             Assert.That(monitoringCoordinator, Is.TypeOf<DomainCertificateMonitoringCoordinator>());
+            Assert.That(promotionService, Is.TypeOf<DomainCertificateMonitoringPromotionService>());
         });
     }
 
