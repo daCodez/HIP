@@ -1,6 +1,7 @@
 @page "/admin/reports"
 @attribute [Authorize(Policy = AdminPolicies.CanViewReviews)]
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 @inject IAdminDashboardService DashboardService
 
 <PageTitle>HIP Reports</PageTitle>
@@ -11,10 +12,16 @@
         <p>Live privacy-safe trust and threat activity summary.</p>
     </div>
     <div class="hip-button-row end">
+        <span role="status" aria-live="polite">Live · refreshes every 10 seconds</span>
         <button type="button" disabled>Export CSV</button>
         <button type="button" disabled>Export PDF</button>
     </div>
 </section>
+
+@if (_refreshError is not null)
+{
+    <p class="hip-inline-alert" role="alert">@_refreshError</p>
+}
 
 @if (_summary is null)
 {
@@ -89,13 +96,72 @@ else
 }
 
 @code {
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(10);
+    private readonly CancellationTokenSource _refreshCancellation = new();
     private AdminDashboardSummary? _summary;
+    private Task? _refreshLoop;
+    private string? _refreshError;
 
     /// <summary>
-    /// Loads the live dashboard summary for report rendering.
+    /// Loads the first live dashboard summary for report rendering.
     /// </summary>
-    protected override async Task OnInitializedAsync() =>
-        _summary = await DashboardService.GetSummaryAsync(CancellationToken.None);
+    protected override Task OnInitializedAsync() => RefreshSummaryAsync();
+
+    /// <summary>
+    /// Starts live refresh only after the interactive component has rendered.
+    /// </summary>
+    /// <param name="firstRender">Whether this is the component's first interactive render.</param>
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _refreshLoop = RefreshLoopAsync();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Refreshes reports sequentially so the scoped persistence context is never used concurrently.
+    /// </summary>
+    private async Task RefreshLoopAsync()
+    {
+        using var timer = new PeriodicTimer(RefreshInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_refreshCancellation.Token))
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshSummaryAsync();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) when (_refreshCancellation.IsCancellationRequested)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Replaces the report snapshot only after a complete successful read.
+    /// </summary>
+    private async Task RefreshSummaryAsync()
+    {
+        try
+        {
+            var summary = await DashboardService.GetSummaryAsync(_refreshCancellation.Token);
+            _summary = summary;
+            _refreshError = null;
+        }
+        catch (OperationCanceledException) when (_refreshCancellation.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            _refreshError = "HIP could not refresh live reports. The last complete snapshot remains visible.";
+        }
+    }
 
     /// <summary>
     /// Gets a dashboard card value by key.
@@ -144,4 +210,24 @@ else
             : severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)
                 ? "suspicious"
                 : "caution";
+
+    /// <summary>
+    /// Stops the live refresh loop when the admin leaves the page or the circuit closes.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        await _refreshCancellation.CancelAsync();
+        if (_refreshLoop is not null)
+        {
+            try
+            {
+                await _refreshLoop;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _refreshCancellation.Dispose();
+    }
 }

@@ -114,6 +114,23 @@ public sealed class AdminDataTruthTests
     }
 
     [Test]
+    public void Reports_page_refreshes_live_data_without_overlapping_scoped_reads()
+    {
+        var source = ReadWorkspaceFile("src", "HIP.Web", "Components", "Pages", "AdminReportsPage.razor");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("@implements IAsyncDisposable"));
+            Assert.That(source, Does.Contain("PeriodicTimer(RefreshInterval)"));
+            Assert.That(source, Does.Contain("await RefreshSummaryAsync();"));
+            Assert.That(source, Does.Contain("await _refreshLoop;"));
+            Assert.That(source, Does.Contain("StateHasChanged();"));
+            Assert.That(source, Does.Contain("The last complete snapshot remains visible."));
+            Assert.That(source, Does.Not.Contain("Task.WhenAll"));
+        });
+    }
+
+    [Test]
     public void Feedback_loop_uses_stored_privacy_safe_feedback_records()
     {
         var source = ReadWorkspaceFile("src", "HIP.Web", "Components", "Pages", "AdminFeedbackLoop.razor");
