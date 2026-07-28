@@ -34,13 +34,20 @@ public sealed class RiskFindingRetentionWorker(
             var current = options.CurrentValue;
             if (current.Enabled)
             {
-                using var scope = scopeFactory.CreateScope();
-                var service = scope.ServiceProvider.GetRequiredService<IRiskFindingRetentionService>();
-                var reports = scope.ServiceProvider.GetRequiredService<IPrivacySafeReportService>();
-                var deletedRiskFindings = await service.DeleteExpiredBatchAsync(current.BatchSize, stoppingToken);
-                var deletedReports = await reports.DeleteExpiredAsync(DateTimeOffset.UtcNow, current.BatchSize, stoppingToken);
-                var deleted = deletedRiskFindings + deletedReports;
-                if (deleted > 0) logger.LogInformation("Deleted {DeletedCount} expired privacy-safe report records.", deleted);
+                try
+                {
+                    using var scope = scopeFactory.CreateScope();
+                    var service = scope.ServiceProvider.GetRequiredService<IRiskFindingRetentionService>();
+                    var reports = scope.ServiceProvider.GetRequiredService<IPrivacySafeReportService>();
+                    var deletedRiskFindings = await service.DeleteExpiredBatchAsync(current.BatchSize, stoppingToken);
+                    var deletedReports = await reports.DeleteExpiredAsync(DateTimeOffset.UtcNow, current.BatchSize, stoppingToken);
+                    var deleted = deletedRiskFindings + deletedReports;
+                    if (deleted > 0) logger.LogInformation("Deleted {DeletedCount} expired privacy-safe report records.", deleted);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    logger.LogError(ex, "Transient failure in retention worker; will retry after interval.");
+                }
             }
 
             await Task.Delay(TimeSpan.FromMinutes(current.IntervalMinutes), stoppingToken);

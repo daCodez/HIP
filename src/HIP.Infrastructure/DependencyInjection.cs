@@ -161,7 +161,13 @@ public static class DependencyInjection
                 "HIP runtime persistence requires PostgreSQL. Run HIP.AppHost to use Aspire-managed PostgreSQL, or set ConnectionStrings__HipDatabase to a PostgreSQL connection string.");
         }
 
-        options.UseNpgsql(connectionString);
+        options.UseNpgsql(connectionString, npgsql =>
+        {
+            npgsql.EnableRetryOnFailure(
+                maxRetryCount: 10,
+                maxRetryDelay: TimeSpan.FromSeconds(15),
+                errorCodesToAdd: null);
+        });
     }
 
     /// <summary>
