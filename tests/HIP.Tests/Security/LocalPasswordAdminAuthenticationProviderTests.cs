@@ -26,7 +26,8 @@ public sealed class LocalPasswordAdminAuthenticationProviderTests
         {
             Assert.That(result.IsAuthenticated, Is.True);
             Assert.That(result.Identity, Is.Not.Null);
-            Assert.That(result.Identity!.Subject, Is.EqualTo(Email));
+            Assert.That(result.Identity!.Subject, Does.Match("^hip-user:v1:[0-9a-f]{64}$"));
+            Assert.That(result.Identity.Subject, Does.Not.Contain("@").And.Not.Contain(Email));
             Assert.That(result.Identity.Email, Is.EqualTo(Email));
             Assert.That(result.Identity.Role, Is.EqualTo(AdminRoles.Owner));
         });

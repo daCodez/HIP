@@ -167,6 +167,7 @@ public sealed class AdminAuthorizationTests
         var response = await SubmitLoginAsync(client, HipWebApplicationFactory<Program>.TestAdminEmail,
             HipWebApplicationFactory<Program>.TestAdminPassword, "/admin/licenses");
         var adminHtml = await client.GetStringAsync("/admin");
+        var rolesHtml = await client.GetStringAsync("/admin/roles");
 
         Assert.Multiple(() =>
         {
@@ -174,7 +175,12 @@ public sealed class AdminAuthorizationTests
             Assert.That(response.Headers.Location?.ToString(), Is.EqualTo("/admin/licenses"));
             Assert.That(response.Headers.TryGetValues("Set-Cookie", out var cookies), Is.True);
             Assert.That(cookies!, Has.Some.Contains("HIP_DEV_ADMIN_ROLE"));
+            Assert.That(cookies!, Has.None.Contains(HipWebApplicationFactory<Program>.TestAdminEmail));
+            Assert.That(cookies!.Any(cookie =>
+                cookie.Contains("hip-user%3Av1%3A", StringComparison.Ordinal) ||
+                cookie.Contains("hip-user:v1:", StringComparison.Ordinal)), Is.True);
             Assert.That(adminHtml, Does.Contain("action=\"/auth/logout\""));
+            Assert.That(rolesHtml, Does.Contain("Administrator access").And.Not.Contain("Administrator access unavailable"));
         });
     }
 

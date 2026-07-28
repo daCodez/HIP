@@ -114,7 +114,7 @@ public sealed class ConsumerAccountDerivedAuthenticationTests
         context.Request.Path = path;
         context.Request.Headers.Cookie =
             $"{HipDevHeaderAuthenticationHandler.DevAdminRoleCookieName}={AdminRoles.Owner}; " +
-            $"{HipDevHeaderAuthenticationHandler.DevAdminUserCookieName}=local-owner-subject";
+            $"{HipDevHeaderAuthenticationHandler.DevAdminUserCookieName}=owner@hip.test";
 
         var result = await context.AuthenticateAsync(HipDevHeaderAuthenticationHandler.SchemeName);
         var principal = result.Principal;
@@ -124,6 +124,9 @@ public sealed class ConsumerAccountDerivedAuthenticationTests
             Assert.That(result.Succeeded, Is.True);
             Assert.That(principal, Is.Not.Null);
             Assert.That(principal!.FindAll(HipAuthenticationClaimTypes.ActorId).Count(), Is.EqualTo(1));
+            Assert.That(
+                principal.FindFirstValue(HipAuthenticationClaimTypes.ActorId),
+                Does.Match("^hip-user:v1:[0-9a-f]{64}$").And.Not.Contain("@"));
             Assert.That(principal.FindAll(HipAuthenticationClaimTypes.ConsumerId).Count(), Is.EqualTo(1));
             Assert.That(
                 principal.FindFirstValue(HipAuthenticationClaimTypes.AccountContactVerified),

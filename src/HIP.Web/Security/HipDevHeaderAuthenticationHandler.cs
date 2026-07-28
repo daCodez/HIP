@@ -64,9 +64,10 @@ public sealed class HipDevHeaderAuthenticationHandler(
         return Request.Cookies.TryGetValue(DevAdminRoleCookieName, out var cookieRole)
             ? AuthenticateAdmin(
                 cookieRole,
-                Request.Cookies.TryGetValue(DevAdminUserCookieName, out var cookieUser)
-                    ? cookieUser
-                    : "hip-dev-admin",
+                HipDevelopmentActorId.FromSubject(
+                    Request.Cookies.TryGetValue(DevAdminUserCookieName, out var cookieUser)
+                        ? cookieUser
+                        : "hip-dev-admin"),
                 includeConsumerIdentity: true)
             : Task.FromResult(AuthenticateResult.NoResult());
     }
@@ -184,4 +185,27 @@ public sealed class HipDevHeaderAuthenticationHandler(
         return $"local-account-{Convert.ToHexString(SHA256.HashData(subjectBytes)).ToLowerInvariant()}";
     }
 
+}
+
+/// <summary>
+/// Converts development authentication subjects into stable actor identifiers without placing email addresses in claims.
+/// </summary>
+internal static class HipDevelopmentActorId
+{
+    /// <summary>Returns an existing privacy-safe identifier or a domain-separated SHA-256 identifier.</summary>
+    internal static string FromSubject(string subject)
+    {
+        var trimmed = subject.Trim();
+        if (trimmed.Length is >= 2 and <= 160 &&
+            char.IsAsciiLetterOrDigit(trimmed[0]) &&
+            trimmed.All(character =>
+                char.IsAsciiLetterOrDigit(character) || character is ':' or '.' or '_' or '-'))
+        {
+            return trimmed;
+        }
+
+        var normalizedSubject = trimmed.ToLowerInvariant();
+        var material = Encoding.UTF8.GetBytes($"hip-development-admin:v1\0{normalizedSubject}");
+        return $"hip-user:v1:{Convert.ToHexString(SHA256.HashData(material)).ToLowerInvariant()}";
+    }
 }

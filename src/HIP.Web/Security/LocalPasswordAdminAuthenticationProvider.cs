@@ -43,7 +43,7 @@ public sealed class LocalPasswordAdminAuthenticationProvider(
         }
 
         var identity = new HipAdminIdentity(
-            options.Email,
+            HipDevelopmentActorId.FromSubject(options.Email),
             options.Email,
             options.Email,
             AdminRoles.Owner);
