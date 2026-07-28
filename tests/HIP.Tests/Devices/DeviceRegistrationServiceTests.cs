@@ -3,6 +3,7 @@ using HIP.Application.Devices;
 using HIP.Application.Protocol;
 using HIP.Application.Reporting;
 using HIP.Application.Review;
+using HIP.Domain.Audit;
 using HIP.Domain.Devices;
 
 namespace HIP.Tests.Devices;
@@ -46,6 +47,8 @@ public sealed class DeviceRegistrationServiceTests
             Assert.That(devices.Single().DeviceId, Is.EqualTo(issued.Challenge.DeviceId));
             Assert.That(devices.Single().FriendlyName, Is.EqualTo("Work laptop"));
             Assert.That(devices.Single().TrustState, Is.EqualTo(DeviceTrustState.ProofOfPossessionVerified));
+            Assert.That(fixture.Repository.AuditEntries, Is.Not.Empty);
+            Assert.That(fixture.Repository.AuditEntries.All(AuditLogIntegrity.Verify), Is.True);
             Assert.That(devices.Single().RevocationState, Is.EqualTo(DeviceRevocationState.Active));
         });
     }
@@ -339,7 +342,7 @@ public sealed class DeviceRegistrationServiceTests
     private static ServiceFixture Fixture(DeviceRegistrationPolicy? policy = null)
     {
         var clock = new MutableTimeProvider(Now);
-        var repository = new InMemoryDeviceRegistrationRepository();
+        var repository = new CapturingDeviceRegistrationRepository();
         var keyDerivation = new DeviceRegistrationKeyDerivation(new PrivacyHashingOptions(
             "hip-device-registration-tests-exact-key",
             AllowDevelopmentKey: true));
@@ -371,10 +374,40 @@ public sealed class DeviceRegistrationServiceTests
 
     private sealed record ServiceFixture(
         IDeviceRegistrationService Service,
-        InMemoryDeviceRegistrationRepository Repository,
+        CapturingDeviceRegistrationRepository Repository,
         DeviceRegistrationKeyDerivation KeyDerivation,
         MutableTimeProvider Clock);
 
+    private sealed class CapturingDeviceRegistrationRepository : IDeviceRegistrationRepository
+    {
+        private readonly InMemoryDeviceRegistrationRepository inner = new();
+        private readonly List<AuditLogEntry> auditEntries = [];
+
+        public IReadOnlyCollection<AuditLogEntry> AuditEntries => auditEntries;
+
+        public Task<DeviceRegistrationAggregate?> GetAsync(
+            string ownerScopeId,
+            CancellationToken cancellationToken) =>
+            inner.GetAsync(ownerScopeId, cancellationToken);
+
+        public Task<RegisteredDevice?> GetDeviceAsync(
+            string deviceId,
+            CancellationToken cancellationToken) =>
+            inner.GetDeviceAsync(deviceId, cancellationToken);
+
+        public async Task<DeviceRegistrationSaveOutcome> TrySaveAsync(
+            DeviceRegistrationTransitionBatch transition,
+            CancellationToken cancellationToken)
+        {
+            var outcome = await inner.TrySaveAsync(transition, cancellationToken);
+            if (outcome == DeviceRegistrationSaveOutcome.Succeeded)
+            {
+                auditEntries.AddRange(transition.AuditEntries);
+            }
+
+            return outcome;
+        }
+    }
     private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public DateTimeOffset UtcNow { get; set; } = utcNow;

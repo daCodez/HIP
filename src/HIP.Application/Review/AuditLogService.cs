@@ -143,14 +143,98 @@ public sealed class AuditLogService(IAuditLogRepository repository) : IAuditLogS
     public async Task<IReadOnlyCollection<AuditLogEntry>> ListAsync(CancellationToken cancellationToken)
     {
         var entries = await repository.ListAsync(cancellationToken).ConfigureAwait(false);
-        if (entries.Any(entry => !AuditLogIntegrity.Verify(entry)))
+        var invalid = entries.Where(entry => !AuditLogIntegrity.Verify(entry)).ToArray();
+        foreach (var entry in invalid)
         {
-            throw new InvalidOperationException("HIP audit integrity verification failed.");
+            if (!IsKnownDeviceTimestampSealDefect(entry))
+            {
+                throw new InvalidOperationException("HIP audit integrity verification failed.");
+            }
+
+            var repaired = AuditLogIntegrity.Seal(entry);
+            var attestation = CreateRepairAttestation(entry);
+            _ = await repository.TryRepairKnownIntegrityDefectAsync(
+                    entry,
+                    repaired,
+                    attestation,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
+
+        if (invalid.Length > 0)
+        {
+            entries = await repository.ListAsync(cancellationToken).ConfigureAwait(false);
+            if (entries.Any(entry => !AuditLogIntegrity.Verify(entry)))
+            {
+                throw new InvalidOperationException("HIP audit integrity verification failed.");
+            }
+        }
+
         return entries
             .OrderByDescending(entry => entry.CreatedAtUtc)
             .ToArray();
     }
+
+    private AuditLogEntry CreateRepairAttestation(AuditLogEntry repairedEntry)
+    {
+        var material = Encoding.UTF8.GetBytes($"audit-integrity-repair\n{repairedEntry.AuditLogId}");
+        var repairId = $"audit-idempotent-{Convert.ToHexString(SHA256.HashData(material)).ToLowerInvariant()}";
+        return AuditLogIntegrity.Seal(CreateEntry(
+            "system",
+            "AuditIntegrity.LegacyDeviceTimestampResealed",
+            TargetType.DeviceKey,
+            repairedEntry.TargetId,
+            "HIP resealed integrity metadata affected by a known device-audit timestamp defect.",
+            AuditSeverity.Medium,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["defectVersion"] = "device-created-at-post-seal-v1",
+                ["repairedAuditLogId"] = repairedEntry.AuditLogId
+            },
+            actorRole: "System") with
+        {
+            AuditLogId = repairId
+        });
+    }
+
+    private static bool IsKnownDeviceTimestampSealDefect(AuditLogEntry entry)
+    {
+        if (entry.IntegrityVersion != AuditLogIntegrity.CurrentVersion ||
+            entry.IntegrityHash is null || !IsLowerHex(entry.IntegrityHash, 64) ||
+            !entry.AuditLogId.StartsWith("audit-", StringComparison.Ordinal) ||
+            !entry.ActorId.StartsWith("owner-hmac-sha256-v1:", StringComparison.Ordinal) ||
+            !IsLowerHex(entry.ActorId["owner-hmac-sha256-v1:".Length..], 64) ||
+            entry.ActorRole != "Consumer" || entry.TargetType != TargetType.DeviceKey ||
+            string.IsNullOrWhiteSpace(entry.TargetId) || entry.TargetId.Length > 128 ||
+            entry.CreatedAtUtc.Offset != TimeSpan.Zero || entry.BeforeMetadata.Count != 0 ||
+            entry.AfterMetadata.Count != 0 || entry.CorrelationId is not null)
+        {
+            return false;
+        }
+
+        var expectedKeys = entry.Action switch
+        {
+            "ConsumerDevice.RegistrationChallengeIssued" when
+                entry.Severity == AuditSeverity.Low &&
+                entry.Summary == "A short-lived consumer device registration challenge was issued." =>
+                new[] { "expiresAtUtc", "keyAlgorithm", "platformType", "publicKeyFingerprint" },
+            "ConsumerDevice.Registered" when
+                entry.Severity == AuditSeverity.Medium &&
+                entry.Summary == "A consumer device completed proof-of-possession registration." =>
+                new[] { "keyAlgorithm", "publicKeyFingerprint", "revocationState", "trustState" },
+            "ConsumerDevice.Revoked" when
+                entry.Severity == AuditSeverity.High &&
+                entry.Summary == "A consumer device was irreversibly revoked." =>
+                new[] { "keyAlgorithm", "publicKeyFingerprint", "revocationState", "trustState" },
+            _ => null
+        };
+        return expectedKeys is not null &&
+               entry.Metadata.Keys.Order(StringComparer.Ordinal).SequenceEqual(expectedKeys) &&
+               entry.Metadata.Values.All(value => !string.IsNullOrWhiteSpace(value) && value.Length <= 256);
+    }
+
+    private static bool IsLowerHex(string value, int length) =>
+        value.Length == length && value.AsSpan().IndexOfAnyExcept("0123456789abcdef") < 0;
 
     private static IReadOnlyDictionary<string, string> Sanitize(IReadOnlyDictionary<string, string>? metadata)
     {

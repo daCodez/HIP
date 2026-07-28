@@ -522,7 +522,7 @@ public sealed class DeviceRegistrationService(
         string summary,
         AuditSeverity severity,
         DateTimeOffset createdAtUtc) =>
-        auditLogService.CreateEntry(
+        AuditLogIntegrity.Seal(auditLogService.CreateEntry(
             ownerScopeId,
             action,
             TargetType.DeviceKey,
@@ -539,7 +539,7 @@ public sealed class DeviceRegistrationService(
             actorRole: "Consumer") with
         {
             CreatedAtUtc = createdAtUtc
-        };
+        });
 
     private IReadOnlyCollection<RegisteredDevice> RetainDevicesForRegistration(
         IReadOnlyCollection<RegisteredDevice> devices)
@@ -558,7 +558,7 @@ public sealed class DeviceRegistrationService(
     private AuditLogEntry CreateChallengeAudit(
         string ownerScopeId,
         DeviceRegistrationChallenge challenge) =>
-        auditLogService.CreateEntry(
+        AuditLogIntegrity.Seal(auditLogService.CreateEntry(
             ownerScopeId,
             "ConsumerDevice.RegistrationChallengeIssued",
             TargetType.DeviceKey,
@@ -575,7 +575,7 @@ public sealed class DeviceRegistrationService(
             actorRole: "Consumer") with
         {
             CreatedAtUtc = challenge.IssuedAtUtc
-        };
+        });
 
     private static DeviceRegistrationDeviceResponse ToResponse(RegisteredDevice device) =>
         new(

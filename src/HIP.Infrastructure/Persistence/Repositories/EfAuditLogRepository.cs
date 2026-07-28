@@ -26,4 +26,25 @@ public sealed class EfAuditLogRepository(HipRecordStore store) : IAuditLogReposi
 
     public Task<IReadOnlyCollection<AuditLogEntry>> ListAsync(CancellationToken cancellationToken) =>
         store.ListAsync<AuditLogEntry>(Partition, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<bool> TryRepairKnownIntegrityDefectAsync(
+        AuditLogEntry original,
+        AuditLogEntry repaired,
+        AuditLogEntry attestation,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(original);
+        ArgumentNullException.ThrowIfNull(repaired);
+        ArgumentNullException.ThrowIfNull(attestation);
+        return store.TrySaveVersionedWithRelatedRecordsAsync(
+            Partition,
+            original.AuditLogId,
+            repaired,
+            expectedVersion: 1,
+            newVersion: 2,
+            [(HipRelatedRecordWrite)new HipRelatedRecordWrite<AuditLogEntry>(
+                Partition, attestation.AuditLogId, attestation)],
+            cancellationToken);
+    }
 }

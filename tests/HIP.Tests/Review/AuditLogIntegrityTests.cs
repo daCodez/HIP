@@ -70,4 +70,44 @@ public sealed class AuditLogIntegrityTests
                 Is.LessThanOrEqualTo(export.LatestAtUtc!.Value));
         });
     }
+
+    [Test]
+    public async Task Listing_atomically_repairs_the_known_device_timestamp_seal_defect_and_attests_it()
+    {
+        var repository = new InMemoryAuditLogRepository();
+        var service = new AuditLogService(repository);
+        var original = service.CreateEntry(
+            $"owner-hmac-sha256-v1:{new string('a', 64)}",
+            "ConsumerDevice.Registered",
+            TargetType.DeviceKey,
+            "device-1",
+            "A consumer device completed proof-of-possession registration.",
+            AuditSeverity.Medium,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["keyAlgorithm"] = "ES256",
+                ["publicKeyFingerprint"] = $"sha256:{new string('b', 43)}",
+                ["trustState"] = "ProofOfPossessionVerified",
+                ["revocationState"] = "Active"
+            },
+            actorRole: "Consumer");
+        var affected = original with { CreatedAtUtc = original.CreatedAtUtc.AddMinutes(-5) };
+        await repository.SaveAsync(affected, CancellationToken.None);
+
+        var entries = await service.ListAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(entries, Has.Count.EqualTo(2));
+            Assert.That(entries.All(AuditLogIntegrity.Verify), Is.True);
+            var repaired = entries.Single(entry => entry.AuditLogId == affected.AuditLogId);
+            Assert.That(repaired.CreatedAtUtc, Is.EqualTo(affected.CreatedAtUtc));
+            var attestation = entries.Single(entry =>
+                entry.Action == "AuditIntegrity.LegacyDeviceTimestampResealed");
+            Assert.That(attestation.TargetId, Is.EqualTo(affected.TargetId));
+            Assert.That(attestation.Metadata["repairedAuditLogId"], Is.EqualTo(affected.AuditLogId));
+            Assert.That(attestation.Metadata["defectVersion"],
+                Is.EqualTo("device-created-at-post-seal-v1"));
+        });
+    }
 }

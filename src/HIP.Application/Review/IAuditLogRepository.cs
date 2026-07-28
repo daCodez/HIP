@@ -9,6 +9,14 @@ public interface IAuditLogRepository
     Task<bool> TryCreateAsync(AuditLogEntry entry, CancellationToken cancellationToken);
 
     Task<IReadOnlyCollection<AuditLogEntry>> ListAsync(CancellationToken cancellationToken);
+
+    /// <summary>Atomically reseals one known legacy defect and appends its repair attestation.</summary>
+    Task<bool> TryRepairKnownIntegrityDefectAsync(
+        AuditLogEntry original,
+        AuditLogEntry repaired,
+        AuditLogEntry attestation,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(false);
 }
 
 public sealed class InMemoryAuditLogRepository : IAuditLogRepository
@@ -43,6 +51,29 @@ public sealed class InMemoryAuditLogRepository : IAuditLogRepository
         lock (gate)
         {
             return Task.FromResult<IReadOnlyCollection<AuditLogEntry>>(entries.Values.ToArray());
+        }
+    }
+
+    public Task<bool> TryRepairKnownIntegrityDefectAsync(
+        AuditLogEntry original,
+        AuditLogEntry repaired,
+        AuditLogEntry attestation,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (gate)
+        {
+            if (!entries.TryGetValue(original.AuditLogId, out var current) ||
+                current != original ||
+                repaired.AuditLogId != original.AuditLogId ||
+                entries.ContainsKey(attestation.AuditLogId))
+            {
+                return Task.FromResult(false);
+            }
+
+            entries[repaired.AuditLogId] = repaired;
+            entries.Add(attestation.AuditLogId, attestation);
+            return Task.FromResult(true);
         }
     }
 }
