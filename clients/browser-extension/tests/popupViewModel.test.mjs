@@ -406,6 +406,43 @@ test("popup shows the current certificate approval stage before issuance", () =>
   assert.equal(view.certificateStatusText, "Not issued");
   assert.equal(view.certificateLevelText, "None verified");
 });
+test("popup presents a verified monitored domain without contradictory fallback labels", () => {
+  const view = buildPopupViewModel(
+    {
+      domain: "example.com",
+      displayScore: 82,
+      scorePresentation: "Available",
+      status: "MostlyTrusted",
+      evidenceCoverage: "Sufficient",
+      evidenceConfidence: "High",
+      identityStatus: "Verified",
+      certificateApplicationStatus: "Approved",
+      certificateProgressStatus: "Certificate active",
+      monitoringStatus: "Active"
+    },
+    { hipBadgeObserved: true, hipBadgeDomainMatch: true },
+    { webBaseUrl: "https://hiptrust.com" },
+    "https://example.com",
+    {
+      level: "Verified",
+      status: "Active",
+      signatureStatus: "Verified",
+      validityStatus: "Current",
+      expiresAtUtc: "2027-08-24T00:00:00Z",
+      publicCertificateUrl: "https://hiptrust.com/certificate/hip-domain-cert-0001",
+      isActive: true
+    });
+
+  assert.equal(view.verifiedText, "Verified");
+  assert.equal(view.evidenceCoverageText, "Sufficient");
+  assert.equal(view.evidenceConfidenceText, "High");
+  assert.equal(view.certificateApplicationText, "Approved");
+  assert.equal(view.monitoringStatusText, "Active");
+  assert.equal(view.certificateStatusText, "Active");
+  assert.equal(view.certificateLevelText, "Verified");
+  assert.equal(view.hipBadgeText, "Found for this site");
+});
+
 test("popup distinguishes an observed matching badge from verification", () => {
   assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: true }), "Found for this site");
   assert.equal(badgeObservationText({ hipBadgeObserved: true, hipBadgeDomainMatch: false }), "Found for another site");
