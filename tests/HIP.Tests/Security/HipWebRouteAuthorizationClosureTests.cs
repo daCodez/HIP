@@ -21,13 +21,16 @@ namespace HIP.Tests.Security;
 [TestFixture]
 public sealed class HipWebRouteAuthorizationClosureTests
 {
-    private const int ExpectedProtectedRouteCount = 120;
+    private const int ExpectedProtectedRouteCount = 123;
 
     private static readonly PrincipalKind[] HumanPrincipals = Enum.GetValues<PrincipalKind>();
 
     private static readonly IReadOnlyDictionary<string, IReadOnlySet<PrincipalKind>> AllowedPrincipalsByPolicy =
         new Dictionary<string, IReadOnlySet<PrincipalKind>>(StringComparer.Ordinal)
         {
+            [AdminPolicies.CanViewOwnAdminAccess] = Allowed(PrincipalKind.Owner, PrincipalKind.Admin, PrincipalKind.Moderator, PrincipalKind.Support, PrincipalKind.ReadOnly),
+            [AdminPolicies.CanViewAdminUsers] = Allowed(PrincipalKind.Owner),
+            [AdminPolicies.CanManageAdmins] = Allowed(PrincipalKind.Owner),
             [AdminPolicies.CanManageRules] = Allowed(PrincipalKind.Owner, PrincipalKind.Admin),
             [AdminPolicies.CanViewReviews] = Allowed(
                 PrincipalKind.Owner,
@@ -141,6 +144,9 @@ public sealed class HipWebRouteAuthorizationClosureTests
         Route(HttpMethods.Post, "/api/v1/admin/reputation/events", AdminPolicies.CanViewAdminDashboard, AdminPolicies.CanManageReputation, AdminPolicies.RecentPrivilegedAuthentication),
         Route(HttpMethods.Post, "/api/v1/admin/reputation/{targetType}/{targetId}/recalculate", AdminPolicies.CanViewAdminDashboard, AdminPolicies.CanManageReputation, AdminPolicies.RecentPrivilegedAuthentication),
         Route(HttpMethods.Get, "/api/v1/admin/roles", AdminPolicies.CanViewAdminDashboard),
+        Route(HttpMethods.Get, "/api/v1/admin/access/me", AdminPolicies.CanViewOwnAdminAccess),
+        Route(HttpMethods.Get, "/api/v1/admin/users", AdminPolicies.CanViewAdminUsers),
+        Route(HttpMethods.Put, "/api/v1/admin/users", AdminPolicies.CanManageAdmins),
         Route(HttpMethods.Get, "/api/v1/admin/site-safety/external-providers", AdminPolicies.CanViewAdminDashboard),
 
         // Audit, review, appeal, and override workflows: 28 (68 cumulative).

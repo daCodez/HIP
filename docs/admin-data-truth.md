@@ -27,7 +27,7 @@ primary source, and optional dependency availability.
 | `AdminReputationSignals.razor` | Single dashboard snapshot | Empty activity is explicit; unavailable source metrics use an em dash. |
 | `AdminReview.razor` | `IReviewQueueService` | Empty queue; sample creation is development-only and labelled. |
 | `AdminReviewSignals.razor` | `IAdminReviewQueueService` | Explicit empty queue; no generated sample signals. |
-| `AdminRoles.razor` | Static current policy reference | Describes the implemented policy map; it is not a role-management claim. |
+| `AdminRoles.razor` | Encrypted `IAdminAccessRepository` directory | Shows persisted privacy-safe administrator assignments and performs Owner-confirmed, version-checked, atomically audited role/status changes. |
 | `AdminRules.razor` | Rule repositories and admin rule services | Empty rule lists are explicit; privacy-safe simulation is labelled and never presented as live. |
 | `AdminScanDetails.razor` | `IAdminScanDetailService` | Explicit missing-scan state; read-only limitations are stated. |
 | `AdminSecondLifeHudSimulator.razor` | `ISecondLifeHudSimulationService` | Clearly labelled development simulator with intentional sample inputs. |

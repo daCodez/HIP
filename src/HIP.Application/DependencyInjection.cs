@@ -1,4 +1,5 @@
 using FluentValidation;
+using HIP.Application.Administration;
 using HIP.Application.Ai;
 using HIP.Application.Browser;
 using HIP.Application.Certificates;
@@ -54,6 +55,7 @@ public static class DependencyInjection
         string? developmentSigningAuthorityScope = null)
     {
         var assembly = typeof(DependencyInjection).Assembly;
+        services.AddScoped<IAdminAccessService, AdminAccessService>();
         services.AddScoped<IDomainCertificateEnrollmentService, DomainCertificateEnrollmentService>();
         services.AddScoped<IDomainCertificateApplicationService, DomainCertificateApplicationService>();
         services.AddScoped<IDomainCertificateLifecycleService, DomainCertificateLifecycleService>();

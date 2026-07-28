@@ -1,12 +1,14 @@
+using HIP.Application.Administration;
+
 namespace HIP.Web.Security;
 
 public static class AdminRoles
 {
-    public const string Owner = nameof(Owner);
-    public const string Admin = nameof(Admin);
-    public const string Moderator = nameof(Moderator);
-    public const string Support = nameof(Support);
-    public const string ReadOnly = nameof(ReadOnly);
+    public const string Owner = AdminAccessRoleNames.Owner;
+    public const string Admin = AdminAccessRoleNames.Admin;
+    public const string Moderator = AdminAccessRoleNames.Moderator;
+    public const string Support = AdminAccessRoleNames.Support;
+    public const string ReadOnly = AdminAccessRoleNames.ReadOnly;
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {

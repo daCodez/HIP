@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -7,6 +8,7 @@ public static class HipAuthorizationExtensions
 {
     public static IServiceCollection AddHipAdminAuthorization(this IServiceCollection services)
     {
+        services.TryAddScoped<IClaimsTransformation, ManagedAdminAccessClaimsTransformation>();
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IAuthorizationHandler, PrivilegedMfaRequirementHandler>());
         services.TryAddEnumerable(
@@ -18,6 +20,13 @@ public static class HipAuthorizationExtensions
 
         services.AddAuthorization(options =>
         {
+            options.AddPolicy(AdminPolicies.CanViewOwnAdminAccess, policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.AddRequirements(new UniqueHipIdentityClaimRequirement(HipAuthenticationClaimTypes.ActorId));
+            });
+            AddAdminPolicy(options, AdminPolicies.CanViewAdminUsers, [AdminRoles.Owner]);
+            AddAdminPolicy(options, AdminPolicies.CanManageAdmins, [AdminRoles.Owner], new RecentPrivilegedMfaRequirement());
             AddAdminPolicy(options, AdminPolicies.CanManageRules, [AdminRoles.Owner, AdminRoles.Admin]);
             AddAdminPolicy(
                 options,

@@ -1,3 +1,4 @@
+using HIP.Application.Administration;
 using HIP.Application.Ai;
 using HIP.Application.Browser;
 using HIP.Application.Certificates;
@@ -83,6 +84,7 @@ public static class DependencyInjection
         services.AddSingleton<IWellKnownHostAddressResolver, SystemWellKnownHostAddressResolver>();
         services.AddSingleton<IWellKnownHttpMessageHandlerFactory, PinnedWellKnownHttpMessageHandlerFactory>();
 
+        services.AddScoped<IAdminAccessRepository, EfAdminAccessRepository>();
         services.AddScoped<IHipIdentityRepository, EfHipIdentityRepository>();
         services.AddScoped<IDeviceRegistrationRepository, EfDeviceRegistrationRepository>();
         services.AddScoped<IServiceClientRepository, EfServiceClientRepository>();

@@ -36,7 +36,26 @@ curl -H "X-HIP-Admin-Role: Owner" https://localhost:7001/api/v1/admin/audit-logs
 
 ## Permission Model
 
-The MVP exposes a permission catalog through `AdminRoleCatalog` and `GET /api/v1/admin/roles`.
+The V1 application exposes a permission catalog through `AdminRoleCatalog` and
+`GET /api/v1/admin/roles`. Administrator assignments are stored as one bounded,
+versioned encrypted directory. The directory contains only the privacy-safe HIP
+actor ID, a non-email operator label, role, status, and lifecycle timestamps; HIP
+does not store an administrator password, token, raw OIDC subject, issuer, or
+email in this directory.
+
+Before the first directory write, the configured OIDC role mapping supplies the
+bootstrap Owner. After that write, HIP replaces external administrative role
+claims on each request with the active persisted assignment. Missing, disabled,
+or unassigned actors receive no HIP admin role. If the directory cannot be read,
+HIP removes administrative roles for that request. Changes require an active
+persisted Owner, recent MFA outside Development, optimistic concurrency, an
+explicit privacy-safe reason, and an atomic append-only audit record. HIP rejects
+self-demotion/self-disable and any change that would leave no active Owner.
+
+Authenticated people can open `/access` or call
+`GET /api/v1/admin/access/me` to see only their own privacy-safe actor ID and
+assignment. An Owner uses that actor ID in **Users and roles**; no email-based
+invitation or identity-provider account mutation is implied.
 
 Current permissions:
 
@@ -69,6 +88,9 @@ summaries and details without changing state.
 
 ## Policies
 
+- `CanViewOwnAdminAccess`: any authenticated identity with one HIP actor claim (self only)
+- `CanViewAdminUsers`: Owner
+- `CanManageAdmins`: Owner with recent MFA-backed authentication outside Development
 - `CanManageRules`: Owner, Admin
 - `CanReviewReports`: Owner, Admin, Moderator (legacy compatibility policy)
 - `CanViewReviews`: Owner, Admin, Moderator, Support, ReadOnly
@@ -108,6 +130,9 @@ Protected API route groups:
 - `/api/v1/admin/audit`
 - `/api/v1/admin/audit/query`
 - `/api/v1/admin/roles`
+- `GET /api/v1/admin/access/me` (`CanViewOwnAdminAccess`; self only; no-store)
+- `GET /api/v1/admin/users` (`CanViewAdminUsers`)
+- `PUT /api/v1/admin/users` (`CanManageAdmins`)
 - `GET /api/v1/admin/service-clients/` (`CanViewServiceClients`)
 - `POST /api/v1/admin/service-clients/` (`CanManageServiceClients` plus recent privileged authentication)
 - `POST /api/v1/admin/service-clients/{clientId}/credentials/rotate` (`CanManageServiceClients` plus recent privileged authentication)
@@ -126,7 +151,8 @@ Protected UI routes:
 - `/admin/reputation-overrides`
 - `/admin/audit-logs`
 - `/admin/audit`
-- `/admin/roles`
+- `/access` (`CanViewOwnAdminAccess`; self only)
+- `/admin/roles` (`CanViewAdminUsers`; mutations reauthorize `CanManageAdmins`)
 - `/admin/api` (`CanViewServiceClients`; mutations reauthorize `CanManageServiceClients` plus recent privileged authentication)
 - `/admin/licenses` and `/admin/licenses/{licenseId}` (`CanViewLicenses`)
 - `/admin/licenses/new` (`CanAdministerLicenses`; creation also rechecks recent authentication)

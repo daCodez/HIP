@@ -1,31 +1,329 @@
 @page "/admin/roles"
-@attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
+@attribute [Authorize(Policy = AdminPolicies.CanViewAdminUsers)]
+@rendermode InteractiveServer
+@inject IAdminAccessService AccessService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthorizationService AuthorizationService
+@inject IHostEnvironment HostEnvironment
 
-<PageTitle>HIP Admin Roles</PageTitle>
+<PageTitle>HIP Users and Roles</PageTitle>
 
 <main class="admin-rule-page">
     <section class="admin-rule-header">
-        <p class="eyebrow">Admin MVP</p>
-        <h1>Roles and Permissions</h1>
-        <p>HIP role definitions and MVP permission mapping. Role management is a production hardening item.</p>
+        <p class="eyebrow">Access control</p>
+        <h1>Users and roles</h1>
+        <p>Manage who can administer HIP and what each person can do. Your identity provider still controls sign-in and passwords.</p>
     </section>
 
-    <section class="rule-builder-panel">
-        <h2>Role Definitions</h2>
-        <table class="admin-rule-table">
-            <thead>
-                <tr><th>Role</th><th>Description</th><th>Permissions</th></tr>
-            </thead>
-            <tbody>
-                @foreach (var role in AdminRoleCatalog.Roles)
-                {
-                    <tr>
-                        <td>@role.Role</td>
-                        <td>@role.Description</td>
-                        <td>@string.Join(", ", role.Permissions)</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </section>
+    @if (_loading)
+    {
+        <p role="status">Loading administrator access…</p>
+    }
+    else if (_directory is null)
+    {
+        <section class="service-client-message error" role="alert">
+            <strong>Administrator access unavailable</strong>
+            <p>@_error</p>
+            <button type="button" class="hip-secondary-action" @onclick="LoadAsync">Retry</button>
+        </section>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <p class="service-client-message" role="status">@_message</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <p class="service-client-message error" role="alert">@_error</p>
+        }
+
+        <section class="rule-builder-panel" aria-labelledby="admin-users-heading">
+            <div class="service-client-heading">
+                <div>
+                    <h2 id="admin-users-heading">Administrator access</h2>
+                    <p>Disabled assignments remain in the encrypted directory and audit trail. HIP stores only a privacy-safe actor ID and operator label.</p>
+                    <p>New administrators first sign in and open <a href="/access">their access status page</a> to obtain the actor ID you add here.</p>
+                </div>
+                <button type="button" class="hip-primary-action" @onclick="BeginAdd" disabled="@_busy">Add administrator</button>
+            </div>
+            <div class="table-scroll" tabindex="0" aria-label="HIP administrator assignments">
+                <table class="admin-rule-table">
+                    <thead>
+                        <tr><th scope="col">Operator</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Updated UTC</th><th scope="col">Action</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var assignment in _directory.Assignments)
+                        {
+                            <tr>
+                                <td><strong>@assignment.DisplayLabel</strong><br /><code>@assignment.ActorId</code></td>
+                                <td>@assignment.Role</td>
+                                <td>@assignment.Status</td>
+                                <td>@assignment.UpdatedAtUtc.ToString("u")</td>
+                                <td><button type="button" class="hip-secondary-action" @onclick="() => BeginEdit(assignment)" disabled="@_busy">Manage</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        @if (_editing)
+        {
+            <section class="rule-builder-panel" aria-labelledby="access-change-heading">
+                <h2 id="access-change-heading">@(_existing is null ? "Add administrator" : "Change administrator access")</h2>
+                <p>Ask the person to sign in and open <strong>/access</strong>, then use the privacy-safe HIP actor ID shown there. Do not enter an email address, external subject, token, or password.</p>
+                <div class="rule-form-grid">
+                    <label for="admin-actor-id">HIP actor ID</label>
+                    <input id="admin-actor-id" @bind="_targetActorId" maxlength="160" required disabled="@(_busy || _existing is not null)" autocomplete="off" aria-describedby="admin-actor-help" />
+                    <small id="admin-actor-help">Example: hip-user:v1: followed by the privacy-safe identifier shown to that administrator.</small>
+
+                    <label for="admin-label">Operator label</label>
+                    <input id="admin-label" @bind="_displayLabel" maxlength="80" required disabled="@_busy" autocomplete="off" />
+                    <small>Use a team-facing label, not an email address.</small>
+
+                    <label for="admin-role">Role</label>
+                    <select id="admin-role" @bind="_role" disabled="@_busy">
+                        @foreach (var role in AdminRoleCatalog.Roles)
+                        {
+                            <option value="@role.Role">@role.Role — @role.Description</option>
+                        }
+                    </select>
+
+                    <label for="admin-status">Access status</label>
+                    <select id="admin-status" @bind="_status" disabled="@_busy">
+                        <option value="@AdminAccessStatus.Active">Active</option>
+                        <option value="@AdminAccessStatus.Disabled">Disabled</option>
+                    </select>
+
+                    <label for="admin-change-reason">Reason</label>
+                    <textarea id="admin-change-reason" @bind="_reason" maxlength="500" rows="4" required disabled="@_busy" aria-describedby="admin-reason-help"></textarea>
+                    <small id="admin-reason-help">Required, 5–500 privacy-safe characters. The reason supports the audit decision but must not contain secrets or personal data.</small>
+                </div>
+                <div class="service-client-actions">
+                    <button type="button" class="hip-primary-action" @onclick="ReviewChange" disabled="@(_busy || !FormValid)">Review change</button>
+                    <button type="button" class="hip-secondary-action" @onclick="CancelEdit" disabled="@_busy">Cancel</button>
+                </div>
+            </section>
+        }
+
+        @if (_confirming)
+        {
+            <section class="lookup-result certificate-action-confirmation" aria-labelledby="confirm-access-heading">
+                <h2 id="confirm-access-heading">Confirm administrator access</h2>
+                <p>Set <strong>@_displayLabel</strong> to <strong>@_role</strong> with <strong>@_status</strong> access.</p>
+                <p>This change affects HIP authorization, is version-checked, and is permanently audited. HIP will reject removal of the last active Owner.</p>
+                <div class="service-client-actions">
+                    <button type="button" class="hip-primary-action" @onclick="SaveAsync" disabled="@_busy">@(_busy ? "Saving…" : "Confirm change")</button>
+                    <button type="button" class="hip-secondary-action" @onclick="CancelConfirmation" disabled="@_busy">Back</button>
+                </div>
+            </section>
+        }
+
+        <section class="rule-builder-panel" aria-labelledby="role-reference-heading">
+            <h2 id="role-reference-heading">Role reference</h2>
+            <table class="admin-rule-table">
+                <thead><tr><th scope="col">Role</th><th scope="col">Purpose</th><th scope="col">Permissions</th></tr></thead>
+                <tbody>
+                    @foreach (var role in AdminRoleCatalog.Roles)
+                    {
+                        <tr><td>@role.Role</td><td>@role.Description</td><td>@string.Join(", ", role.Permissions)</td></tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    }
 </main>
+
+@code {
+    private AdminAccessDirectory? _directory;
+    private AdminAccessAssignment? _existing;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _editing;
+    private bool _confirming;
+    private string _currentRole = string.Empty;
+    private string _targetActorId = string.Empty;
+    private string _displayLabel = string.Empty;
+    private string _role = AdminAccessRoleNames.ReadOnly;
+    private AdminAccessStatus _status = AdminAccessStatus.Active;
+    private string _reason = string.Empty;
+    private string? _message;
+    private string? _error;
+
+    private bool FormValid =>
+        _targetActorId.Trim().Length is >= 2 and <= 160 &&
+        _displayLabel.Trim().Length is >= 2 and <= 80 &&
+        !_displayLabel.Contains('@') &&
+        _reason.Trim().Length is >= 5 and <= 500;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (!TryResolveIdentity(state.User, out var actorId, out _currentRole))
+            {
+                _directory = null;
+                _error = "HIP could not bind this page to one administrator identity.";
+                return;
+            }
+
+            _directory = await AccessService.GetDirectoryAsync(actorId, _currentRole, CancellationToken.None);
+        }
+        catch
+        {
+            _directory = null;
+            _error = "HIP could not load administrator access right now.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void BeginAdd()
+    {
+        _existing = null;
+        _targetActorId = string.Empty;
+        _displayLabel = string.Empty;
+        _role = AdminAccessRoleNames.ReadOnly;
+        _status = AdminAccessStatus.Active;
+        _reason = string.Empty;
+        _editing = true;
+        _confirming = false;
+        _message = null;
+        _error = null;
+    }
+
+    private void BeginEdit(AdminAccessAssignment assignment)
+    {
+        _existing = assignment;
+        _targetActorId = assignment.ActorId;
+        _displayLabel = assignment.DisplayLabel;
+        _role = assignment.Role;
+        _status = assignment.Status;
+        _reason = string.Empty;
+        _editing = true;
+        _confirming = false;
+        _message = null;
+        _error = null;
+    }
+
+    private void ReviewChange()
+    {
+        if (!FormValid)
+        {
+            _error = "Complete every field with privacy-safe values before reviewing the change.";
+            return;
+        }
+
+        _editing = false;
+        _confirming = true;
+        _error = null;
+    }
+
+    private void CancelEdit()
+    {
+        _editing = false;
+        _confirming = false;
+    }
+
+    private void CancelConfirmation()
+    {
+        _confirming = false;
+        _editing = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_directory is null || !FormValid)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (!TryResolveIdentity(state.User, out _, out _currentRole))
+            {
+                _error = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            var request = new AdminAccessChangeRequest(
+                _targetActorId.Trim(),
+                _displayLabel.Trim(),
+                _role,
+                _status,
+                _directory.Version,
+                _reason.Trim());
+            var access = await HipAdminPageAccess.ExecuteAuthorizedAsync(
+                state.User,
+                AuthorizationService,
+                HostEnvironment,
+                [AdminPolicies.CanManageAdmins],
+                (actorId, cancellationToken) => AccessService.ChangeAsync(actorId, _currentRole, request, cancellationToken),
+                CancellationToken.None);
+            if (!access.Succeeded || access.Value is null)
+            {
+                _error = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            var result = access.Value;
+            if (result.Status == AdminAccessChangeStatus.Saved && result.Directory is not null)
+            {
+                _directory = result.Directory;
+                _message = result.Message;
+                _editing = false;
+                _confirming = false;
+            }
+            else
+            {
+                _directory = result.Directory ?? _directory;
+                _error = result.Message;
+                _confirming = false;
+                _editing = result.Status != AdminAccessChangeStatus.Conflict;
+            }
+        }
+        catch
+        {
+            _error = "HIP could not save administrator access. No authorization change was made.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static bool TryResolveIdentity(ClaimsPrincipal principal, out string actorId, out string role)
+    {
+        role = string.Empty;
+        if (!HipAuthenticatedIdentity.TryResolveUniqueClaim(principal, HipAuthenticationClaimTypes.ActorId, out actorId))
+        {
+            return false;
+        }
+
+        var roles = principal.FindAll(ClaimTypes.Role)
+            .Select(claim => claim.Value)
+            .Where(AdminAccessRoleNames.All.Contains)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (roles.Length == 1)
+        {
+            role = roles[0];
+            return true;
+        }
+
+        actorId = string.Empty;
+        return false;
+    }
+}

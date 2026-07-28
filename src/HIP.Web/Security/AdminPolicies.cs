@@ -2,6 +2,9 @@ namespace HIP.Web.Security;
 
 public static class AdminPolicies
 {
+    public const string CanViewOwnAdminAccess = nameof(CanViewOwnAdminAccess);
+    public const string CanViewAdminUsers = nameof(CanViewAdminUsers);
+    public const string CanManageAdmins = nameof(CanManageAdmins);
     public const string CanManageRules = nameof(CanManageRules);
     public const string CanReviewReports = nameof(CanReviewReports);
     public const string CanViewReviews = nameof(CanViewReviews);

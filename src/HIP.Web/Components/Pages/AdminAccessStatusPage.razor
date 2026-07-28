@@ -1,0 +1,95 @@
+@page "/access"
+@attribute [Authorize(Policy = AdminPolicies.CanViewOwnAdminAccess)]
+@rendermode InteractiveServer
+@inject IAdminAccessService AccessService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>HIP Access Status</PageTitle>
+
+<main class="admin-rule-page">
+    <section class="admin-rule-header">
+        <p class="eyebrow">Your HIP identity</p>
+        <h1>Access status</h1>
+        <p>Share the privacy-safe HIP actor ID below with an Owner when you need administrative access. Never share a password, token, or external identity subject.</p>
+    </section>
+
+    @if (_loading)
+    {
+        <p role="status">Loading your access status…</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <section class="service-client-message error" role="alert">
+            <strong>Access status unavailable</strong>
+            <p>@_error</p>
+            <button type="button" class="hip-secondary-action" @onclick="LoadAsync">Retry</button>
+        </section>
+    }
+    else
+    {
+        <section class="rule-builder-panel" aria-labelledby="actor-id-heading">
+            <h2 id="actor-id-heading">Your privacy-safe HIP actor ID</h2>
+            <p><code class="service-client-secret">@_actorId</code></p>
+            <p>This identifier is derived by HIP from the authenticated sign-in and cannot be used as a password.</p>
+        </section>
+
+        <section class="rule-builder-panel" aria-labelledby="assignment-heading">
+            <h2 id="assignment-heading">Current assignment</h2>
+            @if (_assignment is null)
+            {
+                <p><strong>Not assigned</strong></p>
+                <p>Ask a HIP Owner to add the actor ID above from <strong>Users and roles</strong>. Access takes effect on your next request after it is saved.</p>
+            }
+            else
+            {
+                <dl class="summary-grid">
+                    <div><dt>Operator label</dt><dd>@_assignment.DisplayLabel</dd></div>
+                    <div><dt>Role</dt><dd>@_assignment.Role</dd></div>
+                    <div><dt>Status</dt><dd>@_assignment.Status</dd></div>
+                    <div><dt>Updated UTC</dt><dd>@_assignment.UpdatedAtUtc.ToString("u")</dd></div>
+                </dl>
+                @if (_assignment.Status == HIP.Application.Administration.AdminAccessStatus.Disabled)
+                {
+                    <p>Your assignment is retained for auditability but does not grant administrative access.</p>
+                }
+            }
+        </section>
+    }
+</main>
+
+@code {
+    private bool _loading = true;
+    private string _actorId = string.Empty;
+    private AdminAccessAssignment? _assignment;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (!HipAuthenticatedIdentity.TryResolveUniqueClaim(
+                    state.User,
+                    HipAuthenticationClaimTypes.ActorId,
+                    out _actorId))
+            {
+                _error = "HIP could not bind this page to one authenticated identity.";
+                return;
+            }
+
+            _assignment = await AccessService.GetCurrentAssignmentAsync(_actorId, CancellationToken.None);
+        }
+        catch
+        {
+            _error = "HIP could not load your access assignment right now.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

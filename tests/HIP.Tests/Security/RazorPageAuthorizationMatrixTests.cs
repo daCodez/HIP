@@ -14,6 +14,7 @@ public sealed class RazorPageAuthorizationMatrixTests
 {
     private static readonly PageAuthorizationCase[] Cases =
     [
+        Page("AdminAccessStatusPage", "/access", AdminPolicies.CanViewOwnAdminAccess, DeniedPrincipal.Consumer, "<h1>Access status</h1>"),
         Page("AdminApiDeveloper", "/admin/api", AdminPolicies.CanViewServiceClients, DeniedPrincipal.Moderator, "Integrate HIP into your own tools"),
         Page("AdminDashboard", "/", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Overview</h1>"),
         Page("AdminDashboard", "/admin", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Overview</h1>"),
@@ -24,7 +25,7 @@ public sealed class RazorPageAuthorizationMatrixTests
         Page("AdminPrivacySafety", "/admin/privacy", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Privacy"),
         Page("AdminReputationOverview", "/admin/reputation", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Score Overview</h1>"),
         Page("AdminReputationSignals", "/admin/reputation/signals", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Trust Signals</h1>"),
-        Page("AdminRoles", "/admin/roles", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Roles and Permissions</h1>"),
+        Page("AdminRoles", "/admin/roles", AdminPolicies.CanViewAdminUsers, DeniedPrincipal.Admin, "<h1>Users and roles</h1>"),
         Page("AdminScanDetails", "/admin/scans/{ScanId}", "/admin/scans/matrix-scan", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Scan Result Details</h1>"),
         Page("AdminSenderProfiles", "/admin/reputation/senders", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Sender Profiles</h1>"),
         Page("AdminTourScan", "/admin/tour-scan", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "Sample Threat"),
@@ -91,10 +92,10 @@ public sealed class RazorPageAuthorizationMatrixTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(Cases, Has.Length.EqualTo(47), "The maintained matrix must contain every protected route template.");
+            Assert.That(Cases, Has.Length.EqualTo(48), "The maintained matrix must contain every protected route template.");
             Assert.That(
                 Cases.Select(item => item.ComponentName).Distinct(StringComparer.Ordinal).ToArray(),
-                Has.Length.EqualTo(39),
+                Has.Length.EqualTo(40),
                 "The maintained matrix must contain every protected routable component.");
             Assert.That(
                 expected.Select(item => $"{item.ComponentName}|{item.RouteTemplate}"),

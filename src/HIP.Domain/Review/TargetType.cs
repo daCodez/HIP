@@ -10,5 +10,6 @@ public enum TargetType
     Rule = 5,
     Url = 6,
     Website = 7,
-    ServiceClient = 8
+    ServiceClient = 8,
+    Administrator = 9
 }

@@ -7,6 +7,7 @@ using System.Threading.RateLimiting;
 using System.Globalization;
 using System.Security.Claims;
 using HIP.Application;
+using HIP.Application.Administration;
 using HIP.Application.Ai;
 using HIP.Application.Browser;
 using HIP.Application.Certificates;
@@ -273,6 +274,57 @@ app.MapPost($"{ApiRoutes.Admin}/audit/query", (AuditQueryRequest request, IAudit
     .RequireAuthorization(AdminPolicies.CanViewAuditLogs);
 app.MapGet($"{ApiRoutes.Admin}/roles", (HttpContext httpContext) => Results.Ok(AdminRoleCatalog.Roles))
     .RequireAuthorization(AdminPolicies.CanViewAdminDashboard);
+app.MapGet($"{ApiRoutes.Admin}/access/me", async (
+    HttpContext httpContext,
+    IAdminAccessService accessService,
+    CancellationToken cancellationToken) =>
+{
+    if (!HipAuthenticatedIdentity.TryResolveUniqueClaim(
+            httpContext.User,
+            HipAuthenticationClaimTypes.ActorId,
+            out var actorId))
+    {
+        return Results.Unauthorized();
+    }
+
+    httpContext.Response.Headers.CacheControl = "no-store";
+    var assignment = await accessService.GetCurrentAssignmentAsync(actorId, cancellationToken);
+    return Results.Ok(new AdminSelfAccessResponse(actorId, assignment));
+})
+    .RequireAuthorization(AdminPolicies.CanViewOwnAdminAccess);app.MapGet($"{ApiRoutes.Admin}/users", async (
+    HttpContext httpContext,
+    IAdminAccessService accessService,
+    CancellationToken cancellationToken) =>
+{
+    if (!AdminEndpointIdentity.TryResolve(httpContext.User, out var actorId, out var role))
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(await accessService.GetDirectoryAsync(actorId, role, cancellationToken));
+})
+    .RequireAuthorization(AdminPolicies.CanViewAdminUsers);
+app.MapPut($"{ApiRoutes.Admin}/users", async (
+    HttpContext httpContext,
+    AdminAccessChangeRequest request,
+    IAdminAccessService accessService,
+    CancellationToken cancellationToken) =>
+{
+    if (!AdminEndpointIdentity.TryResolve(httpContext.User, out var actorId, out var role))
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await accessService.ChangeAsync(actorId, role, request, cancellationToken);
+    return result.Status switch
+    {
+        AdminAccessChangeStatus.Saved => Results.Ok(result),
+        AdminAccessChangeStatus.Conflict => Results.Conflict(result),
+        AdminAccessChangeStatus.Forbidden => Results.Forbid(),
+        _ => Results.BadRequest(result)
+    };
+})
+    .RequireAuthorization(AdminPolicies.CanManageAdmins);
 app.MapGet($"{ApiRoutes.Admin}/reports", async (
     IPrivacySafeReportService reportService,
     CancellationToken cancellationToken) =>
@@ -3407,6 +3459,37 @@ public sealed record AdminReviewQueueAssignRequest(string ActorId, string Assign
 /// <param name="ActorId">Compatibility-only actor field; HIP ignores it and uses the authenticated actor claim.</param>
 /// <param name="Reason">Privacy-safe dismissal reason. Raw page text, credentials, and private messages are rejected by validation.</param>
 public sealed record AdminReviewQueueDismissRequest(string ActorId, string Reason);
+
+internal static class AdminEndpointIdentity
+{
+    public static bool TryResolve(ClaimsPrincipal principal, out string actorId, out string role)
+    {
+        actorId = string.Empty;
+        role = string.Empty;
+        if (!HipAuthenticatedIdentity.TryResolveUniqueClaim(
+                principal,
+                HipAuthenticationClaimTypes.ActorId,
+                out actorId))
+        {
+            return false;
+        }
+
+        var roles = principal.FindAll(ClaimTypes.Role)
+            .Select(claim => claim.Value)
+            .Where(AdminRoles.All.Contains)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (roles.Length != 1)
+        {
+            actorId = string.Empty;
+            return false;
+        }
+
+        role = roles[0];
+        return true;
+    }
+}
+public sealed record AdminSelfAccessResponse(string ActorId, AdminAccessAssignment? Assignment);
 
 public sealed record AuditQueryRequest(string? Action, TargetType? TargetType, string? TargetId, AuditSeverity? Severity, int? Limit);
 
