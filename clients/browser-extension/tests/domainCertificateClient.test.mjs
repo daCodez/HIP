@@ -31,14 +31,15 @@ test("extension verifies signed badge state then retrieves the certificate direc
         payload: {
           certificateId: "hip-domain-cert-0001",
           domain: "example.com",
-          level: "Verified",
-          expiresAtUtc: "2026-08-24T00:00:00Z",
+          level: 1,
+          status: 3,
+          expiresAtUtc: "2026-08-23T20:00:00-04:00",
           publicCertificateUrl: "https://hiptrust.com/certificate/hip-domain-cert-0001"
         }
       },
-      currentStatus: "Active",
-      signatureStatus: "Verified",
-      validityStatus: "Current",
+      currentStatus: 3,
+      signatureStatus: 0,
+      validityStatus: 0,
       isActive: true
     });
   };
@@ -58,7 +59,7 @@ test("extension verifies signed badge state then retrieves the certificate direc
       status: "Active",
       signatureStatus: "Verified",
       validityStatus: "Current",
-      expiresAtUtc: "2026-08-24T00:00:00Z",
+      expiresAtUtc: "2026-08-23T20:00:00-04:00",
       publicCertificateUrl: "https://hiptrust.com/certificate/hip-domain-cert-0001",
       isActive: true
     });

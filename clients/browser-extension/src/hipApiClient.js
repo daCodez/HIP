@@ -9,6 +9,20 @@ export const HIP_EXTENSION_CHANNEL = "dev";
 
 export const HIP_FETCH_TIMEOUT_MS = 8000;
 
+/**
+ * Normalizes the public certificate API's current numeric enum representation
+ * while remaining compatible with string-valued protocol responses.
+ */
+function certificateEnumName(value, names) {
+  if (typeof value === "string" && names.includes(value)) {
+    return value;
+  }
+
+  return Number.isInteger(value) && value >= 0 && value < names.length
+    ? names[value]
+    : null;
+}
+
 export const REPUTATION_FEEDBACK_ENUMS = Object.freeze({
   targetType: Object.freeze({
     Website: 5
@@ -130,15 +144,29 @@ export class HipApiClient {
 
     const certificate = await certificateResponse.json();
     const payload = certificate?.signedCertificate?.payload;
+    const payloadLevel = certificateEnumName(payload?.level, ["Registered", "Verified", "Monitored"]);
+    const payloadStatus = certificateEnumName(
+      payload?.status,
+      ["Draft", "PendingVerification", "PendingReview", "Active", "Suspended", "Revoked", "Expired", "RenewalRequired"]);
+    const currentStatus = certificateEnumName(
+      certificate?.currentStatus,
+      ["Draft", "PendingVerification", "PendingReview", "Active", "Suspended", "Revoked", "Expired", "RenewalRequired"]);
+    const signatureStatus = certificateEnumName(
+      certificate?.signatureStatus,
+      ["Verified", "Invalid", "Unavailable"]);
+    const validityStatus = certificateEnumName(
+      certificate?.validityStatus,
+      ["Current", "NotYetValid", "Expired"]);
     if (!payload ||
         payload.certificateId !== certificateId ||
         normalizeCertificateDomain(payload.domain) !== normalizedDomain ||
-        payload.level !== badgeCertificate.level ||
-        certificate.currentStatus !== badgeCertificate.status ||
-        certificate.signatureStatus !== "Verified" ||
+        payloadLevel !== badgeCertificate.level ||
+        payloadStatus !== badgeCertificate.status ||
+        currentStatus !== badgeCertificate.status ||
+        signatureStatus !== "Verified" ||
         badgeCertificate.signatureStatus !== "Verified" ||
         certificate.isActive !== badgeCertificate.isActive ||
-        payload.expiresAtUtc !== badgeCertificate.expiresAtUtc ||
+        !sameCertificateInstant(payload.expiresAtUtc, badgeCertificate.expiresAtUtc) ||
         (certificate.publicCertificateUrl || payload.publicCertificateUrl) !==
           badgeCertificate.publicCertificateUrl) {
       throw new Error("HIP certificate state is unavailable or inconsistent.");
@@ -147,10 +175,10 @@ export class HipApiClient {
     return {
       certificateId,
       domain: normalizedDomain,
-      level: payload.level,
-      status: certificate.currentStatus,
-      signatureStatus: certificate.signatureStatus,
-      validityStatus: certificate.validityStatus,
+      level: payloadLevel,
+      status: currentStatus,
+      signatureStatus,
+      validityStatus,
       expiresAtUtc: payload.expiresAtUtc,
       publicCertificateUrl: certificate.publicCertificateUrl || payload.publicCertificateUrl,
       isActive: certificate.isActive === true
@@ -811,13 +839,19 @@ export function classifyClientChatContext(context = {}) {
     : "page-link";
 }
 
+function sameCertificateInstant(left, right) {
+  const leftInstant = Date.parse(left);
+  const rightInstant = Date.parse(right);
+  return Number.isFinite(leftInstant) && Number.isFinite(rightInstant) && leftInstant === rightInstant;
+}
+
 function sameCertificateState(left, right) {
   return left.certificateId === right.certificateId &&
     left.domain === right.domain &&
     left.level === right.level &&
     left.status === right.status &&
     left.signatureStatus === right.signatureStatus &&
-    left.expiresAtUtc === right.expiresAtUtc &&
+    sameCertificateInstant(left.expiresAtUtc, right.expiresAtUtc) &&
     left.publicCertificateUrl === right.publicCertificateUrl &&
     left.isActive === right.isActive;
 }

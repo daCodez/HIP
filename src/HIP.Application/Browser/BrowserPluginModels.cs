@@ -40,11 +40,32 @@ public sealed record BrowserScoreSiteResponse(
     DateTimeOffset LastCheckedUtc,
     string PublicLookupUrl)
 {
+    /// <summary>Nullable score that the browser may display when authenticated evidence is sufficient.</summary>
+    public int? DisplayScore { get; init; }
+
+    /// <summary>Explicit score-presentation decision used to prevent misleading compatibility scores.</summary>
+    public string ScorePresentation { get; init; } = HIP.Application.PublicLookup.PublicEvidencePresentation.ScoreWithheldInsufficientEvidence;
+
+    /// <summary>Coverage of authenticated safety and trust evidence.</summary>
+    public string EvidenceCoverage { get; init; } = HIP.Application.PublicLookup.PublicEvidencePresentation.CoverageInsufficient;
+
+    /// <summary>Confidence in the authenticated evidence used for this response.</summary>
+    public string EvidenceConfidence { get; init; } = HIP.Application.PublicLookup.PublicEvidencePresentation.ConfidenceNone;
+
+    /// <summary>Normalized identity state: Unverified, Pending, or Verified.</summary>
+    public string IdentityStatus { get; init; } = "Unverified";
+
     /// <summary>Public-safe certificate application decision state.</summary>
     public string CertificateApplicationStatus { get; init; } = "NotStarted";
 
     /// <summary>Plain-English current certificate lifecycle stage.</summary>
     public string CertificateProgressStatus { get; init; } = "No certificate application";
+
+    /// <summary>Public-safe continuous monitoring lifecycle state.</summary>
+    public string MonitoringStatus { get; init; } = "Not enabled";
+
+    /// <summary>Public-safe source of the authoritative assessment.</summary>
+    public string DataSource { get; init; } = "NoStoredData";
 }
 
 /// <summary>

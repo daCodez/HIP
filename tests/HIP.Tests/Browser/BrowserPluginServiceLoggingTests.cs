@@ -33,6 +33,29 @@ public sealed class BrowserPluginServiceLoggingTests
         });
     }
 
+    [Test]
+    public async Task ScoreSiteAsync_preserves_authoritative_evidence_and_certificate_lifecycle_fields()
+    {
+        var service = new BrowserPluginService(new StubLookupService(RiskStatus.MostlyTrusted, 82));
+
+        var result = await service.ScoreSiteAsync(
+            new BrowserScoreSiteRequest("https://example.com", "example.com"),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.DisplayScore, Is.EqualTo(82));
+            Assert.That(result.ScorePresentation, Is.EqualTo(PublicEvidencePresentation.ScoreAvailable));
+            Assert.That(result.EvidenceCoverage, Is.EqualTo(PublicEvidencePresentation.CoverageSufficient));
+            Assert.That(result.EvidenceConfidence, Is.EqualTo(PublicEvidencePresentation.ConfidenceHigh));
+            Assert.That(result.IdentityStatus, Is.EqualTo("Verified"));
+            Assert.That(result.CertificateApplicationStatus, Is.EqualTo("Approved"));
+            Assert.That(result.CertificateProgressStatus, Is.EqualTo("Certificate active"));
+            Assert.That(result.MonitoringStatus, Is.EqualTo("Active"));
+            Assert.That(result.DataSource, Is.EqualTo("Test"));
+        });
+    }
+
     /// <summary>
     /// Invalid page URLs are rejected and logged without echoing the invalid input value.
     /// </summary>
@@ -106,10 +129,10 @@ public sealed class BrowserPluginServiceLoggingTests
                 "NotConfigured",
                 "None",
                 null,
-                "Unknown",
-                "NotConfigured",
-                null,
-                false,
+                "Verified",
+                "Verified",
+                true,
+                true,
                 $"/lookup/domain/{Uri.EscapeDataString(domain)}",
                 score,
                 score,
@@ -121,7 +144,16 @@ public sealed class BrowserPluginServiceLoggingTests
                 0,
                 0,
                 "Test",
-                "Stub lookup message."));
+                "Stub lookup message.")
+            {
+                DisplayScore = score,
+                ScorePresentation = PublicEvidencePresentation.ScoreAvailable,
+                EvidenceCoverage = PublicEvidencePresentation.CoverageSufficient,
+                EvidenceConfidence = PublicEvidencePresentation.ConfidenceHigh,
+                CertificateApplicationStatus = "Approved",
+                CertificateProgressStatus = "Certificate active",
+                MonitoringStatus = "Active"
+            });
         }
     }
 }

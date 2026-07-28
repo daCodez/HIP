@@ -63,8 +63,15 @@ public sealed class BrowserPluginService(
             lookup.LastCheckedUtc,
             lookup.PublicLookupUrl)
         {
+            DisplayScore = lookup.DisplayScore,
+            ScorePresentation = lookup.ScorePresentation,
+            EvidenceCoverage = lookup.EvidenceCoverage,
+            EvidenceConfidence = lookup.EvidenceConfidence,
+            IdentityStatus = lookup.IdentityStatus,
             CertificateApplicationStatus = lookup.CertificateApplicationStatus,
-            CertificateProgressStatus = lookup.CertificateProgressStatus
+            CertificateProgressStatus = lookup.CertificateProgressStatus,
+            MonitoringStatus = lookup.MonitoringStatus,
+            DataSource = lookup.DataSource
         };
     }
 
