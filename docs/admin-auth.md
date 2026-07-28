@@ -52,10 +52,19 @@ persisted Owner, recent MFA outside Development, optimistic concurrency, an
 explicit privacy-safe reason, and an atomic append-only audit record. HIP rejects
 self-demotion/self-disable and any change that would leave no active Owner.
 
-Authenticated people can open `/access` or call
-`GET /api/v1/admin/access/me` to see only their own privacy-safe actor ID and
-assignment. An Owner uses that actor ID in **Users and roles**; no email-based
-invitation or identity-provider account mutation is implied.
+Authenticated people open `/access` to submit a privacy-safe access request.
+HIP captures the actor ID from the authenticated session; the requester never
+copies or edits it. Owners review the pending queue in **Users and roles**, choose
+the least-privileged role, and explicitly approve or deny the request. The
+request workflow assigns HIP authorization only; production identity-provider
+account creation remains outside HIP.
+
+Development can opt into `HipAdminLogin:AllowTestPersonas`. With that local-only
+setting, a unique test email plus the configured bootstrap Owner password creates
+an unprivileged test persona with its own stable actor ID. The same test email
+keeps the same identity across browsers, while different test emails create
+distinct identities. This convenience is protected by the loopback-only
+Development boundary and is never registered in deployed environments.
 
 Current permissions:
 

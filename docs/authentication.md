@@ -8,7 +8,10 @@ environments. Production authentication is provider-neutral OpenID Connect
 
 - `Development` registers only `HipDevHeader`. Its loopback request guard,
   local password provider, and development cookies remain available for local
-  testing.
+  testing. The provider supports bounded configured accounts and an explicit
+  `AllowTestPersonas` mode: different local test emails derive different stable
+  actor IDs but start unprivileged, while repeated use of one email preserves
+  identity across browser sessions.
 - Every other environment registers only the encrypted HIP session cookie, an
   OIDC confidential client, and a challenge router. Development headers and
   cookies cannot authenticate there.

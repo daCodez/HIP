@@ -185,6 +185,47 @@ public sealed class AdminAuthorizationTests
     }
 
     /// <summary>
+    /// Confirms separate browser cookie jars using different local test emails receive different stable actor IDs.
+    /// </summary>
+    [Test]
+    public async Task Different_local_test_users_receive_distinct_actor_ids()
+    {
+        const string personaEmail = "second-browser-user@hip.test";
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var owner = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var persona = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        using var ownerLogin = await SubmitLoginAsync(
+            owner,
+            HipWebApplicationFactory<Program>.TestAdminEmail,
+            HipWebApplicationFactory<Program>.TestAdminPassword,
+            "/access");
+        using var personaLogin = await SubmitLoginAsync(
+            persona,
+            personaEmail,
+            HipWebApplicationFactory<Program>.TestAdminPassword,
+            "/access");
+        using var ownerAccess = await owner.GetAsync("/api/v1/admin/access/me");
+        using var personaAccess = await persona.GetAsync("/api/v1/admin/access/me");
+        using var ownerJson = await JsonDocument.ParseAsync(await ownerAccess.Content.ReadAsStreamAsync());
+        using var personaJson = await JsonDocument.ParseAsync(await personaAccess.Content.ReadAsStreamAsync());
+        var ownerActor = ownerJson.RootElement.GetProperty("actorId").GetString();
+        var personaActor = personaJson.RootElement.GetProperty("actorId").GetString();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ownerLogin.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
+            Assert.That(personaLogin.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
+            Assert.That(ownerAccess.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(personaAccess.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(ownerActor, Does.Match("^hip-user:v1:[0-9a-f]{64}$"));
+            Assert.That(personaActor, Does.Match("^hip-user:v1:[0-9a-f]{64}$"));
+            Assert.That(personaActor, Is.Not.EqualTo(ownerActor));
+            Assert.That(personaActor, Does.Not.Contain(personaEmail));
+        });
+    }
+
+    /// <summary>
     /// Confirms a different provider can own credential verification without changing the HTTP login contract.
     /// </summary>
     [Test]

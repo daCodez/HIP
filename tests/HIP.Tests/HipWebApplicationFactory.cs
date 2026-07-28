@@ -60,7 +60,8 @@ public sealed class HipWebApplicationFactory<TProgram> : WebApplicationFactory<T
                 ["HipSecurity:ClientWriteCorsOrigins:0"] = "http://localhost",
                 ["HipSecurity:ClientWriteCorsOrigins:1"] = "https://localhost",
                 ["HipAdminLogin:Email"] = TestAdminEmail,
-                ["HipAdminLogin:PasswordHash"] = passwordHasher.HashPassword(TestAdminEmail, TestAdminPassword)
+                ["HipAdminLogin:PasswordHash"] = passwordHasher.HashPassword(TestAdminEmail, TestAdminPassword),
+                ["HipAdminLogin:AllowTestPersonas"] = "true"
             });
         });
         builder.ConfigureServices(services =>
