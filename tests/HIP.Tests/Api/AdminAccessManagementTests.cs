@@ -140,10 +140,10 @@ public sealed class AdminAccessManagementTests
         Assert.Multiple(() =>
         {
             Assert.That(management, Does.Contain("<h1>Users and roles</h1>"));
-            Assert.That(management, Does.Contain("Add administrator"));
+            Assert.That(management, Does.Contain("Pending access requests"));
             Assert.That(management, Does.Contain("/access"));
             Assert.That(selfAccess, Does.Contain("<h1>Access status</h1>"));
-            Assert.That(selfAccess, Does.Contain("page-owner"));
+            Assert.That(selfAccess, Does.Contain("authenticated identity automatically"));
         });
     }
     [Test]

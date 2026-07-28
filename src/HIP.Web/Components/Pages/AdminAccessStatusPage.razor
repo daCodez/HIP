@@ -2,6 +2,7 @@
 @attribute [Authorize(Policy = AdminPolicies.CanViewOwnAdminAccess)]
 @rendermode InteractiveServer
 @inject IAdminAccessService AccessService
+@inject IAdminAccessRequestService RequestService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>HIP Access Status</PageTitle>
@@ -10,7 +11,7 @@
     <section class="admin-rule-header">
         <p class="eyebrow">Your HIP identity</p>
         <h1>Access status</h1>
-        <p>Share the privacy-safe HIP actor ID below with an Owner when you need administrative access. Never share a password, token, or external identity subject.</p>
+        <p>HIP binds this page to your authenticated identity automatically. An Owner must still review and approve every administrator assignment.</p>
     </section>
 
     @if (_loading)
@@ -27,20 +28,14 @@
     }
     else
     {
-        <section class="rule-builder-panel" aria-labelledby="actor-id-heading">
-            <h2 id="actor-id-heading">Your privacy-safe HIP actor ID</h2>
-            <p><code class="service-client-secret">@_actorId</code></p>
-            <p>This identifier is derived by HIP from the authenticated sign-in and cannot be used as a password.</p>
-        </section>
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <p class="service-client-message" role="status">@_message</p>
+        }
 
         <section class="rule-builder-panel" aria-labelledby="assignment-heading">
             <h2 id="assignment-heading">Current assignment</h2>
-            @if (_assignment is null)
-            {
-                <p><strong>Not assigned</strong></p>
-                <p>Ask a HIP Owner to add the actor ID above from <strong>Users and roles</strong>. Access takes effect on your next request after it is saved.</p>
-            }
-            else
+            @if (_assignment is not null)
             {
                 <dl class="summary-grid">
                     <div><dt>Operator label</dt><dd>@_assignment.DisplayLabel</dd></div>
@@ -48,20 +43,69 @@
                     <div><dt>Status</dt><dd>@_assignment.Status</dd></div>
                     <div><dt>Updated UTC</dt><dd>@_assignment.UpdatedAtUtc.ToString("u")</dd></div>
                 </dl>
-                @if (_assignment.Status == HIP.Application.Administration.AdminAccessStatus.Disabled)
+                @if (_assignment.Status == AdminAccessStatus.Disabled)
                 {
-                    <p>Your assignment is retained for auditability but does not grant administrative access.</p>
+                    <p>Your assignment is retained for auditability but does not grant administrator access.</p>
                 }
             }
+            else if (_request?.Status == AdminAccessRequestStatus.Pending)
+            {
+                <p><strong>Pending Owner review</strong></p>
+                <p>HIP securely attached your authenticated actor ID when you submitted this request. You do not need to copy or share it.</p>
+                <dl class="summary-grid">
+                    <div><dt>Requested as</dt><dd>@_request.DisplayLabel</dd></div>
+                    <div><dt>Submitted UTC</dt><dd>@_request.CreatedAtUtc.ToString("u")</dd></div>
+                </dl>
+            }
+            else if (_request?.Status == AdminAccessRequestStatus.Denied)
+            {
+                <p><strong>Request denied</strong></p>
+                <p>The decision is retained in HIP's audit trail. Contact a HIP Owner if your responsibilities change.</p>
+            }
+            else
+            {
+                <p><strong>Not assigned</strong></p>
+                <p>Submit a request below. HIP will capture your privacy-safe actor ID from this authenticated session and place the request in the Owner review queue.</p>
+            }
         </section>
+
+        @if (_assignment is null && _request is null)
+        {
+            <section class="rule-builder-panel" aria-labelledby="request-access-heading">
+                <h2 id="request-access-heading">Request administrator access</h2>
+                <div class="rule-form-grid">
+                    <label for="access-request-label">Team-facing label</label>
+                    <input id="access-request-label" @bind="_displayLabel" maxlength="80" required disabled="@_busy" autocomplete="off" />
+                    <small>Use a recognizable work label, not an email address.</small>
+
+                    <label for="access-request-reason">Why access is needed</label>
+                    <textarea id="access-request-reason" @bind="_reason" maxlength="500" rows="4" required disabled="@_busy"></textarea>
+                    <small>Enter 5–500 privacy-safe characters. Do not include secrets or personal data.</small>
+                </div>
+                <p>Submitting records your authenticated HIP actor ID, label, reason, and timestamp in encrypted storage and the audit trail.</p>
+                <button type="button" class="hip-primary-action" @onclick="SubmitAsync" disabled="@(_busy || !RequestValid)">
+                    @(_busy ? "Submitting…" : "Submit request")
+                </button>
+            </section>
+        }
     }
 </main>
 
 @code {
     private bool _loading = true;
+    private bool _busy;
     private string _actorId = string.Empty;
+    private string _displayLabel = string.Empty;
+    private string _reason = string.Empty;
     private AdminAccessAssignment? _assignment;
+    private AdminAccessRequestRecord? _request;
+    private string? _message;
     private string? _error;
+
+    private bool RequestValid =>
+        _displayLabel.Trim().Length is >= 2 and <= 80 &&
+        !_displayLabel.Contains('@') &&
+        _reason.Trim().Length is >= 5 and <= 500;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -82,6 +126,7 @@
             }
 
             _assignment = await AccessService.GetCurrentAssignmentAsync(_actorId, CancellationToken.None);
+            _request = await RequestService.GetCurrentAsync(_actorId, CancellationToken.None);
         }
         catch
         {
@@ -90,6 +135,55 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!RequestValid)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (!HipAuthenticatedIdentity.TryResolveUniqueClaim(
+                    state.User,
+                    HipAuthenticationClaimTypes.ActorId,
+                    out var authenticatedActorId) ||
+                !string.Equals(authenticatedActorId, _actorId, StringComparison.Ordinal))
+            {
+                _error = "HIP could not bind this request to one authenticated identity.";
+                return;
+            }
+
+            var result = await RequestService.SubmitAsync(
+                authenticatedActorId,
+                new AdminAccessRequestSubmission(_displayLabel.Trim(), _reason.Trim()),
+                CancellationToken.None);
+            _request = result.Request;
+            if (result.Status is AdminAccessRequestMutationStatus.Saved or AdminAccessRequestMutationStatus.AlreadyPending)
+            {
+                _message = result.Message;
+                _displayLabel = string.Empty;
+                _reason = string.Empty;
+            }
+            else
+            {
+                _error = result.Message;
+            }
+        }
+        catch
+        {
+            _error = "HIP could not submit the access request. No authorization change was made.";
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 }

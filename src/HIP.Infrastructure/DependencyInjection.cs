@@ -85,6 +85,7 @@ public static class DependencyInjection
         services.AddSingleton<IWellKnownHttpMessageHandlerFactory, PinnedWellKnownHttpMessageHandlerFactory>();
 
         services.AddScoped<IAdminAccessRepository, EfAdminAccessRepository>();
+        services.AddScoped<IAdminAccessRequestRepository, EfAdminAccessRequestRepository>();
         services.AddScoped<IHipIdentityRepository, EfHipIdentityRepository>();
         services.AddScoped<IDeviceRegistrationRepository, EfDeviceRegistrationRepository>();
         services.AddScoped<IServiceClientRepository, EfServiceClientRepository>();

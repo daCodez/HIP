@@ -2,6 +2,7 @@
 @attribute [Authorize(Policy = AdminPolicies.CanViewAdminUsers)]
 @rendermode InteractiveServer
 @inject IAdminAccessService AccessService
+@inject IAdminAccessRequestService RequestService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthorizationService AuthorizationService
 @inject IHostEnvironment HostEnvironment
@@ -38,14 +39,41 @@
             <p class="service-client-message error" role="alert">@_error</p>
         }
 
+        <section class="rule-builder-panel" aria-labelledby="pending-access-heading">
+            <h2 id="pending-access-heading">Pending access requests</h2>
+            <p>HIP captures each requester's privacy-safe actor ID from their authenticated session. Review the stated need, choose the least-privileged role, and confirm or leave the request pending.</p>
+            @if (_requests.Count == 0)
+            {
+                <p>No administrator access requests are waiting for review.</p>
+            }
+            else
+            {
+                <div class="table-scroll" tabindex="0" aria-label="Pending administrator access requests">
+                    <table class="admin-rule-table">
+                        <thead><tr><th scope="col">Requester</th><th scope="col">Reason</th><th scope="col">Submitted UTC</th><th scope="col">Action</th></tr></thead>
+                        <tbody>
+                            @foreach (var request in _requests)
+                            {
+                                <tr>
+                                    <td><strong>@request.DisplayLabel</strong></td>
+                                    <td>@request.Reason</td>
+                                    <td>@request.CreatedAtUtc.ToString("u")</td>
+                                    <td><button type="button" class="hip-secondary-action" @onclick="() => BeginRequestReview(request)" disabled="@_busy">Review</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
         <section class="rule-builder-panel" aria-labelledby="admin-users-heading">
             <div class="service-client-heading">
                 <div>
                     <h2 id="admin-users-heading">Administrator access</h2>
                     <p>Disabled assignments remain in the encrypted directory and audit trail. HIP stores only a privacy-safe actor ID and operator label.</p>
-                    <p>New administrators first sign in and open <a href="/access">their access status page</a> to obtain the actor ID you add here.</p>
+                    <p>New administrators request access from <a href="/access">their access status page</a>; actor IDs are transferred automatically.</p>
                 </div>
-                <button type="button" class="hip-primary-action" @onclick="BeginAdd" disabled="@_busy">Add administrator</button>
+
             </div>
             <div class="table-scroll" tabindex="0" aria-label="HIP administrator assignments">
                 <table class="admin-rule-table">
@@ -71,12 +99,12 @@
         @if (_editing)
         {
             <section class="rule-builder-panel" aria-labelledby="access-change-heading">
-                <h2 id="access-change-heading">@(_existing is null ? "Add administrator" : "Change administrator access")</h2>
-                <p>Ask the person to sign in and open <strong>/access</strong>, then use the privacy-safe HIP actor ID shown there. Do not enter an email address, external subject, token, or password.</p>
+                <h2 id="access-change-heading">@(_selectedRequest is not null ? "Approve access request" : "Change administrator access")</h2>
+                <p>@(_existing is null ? "This actor ID was captured from the requester's authenticated HIP session." : "Change the existing assignment while preserving its authenticated actor binding.")</p>
                 <div class="rule-form-grid">
                     <label for="admin-actor-id">HIP actor ID</label>
-                    <input id="admin-actor-id" @bind="_targetActorId" maxlength="160" required disabled="@(_busy || _existing is not null)" autocomplete="off" aria-describedby="admin-actor-help" />
-                    <small id="admin-actor-help">Example: hip-user:v1: followed by the privacy-safe identifier shown to that administrator.</small>
+                    <input id="admin-actor-id" @bind="_targetActorId" maxlength="160" required disabled autocomplete="off" aria-describedby="admin-actor-help" />
+                    <small id="admin-actor-help">HIP binds this identifier automatically; it cannot be edited here.</small>
 
                     <label for="admin-label">Operator label</label>
                     <input id="admin-label" @bind="_displayLabel" maxlength="80" required disabled="@_busy" autocomplete="off" />
@@ -101,7 +129,11 @@
                     <small id="admin-reason-help">Required, 5–500 privacy-safe characters. The reason supports the audit decision but must not contain secrets or personal data.</small>
                 </div>
                 <div class="service-client-actions">
-                    <button type="button" class="hip-primary-action" @onclick="ReviewChange" disabled="@(_busy || !FormValid)">Review change</button>
+                    <button type="button" class="hip-primary-action" @onclick="ReviewChange" disabled="@(_busy || !FormValid)">Review approval</button>
+                    @if (_selectedRequest is not null)
+                    {
+                        <button type="button" class="hip-secondary-action" @onclick="ReviewDenial" disabled="@(_busy || !FormValid)">Review denial</button>
+                    }
                     <button type="button" class="hip-secondary-action" @onclick="CancelEdit" disabled="@_busy">Cancel</button>
                 </div>
             </section>
@@ -120,6 +152,18 @@
             </section>
         }
 
+        @if (_denying && _selectedRequest is not null)
+        {
+            <section class="lookup-result certificate-action-confirmation" aria-labelledby="deny-access-heading">
+                <h2 id="deny-access-heading">Confirm access denial</h2>
+                <p>Deny the request from <strong>@_selectedRequest.DisplayLabel</strong>.</p>
+                <p>The decision and privacy-safe reason are permanently audited. No administrator access will be granted.</p>
+                <div class="service-client-actions">
+                    <button type="button" class="hip-primary-action" @onclick="DenyAsync" disabled="@_busy">@(_busy ? "Saving…" : "Confirm denial")</button>
+                    <button type="button" class="hip-secondary-action" @onclick="CancelConfirmation" disabled="@_busy">Back</button>
+                </div>
+            </section>
+        }
         <section class="rule-builder-panel" aria-labelledby="role-reference-heading">
             <h2 id="role-reference-heading">Role reference</h2>
             <table class="admin-rule-table">
@@ -137,11 +181,14 @@
 
 @code {
     private AdminAccessDirectory? _directory;
+    private IReadOnlyCollection<AdminAccessRequestRecord> _requests = [];
+    private AdminAccessRequestRecord? _selectedRequest;
     private AdminAccessAssignment? _existing;
     private bool _loading = true;
     private bool _busy;
     private bool _editing;
     private bool _confirming;
+    private bool _denying;
     private string _currentRole = string.Empty;
     private string _targetActorId = string.Empty;
     private string _displayLabel = string.Empty;
@@ -174,6 +221,7 @@
             }
 
             _directory = await AccessService.GetDirectoryAsync(actorId, _currentRole, CancellationToken.None);
+            _requests = await RequestService.ListPendingAsync(actorId, _currentRole, CancellationToken.None);
         }
         catch
         {
@@ -186,22 +234,24 @@
         }
     }
 
-    private void BeginAdd()
+    private void BeginRequestReview(AdminAccessRequestRecord request)
     {
+        _selectedRequest = request;
         _existing = null;
-        _targetActorId = string.Empty;
-        _displayLabel = string.Empty;
+        _targetActorId = request.ActorId;
+        _displayLabel = request.DisplayLabel;
         _role = AdminAccessRoleNames.ReadOnly;
         _status = AdminAccessStatus.Active;
         _reason = string.Empty;
         _editing = true;
         _confirming = false;
+        _denying = false;
         _message = null;
         _error = null;
     }
-
     private void BeginEdit(AdminAccessAssignment assignment)
     {
+        _selectedRequest = null;
         _existing = assignment;
         _targetActorId = assignment.ActorId;
         _displayLabel = assignment.DisplayLabel;
@@ -210,10 +260,24 @@
         _reason = string.Empty;
         _editing = true;
         _confirming = false;
+        _denying = false;
         _message = null;
         _error = null;
     }
 
+    private void ReviewDenial()
+    {
+        if (_selectedRequest is null || !FormValid)
+        {
+            _error = "Enter a privacy-safe decision reason before reviewing the denial.";
+            return;
+        }
+
+        _editing = false;
+        _confirming = false;
+        _denying = true;
+        _error = null;
+    }
     private void ReviewChange()
     {
         if (!FormValid)
@@ -224,6 +288,7 @@
 
         _editing = false;
         _confirming = true;
+        _denying = false;
         _error = null;
     }
 
@@ -231,14 +296,79 @@
     {
         _editing = false;
         _confirming = false;
+        _denying = false;
     }
 
     private void CancelConfirmation()
     {
         _confirming = false;
+        _denying = false;
         _editing = true;
     }
 
+    private async Task DenyAsync()
+    {
+        if (_selectedRequest is null || !FormValid)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (!TryResolveIdentity(state.User, out var actorId, out _currentRole))
+            {
+                _error = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            var access = await HipAdminPageAccess.ExecuteAuthorizedAsync(
+                state.User,
+                AuthorizationService,
+                HostEnvironment,
+                [AdminPolicies.CanManageAdmins],
+                (authenticatedActorId, cancellationToken) => RequestService.DenyAsync(
+                    authenticatedActorId,
+                    _currentRole,
+                    _selectedRequest.ActorId,
+                    _selectedRequest.Version,
+                    _reason.Trim(),
+                    cancellationToken),
+                CancellationToken.None);
+            if (!access.Succeeded || access.Value is null)
+            {
+                _error = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            var result = access.Value;
+            if (result.Status == AdminAccessRequestMutationStatus.Saved)
+            {
+                _requests = await RequestService.ListPendingAsync(actorId, _currentRole, CancellationToken.None);
+                _selectedRequest = null;
+                _message = result.Message;
+                _editing = false;
+                _denying = false;
+            }
+            else
+            {
+                _error = result.Message;
+                _denying = false;
+                _editing = result.Status != AdminAccessRequestMutationStatus.Conflict;
+            }
+        }
+        catch
+        {
+            _error = "HIP could not deny the access request. No authorization change was made.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
     private async Task SaveAsync()
     {
         if (_directory is null || !FormValid)
@@ -252,7 +382,7 @@
         try
         {
             var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            if (!TryResolveIdentity(state.User, out _, out _currentRole))
+            if (!TryResolveIdentity(state.User, out var actorId, out _currentRole))
             {
                 _error = HipAdminPageAccess.AccessUnavailableMessage;
                 return;
@@ -282,6 +412,8 @@
             if (result.Status == AdminAccessChangeStatus.Saved && result.Directory is not null)
             {
                 _directory = result.Directory;
+                _requests = await RequestService.ListPendingAsync(actorId, _currentRole, CancellationToken.None);
+                _selectedRequest = null;
                 _message = result.Message;
                 _editing = false;
                 _confirming = false;
