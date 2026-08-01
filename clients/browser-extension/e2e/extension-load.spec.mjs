@@ -1,10 +1,12 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, expect, test } from "@playwright/test";
 
 const extensionPath = fileURLToPath(new URL("../", import.meta.url));
+const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
+const expectedPluginVersion = `HIP Plugin v${manifest.version}-dev`;
 
 /** Returns an explicitly configured Chromium build; otherwise Playwright uses its tested build. */
 function chromiumExecutablePath() {
@@ -52,9 +54,9 @@ test("loads the unpacked MV3 extension and renders the real popup", async () => 
 
     await expect(page).toHaveTitle("HIP");
     await expect(page.getByRole("heading", { name: "Website Trust" })).toBeVisible();
-    await expect(page.getByText("HTTPS secures the connection. HIP verifies the trust.")).toBeVisible();
-    expect(versionResponse).toEqual({ ok: true, result: "HIP Plugin v0.1.14-dev" });
-    await expect(page.locator("#pluginVersion")).toContainText("HIP Plugin v0.1.14-dev");
+    await expect(page.getByText("HIP checks identity, safety, and trust evidence for this site.")).toBeVisible();
+    expect(versionResponse).toEqual({ ok: true, result: expectedPluginVersion });
+    await expect(page.locator("#pluginVersion")).toContainText(expectedPluginVersion);
     expect(pageErrors).toEqual([]);
     expect(consoleProblems).toEqual([]);
   } finally {
