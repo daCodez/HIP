@@ -32,7 +32,7 @@ public sealed class VpsDeploymentSecurityTests
     }
 
     [Test]
-    public void Vps_images_are_digest_pinned_and_HIP_builds_require_release_metadata()
+    public void Vps_external_images_are_digest_pinned_and_HIP_builds_are_revision_tagged()
     {
         var root = RepositoryRoot();
         var compose = File.ReadAllText(Path.Combine(
@@ -51,7 +51,20 @@ public sealed class VpsDeploymentSecurityTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(compose, Does.Not.Match(@"(?m)^\s+image:\s+[^\r\n@]+$"));
+            Assert.That(compose, Does.Contain(
+                "image: guardwithhip/identity:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}"));
+            Assert.That(compose, Does.Contain(
+                "image: guardwithhip/api:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}"));
+            Assert.That(compose, Does.Contain(
+                "image: guardwithhip/admin-web:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}"));
+            Assert.That(compose, Does.Contain(
+                "image: guardwithhip/consumer-web:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}"));
+            Assert.That(compose, Does.Contain(
+                "image: guardwithhip/sandbox-worker:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}"));
+            Assert.That(
+                compose,
+                Does.Not.Match(@"(?m)^\s+image:\s+(?!guardwithhip/)[^\r\n@]+\r?$"),
+                "Every third-party image must be pinned by digest.");
             Assert.That(compose, Does.Contain(
                 "HIP_RELEASE_REVISION: ${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}"));
             Assert.That(compose, Does.Contain(

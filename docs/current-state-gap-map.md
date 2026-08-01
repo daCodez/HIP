@@ -338,11 +338,14 @@ lifecycle work.
   a production managed signer remains unverified.
 - No live multi-instance Redis outage/recovery integration suite exists; atomic
   service-client counter and fail-closed adapter behavior has focused coverage.
-- No migration-forward/rollback or production-startup safety suite exists.
+- Production startup safety has focused coverage, and the dated target-platform
+  migration downgrade/reapply rehearsal passed on 2026-08-01. A recurring
+  automated target-platform rehearsal is still absent.
 - No durable queue retry/dead-letter tests exist.
 - No hardened sandbox/network/SSRF integration suite exists.
-- The target PostgreSQL backup/restore drill is complete. Production load,
-  migration-forward/rollback, and live sandbox isolation evidence remain.
+- The target PostgreSQL backup/restore drill, migration downgrade/reapply
+  rehearsal, public read-path load checks, and container isolation proof are
+  complete. Authenticated/write load and browser-runner egress evidence remain.
 - Real Second Life behavior remains unverified.
 
 Tests must not be weakened merely to make the suite green. Dashboard tests and
@@ -399,13 +402,13 @@ reconciliation in the owning work package.
 | HIP-0704 CoreDNS test automation | Complete foundation; live Docker rerun pending |
 | HIP-0801 through HIP-0804 Second Life | Complete MVP foundation; live Second Life validation pending |
 | HIP-0901 Durable sandbox jobs | Complete foundation |
-| HIP-0902 Sandbox isolation | Complete enforceable launch-policy foundation; pinned runner image and live Docker proof pending |
+| HIP-0902 Sandbox isolation | Complete target-platform container proof 2026-08-01; production browser-runner image remains part of HIP-0903 wiring |
 | HIP-0903 SSRF-safe browser execution | Complete network-gate foundation; runner/broker wiring pending |
 | HIP-0904 AI explanation provider | Complete optional provider boundary with deterministic fallback |
 | HIP-1001 Threat model | Complete baseline; release-by-release review required |
-| HIP-1002 Load testing | Harness complete; target-environment evidence pending |
+| HIP-1002 Load testing | Public lookup and browser-score target evidence passed 2026-08-01; authenticated admin-list and isolated feedback-write evidence pending |
 | HIP-1003 Backup and restore drill | Complete; dated target-platform restore drill passed 2026-08-01 |
-| HIP-1004 Deployment runbook | Complete baseline; target-platform commands/evidence pending |
+| HIP-1004 Deployment runbook | Complete baseline; isolated migration rehearsal passed and revision-tagged rollback images enforced 2026-08-01; application rollback and incident tabletop remain |
 | HIP-1005 Incident response | Complete baseline; tabletop exercise evidence pending |
 
 ## Security Risks Requiring Priority Treatment
@@ -439,12 +442,13 @@ Acceptance criteria:
 
 - Wire a pinned browser-runner image through the sandbox network gate and prove
   connected-IP/egress/container isolation with live Docker tests.
-- Run the load harness in staging and retain p95/error/saturation evidence.
+- Complete the authenticated admin-list and isolated feedback-write load
+  scenarios; public lookup and browser-score staging targets passed on
+  2026-08-01 with retained latency/error/saturation evidence.
 - Integrate an audited managed signer/key store and explicitly authorize the
   production issuer/key without enabling the development signer.
 - Deploy all HIP services in Production mode from a clean, revision-labelled
   release and revalidate admin/consumer session continuity.
-- Prove controlled migration-forward and rollback behavior.
 - Rehearse deployment rollback and incident-response tabletop procedures.
 
 HIP-0604 adds explicit dashboard dependency availability, removes invented

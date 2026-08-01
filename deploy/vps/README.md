@@ -36,7 +36,10 @@ export HIP_RELEASE_REVISION HIP_RELEASE_VERSION
 The script refuses staged, modified, or untracked source. Do not bypass that
 check by copying an assembled directory to the server. The deployed revision,
 version, compose file, and protected environment file must identify one release
-and must be retained together for rollback.
+and must be retained together for rollback. Compose tags every HIP-built image
+with the full release revision. Retain the current and previously approved
+revision tags until the stabilization window and authenticated rollback checks
+have passed; a floating `latest` tag is not a rollback artifact.
 
 ## Protected configuration
 

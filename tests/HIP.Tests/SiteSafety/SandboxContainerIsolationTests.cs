@@ -70,6 +70,42 @@ public sealed class SandboxContainerIsolationTests
         });
     }
 
+    [Test]
+    public void Live_proof_script_uses_a_pinned_image_and_replays_the_enforced_launch_controls()
+    {
+        var script = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "eng",
+            "sandbox",
+            "verify-container-isolation.sh"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(script, Does.Contain("@sha256:"));
+            Assert.That(script, Does.Contain("--network none"));
+            Assert.That(script, Does.Contain("--read-only"));
+            Assert.That(script, Does.Contain("noexec,nosuid,nodev"));
+            Assert.That(script, Does.Contain("--cap-drop ALL"));
+            Assert.That(script, Does.Contain("no-new-privileges=true"));
+            Assert.That(script, Does.Contain("--pids-limit 32"));
+            Assert.That(script, Does.Contain("--cpus 0.5"));
+            Assert.That(script, Does.Contain("--memory 256m"));
+            Assert.That(script, Does.Contain("--user 65532:65532"));
+            Assert.That(script, Does.Contain("network-attempt=blocked"));
+        });
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var current = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "HIP.slnx"))) return current.FullName;
+            current = current.Parent;
+        }
+        throw new DirectoryNotFoundException("Could not locate HIP.slnx from the test output directory.");
+    }
+
     private static SandboxLinkScanRequest LeasedJob() => new(
         "sandbox-link-test",
         "risky.example",

@@ -65,6 +65,7 @@ services:
       start_period: 20s
 
   keycloak:
+    image: guardwithhip/identity:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
     build:
       context: ../..
       dockerfile: deploy/keycloak/Dockerfile
@@ -102,6 +103,7 @@ services:
       keycloak-db: { condition: service_healthy }
 
   api:
+    image: guardwithhip/api:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
     build:
       context: ../..
       dockerfile: src/HIP.ApiService/Dockerfile
@@ -140,6 +142,7 @@ services:
       queue: { condition: service_healthy }
 
   web:
+    image: guardwithhip/admin-web:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
     build:
       context: ../..
       dockerfile: src/HIP.Web/Dockerfile
@@ -186,6 +189,7 @@ services:
       api: { condition: service_healthy }
 
   consumer-web:
+    image: guardwithhip/consumer-web:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
     build:
       context: ../..
       dockerfile: src/HIP.Web/Dockerfile
@@ -269,6 +273,7 @@ services:
       keycloak: { condition: service_started }
 
   sandbox-worker:
+    image: guardwithhip/sandbox-worker:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
     build:
       context: ../..
       dockerfile: src/HIP.SandboxWorker/Dockerfile
