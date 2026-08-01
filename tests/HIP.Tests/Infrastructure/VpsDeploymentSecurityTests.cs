@@ -47,6 +47,7 @@ public sealed class VpsDeploymentSecurityTests
             Path.Combine(root, "src", "HIP.Web", "Dockerfile"),
             Path.Combine(root, "src", "HIP.SandboxWorker", "Dockerfile")
         };
+        var sandboxWorkerDockerfile = File.ReadAllText(dockerfiles[^1]);
 
         Assert.Multiple(() =>
         {
@@ -55,6 +56,9 @@ public sealed class VpsDeploymentSecurityTests
                 "HIP_RELEASE_REVISION: ${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}"));
             Assert.That(compose, Does.Contain(
                 "HIP_RELEASE_VERSION: ${HIP_RELEASE_VERSION:?HIP_RELEASE_VERSION is required}"));
+            Assert.That(
+                sandboxWorkerDockerfile,
+                Does.Match(@"(?m)^FROM mcr\.microsoft\.com/dotnet/aspnet:10\.0@sha256:[a-f0-9]{64} AS runtime$"));
             foreach (var dockerfilePath in dockerfiles)
             {
                 var dockerfile = File.ReadAllText(dockerfilePath);
