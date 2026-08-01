@@ -14,6 +14,9 @@ public sealed class LoadHarnessContractTests
             Assert.That(script, Does.Contain("public-feedback-write"));
             Assert.That(script, Does.Contain("admin-paged-list"));
             Assert.That(script, Does.Contain("HIP_LOAD_ENABLE_WRITES === '1'"));
+            Assert.That(script, Does.Contain("HIP_LOAD_REQUESTS_PER_SECOND"));
+            Assert.That(script, Does.Contain("HIP_LOAD_SCENARIOS"));
+            Assert.That(script, Does.Contain("statusCodes"));
             Assert.That(script, Does.Contain("p95TargetMs"));
             Assert.That(script, Does.Not.Contain("console.log(response"));
         });
