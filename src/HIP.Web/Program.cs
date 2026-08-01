@@ -72,6 +72,10 @@ builder.Services.AddHipApplication(
     builder.Environment.IsDevelopment() ? "web" : null);
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
+var managedSigningReadiness = builder.Configuration
+    .GetSection(HipManagedSigningReadinessOptions.SectionName)
+    .Get<HipManagedSigningReadinessOptions>() ?? new HipManagedSigningReadinessOptions();
+builder.Services.AddSingleton(managedSigningReadiness);
 builder.Services.AddHostedService<DomainVerificationRecheckWorker>();
 builder.Services.AddHostedService<DomainCertificateMonitoringWorker>();
 builder.Services.AddOptions<HipPerformanceOptions>()
@@ -163,6 +167,7 @@ var databaseInitializationMode = app.Environment.IsDevelopment()
     ? HipDatabaseInitializationMode.CreateDevelopmentSchema
     : HipDatabaseInitializationMode.ValidateMigrations;
 await HipDatabaseInitializer.InitializeAsync(app.Services, databaseInitializationMode);
+await HipManagedSigningReadiness.ValidateAsync(app.Services, managedSigningReadiness);
 
 if (consumerHistoryBackfillRequested)
 {

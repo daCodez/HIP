@@ -26,6 +26,11 @@ public sealed class VpsDeploymentSecurityTests
             Assert.That(overrideSource, Does.Contain("env_file: !reset []"));
             Assert.That(overrideSource, Does.Contain("HipSessionProtection__CertificatePath:"));
             Assert.That(overrideSource, Does.Contain("HipAuthentication__Authority:"));
+            Assert.That(
+                Occurrences(overrideSource, "HipManagedSigning__Required: \"true\""),
+                Is.EqualTo(3));
+            Assert.That(overrideSource, Does.Contain("HIP_SIGNING_ISSUER_ID is required"));
+            Assert.That(overrideSource, Does.Contain("HIP_SIGNING_KEY_ID is required"));
             Assert.That(caddySource, Does.Not.Contain(
                 "header_up X-HIP-Trusted-Staging-Proxy "));
         });
@@ -84,6 +89,19 @@ public sealed class VpsDeploymentSecurityTests
                 Assert.That(dockerfile, Does.Contain("org.opencontainers.image.version"), dockerfilePath);
             }
         });
+    }
+
+    private static int Occurrences(string value, string fragment)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = value.IndexOf(fragment, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += fragment.Length;
+        }
+
+        return count;
     }
 
     private static string RepositoryRoot()

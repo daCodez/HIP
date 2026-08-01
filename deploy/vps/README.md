@@ -58,3 +58,19 @@ environment and mounted secret files, never in Git. Before a rollout:
 without writing them to standard output. It does not provide HIP's managed V1
 certificate-signing key custody; that separate launch dependency must remain
 fail-closed until an audited managed signer is configured.
+
+## Managed signing launch gate
+
+The production override requires an explicit `HIP_SIGNING_ISSUER_ID` and
+`HIP_SIGNING_KEY_ID`. It also enables the startup readiness gate in every public
+HIP host. Startup fails unless deployment composition replaces
+`UnavailableManagedTrustReceiptSigner` with an audited managed-custody adapter,
+the returned key exactly matches those identifiers and ML-DSA-65, the signer is
+explicitly allowlisted, the platform verification provider is available, and
+the same active public key exists in HIP's durable lifecycle state.
+
+The readiness check requests metadata only; it does not create a signature or
+request private key material. Selecting and auditing the HSM or signing-service
+adapter is a production infrastructure decision and must include key creation,
+rotation, revocation, access-control, audit-log, outage, and recovery evidence.
+Do not weaken or disable the gate to promote a V1 release.

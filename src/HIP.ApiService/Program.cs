@@ -39,6 +39,10 @@ builder.Services.AddHipApplication(
     builder.Environment.IsDevelopment() ? "api" : null);
 builder.Services.AddSingleton(BindExternalSiteEvidenceOptions(builder.Configuration));
 builder.Services.AddHipInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
+var managedSigningReadiness = builder.Configuration
+    .GetSection(HipManagedSigningReadinessOptions.SectionName)
+    .Get<HipManagedSigningReadinessOptions>() ?? new HipManagedSigningReadinessOptions();
+builder.Services.AddSingleton(managedSigningReadiness);
 builder.Services.AddOptions<HipPerformanceOptions>()
     .Bind(builder.Configuration.GetSection(HipPerformanceOptions.SectionName))
     .Validate(ValidateHipPerformanceOptions, "HIP performance options must use positive cache durations and request limits.")
@@ -120,6 +124,7 @@ var databaseInitializationMode = app.Environment.IsDevelopment()
     ? HipDatabaseInitializationMode.CreateDevelopmentSchema
     : HipDatabaseInitializationMode.ValidateMigrations;
 await HipDatabaseInitializer.InitializeAsync(app.Services, databaseInitializationMode);
+await HipManagedSigningReadiness.ValidateAsync(app.Services, managedSigningReadiness);
 
 if (app.Environment.IsDevelopment())
 {
