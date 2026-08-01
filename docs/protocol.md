@@ -101,6 +101,15 @@ HIP receipt-issuance key. Private key material must never cross the
 `IManagedTrustReceiptSigner` boundary or enter API models, receipt JSON,
 persistence, logs, or fixtures.
 
+V1 production composition must also enable `HipManagedSigning:Required` and
+provide the exact expected issuer and key identifiers. Before accepting traffic,
+each public host requests signer metadata and verifies that the configured
+managed adapter, explicit allowlist, ML-DSA-65 verification provider, production
+runtime policy, and active durable public-key lifecycle record all agree. The
+readiness check never requests a signature or private key material. Missing or
+mismatched custody fails startup rather than silently publishing unsigned V1
+trust documents.
+
 ## Signed Live Badge
 
 Live badge responses bind HIP-derived domain, score, status, identity meaning,
