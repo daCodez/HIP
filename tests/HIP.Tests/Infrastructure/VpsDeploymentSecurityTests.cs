@@ -59,6 +59,7 @@ public sealed class VpsDeploymentSecurityTests
             Assert.That(
                 sandboxWorkerDockerfile,
                 Does.Match(@"(?m)^FROM mcr\.microsoft\.com/dotnet/aspnet:10\.0@sha256:[a-f0-9]{64} AS runtime$"));
+            Assert.That(sandboxWorkerDockerfile, Does.Contain("libgssapi-krb5-2"));
             foreach (var dockerfilePath in dockerfiles)
             {
                 var dockerfile = File.ReadAllText(dockerfilePath);
