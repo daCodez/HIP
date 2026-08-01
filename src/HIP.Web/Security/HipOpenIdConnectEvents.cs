@@ -99,19 +99,6 @@ public sealed class HipOpenIdConnectEvents(
             }
         }
 
-        if (TryGetValidatedTokenExpiry(context, out var tokenExpiry))
-        {
-            if (tokenExpiry <= now)
-            {
-                return Fail(context, properties);
-            }
-
-            if (tokenExpiry < absoluteExpiry)
-            {
-                absoluteExpiry = tokenExpiry;
-            }
-        }
-
         var idleExpiry = now.Add(options.IdleSessionLifetime);
         context.Principal = new ClaimsPrincipal(new ClaimsIdentity(
             identityClaims.Concat(assuranceClaims),
@@ -130,6 +117,14 @@ public sealed class HipOpenIdConnectEvents(
     public override Task RedirectToIdentityProvider(RedirectContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        var safeReturnUrl = HipDevelopmentLoginEndpoints.SafeLocalReturnUrl(context.Properties.RedirectUri);
+        if (!HipStepUpAuthenticationProperties.IsStepUp(context.Properties) &&
+            safeReturnUrl.StartsWith("/admin", StringComparison.OrdinalIgnoreCase))
+        {
+            context.ProtocolMessage.Prompt = "login";
+            context.ProtocolMessage.MaxAge = "0";
+        }
+
         if (options.TrustedMfaAcrValues.Count > 0)
         {
             context.ProtocolMessage.AcrValues = string.Join(" ", options.TrustedMfaAcrValues);
@@ -142,11 +137,11 @@ public sealed class HipOpenIdConnectEvents(
     public override Task RemoteFailure(RemoteFailureContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        var isStepUp = context.Properties is not null &&
-                       HipStepUpAuthenticationProperties.IsStepUp(context.Properties);
-        var stepUpReturnUrl = context.Properties is null
+        var safeReturnUrl = context.Properties is null
             ? "/admin"
             : HipDevelopmentLoginEndpoints.SafeLocalReturnUrl(context.Properties.RedirectUri);
+        var isStepUp = context.Properties is not null &&
+                       HipStepUpAuthenticationProperties.IsStepUp(context.Properties);
         if (context.Properties is not null)
         {
             HipStepUpAuthenticationProperties.Clear(context.Properties);
@@ -155,8 +150,8 @@ public sealed class HipOpenIdConnectEvents(
         context.HandleResponse();
         context.Response.Redirect(
             isStepUp
-                ? $"/step-up?error=unsatisfied&returnUrl={Uri.EscapeDataString(stepUpReturnUrl)}"
-                : "/login?error=external-authentication");
+                ? $"/step-up?error=unsatisfied&returnUrl={Uri.EscapeDataString(safeReturnUrl)}"
+                : $"{HipDevelopmentLoginEndpoints.LoginPathFor(safeReturnUrl)}?error=external-authentication");
         return Task.CompletedTask;
     }
 
@@ -201,18 +196,4 @@ public sealed class HipOpenIdConnectEvents(
         return false;
     }
 
-    private static bool TryGetValidatedTokenExpiry(
-        TokenValidatedContext context,
-        out DateTimeOffset tokenExpiry)
-    {
-        var validTo = context.SecurityToken?.ValidTo ?? DateTime.MinValue;
-        if (validTo == DateTime.MinValue || validTo == DateTime.MaxValue)
-        {
-            tokenExpiry = default;
-            return false;
-        }
-
-        tokenExpiry = new DateTimeOffset(DateTime.SpecifyKind(validTo, DateTimeKind.Utc));
-        return true;
-    }
 }

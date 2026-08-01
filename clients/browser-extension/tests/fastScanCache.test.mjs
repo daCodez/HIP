@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { webcrypto } from "node:crypto";
 import test from "node:test";
 
 import { BoundedLruStore, FastScanCache, privacySafeScanCacheKey, RecentSubmissionDeduper } from "../src/fastScanCache.js";
@@ -76,11 +77,11 @@ test("hashes canonical inputs so raw URLs never become cache keys", async () => 
   const first = await privacySafeScanCacheKey("site-safety", {
     url: "https://example.com/private?token=secret",
     signals: { count: 1, safe: true }
-  });
+  }, webcrypto.subtle);
   const reordered = await privacySafeScanCacheKey("site-safety", {
     signals: { safe: true, count: 1 },
     url: "https://example.com/private?token=secret"
-  });
+  }, webcrypto.subtle);
 
   assert.equal(first, reordered);
   assert.match(first, /^site-safety:sha256:[a-f0-9]{64}$/);
@@ -93,8 +94,12 @@ test("different observations and service settings remain isolated", async () => 
   const observationChanged = { apiBaseUrl: "https://hip.example", request: { url: "https://target.example", count: 2 } };
   const serviceChanged = { apiBaseUrl: "https://other-hip.example", request: { url: "https://target.example", count: 1 } };
 
-  assert.notEqual(await privacySafeScanCacheKey("score", base), await privacySafeScanCacheKey("score", observationChanged));
-  assert.notEqual(await privacySafeScanCacheKey("score", base), await privacySafeScanCacheKey("score", serviceChanged));
+  assert.notEqual(
+    await privacySafeScanCacheKey("score", base, webcrypto.subtle),
+    await privacySafeScanCacheKey("score", observationChanged, webcrypto.subtle));
+  assert.notEqual(
+    await privacySafeScanCacheKey("score", base, webcrypto.subtle),
+    await privacySafeScanCacheKey("score", serviceChanged, webcrypto.subtle));
 });
 
 test("coalesces writes and suppresses recent successful duplicates", async () => {

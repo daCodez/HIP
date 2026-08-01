@@ -421,6 +421,8 @@
                         "Enter a valid public domain and display name.",
                     DomainCertificateEnrollmentStartStatus.Conflict =>
                         "This domain is linked to a different HIP account. Sign in with that account or use domain ownership recovery.",
+                    DomainCertificateEnrollmentStartStatus.IdentityKeyUnavailable =>
+                        "New domain verification is temporarily unavailable while HIP's managed production identity-key service is being configured. Existing certificate information was not changed.",
                     DomainCertificateEnrollmentStartStatus.PersistenceUnavailable =>
                         "HIP could not save this enrollment right now. The existing domain identity was not changed; retry in a moment.",
                     _ => "HIP could not start this enrollment right now."
@@ -467,9 +469,14 @@
                 result.ChallengeToken is null ||
                 result.ChallengeExpiresAtUtc is null)
             {
-                _enrollmentError = result.Status == DomainCertificateEnrollmentStartStatus.Conflict
-                    ? "HIP could not replace this DNS value because the domain ownership binding changed."
-                    : "HIP could not generate a replacement DNS value right now.";
+                _enrollmentError = result.Status switch
+                {
+                    DomainCertificateEnrollmentStartStatus.Conflict =>
+                        "HIP could not replace this DNS value because the domain ownership binding changed.",
+                    DomainCertificateEnrollmentStartStatus.IdentityKeyUnavailable =>
+                        "HIP's managed production identity-key service is not available. The current DNS value was not changed.",
+                    _ => "HIP could not generate a replacement DNS value right now."
+                };
                 return;
             }
 

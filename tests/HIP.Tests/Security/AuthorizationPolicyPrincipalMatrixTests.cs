@@ -26,6 +26,16 @@ public sealed class AuthorizationPolicyPrincipalMatrixTests
 
     private static readonly PolicyExpectation[] AdminPolicyExpectations =
     [
+        Admin(
+            AdminPolicies.CanViewOwnAdminAccess,
+            PrincipalKind.Owner,
+            PrincipalKind.Admin,
+            PrincipalKind.Moderator,
+            PrincipalKind.Support,
+            PrincipalKind.ReadOnly,
+            PrincipalKind.AuthenticatedWithoutRole),
+        Admin(AdminPolicies.CanViewAdminUsers, PrincipalKind.Owner),
+        Admin(AdminPolicies.CanManageAdmins, PrincipalKind.Owner),
         Admin(AdminPolicies.CanManageRules, PrincipalKind.Owner, PrincipalKind.Admin),
         Admin(
             AdminPolicies.CanReviewReports,
@@ -207,7 +217,7 @@ public sealed class AuthorizationPolicyPrincipalMatrixTests
     }
 
     [Test]
-    public async Task Admin_policy_MFA_requirements_preserve_the_pre_MFA_step_up_entry_policy()
+    public async Task Admin_policy_MFA_requirements_preserve_access_status_and_step_up_entry_policies()
     {
         using var provider = Services();
         using var scope = provider.CreateScope();
@@ -218,11 +228,12 @@ public sealed class AuthorizationPolicyPrincipalMatrixTests
         {
             var policy = await policyProvider.GetPolicyAsync(expectation.PolicyName);
             var isStepUpEntryPolicy = expectation.PolicyName == AdminPolicies.CanRequestPrivilegedStepUp;
+            var isAccessStatusPolicy = expectation.PolicyName == AdminPolicies.CanViewOwnAdminAccess;
 
             Assert.That(policy, Is.Not.Null);
             Assert.That(
                 policy!.Requirements.Count(requirement => requirement is PrivilegedMfaRequirement),
-                Is.EqualTo(isStepUpEntryPolicy ? 0 : 1),
+                Is.EqualTo(isStepUpEntryPolicy || isAccessStatusPolicy ? 0 : 1),
                 expectation.PolicyName);
             Assert.That(
                 policy.Requirements.Count(requirement =>
@@ -232,7 +243,8 @@ public sealed class AuthorizationPolicyPrincipalMatrixTests
                 expectation.PolicyName);
             Assert.That(
                 policy.Requirements.Count(requirement => requirement is RecentPrivilegedMfaRequirement),
-                Is.EqualTo(expectation.PolicyName == AdminPolicies.RecentPrivilegedAuthentication ? 1 : 0),
+                Is.EqualTo(expectation.PolicyName is AdminPolicies.CanManageAdmins or
+                    AdminPolicies.RecentPrivilegedAuthentication ? 1 : 0),
                 expectation.PolicyName);
 
             var withoutMfa = await authorization.AuthorizeAsync(
@@ -241,7 +253,7 @@ public sealed class AuthorizationPolicyPrincipalMatrixTests
                 expectation.PolicyName);
             Assert.That(
                 withoutMfa.Succeeded,
-                Is.EqualTo(isStepUpEntryPolicy),
+                Is.EqualTo(isStepUpEntryPolicy || isAccessStatusPolicy),
                 expectation.PolicyName);
         }
     }
@@ -352,6 +364,7 @@ public sealed class AuthorizationPolicyPrincipalMatrixTests
         services.AddSingleton<ISetupCodeLicenseService, InMemorySetupCodeLicenseService>();
         services.AddSingleton<IHudDeviceCredentialService>(new HudDeviceCredentialService(
             new PrivacyHashingOptions("test-only-HUD-policy-matrix-key", AllowDevelopmentKey: true)));
+        services.AddHipAuthorizationTestDependencies();
         services.AddHipAdminAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions
         {

@@ -1,0 +1,93 @@
+{$HIP_PUBLIC_HOST} {
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    reverse_proxy web:8080 {
+        header_up X-HIP-Trusted-Staging-Proxy {$HIP_DEVELOPMENT_PROXY_SECRET}
+        header_up -X-HIP-Admin-Role
+        header_up -X-HIP-Admin-User
+        header_up -X-HIP-Consumer-Id
+    }
+}
+
+{$HIP_CONSUMER_HOST} {
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    @portalRoot path /
+    redir @portalRoot /consumer 302
+
+    reverse_proxy consumer-web:8080 {
+        header_up -X-HIP-Admin-Role
+        header_up -X-HIP-Admin-User
+        header_up -X-HIP-Consumer-Id
+        header_up -X-HIP-Trusted-Staging-Proxy
+    }
+}
+
+{$HIP_ADMIN_HOST} {
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+
+    @portalRoot path /
+    redir @portalRoot /admin 302
+
+    reverse_proxy consumer-web:8080 {
+        header_up -X-HIP-Admin-Role
+        header_up -X-HIP-Admin-User
+        header_up -X-HIP-Consumer-Id
+        header_up -X-HIP-Trusted-Staging-Proxy
+    }
+}
+
+{$HIP_API_HOST} {
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+
+    reverse_proxy api:8080
+}
+
+{$HIP_IDENTITY_HOST} {
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+
+    reverse_proxy keycloak:8080 {
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-Port 443
+        header_up X-Forwarded-Host {host}
+    }
+}

@@ -18,6 +18,12 @@ public static class HipProductionLoginEndpoints
             return app;
         }
 
+        app.MapGet("/auth/login", SignInFromLink)
+            .AllowAnonymous()
+            .RequireRateLimiting(RateLimitPolicies.AdminLoginPolicy);
+        app.MapGet("/auth/register", RegisterFromLink)
+            .AllowAnonymous()
+            .RequireRateLimiting(RateLimitPolicies.AdminLoginPolicy);
         app.MapPost("/auth/login", SignInAsync)
             .AllowAnonymous()
             .RequireRateLimiting(RateLimitPolicies.AdminLoginPolicy)
@@ -33,6 +39,21 @@ public static class HipProductionLoginEndpoints
         return app;
     }
 
+    private static IResult SignInFromLink(string? returnUrl) =>
+        Results.Challenge(
+            SignInProperties(returnUrl),
+            [HipAuthenticationSchemes.OpenIdConnect]);
+
+    private static IResult RegisterFromLink(string? returnUrl)
+    {
+        var challenge = new OpenIdConnectChallengeProperties
+        {
+            RedirectUri = HipDevelopmentLoginEndpoints.SafeLocalReturnUrl(returnUrl, "/consumer"),
+            Prompt = "create"
+        };
+        return Results.Challenge(challenge, [HipAuthenticationSchemes.OpenIdConnect]);
+    }
+
     private static async Task<IResult> SignInAsync(
         HttpContext httpContext,
         IAntiforgery antiforgery,
@@ -46,8 +67,21 @@ public static class HipProductionLoginEndpoints
         var form = await httpContext.Request.ReadFormAsync(cancellationToken);
         var returnUrl = HipDevelopmentLoginEndpoints.SafeLocalReturnUrl(form["returnUrl"].ToString());
         return Results.Challenge(
-            new AuthenticationProperties { RedirectUri = returnUrl },
+            SignInProperties(returnUrl),
             [HipAuthenticationSchemes.OpenIdConnect]);
+    }
+
+    private static AuthenticationProperties SignInProperties(string? returnUrl)
+    {
+        var safeReturnUrl = HipDevelopmentLoginEndpoints.SafeLocalReturnUrl(returnUrl);
+        return safeReturnUrl.StartsWith("/admin", StringComparison.OrdinalIgnoreCase)
+            ? new OpenIdConnectChallengeProperties
+            {
+                RedirectUri = safeReturnUrl,
+                Prompt = "login",
+                MaxAge = TimeSpan.Zero
+            }
+            : new AuthenticationProperties { RedirectUri = safeReturnUrl };
     }
 
     private static async Task<IResult> SignOutAsync(

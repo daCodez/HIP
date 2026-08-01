@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
@@ -139,7 +140,8 @@ public sealed class HipProductionAuthenticationEndpointTests
             Assert.That(query["code_challenge_method"].ToString(), Is.EqualTo("S256"));
             Assert.That(query["scope"].ToString(), Is.EqualTo("openid"));
             Assert.That(query["acr_values"].ToString(), Is.EqualTo("urn:hip:test:mfa"));
-            Assert.That(query["max_age"].ToString(), Is.EqualTo("28800"));
+            Assert.That(query["prompt"].ToString(), Is.EqualTo("login"));
+            Assert.That(query["max_age"].ToString(), Is.EqualTo("0"));
             Assert.That(query.ContainsKey("client_secret"), Is.False);
             Assert.That(location.Query, Does.Not.Contain("test-oidc-secret"));
         });
@@ -367,6 +369,8 @@ public sealed class HipProductionAuthenticationEndpointTests
         services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
             .Where(endpoint => endpoint.RoutePattern.RawText is "/auth/login" or "/auth/logout" or "/auth/step-up")
+            .Where(endpoint => endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods
+                .Contains(HttpMethods.Post, StringComparer.OrdinalIgnoreCase) == true)
             .ToArray();
 
     private static async Task<AntiforgeryForm> GetAntiforgeryFormAsync(

@@ -255,7 +255,9 @@ public sealed class BrowserScanResultApiTests
             Assert.That(json.RootElement.GetProperty("status").GetString(), Is.EqualTo("LimitedTrustData"));
             Assert.That(json.RootElement.GetProperty("score").GetInt32(), Is.InRange(45, 60));
             Assert.That(json.RootElement.GetProperty("dataSource").GetString(), Is.EqualTo("NoStoredData"));
-            Assert.That(json.RootElement.GetProperty("message").GetString(), Does.Contain("not scanned"));
+            Assert.That(
+                json.RootElement.GetProperty("message").GetString(),
+                Does.Contain("no authoritative site-safety assessment"));
             Assert.That(json.RootElement.GetProperty("recommendedAction").GetString(), Is.EqualTo("ShowCaution"));
         });
     }

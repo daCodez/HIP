@@ -137,6 +137,44 @@ public sealed class DomainCertificateWebsiteVerificationTests
     }
 
     [Test]
+    public async Task Enrollment_start_fails_closed_when_production_identity_key_custody_is_unavailable()
+    {
+        const string domain = "example.com";
+        const string owner = "owner-1";
+        var website = new WebsiteIdentity(
+            domain, "hip:web:example.com", [], VerificationStatus.Pending,
+            VerificationMethod.DnsTxt, Now, null);
+        var enrollments = new StubEnrollmentRepository(new DomainEnrollmentStateRecord(
+            "unused", owner, domain, DomainEnrollmentStatus.PendingOwnership, Now, null));
+        var requests = new StubVerificationRequests(new DomainVerificationRequest(
+            domain, VerificationMethod.DnsTxt, "unused", VerificationStatus.Pending,
+            Now, null, Now.AddHours(1)));
+        var websiteIdentities = new StubWebsiteIdentityService(website)
+        {
+            RegistrationUnavailable = true
+        };
+        var service = CreateService(
+            website,
+            enrollments,
+            new StubDomainVerificationService(requests),
+            requests,
+            new StubFetcher(),
+            websiteIdentities);
+
+        var result = await service.StartAsync(
+            owner,
+            owner,
+            new DomainCertificateEnrollmentStartRequest(domain, "Example", VerificationMethod.DnsTxt),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateEnrollmentStartStatus.IdentityKeyUnavailable));
+            Assert.That(enrollments.StartedEnrollment, Is.Null);
+        });
+    }
+
+    [Test]
     public async Task Existing_owner_can_recover_the_current_dns_challenge_without_starting_again()
     {
         const string domain = "example.com";
@@ -541,6 +579,7 @@ public sealed class DomainCertificateWebsiteVerificationTests
         public string? LastActorId { get; private set; }
         public List<string> ActorIds { get; } = [];
         public string? RequiredActorId { get; init; }
+        public bool RegistrationUnavailable { get; init; }
 
         public Task<WebsiteIdentity?> GetAsync(
             string domain,
@@ -565,6 +604,11 @@ public sealed class DomainCertificateWebsiteVerificationTests
             LastActorId = actorId;
             ActorIds.Add(actorId);
             EnsureActor(actorId);
+            if (RegistrationUnavailable)
+            {
+                throw new PlatformNotSupportedException("Test managed key custody is unavailable.");
+            }
+
             return Task.FromResult(new WebsiteIdentityRegistrationResponse(
                 website,
                 registrationChallenge ?? throw new InvalidOperationException("A registration challenge was not configured."),

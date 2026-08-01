@@ -28,7 +28,13 @@ public sealed class HipWebRouteAuthorizationClosureTests
     private static readonly IReadOnlyDictionary<string, IReadOnlySet<PrincipalKind>> AllowedPrincipalsByPolicy =
         new Dictionary<string, IReadOnlySet<PrincipalKind>>(StringComparer.Ordinal)
         {
-            [AdminPolicies.CanViewOwnAdminAccess] = Allowed(PrincipalKind.Owner, PrincipalKind.Admin, PrincipalKind.Moderator, PrincipalKind.Support, PrincipalKind.ReadOnly),
+            [AdminPolicies.CanViewOwnAdminAccess] = Allowed(
+                PrincipalKind.AuthenticatedActorWithoutRole,
+                PrincipalKind.Owner,
+                PrincipalKind.Admin,
+                PrincipalKind.Moderator,
+                PrincipalKind.Support,
+                PrincipalKind.ReadOnly),
             [AdminPolicies.CanViewAdminUsers] = Allowed(PrincipalKind.Owner),
             [AdminPolicies.CanManageAdmins] = Allowed(PrincipalKind.Owner),
             [AdminPolicies.CanManageRules] = Allowed(PrincipalKind.Owner, PrincipalKind.Admin),

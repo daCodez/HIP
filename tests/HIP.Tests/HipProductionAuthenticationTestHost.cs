@@ -78,6 +78,7 @@ public sealed class HipProductionAuthenticationTestHost : IAsyncDisposable
             [$"{HipSessionProtectionOptions.SectionName}:ApplicationName"] = "HIP.Web"
         });
         builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddHipAuthorizationTestDependencies();
         builder.Services.AddHipWebAuthentication(builder.Configuration, builder.Environment);
         builder.Services.AddHipAdminAuthorization();
         builder.Services.AddCascadingAuthenticationState();

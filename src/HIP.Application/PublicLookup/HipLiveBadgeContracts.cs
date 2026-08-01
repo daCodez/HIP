@@ -77,11 +77,12 @@ public sealed record HipLiveBadgeCertificateState
         }
 
         var normalizedDomain = DomainInputValidator.ValidateAndNormalize(domain);
+        var normalizedExpiresAtUtc = expiresAtUtc.ToUniversalTime();
         if (!string.Equals(domain, normalizedDomain, StringComparison.Ordinal) ||
             !Enum.IsDefined(level) ||
             !Enum.IsDefined(status) ||
             !Enum.IsDefined(signatureStatus) ||
-            expiresAtUtc.Offset != TimeSpan.Zero ||
+            normalizedExpiresAtUtc.Offset != TimeSpan.Zero ||
             !Uri.TryCreate(publicCertificateUrl, UriKind.Absolute, out var publicUrl) ||
             publicUrl.Scheme != Uri.UriSchemeHttps ||
             !string.IsNullOrEmpty(publicUrl.UserInfo) ||
@@ -98,7 +99,7 @@ public sealed record HipLiveBadgeCertificateState
         Level = level;
         Status = status;
         SignatureStatus = signatureStatus;
-        ExpiresAtUtc = expiresAtUtc;
+        ExpiresAtUtc = normalizedExpiresAtUtc;
         PublicCertificateUrl = publicUrl.AbsoluteUri;
         IsActive = isActive;
     }

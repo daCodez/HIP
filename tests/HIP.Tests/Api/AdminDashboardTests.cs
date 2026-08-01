@@ -83,6 +83,27 @@ public sealed class AdminDashboardTests
     }
 
     [Test]
+    public async Task Current_protection_score_uses_only_the_latest_authoritative_scan_per_domain()
+    {
+        var repository = new InMemoryBrowserScanResultRepository();
+        var now = DateTimeOffset.UtcNow;
+        await repository.SaveAsync(Scan("changing.example", 20, "HighRisk", 1, 1, 0, now.AddHours(-2), "Older result."), CancellationToken.None);
+        await repository.SaveAsync(Scan("changing.example", 90, "Clean", 1, 0, 0, now, "Current result."), CancellationToken.None);
+        await repository.SaveAsync(Scan("steady.example", 80, "Trusted", 1, 0, 0, now, "Current result."), CancellationToken.None);
+
+        var summary = await Dashboard(repository).GetSummaryAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Card(summary, "averageHipScore").Value, Is.EqualTo(85));
+            Assert.That(Card(summary, "averageHipScore").Label, Is.EqualTo("Current Protection Score"));
+            Assert.That(Card(summary, "trustedResults").Value, Is.EqualTo(2));
+            Assert.That(Card(summary, "highRiskResults").Value, Is.Zero);
+            Assert.That(Card(summary, "totalScans").Value, Is.EqualTo(3));
+        });
+    }
+
+    [Test]
     public async Task Dashboard_certificate_cards_use_persisted_current_certificate_state()
     {
         var now = DateTimeOffset.UtcNow;
@@ -624,7 +645,7 @@ public sealed class AdminDashboardTests
             Assert.That(source, Does.Contain("Final score"));
             Assert.That(source, Does.Contain("Domain trust"));
             Assert.That(source, Does.Contain("Page trust"));
-            Assert.That(source, Does.Contain("Content risk"));
+            Assert.That(source, Does.Contain("Content safety"));
             Assert.That(source, Does.Contain("Confidence"));
             Assert.That(source, Does.Contain("No authoritative scans yet"));
             Assert.That(source, Does.Contain("Run the browser extension"));
@@ -798,7 +819,7 @@ public sealed class AdminDashboardTests
         {
             Assert.That(source, Does.Contain("Today's protection posture"));
             Assert.That(source, Does.Contain("IAdminDashboardService"));
-            Assert.That(source, Does.Contain("Overall HIP protection"));
+            Assert.That(source, Does.Contain("Current domain protection"));
             Assert.That(source, Does.Contain("Protection outcomes by day"));
             Assert.That(source, Does.Contain("Top risk categories"));
             Assert.That(source, Does.Contain("Domain identity"));

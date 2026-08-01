@@ -129,6 +129,10 @@ public sealed class AdminDashboardService(
             item.CertificateId is null &&
             item.EnrollmentStatus is not DomainEnrollmentStatus.Suspended and not DomainEnrollmentStatus.Revoked);
         var hasScanData = authoritativeScans.Length > 0;
+        var currentDomainScans = authoritativeScans
+            .GroupBy(scan => scan.Domain, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(scan => scan.LastCheckedUtc).First())
+            .ToArray();
         var totalScans = authoritativeScans.Length;
         var scansToday = authoritativeScans.Count(scan => scan.LastCheckedUtc.UtcDateTime.Date == now.UtcDateTime.Date);
         var domainsScanned = authoritativeScans.Select(scan => scan.Domain).Distinct(StringComparer.OrdinalIgnoreCase).Count();
@@ -136,17 +140,17 @@ public sealed class AdminDashboardService(
         var riskyLinksFound = authoritativeScans.Sum(scan => scan.RiskyLinksFound);
         var suspiciousLinksFound = authoritativeScans.Sum(scan => scan.SuspiciousLinksFound);
         var dangerousLinksFound = authoritativeScans.Sum(scan => scan.DangerousLinksFound);
-        var trustedResults = authoritativeScans.Count(IsTrustedScan);
-        var mostlyTrustedResults = authoritativeScans.Count(IsMostlyTrustedScan);
-        var limitedTrustResults = authoritativeScans.Count(IsLimitedTrustScan);
-        var unknownResults = authoritativeScans.Count(IsUnknownScan);
-        var suspiciousResults = authoritativeScans.Count(IsSuspiciousScan);
-        var highRiskResults = authoritativeScans.Count(IsHighRiskScan);
-        var dangerousResults = authoritativeScans.Count(IsDangerousScan);
+        var trustedResults = currentDomainScans.Count(IsTrustedScan);
+        var mostlyTrustedResults = currentDomainScans.Count(IsMostlyTrustedScan);
+        var limitedTrustResults = currentDomainScans.Count(IsLimitedTrustScan);
+        var unknownResults = currentDomainScans.Count(IsUnknownScan);
+        var suspiciousResults = currentDomainScans.Count(IsSuspiciousScan);
+        var highRiskResults = currentDomainScans.Count(IsHighRiskScan);
+        var dangerousResults = currentDomainScans.Count(IsDangerousScan);
         var scansLast24Hours = authoritativeScans.Count(scan => scan.LastCheckedUtc >= now.AddHours(-24));
         var scansLast7Days = authoritativeScans.Count(scan => scan.LastCheckedUtc >= now.AddDays(-7));
         var averageHipScore = hasScanData
-            ? (int)Math.Round(authoritativeScans.Average(scan => scan.Score))
+            ? (int)Math.Round(currentDomainScans.Average(scan => scan.Score))
             : 0;
         var latestScanUtc = authoritativeScans.FirstOrDefault()?.LastCheckedUtc;
         var clientTelemetryDomains = clientTelemetry.Select(scan => scan.Domain).Distinct(StringComparer.OrdinalIgnoreCase).Count();
@@ -218,7 +222,7 @@ public sealed class AdminDashboardService(
             Card("dangerousLinksFound", "Dangerous Links", dangerousLinksFound, dangerousLinksFound > 0 ? "High Attention" : "Clear", !hasScanData, "Total dangerous/critical links found in stored browser scans."),
             Card("scansLast24Hours", "Last 24 Hours", scansLast24Hours, hasScanData ? "Recent" : "No Data", !hasScanData, "Browser plugin scans received in the last 24 hours."),
             Card("scansLast7Days", "Last 7 Days", scansLast7Days, hasScanData ? "Recent" : "No Data", !hasScanData, "Browser plugin scans received in the last 7 days."),
-            Card("averageHipScore", "Average HIP Score", averageHipScore, hasScanData ? "Average" : "No Data", !hasScanData, "Average HIP score across stored browser scans."),
+            Card("averageHipScore", "Current Protection Score", averageHipScore, hasScanData ? "Current" : "No Data", !hasScanData, "Average of the latest authoritative HIP score for each monitored domain."),
             Card("latestScan", "Latest Scan", latestScanUtc is null ? 0 : (int)Math.Max(0, Math.Round((now - latestScanUtc.Value).TotalMinutes)), latestScanUtc is null ? "No Data" : "Minutes Ago", !hasScanData, "Minutes since the latest stored browser scan."),
             Card("clientTelemetryObservations", "Client Telemetry", clientTelemetry.Length, !clientTelemetryRead.IsAvailable ? "Unavailable" : clientTelemetry.Length > 0 ? "Untrusted" : "No Data", !clientTelemetryRead.IsAvailable || clientTelemetry.Length == 0, "Stored privacy-safe client observations that do not affect authoritative HIP scores."),
             Card("clientTelemetryDomains", "Observed Domains", clientTelemetryDomains, !clientTelemetryRead.IsAvailable ? "Unavailable" : clientTelemetry.Length > 0 ? "Untrusted" : "No Data", !clientTelemetryRead.IsAvailable || clientTelemetry.Length == 0, "Distinct domains observed by untrusted browser clients."),
@@ -278,7 +282,7 @@ public sealed class AdminDashboardService(
                 MetadataInt(scan, "domainTrustScore"),
                 MetadataInt(scan, "pageTrustScore"),
                 MetadataInt(scan, "contentRiskScore"),
-                MetadataValue(scan, "confidence", MetadataValue(scan, "confidenceLevel", "Unknown")),
+                MetadataValue(scan, "evidenceConfidence", MetadataValue(scan, "confidence", MetadataValue(scan, "confidenceLevel", "Unknown"))),
                 scan.RiskLevel,
                 scan.LinksScanned,
                 scan.RiskyLinksFound,
@@ -1008,7 +1012,7 @@ public sealed class AdminDashboardService(
     /// <param name="scan">Stored browser scan summary.</param>
     /// <returns>True when either risk label or status label is Trusted.</returns>
     private static bool IsTrustedScan(BrowserScanResultRecord scan) =>
-        MatchesScanStatus(scan, "Trusted");
+        MatchesScanStatus(scan, "Trusted", "Clean");
 
     /// <summary>
     /// Determines whether a stored scan is mostly trusted.

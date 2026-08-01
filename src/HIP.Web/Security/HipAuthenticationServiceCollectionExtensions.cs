@@ -119,7 +119,10 @@ public static class HipAuthenticationServiceCollectionExtensions
             options.ClientSecret = authentication.ClientSecret;
             options.SignInScheme = HipAuthenticationSchemes.SessionCookie;
             options.ResponseType = OpenIdConnectResponseType.Code;
-            options.ResponseMode = OpenIdConnectResponseMode.FormPost;
+            // A top-level authorization-code callback keeps the Lax correlation and
+            // nonce cookies available in privacy-hardened embedded browsers. PKCE and
+            // the one-time protected state still bind the callback to this client.
+            options.ResponseMode = OpenIdConnectResponseMode.Query;
             options.UsePkce = true;
             options.RequireHttpsMetadata = true;
             options.MapInboundClaims = false;
@@ -133,13 +136,16 @@ public static class HipAuthenticationServiceCollectionExtensions
             options.CorrelationCookie.Name = "__Host-HIP.Oidc.Correlation.";
             options.CorrelationCookie.HttpOnly = true;
             options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
-            options.CorrelationCookie.SameSite = SameSiteMode.None;
+            // HIP and its identity provider are same-site subdomains. Lax keeps the
+            // one-time correlation cookie available to the callback without exposing
+            // it to unrelated cross-site requests.
+            options.CorrelationCookie.SameSite = SameSiteMode.Lax;
             options.CorrelationCookie.Path = "/";
             options.CorrelationCookie.IsEssential = true;
             options.NonceCookie.Name = "__Host-HIP.Oidc.Nonce.";
             options.NonceCookie.HttpOnly = true;
             options.NonceCookie.SecurePolicy = CookieSecurePolicy.Always;
-            options.NonceCookie.SameSite = SameSiteMode.None;
+            options.NonceCookie.SameSite = SameSiteMode.Lax;
             options.NonceCookie.Path = "/";
             options.NonceCookie.IsEssential = true;
             options.TokenValidationParameters = new TokenValidationParameters

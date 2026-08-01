@@ -116,11 +116,11 @@ public static class HipDevelopmentLoginEndpoints
     /// <summary>
     /// Returns a local path or the administrator home page when the requested path could leave HIP.
     /// </summary>
-    internal static string SafeLocalReturnUrl(string? returnUrl)
+    internal static string SafeLocalReturnUrl(string? returnUrl, string fallback = "/admin")
     {
         if (string.IsNullOrWhiteSpace(returnUrl))
         {
-            return "/admin";
+            return fallback;
         }
 
         var trimmed = returnUrl.Trim();
@@ -131,6 +131,12 @@ public static class HipDevelopmentLoginEndpoints
                !trimmed.Any(char.IsControl) &&
                !Uri.TryCreate(trimmed, UriKind.Absolute, out _)
             ? trimmed
-            : "/admin";
+            : fallback;
     }
+
+    /// <summary>Returns the isolated portal login path for a validated local destination.</summary>
+    internal static string LoginPathFor(string returnUrl) =>
+        returnUrl.StartsWith("/consumer", StringComparison.OrdinalIgnoreCase)
+            ? "/consumer/login"
+            : "/admin/login";
 }

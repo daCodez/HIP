@@ -95,7 +95,7 @@ public sealed class TrustBadgeService(
             payload.Level,
             certificate.CurrentStatus,
             certificate.SignatureStatus,
-            payload.ExpiresAtUtc,
+            payload.ExpiresAtUtc.ToUniversalTime(),
             certificate.PublicCertificateUrl,
             certificate.IsActive);
     }

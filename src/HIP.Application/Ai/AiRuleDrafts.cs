@@ -193,7 +193,12 @@ public sealed class AiRuleDraftService(
         AiRuleDraftContract.Validate(draft);
         if (!draft.SimulationPassed)
             throw new InvalidOperationException("A failed AI draft simulation cannot enter approval.");
-        return await approvals.RequestAsync(draft.ProposedRule, draft.SimulationId, actorId, cancellationToken);
+        var simulatedCandidate = draft.ProposedRule with
+        {
+            Enabled = true,
+            Mode = RuleMode.Active
+        };
+        return await approvals.RequestAsync(simulatedCandidate, draft.SimulationId, actorId, cancellationToken);
     }
 
     private static IReadOnlyCollection<RuleSimulationTestCase> BuildFixtures(TrustRule rule)

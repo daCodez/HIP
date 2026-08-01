@@ -1,0 +1,43 @@
+services:
+  api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+
+  web:
+    env_file: !reset []
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      HipDevelopmentProxy__Enabled: "false"
+      HipDevelopmentProxy__SharedSecret: ""
+      HipAuthentication__Authority: https://${HIP_IDENTITY_HOST:?HIP_IDENTITY_HOST is required}/realms/hip
+      HipAuthentication__ClientId: hip-web
+      HipAuthentication__ClientSecret: ${HIP_OIDC_CLIENT_SECRET:?HIP_OIDC_CLIENT_SECRET is required}
+      HipAuthentication__RoleClaimType: hip_roles
+      HipAuthentication__RoleMappings__hip-owner: Owner
+      HipAuthentication__RoleMappings__hip-admin: Admin
+      HipAuthentication__AcceptStandardMfaAmr: "true"
+      HipAuthentication__AcceptPasswordAndOtpMfaAmr: "true"
+      HipAuthentication__RecentAuthenticationLifetime: 00:10:00
+      HipAuthentication__IdleSessionLifetime: 00:30:00
+      HipAuthentication__AbsoluteSessionLifetime: 08:00:00
+      HipSessionProtection__KeyRingDirectoryPath: /var/lib/hip/session-keys
+      HipSessionProtection__CertificatePath: /run/secrets/hip-session-protection.pfx
+      HipSessionProtection__CertificatePassword: ${HIP_SESSION_CERTIFICATE_PASSWORD:?HIP_SESSION_CERTIFICATE_PASSWORD is required}
+      HipSessionProtection__ApplicationName: HIP.Web.Public
+    volumes:
+      - ${HIP_SESSION_KEYRING_PATH:?HIP_SESSION_KEYRING_PATH is required}:/var/lib/hip/session-keys
+      - ${HIP_SESSION_CERTIFICATE_PATH:?HIP_SESSION_CERTIFICATE_PATH is required}:/run/secrets/hip-session-protection.pfx:ro
+
+  caddy:
+    environment:
+      HIP_DEVELOPMENT_PROXY_SECRET: ""
+    volumes:
+      - ./Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  sandbox-worker:
+    environment:
+      DOTNET_ENVIRONMENT: Production

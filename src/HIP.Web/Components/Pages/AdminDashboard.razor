@@ -37,7 +37,7 @@
                 <h1>@DashboardHeading</h1>
             </div>
             <p>@DashboardSummary</p>
-            <small>@HipWebBuildInfo.DashboardDisplayVersion · Snapshot @_summary.GeneratedAtUtc.UtcDateTime.ToString("u") · @_summary.DataSource</small>
+            <small class="intro-meta"><span>@HipWebBuildInfo.DashboardDisplayVersion</span><span>Snapshot @_summary.GeneratedAtUtc.UtcDateTime.ToString("u")</span><span>@DashboardDataSourceLabel</span></small>
         </header>
 
         <section class="editorial-hero" aria-label="HIP protection summary">
@@ -187,7 +187,7 @@
             {
                 <div class="hip-table-wrap">
                     <table class="hip-data-table">
-                        <thead><tr><th>Domain</th><th>Status</th><th>Domain trust</th><th>Page trust</th><th>Content risk</th><th>Final score</th><th>Confidence</th><th>Last checked</th></tr></thead>
+                        <thead><tr><th>Domain</th><th>Status</th><th>Domain trust</th><th>Page trust</th><th>Content safety</th><th>Final score</th><th>Confidence</th><th>Last checked</th></tr></thead>
                         <tbody>
                             @foreach (var scan in _summary.RecentScans.Take(10))
                             {
@@ -269,7 +269,7 @@
     private int UnavailableSourceCount => _summary?.Sources.Count(source => !source.IsAvailable) ?? 0;
     private IReadOnlyList<AdminRecentScanItem> RangeScans => _summary?.RecentScans.Where(scan => scan.LastCheckedUtc >= DateTimeOffset.UtcNow.AddDays(-_rangeDays)).ToArray() ?? [];
     private int Count(params string[] values) => RangeScans.Count(scan => values.Any(value => scan.Status.Contains(value, StringComparison.OrdinalIgnoreCase)));
-    private int SafeCount => Count("Trusted", "Safe");
+    private int SafeCount => Count("Trusted", "Safe", "Clean");
     private int CautionCount => Count("Limited", "Unknown", "Caution");
     private int HighRiskCount => Count("Suspicious", "HighRisk");
     private int CriticalCount => Count("Dangerous", "Critical");
@@ -295,14 +295,20 @@
     private int MaxBucketTotal => Math.Max(1, DailyOutcomes.Max(bucket => bucket.Total));
 
     private string ProtectionLabel => ProtectionScore >= 85 ? "Protected" : ProtectionScore >= 60 ? "Caution" : ProtectionScore >= 30 ? "High risk" : "Critical";
-    private string ProtectionKicker => _summary?.HasScanData == true ? "Overall HIP protection" : HasClientObservedScore ? "Client-observed HIP signal" : "Overall HIP protection";
+    private string ProtectionKicker => _summary?.HasScanData == true ? "Current domain protection" : HasClientObservedScore ? "Client-observed HIP signal" : "Current domain protection";
     private string ProtectionStatus => _summary?.HasScanData != true ? HasClientObservedScore ? "Client-observed · not verified" : "Awaiting evidence" : JudgmentCount > 0 ? "Protection pending review" : ProtectionLabel;
     private string ProtectionHeading => _summary?.HasScanData != true ? HasClientObservedScore ? "Observed score available, verification pending." : "Protection needs evidence." : JudgmentCount > 0 ? "Strong evidence, incomplete judgment." : "Current evidence is fully reviewed.";
-    private string ProtectionExplanation => _summary?.HasScanData == true ? JudgmentCount > 0 ? $"{JudgmentCount} {Pluralize(JudgmentCount, "decision", "decisions")} require review before protection status can be confirmed." : $"Average HIP score across {_summary.RecentScans.Count} recent privacy-safe scan summaries." : ClientTelemetryCount > 0 ? $"HIP stored {ClientTelemetryCount} privacy-safe client {Pluralize(ClientTelemetryCount, "observation", "observations")}. They are visible below but cannot become an authoritative score without verified evidence." : "HIP needs stored scan evidence before it can calculate protection.";
+    private string ProtectionExplanation => _summary?.HasScanData == true ? JudgmentCount > 0 ? $"{JudgmentCount} {Pluralize(JudgmentCount, "decision", "decisions")} require review before protection status can be confirmed." : $"Based on the latest authoritative scan for {CountCard("domainsScanned")} monitored {Pluralize(CountCard("domainsScanned"), "domain", "domains")}." : ClientTelemetryCount > 0 ? $"HIP stored {ClientTelemetryCount} privacy-safe client {Pluralize(ClientTelemetryCount, "observation", "observations")}. They are visible below but cannot become an authoritative score without verified evidence." : "HIP needs stored scan evidence before it can calculate protection.";
     private string DashboardHeading => _summary?.HasScanData != true
         ? ClientTelemetryCount > 0 ? "Client telemetry is arriving." : "Trust needs evidence."
         : ProtectionScore < 85 || JudgmentCount > 0 ? "Trust needs attention." : "Trust is operating normally.";
     private string DashboardSummary => ProtectionExplanation;
+    private string DashboardDataSourceLabel => _summary?.DataSource switch
+    {
+        "BrowserPluginScanResults" => "Authoritative scan data",
+        "ClientTelemetryOnly" => "Client telemetry only",
+        _ => "No authoritative scan data"
+    };
     private string JudgmentHeading => JudgmentCount == 0 ? "No judgments remain." : $"{JudgmentCount} {Pluralize(JudgmentCount, "judgment", "judgments")} remain.";
     private string OutcomeDistributionLabel => $"{TrustedPercent}% trusted, {CautionPercent}% caution, {RiskPercent}% risk";
     private string ClientOutcomeDistributionLabel => $"Client-observed distribution: {ClientTrustedPercent}% trusted, {ClientCautionPercent}% caution, {ClientRiskPercent}% risk; not authoritative";

@@ -173,13 +173,17 @@ public static class DependencyInjection
             provider.GetRequiredService<MlDsa65SignatureProvider>());
         services.RemoveAll<DevelopmentHipCryptoProviderOptions>();
         services.AddSingleton(new DevelopmentHipCryptoProviderOptions(allowDevelopmentCryptoProvider));
-        services.AddSingleton<DevelopmentHipCryptoProvider>();
-        services.AddSingleton<IHipCryptoProvider>(provider =>
-            provider.GetRequiredService<DevelopmentHipCryptoProvider>());
         if (allowDevelopmentCryptoProvider)
         {
+            services.AddSingleton<DevelopmentHipCryptoProvider>();
+            services.AddSingleton<IHipCryptoProvider>(provider =>
+                provider.GetRequiredService<DevelopmentHipCryptoProvider>());
             services.AddSingleton<IHipSignatureProvider>(provider =>
                 provider.GetRequiredService<DevelopmentHipCryptoProvider>());
+        }
+        else
+        {
+            services.AddSingleton<IHipCryptoProvider, UnavailableHipCryptoProvider>();
         }
 
         services.AddSingleton(allowDevelopmentCryptoProvider

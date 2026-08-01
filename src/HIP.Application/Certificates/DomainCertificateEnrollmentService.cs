@@ -17,6 +17,7 @@ public enum DomainCertificateEnrollmentStartStatus
 {
     InvalidRequest,
     Conflict,
+    IdentityKeyUnavailable,
     PersistenceUnavailable,
     Started,
     Existing
@@ -256,6 +257,10 @@ public sealed class DomainCertificateEnrollmentService(
         catch (ArgumentException)
         {
             return Result(DomainCertificateEnrollmentStartStatus.InvalidRequest);
+        }
+        catch (PlatformNotSupportedException)
+        {
+            return Result(DomainCertificateEnrollmentStartStatus.IdentityKeyUnavailable);
         }
 
         var now = timeProvider.GetUtcNow();

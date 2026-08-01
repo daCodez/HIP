@@ -16,7 +16,7 @@ namespace HIP.Tests.Security;
 public sealed class HipAuthenticationEventTests
 {
     [Test]
-    public async Task Token_validation_replaces_external_personal_claims_with_only_hip_claims()
+    public async Task Token_validation_keeps_a_bounded_display_label_but_removes_external_personal_claims()
     {
         var time = new AdjustableTimeProvider(new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero));
         var events = CreateOidcEvents(time, out var options);
@@ -43,11 +43,14 @@ public sealed class HipAuthenticationEventTests
                 ClaimTypes.NameIdentifier,
                 HipAuthenticationClaimTypes.ActorId,
                 HipAuthenticationClaimTypes.ConsumerId,
+                HipAuthenticationClaimTypes.DisplayName,
                 HipAuthenticationClaimTypes.MultiFactorAuthenticated,
                 HipAuthenticationClaimTypes.AuthenticationTime,
                 ClaimTypes.Role
             }));
             Assert.That(claims.Single(claim => claim.Type == ClaimTypes.Role).Value, Is.EqualTo(AdminRoles.Owner));
+            Assert.That(claims.Single(claim => claim.Type == HipAuthenticationClaimTypes.DisplayName).Value, Is.EqualTo("Private Name"));
+            Assert.That(claims.Any(claim => claim.Type == ClaimTypes.Name), Is.False);
             Assert.That(
                 claims.Single(claim => claim.Type == HipAuthenticationClaimTypes.MultiFactorAuthenticated).Value,
                 Is.EqualTo("true"));
@@ -336,10 +339,10 @@ public sealed class HipAuthenticationEventTests
     }
 
     [Test]
-    public async Task Validated_token_expiry_caps_the_cookie_absolute_expiry()
+    public async Task Validated_identity_token_expiry_does_not_shorten_the_local_idle_session()
     {
         var startedAt = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
-        var tokenExpiry = startedAt.AddMinutes(10);
+        var tokenExpiry = startedAt.AddMinutes(5);
         var time = new AdjustableTimeProvider(startedAt);
         var events = CreateOidcEvents(time, out var options);
         var context = TokenContext(
@@ -350,14 +353,16 @@ public sealed class HipAuthenticationEventTests
         context.SecurityToken = new JwtSecurityToken(expires: tokenExpiry.UtcDateTime);
 
         await events.TokenValidated(context);
-        time.Advance(TimeSpan.FromMinutes(11));
+        time.Advance(TimeSpan.FromMinutes(20));
         var cookieContext = CookieContext(context.Principal!, context.Properties!);
         await new HipSessionCookieEvents(Options.Create(ValidOptions()), time).ValidatePrincipal(cookieContext);
 
         Assert.Multiple(() =>
         {
-            Assert.That(context.Properties!.ExpiresUtc, Is.EqualTo(tokenExpiry));
-            Assert.That(cookieContext.Principal, Is.Null);
+            Assert.That(context.Properties!.IssuedUtc, Is.EqualTo(time.GetUtcNow()));
+            Assert.That(context.Properties.ExpiresUtc, Is.EqualTo(startedAt.AddMinutes(50)));
+            Assert.That(cookieContext.ShouldRenew, Is.True);
+            Assert.That(cookieContext.Principal, Is.Not.Null);
         });
     }
 
@@ -414,8 +419,34 @@ public sealed class HipAuthenticationEventTests
         Assert.Multiple(() =>
         {
             Assert.That(context.Result?.Handled, Is.True);
-            Assert.That(httpContext.Response.Headers.Location.ToString(), Is.EqualTo("/login?error=external-authentication"));
+            Assert.That(httpContext.Response.Headers.Location.ToString(), Is.EqualTo("/admin/login?error=external-authentication"));
             Assert.That(httpContext.Response.Headers.Location.ToString(), Does.Not.Contain(sensitiveMarker));
+        });
+    }
+
+    [Test]
+    public async Task Consumer_remote_failure_returns_to_the_consumer_login_page()
+    {
+        var time = new AdjustableTimeProvider(new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero));
+        var events = CreateOidcEvents(time, out var options);
+        var httpContext = new DefaultHttpContext();
+        var context = new RemoteFailureContext(
+            httpContext,
+            new AuthenticationScheme(HipAuthenticationSchemes.OpenIdConnect, null, typeof(OpenIdConnectHandler)),
+            options,
+            new InvalidOperationException("provider failure"))
+        {
+            Properties = new AuthenticationProperties { RedirectUri = "/consumer" }
+        };
+
+        await events.RemoteFailure(context);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.Result?.Handled, Is.True);
+            Assert.That(
+                httpContext.Response.Headers.Location.ToString(),
+                Is.EqualTo("/consumer/login?error=external-authentication"));
         });
     }
 

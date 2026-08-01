@@ -96,6 +96,7 @@ public sealed class HipAuthenticationRegistrationTests
             Assert.That(oidc.ClientId, Is.EqualTo("hip-web"));
             Assert.That(oidc.ClientSecret, Is.EqualTo("test-oidc-secret"));
             Assert.That(oidc.ResponseType, Is.EqualTo(OpenIdConnectResponseType.Code));
+            Assert.That(oidc.ResponseMode, Is.EqualTo(OpenIdConnectResponseMode.Query));
             Assert.That(oidc.UsePkce, Is.True);
             Assert.That(oidc.RequireHttpsMetadata, Is.True);
             Assert.That(oidc.MapInboundClaims, Is.False);
@@ -104,6 +105,18 @@ public sealed class HipAuthenticationRegistrationTests
             Assert.That(oidc.MaxAge, Is.EqualTo(TimeSpan.FromHours(8)));
             Assert.That(oidc.Scope, Is.EqualTo(new[] { OpenIdConnectScope.OpenId }));
             Assert.That(oidc.EventsType, Is.EqualTo(typeof(HipOpenIdConnectEvents)));
+            Assert.That(oidc.CorrelationCookie.Name, Is.EqualTo("__Host-HIP.Oidc.Correlation."));
+            Assert.That(oidc.CorrelationCookie.HttpOnly, Is.True);
+            Assert.That(oidc.CorrelationCookie.SecurePolicy, Is.EqualTo(CookieSecurePolicy.Always));
+            Assert.That(oidc.CorrelationCookie.SameSite, Is.EqualTo(SameSiteMode.Lax));
+            Assert.That(oidc.CorrelationCookie.Path, Is.EqualTo("/"));
+            Assert.That(oidc.CorrelationCookie.Domain, Is.Null);
+            Assert.That(oidc.NonceCookie.Name, Is.EqualTo("__Host-HIP.Oidc.Nonce."));
+            Assert.That(oidc.NonceCookie.HttpOnly, Is.True);
+            Assert.That(oidc.NonceCookie.SecurePolicy, Is.EqualTo(CookieSecurePolicy.Always));
+            Assert.That(oidc.NonceCookie.SameSite, Is.EqualTo(SameSiteMode.Lax));
+            Assert.That(oidc.NonceCookie.Path, Is.EqualTo("/"));
+            Assert.That(oidc.NonceCookie.Domain, Is.Null);
             Assert.That(oidc.TokenValidationParameters.ValidateIssuer, Is.True);
             Assert.That(oidc.TokenValidationParameters.ValidateAudience, Is.True);
             Assert.That(oidc.TokenValidationParameters.ValidateLifetime, Is.True);

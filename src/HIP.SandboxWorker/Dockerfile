@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/runtime:10.0@sha256:68d35011fe04a39cca38208d392ed48f2df15653633dca16dbc4582d07342b9f AS runtime
 WORKDIR /app
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:72dd743782f2ae7e5476fd64f6a460045e3998dc862218b80e6944cba79a01b0 AS build
 WORKDIR /src
 COPY HIP.slnx ./
 COPY src/HIP.SandboxWorker/HIP.SandboxWorker.csproj src/HIP.SandboxWorker/
@@ -16,6 +16,11 @@ COPY src/ src/
 RUN dotnet publish src/HIP.SandboxWorker/HIP.SandboxWorker.csproj -c Release -o /app/publish --no-restore
 
 FROM runtime AS final
+ARG HIP_RELEASE_REVISION=unknown
+ARG HIP_RELEASE_VERSION=0.0.0-unset
+LABEL org.opencontainers.image.source="https://github.com/daCodez/HIP" \
+      org.opencontainers.image.revision="$HIP_RELEASE_REVISION" \
+      org.opencontainers.image.version="$HIP_RELEASE_VERSION"
 WORKDIR /app
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "HIP.SandboxWorker.dll"]

@@ -183,6 +183,7 @@ public sealed class HipSignatureProviderFactoryTests
         var registeredAlgorithms = provider.GetServices<IHipSignatureProvider>()
             .Select(item => item.Capabilities.Algorithm)
             .ToArray();
+        var identityCrypto = provider.GetRequiredService<IHipCryptoProvider>();
         var timeProvider = provider.GetRequiredService<TimeProvider>();
         var verifier = scope.ServiceProvider.GetRequiredService<IHipEnvelopeVerificationService>();
 
@@ -191,6 +192,9 @@ public sealed class HipSignatureProviderFactoryTests
             Assert.That(factory, Is.TypeOf<HipSignatureProviderFactory>());
             Assert.That(policy.Environment, Is.EqualTo(SignatureProviderRuntimeEnvironment.Production));
             Assert.That(registeredAlgorithms, Is.EqualTo(new[] { MlDsa65SignatureProvider.Algorithm }));
+            Assert.That(identityCrypto, Is.TypeOf<UnavailableHipCryptoProvider>());
+            Assert.That(identityCrypto.Capabilities.IsAvailable, Is.False);
+            Assert.Throws<PlatformNotSupportedException>(() => identityCrypto.GenerateKeyPair());
             Assert.That(timeProvider, Is.SameAs(TimeProvider.System));
             Assert.That(verifier, Is.TypeOf<HipEnvelopeVerificationService>());
             Assert.Throws<InvalidOperationException>(() => factory.GetRequiredProvider(

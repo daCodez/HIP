@@ -85,7 +85,7 @@ public sealed class AdminDesignSystemTests
     }
 
     [Test]
-    public void Dashboard_uses_reference_logo_neutral_threat_rows_and_no_footer_quick_links()
+    public void Dashboard_uses_reference_logo_evidence_heading_neutral_threat_rows_and_no_footer_quick_links()
     {
         var dashboard = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Pages", "AdminDashboard.razor"));
         var navigation = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Layout", "ControlCenterNav.razor"));
@@ -94,8 +94,8 @@ public sealed class AdminDesignSystemTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(dashboard, Does.Contain("HIP Admin · dashboard"));
-            Assert.That(dashboard, Does.Contain("<h1>Overview</h1>"));
+            Assert.That(dashboard, Does.Contain("<b>Operations dashboard</b>"));
+            Assert.That(dashboard, Does.Contain("<h1>@DashboardHeading</h1>"));
             Assert.That(dashboard, Does.Not.Contain("Recent Threats"));
             Assert.That(dashboard, Does.Not.Contain("Quick Links"));
             Assert.That(navigation, Does.Contain("src=\"/hip-logo.svg?v=87b1fcee\""));
@@ -109,7 +109,7 @@ public sealed class AdminDesignSystemTests
     }
 
     [Test]
-    public void Brand_kit_uses_the_accessible_svg_shield_without_replacing_navigation_icons()
+    public void Brand_kit_uses_the_accessible_svg_shield_and_distinct_navigation_icons()
     {
         var navigation = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Layout", "ControlCenterNav.razor"));
         var login = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Pages", "HipLogin.razor"));
@@ -134,10 +134,14 @@ public sealed class AdminDesignSystemTests
                 logoHash,
                 Is.EqualTo("155C3D83DDBA1F94D1A3E177B6D30479B4F3E15C319DDB41DC4D492A6DDA0EBB"));
             Assert.That(navigation, Does.Contain("private static RenderFragment Icon"));
-            Assert.That(navigation, Does.Contain("\"shield\" => Svg"));
-            Assert.That(navigation, Does.Contain("\"eye\" => Svg"));
-            Assert.That(navigation, Does.Contain("\"bolt\" => Svg"));
+            Assert.That(navigation, Does.Contain("\"dashboard\" => Svg"));
+            Assert.That(navigation, Does.Contain("\"review\" => Svg"));
+            Assert.That(navigation, Does.Contain("\"certificate\" => Svg"));
+            Assert.That(navigation, Does.Contain("\"radar\" => Svg"));
+            Assert.That(navigation, Does.Contain("\"message-shield\" => Svg"));
             Assert.That(navigation, Does.Contain("\"settings\" => Svg"));
+            Assert.That(navigation, Does.Not.Contain("\"eye\" => Svg"));
+            Assert.That(navigation, Does.Not.Contain("\"bolt\" => Svg"));
             Assert.That(navigation, Does.Not.Contain("brand_kit"));
             Assert.That(navigation, Does.Not.Contain("hip_brand_kit"));
         });

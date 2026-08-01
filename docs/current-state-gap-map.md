@@ -1,6 +1,6 @@
 # HIP Current-State Gap Map
 
-Last verified: 2026-07-27
+Last verified: 2026-08-01
 Backlog package: HIP-1005
 Repository branch at creation: `codex/complete-backlog`
 
@@ -38,12 +38,12 @@ profiles, rules and simulation, review and appeal workflows, identity and
 development signing, PostgreSQL persistence, admin and consumer portals, and a
 Second Life HUD foundation.
 
-The highest-risk gaps are future tenant/account isolation, managed-key and
-secret-store operations, durable worker queues, SSRF-safe sandbox execution,
-critical rule approval, scoring/provider productionization, and production
-recovery and operations. Identity-provider deployment validation and the replay
-risk of static service credentials also require explicit operational controls.
-These gaps prevent a controlled public production release.
+The highest-risk release gaps are audited managed-key custody, a fully
+Production-mode deployment, live worker/outbox/sandbox proof, target load
+evidence, migration-forward/rollback evidence, and operational retention/export
+decisions. Identity-provider session continuity must also be revalidated after
+the 2026-08-01 authentication deployment. These gaps prevent a controlled
+public production release.
 
 ## Repository Projects and Dependencies
 
@@ -57,7 +57,7 @@ These gaps prevent a controlled public production release.
 | `HIP.SandboxWorker` | Complete control-plane foundation; live runner pending | Durable leases/retries/dead letters and fail-closed container/network policies exist with focused tests. Browser execution remains disabled by default. | Pinned runner image, broker wiring, and live container/egress proof. |
 | `HIP.AppHost` | Partial; Needs security review | Orchestrates API, Web, PostgreSQL, Redis, CoreDNS, sandbox resources, and secret persistence-protection parameters. | Production secret-store operations and remaining orchestration hardening. |
 | `HIP.ServiceDefaults` | Partial | Health, resilience, service discovery, OpenTelemetry, and common hosting defaults. | Domain metrics/spans, production export/retention policy, and alert definitions. |
-| `HIP.Tests` | Partial | Broad unit and integration coverage across current feature areas, including exhaustive Web/API authorization manifests and principal matrices. | Restore full green suite and add migrations, Redis, sandbox, load, restore, and real-browser coverage. |
+| `HIP.Tests` | Complete repository gate; live evidence partial | The 2026-08-01 full run passed 2,187 tests with zero failures; six opt-in live CoreDNS fixtures were skipped. Web/API authorization manifests, principal matrices, and browser-extension Chromium scenarios are included. | Add migration rollback, multi-instance Redis, live sandbox, target load, and external managed-signer evidence. |
 
 The solution is a modular monolith with appropriate extraction seams. Splitting
 it into microservices is not required for the MVP.
@@ -101,7 +101,7 @@ it into microservices is not required for the MVP.
 | Distributed rate limiting | Partial | Service-client authentication uses shared Redis source and source-plus-client work budgets before PBKDF2. Other framework endpoint limiters remain process-local. |
 | Durable outbox delivery | Partial | Inbox/outbox persistence types exist; durable dispatch and operational recovery are incomplete. |
 | Durable worker queue | Complete foundation | Provider and sandbox jobs have encrypted persistence, compare-and-swap leases, retries, cancellation/terminal state, and worker consumers. Operational alert/replay tooling remains. |
-| Backup and restore | Tooling/runbook complete; drill evidence pending | Safe custom-format dump, checksum, key-metadata, isolated restore, and verification workflow exists; target-platform execution is still required. |
+| Backup and restore | Complete target-platform drill | On 2026-08-01, current HIP and identity PostgreSQL databases were dumped with root-only permissions and SHA-256 checksums, listed with `pg_restore`, and restored into an isolated networkless PostgreSQL 17 container. HIP restored eight public tables and identity restored 100; the temporary container was removed. |
 
 Known or documented MVP state that may still be scoped/in-memory includes
 consumer settings and portions of review, appeal, override, reputation,
@@ -314,13 +314,16 @@ lifecycle work.
   startup, installation keys, warning/feedback privacy, normal and failed API
   states, and safety-page routing.
 
-### Known verification gaps
+### Current verification evidence and gaps
 
-- The focused dashboard contract is reconciled with the current implementation:
-  all 47 `AdminDashboardTests` pass with isolated build artifacts, including
-  rendered routes, source contracts, privacy-safe projections, dependency
-  availability, and website-verification lifecycle metrics. The full .NET suite
-  was intentionally not rerun as part of this focused work package.
+- The 2026-08-01 full .NET gate passed 2,187 tests with zero failures and six
+  skipped opt-in live CoreDNS fixtures. The Release build completed with zero
+  warnings and zero errors, and the NuGet direct/transitive vulnerability audit
+  reported no vulnerable packages.
+- The browser extension passed all 169 Node tests and all five serial real
+  Chromium scenarios. The local npm advisory endpoint could not be reached
+  because the workstation rejected its certificate chain; CI now performs the
+  high-severity npm audit on a clean runner without weakening TLS locally.
 - Focused production authentication, MFA, step-up, device proof, tamper,
   actor-binding, and sensitive-action tests exist. Authorization closure tests
   cover every protected Web API route and page template without rendering
@@ -338,7 +341,8 @@ lifecycle work.
 - No migration-forward/rollback or production-startup safety suite exists.
 - No durable queue retry/dead-letter tests exist.
 - No hardened sandbox/network/SSRF integration suite exists.
-- No production load, backup, or restore verification exists.
+- The target PostgreSQL backup/restore drill is complete. Production load,
+  migration-forward/rollback, and live sandbox isolation evidence remain.
 - Real Second Life behavior remains unverified.
 
 Tests must not be weakened merely to make the suite green. Dashboard tests and
@@ -400,7 +404,7 @@ reconciliation in the owning work package.
 | HIP-0904 AI explanation provider | Complete optional provider boundary with deterministic fallback |
 | HIP-1001 Threat model | Complete baseline; release-by-release review required |
 | HIP-1002 Load testing | Harness complete; target-environment evidence pending |
-| HIP-1003 Backup and restore drill | Safe tooling/runbook complete; dated target-platform drill pending |
+| HIP-1003 Backup and restore drill | Complete; dated target-platform restore drill passed 2026-08-01 |
 | HIP-1004 Deployment runbook | Complete baseline; target-platform commands/evidence pending |
 | HIP-1005 Incident response | Complete baseline; tabletop exercise evidence pending |
 
@@ -429,15 +433,18 @@ reconciliation in the owning work package.
 
 ## Next Smallest Safe Work Package
 
-Complete the live environment evidence that cannot be truthfully produced from
-the current unhealthy local Docker stack.
+Complete the remaining production-only controls and live environment evidence.
 
 Acceptance criteria:
 
 - Wire a pinned browser-runner image through the sandbox network gate and prove
   connected-IP/egress/container isolation with live Docker tests.
 - Run the load harness in staging and retain p95/error/saturation evidence.
-- Execute and audit the PostgreSQL plus secret-metadata restore drill.
+- Integrate an audited managed signer/key store and explicitly authorize the
+  production issuer/key without enabling the development signer.
+- Deploy all HIP services in Production mode from a clean, revision-labelled
+  release and revalidate admin/consumer session continuity.
+- Prove controlled migration-forward and rollback behavior.
 - Rehearse deployment rollback and incident-response tabletop procedures.
 
 HIP-0604 adds explicit dashboard dependency availability, removes invented

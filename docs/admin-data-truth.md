@@ -8,6 +8,7 @@ primary source, and optional dependency availability.
 
 | Page | Source of truth | Empty or unavailable behavior |
 | --- | --- | --- |
+| `AdminAccessStatusPage.razor` | Authenticated actor-bound `IAdminAccessService` assignment plus `IAdminAccessRequestService` request state | Explicit loading/error/unassigned/pending/denied states; a request is bound to the current authenticated actor and requires Owner review before it grants access. |
 | `AdminAlerts.razor` | `IAdminDashboardService` privacy-safe threat projection | Explicit empty/filter states; refresh failures retain rows and show an error. |
 | `AdminApiDeveloper.razor` | Authorized service-client management endpoints | Explicit empty list; secrets are returned only once at creation. |
 | `AdminAppeals.razor` | Async `IAppealService` reads and actor-authorized decisions | Explicit loading/empty/not-found/error states; decisions require an operator reason, persist asynchronously, and write privacy-safe audit evidence. Sample creation is development-only and labelled. |

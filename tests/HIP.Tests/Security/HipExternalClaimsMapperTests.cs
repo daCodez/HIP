@@ -10,7 +10,7 @@ namespace HIP.Tests.Security;
 public sealed class HipExternalClaimsMapperTests
 {
     [Test]
-    public void Issuer_and_subject_create_matching_privacy_safe_actor_and_consumer_ids()
+    public void Issuer_and_subject_create_matching_privacy_safe_ids_and_a_separate_display_label()
     {
         var mapper = CreateMapper();
         var principal = ExternalPrincipal(
@@ -30,7 +30,9 @@ public sealed class HipExternalClaimsMapperTests
             Assert.That(actorId, Does.Not.Contain("identity.hip.test"));
             Assert.That(actorId, Does.Not.Contain("opaque-provider-subject"));
             Assert.That(claims.Any(claim => claim.Value == "person@example.test"), Is.False);
-            Assert.That(claims.Any(claim => claim.Value == "Private Display Name"), Is.False);
+            Assert.That(
+                claims.Single(claim => claim.Type == HipAuthenticationClaimTypes.DisplayName).Value,
+                Is.EqualTo("Private Display Name"));
         });
     }
 
@@ -53,6 +55,32 @@ public sealed class HipExternalClaimsMapperTests
         var secondId = mapper.Map(second).Single(claim => claim.Type == HipAuthenticationClaimTypes.ActorId).Value;
 
         Assert.That(secondId, Is.EqualTo(firstId));
+    }
+
+    [Test]
+    public void Email_like_ambiguous_or_oversized_display_names_are_ignored()
+    {
+        var mapper = CreateMapper();
+        var emailLike = mapper.Map(ExternalPrincipal(
+            "https://identity.hip.test/tenant/v2.0",
+            "subject-email",
+            new Claim(ClaimTypes.Name, "person@example.test")));
+        var ambiguous = mapper.Map(ExternalPrincipal(
+            "https://identity.hip.test/tenant/v2.0",
+            "subject-ambiguous",
+            new Claim(ClaimTypes.Name, "First Name"),
+            new Claim("name", "Second Name")));
+        var oversized = mapper.Map(ExternalPrincipal(
+            "https://identity.hip.test/tenant/v2.0",
+            "subject-oversized",
+            new Claim(ClaimTypes.Name, new string('a', 81))));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(emailLike.Any(claim => claim.Type == HipAuthenticationClaimTypes.DisplayName), Is.False);
+            Assert.That(ambiguous.Any(claim => claim.Type == HipAuthenticationClaimTypes.DisplayName), Is.False);
+            Assert.That(oversized.Any(claim => claim.Type == HipAuthenticationClaimTypes.DisplayName), Is.False);
+        });
     }
 
     [Test]

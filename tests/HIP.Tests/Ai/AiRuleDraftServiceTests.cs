@@ -39,7 +39,12 @@ public sealed class AiRuleDraftServiceTests
         var workflow = await context.Drafts.SubmitForApprovalAsync(
             draft.DraftId, "human-submitter", CancellationToken.None);
 
-        Assert.That(workflow.RequiredApprovalCount, Is.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(workflow.RequiredApprovalCount, Is.EqualTo(1));
+            Assert.That(workflow.RuleSnapshot.Enabled, Is.True);
+            Assert.That(workflow.RuleSnapshot.Mode, Is.EqualTo(RuleMode.Active));
+        });
         Assert.That(
             async () => await context.Approvals.ApproveAsync(
                 workflow.WorkflowId, "ai:untrusted-model", CancellationToken.None),

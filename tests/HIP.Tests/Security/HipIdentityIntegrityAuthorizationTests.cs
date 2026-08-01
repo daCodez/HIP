@@ -27,6 +27,7 @@ public sealed class HipIdentityIntegrityAuthorizationTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddHipAuthorizationTestDependencies();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment(Environments.Development));
         services.AddSingleton(TimeProvider.System);
         services.AddHipAdminAuthorization();

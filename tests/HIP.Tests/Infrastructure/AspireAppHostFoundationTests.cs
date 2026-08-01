@@ -120,7 +120,7 @@ public sealed class AspireAppHostFoundationTests
 
         Assert.That(source, Does.Contain("HIP requires ConnectionStrings:HipDatabase"));
         Assert.That(source, Does.Not.Contain("?? \"Data Source=hip-dev.db\""));
-        Assert.That(source, Does.Contain("UseNpgsql(connectionString)"));
+        Assert.That(source, Does.Contain("UseNpgsql(connectionString"));
         Assert.That(source, Does.Not.Contain("Use" + "Sql" + "ite(connectionString)"));
         Assert.That(source, Does.Contain("HIP runtime persistence requires PostgreSQL"));
         Assert.That(source, Does.Contain("HipInfrastructure:DatabaseProvider"));

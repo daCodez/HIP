@@ -175,7 +175,11 @@ public sealed class ConsumerPortalTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(denied.StatusCode, Is.EqualTo(HttpStatusCode.NotFound), route);
+            Assert.That(denied.StatusCode, Is.EqualTo(HttpStatusCode.Found), route);
+            Assert.That(
+                denied.Headers.Location?.OriginalString,
+                Is.EqualTo($"/login?returnUrl={Uri.EscapeDataString(route)}"),
+                route);
             Assert.That(allowed.StatusCode, Is.EqualTo(HttpStatusCode.OK), route);
         });
     }

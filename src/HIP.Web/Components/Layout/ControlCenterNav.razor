@@ -17,80 +17,80 @@
 {
 <nav class="nav" aria-label="HIP consumer navigation">
             <p class="group-title">Consumer portal</p>
-            <NavLink class="nav-item" href="consumer" Match="NavLinkMatch.All">@Icon("grid")<span>Home</span></NavLink>
-            <NavLink class="nav-item" href="consumer/scans">@Icon("search")<span>Scan History</span></NavLink>
-            <NavLink class="nav-item" href="consumer/certificates">@Icon("shield")<span>Domain Certificates</span></NavLink>
-            <NavLink class="nav-item" href="consumer/devices">@Icon("grid")<span>Devices</span></NavLink>
-            <NavLink class="nav-item" href="consumer/alerts">@Icon("bell")<span>Alert Settings</span></NavLink>
-            <NavLink class="nav-item" href="consumer/reports">@Icon("file")<span>Reports</span></NavLink>
-            <NavLink class="nav-item" href="consumer/appeals">@Icon("eye")<span>Appeals</span></NavLink>
-            <NavLink class="nav-item" href="consumer/licenses">@Icon("file")<span>Licenses</span></NavLink>
-            <NavLink class="nav-item" href="consumer/security">@Icon("shield")<span>Account Security</span></NavLink>
+            <NavLink class="nav-item" href="consumer" Match="NavLinkMatch.All" title="Home">@Icon("home")<span>Home</span></NavLink>
+            <NavLink class="nav-item" href="consumer/scans" title="Scan History">@Icon("history")<span>Scan History</span></NavLink>
+            <NavLink class="nav-item" href="consumer/certificates" title="Domain Certificates">@Icon("certificate")<span>Domain Certificates</span></NavLink>
+            <NavLink class="nav-item" href="consumer/devices" title="Devices">@Icon("devices")<span>Devices</span></NavLink>
+            <NavLink class="nav-item" href="consumer/alerts" title="Alert Settings">@Icon("bell")<span>Alert Settings</span></NavLink>
+            <NavLink class="nav-item" href="consumer/reports" title="Reports">@Icon("report")<span>Reports</span></NavLink>
+            <NavLink class="nav-item" href="consumer/appeals" title="Appeals">@Icon("gavel")<span>Appeals</span></NavLink>
+            <NavLink class="nav-item" href="consumer/licenses" title="Licenses">@Icon("key")<span>Licenses</span></NavLink>
+            <NavLink class="nav-item" href="consumer/security" title="Account Security">@Icon("lock")<span>Account Security</span></NavLink>
         </nav>
 }
 else
 {
 <nav class="nav" aria-label="HIP admin navigation">
     <p class="group-title">Command</p>
-    <NavLink class="nav-item" href="admin" Match="NavLinkMatch.All">@Icon("grid")<span>Overview</span></NavLink>
+    <NavLink class="nav-item" href="admin" Match="NavLinkMatch.All" title="Overview">@Icon("dashboard")<span>Overview</span></NavLink>
 
     <p class="group-title">Trust operations</p>
     <AuthorizeView Policy="@AdminPolicies.CanViewReviews">
         <Authorized>
-            <NavLink class="nav-item" href="admin/alerts">@Icon("bell")<span>Alert Center</span></NavLink>
-            <NavLink class="nav-item" href="admin/review">@Icon("search")<span>Review Queue</span></NavLink>
-            <NavLink class="nav-item" href="admin/certificates">@Icon("shield")<span>Certificates</span></NavLink>
-            <NavLink class="nav-item" href="admin/review-queue">@Icon("eye")<span>Safety Signals</span></NavLink>
+            <NavLink class="nav-item" href="admin/alerts" title="Alert Center">@Icon("bell")<span>Alert Center</span></NavLink>
+            <NavLink class="nav-item" href="admin/review" title="Review Queue">@Icon("review")<span>Review Queue</span></NavLink>
+            <NavLink class="nav-item" href="admin/certificates" title="Certificates">@Icon("certificate")<span>Certificates</span></NavLink>
+            <NavLink class="nav-item" href="admin/review-queue" title="Safety Signals">@Icon("radar")<span>Safety Signals</span></NavLink>
         </Authorized>
     </AuthorizeView>
-    <NavLink class="nav-item" href="admin/message-shield">@Icon("shield")<span>Message Shield</span></NavLink>
+    <NavLink class="nav-item" href="admin/message-shield" title="Message Shield">@Icon("message-shield")<span>Message Shield</span></NavLink>
     <AuthorizeView Policy="@AdminPolicies.CanViewAppeals">
         <Authorized>
-            <NavLink class="nav-item" href="admin/appeals">@Icon("file")<span>Appeals</span></NavLink>
+            <NavLink class="nav-item" href="admin/appeals" title="Appeals">@Icon("gavel")<span>Appeals</span></NavLink>
         </Authorized>
     </AuthorizeView>
 
     <p class="group-title">Intelligence</p>
-    <NavLink class="nav-item" href="admin/reputation">@Icon("grid")<span>Score Overview</span></NavLink>
-    <NavLink class="nav-item" href="admin/reputation/signals">@Icon("bolt")<span>Trust Signals</span></NavLink>
-    <NavLink class="nav-item" href="admin/reputation/senders">@Icon("file")<span>Sender Profiles</span></NavLink>
+    <NavLink class="nav-item" href="admin/reputation" title="Score Overview">@Icon("gauge")<span>Score Overview</span></NavLink>
+    <NavLink class="nav-item" href="admin/reputation/signals" title="Trust Signals">@Icon("signal")<span>Trust Signals</span></NavLink>
+    <NavLink class="nav-item" href="admin/reputation/senders" title="Sender Profiles">@Icon("contact")<span>Sender Profiles</span></NavLink>
     <AuthorizeView Policy="@AdminPolicies.CanViewReviews">
         <Authorized>
-            <NavLink class="nav-item" href="admin/reports">@Icon("file")<span>Reports</span></NavLink>
+            <NavLink class="nav-item" href="admin/reports" title="Reports">@Icon("report")<span>Reports</span></NavLink>
         </Authorized>
     </AuthorizeView>
-    <NavLink class="nav-item" href="admin/feedback">@Icon("eye")<span>Feedback Loop</span></NavLink>
+    <NavLink class="nav-item" href="admin/feedback" title="Feedback Loop">@Icon("feedback")<span>Feedback Loop</span></NavLink>
 
     <p class="group-title">Identity &amp; clients</p>
-    <NavLink class="nav-item" href="admin/identity/websites">@Icon("shield")<span>Domain Verification</span></NavLink>
-    <NavLink class="nav-item" href="admin/platforms">@Icon("settings")<span>Platform Connections</span></NavLink>
-    <NavLink class="nav-item" href="consumer/devices">@Icon("grid")<span>Devices</span></NavLink>
+    <NavLink class="nav-item" href="admin/identity/websites" title="Domain Verification">@Icon("domain-check")<span>Domain Verification</span></NavLink>
+    <NavLink class="nav-item" href="admin/platforms" title="Platform Connections">@Icon("plug")<span>Platform Connections</span></NavLink>
+    <NavLink class="nav-item" href="consumer/devices" title="Devices">@Icon("devices")<span>Devices</span></NavLink>
     <AuthorizeView Policy="@AdminPolicies.CanViewLicenses">
         <Authorized>
-            <NavLink class="nav-item" href="/admin/licenses" data-enhance-nav="false">@Icon("file")<span>Licenses</span></NavLink>
+            <NavLink class="nav-item" href="/admin/licenses" data-enhance-nav="false" title="Licenses">@Icon("key")<span>Licenses</span></NavLink>
         </Authorized>
     </AuthorizeView>
     <AuthorizeView Policy="@AdminPolicies.CanSupportLicenses">
         <Authorized>
-            <NavLink class="nav-item" href="admin/sl-hud-simulator">@Icon("eye")<span>HUD Simulator</span></NavLink>
+            <NavLink class="nav-item" href="admin/sl-hud-simulator" title="HUD Simulator">@Icon("gamepad")<span>HUD Simulator</span></NavLink>
         </Authorized>
     </AuthorizeView>
 
     <p class="group-title">Automation</p>
-    <NavLink class="nav-item" href="admin/rules">@Icon("bolt")<span>Rule Builder</span></NavLink>
-    <NavLink class="nav-item" href="admin/self-healing">@Icon("settings")<span>Self-Healing</span></NavLink>
-    <NavLink class="nav-item" href="admin/reputation-overrides">@Icon("file")<span>Reputation Overrides</span></NavLink>
+    <NavLink class="nav-item" href="admin/rules" title="Rule Builder">@Icon("workflow")<span>Rule Builder</span></NavLink>
+    <NavLink class="nav-item" href="admin/self-healing" title="Self-Healing">@Icon("repair")<span>Self-Healing</span></NavLink>
+    <NavLink class="nav-item" href="admin/reputation-overrides" title="Reputation Overrides">@Icon("sliders")<span>Reputation Overrides</span></NavLink>
 
     <p class="group-title">System</p>
-    <NavLink class="nav-item" href="admin/audit-logs">@Icon("file")<span>Audit Trail</span></NavLink>
+    <NavLink class="nav-item" href="admin/audit-logs" title="Audit Trail">@Icon("audit")<span>Audit Trail</span></NavLink>
     <AuthorizeView Policy="@AdminPolicies.CanViewServiceClients">
         <Authorized>
-            <NavLink class="nav-item" href="admin/api">@Icon("grid")<span>API &amp; Developer</span></NavLink>
+            <NavLink class="nav-item" href="admin/api" title="API &amp; Developer">@Icon("code")<span>API &amp; Developer</span></NavLink>
         </Authorized>
     </AuthorizeView>
-    <NavLink class="nav-item" href="admin/privacy">@Icon("shield")<span>Privacy &amp; Safety</span></NavLink>
-    <NavLink class="nav-item" href="admin/roles">@Icon("eye")<span>Users &amp; Roles</span></NavLink>
-    <NavLink class="nav-item" href="admin/settings">@Icon("settings")<span>Settings</span></NavLink>
+    <NavLink class="nav-item" href="admin/privacy" title="Privacy &amp; Safety">@Icon("lock")<span>Privacy &amp; Safety</span></NavLink>
+    <NavLink class="nav-item" href="admin/roles" title="Users &amp; Roles">@Icon("users")<span>Users &amp; Roles</span></NavLink>
+    <NavLink class="nav-item" href="admin/settings" title="Settings">@Icon("settings")<span>Settings</span></NavLink>
 </nav>
 }
 
@@ -104,6 +104,7 @@ else
             </div>
             <form class="operator-signout" method="post" action="/auth/logout">
                 <AntiforgeryToken />
+                <input type="hidden" name="returnUrl" value="@(IsConsumerPortal ? "/consumer/login" : "/admin/login")" />
                 <button type="submit" title="Sign out" aria-label="Sign out">
                     @Icon("logout")
                 </button>
@@ -124,6 +125,12 @@ else
 
     private string OperatorLabel(System.Security.Claims.ClaimsPrincipal principal)
     {
+        var displayName = principal.FindFirst(HipAuthenticationClaimTypes.DisplayName)?.Value;
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            return displayName;
+        }
+
         if (IsConsumerPortal)
         {
             return "Your HIP account";
@@ -148,8 +155,14 @@ else
 
     private string OperatorInitials(System.Security.Claims.ClaimsPrincipal principal)
     {
-        var role = OperatorRole(principal);
-        var initials = new string(role.Where(char.IsLetterOrDigit).Take(2).ToArray()).ToUpperInvariant();
+        var words = OperatorLabel(principal)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => word.FirstOrDefault(char.IsLetterOrDigit))
+            .Where(character => character != default)
+            .ToArray();
+        var initials = words.Length > 1
+            ? string.Concat(words[0], words[^1]).ToUpperInvariant()
+            : new string(OperatorLabel(principal).Where(char.IsLetterOrDigit).Take(2).ToArray()).ToUpperInvariant();
         return initials.Length == 0 ? "HIP" : initials;
     }
 
@@ -166,12 +179,32 @@ else
     }
     private static RenderFragment Icon(string name) => name switch
     {
-        "search" => Svg("<circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m16 16 4 4\"/>"),
-        "shield" => Svg("<path d=\"M12 3 20 6v5c0 5-3.3 8.5-8 10-4.7-1.5-8-5-8-10V6z\"/><path d=\"m9 12 2 2 4-5\"/>"),
-        "eye" => Svg("<path d=\"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>"),
-        "bolt" => Svg("<path d=\"m13 2-9 12h7l-1 8 9-12h-7z\"/>"),
+        "home" => Svg("<path d=\"m3 11 9-8 9 8v10h-6v-6H9v6H3z\"/>"),
+        "history" => Svg("<path d=\"M3 12a9 9 0 1 0 3-6.7L3 8\"/><path d=\"M3 3v5h5M12 7v5l3 2\"/>"),
+        "dashboard" => Svg("<path d=\"M4 13a8 8 0 1 1 16 0\"/><path d=\"m12 13 4-4M5 17h14\"/>"),
+        "review" => Svg("<path d=\"M7 3h10v4H7zM5 5H3v16h18V5h-2\"/><path d=\"m8 14 3 3 5-6\"/>"),
+        "certificate" => Svg("<circle cx=\"12\" cy=\"9\" r=\"6\"/><path d=\"m8 14-1 8 5-3 5 3-1-8M9 9l2 2 4-4\"/>"),
+        "radar" => Svg("<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 12 18 6M12 3v2M3 12h2\"/>"),
+        "message-shield" => Svg("<path d=\"M4 4h16v11H9l-5 4z\"/><path d=\"M14 7 18 8.5v2.3c0 2-1.3 3.5-4 4.3-2.7-.8-4-2.3-4-4.3V8.5z\"/>"),
+        "gavel" => Svg("<path d=\"m5 8 5-5 4 4-5 5zM11 14l5-5 4 4-5 5zM9 10l6 6M4 21h11\"/>"),
+        "gauge" => Svg("<path d=\"M4 18a9 9 0 1 1 16 0\"/><path d=\"m12 15 5-6M7 18h10\"/>"),
+        "signal" => Svg("<path d=\"M3 12h4l2-6 4 12 2-6h6\"/>"),
+        "contact" => Svg("<rect x=\"4\" y=\"3\" width=\"16\" height=\"18\" rx=\"2\"/><circle cx=\"12\" cy=\"9\" r=\"3\"/><path d=\"M7 18c1-3 3-4 5-4s4 1 5 4\"/>"),
+        "report" => Svg("<path d=\"M5 3h14v18H5zM8 17v-4M12 17V8M16 17v-7\"/>"),
+        "feedback" => Svg("<path d=\"M4 4h16v13H9l-5 4z\"/><path d=\"M8 9h8M8 13h5\"/>"),
+        "domain-check" => Svg("<circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"M3 11h16M11 3c3 3 3 13 0 16M11 3c-3 3-3 13 0 16m5 1 2 2 4-5\"/>"),
+        "plug" => Svg("<path d=\"M8 3v5M16 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4\"/>"),
+        "devices" => Svg("<rect x=\"3\" y=\"4\" width=\"13\" height=\"10\" rx=\"1\"/><path d=\"M7 18h5M9.5 14v4\"/><rect x=\"17\" y=\"8\" width=\"4\" height=\"12\" rx=\"1\"/>"),
+        "key" => Svg("<circle cx=\"8\" cy=\"12\" r=\"4\"/><path d=\"M12 12h9M17 12v3M20 12v2\"/>"),
+        "gamepad" => Svg("<path d=\"M7 8h10c3 0 5 3 4 7l-1 4-5-3H9l-5 3-1-4c-1-4 1-7 4-7Z\"/><path d=\"M7 11v4M5 13h4M16 12h.01M18 14h.01\"/>"),
+        "workflow" => Svg("<rect x=\"3\" y=\"3\" width=\"6\" height=\"5\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\"/><path d=\"M9 5.5h4a4 4 0 0 1 4 4V16M6 8v8\"/>"),
+        "repair" => Svg("<path d=\"M14 6a5 5 0 0 0-6-3l3 3-5 5-3-3a5 5 0 0 0 6 6l6 6 4-4-6-6a5 5 0 0 0 1-4Z\"/>"),
+        "sliders" => Svg("<path d=\"M4 6h5M15 6h5M4 12h9M17 12h3M4 18h2M10 18h10\"/><circle cx=\"12\" cy=\"6\" r=\"3\"/><circle cx=\"15\" cy=\"12\" r=\"2\"/><circle cx=\"8\" cy=\"18\" r=\"2\"/>"),
+        "audit" => Svg("<path d=\"M4 4h16v17H4zM8 2v4M16 2v4M4 9h16\"/><path d=\"m8 15 2 2 5-5\"/>"),
+        "code" => Svg("<path d=\"m8 5-6 7 6 7M16 5l6 7-6 7M14 3l-4 18\"/>"),
+        "lock" => Svg("<rect x=\"4\" y=\"10\" width=\"16\" height=\"11\" rx=\"2\"/><path d=\"M8 10V7a4 4 0 0 1 8 0v3M12 14v3\"/>"),
+        "users" => Svg("<circle cx=\"9\" cy=\"8\" r=\"4\"/><path d=\"M2 21c0-5 3-7 7-7s7 2 7 7M16 4a4 4 0 0 1 0 8M17 14c3 .5 5 2.5 5 7\"/>"),
         "settings" => Svg("<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19 12a7 7 0 0 0-.1-1l2-1.6-2-3.4-2.5 1A8 8 0 0 0 15 6l-.4-2.7h-4L10 6a8 8 0 0 0-1.5 1L6 6 4 9.4 6.1 11a7 7 0 0 0 0 2L4 14.6 6 18l2.5-1a8 8 0 0 0 1.5 1l.5 2.7h4L15 18a8 8 0 0 0 1.5-1l2.5 1 2-3.4-2.1-1.6a7 7 0 0 0 .1-1Z\"/>"),
-        "file" => Svg("<path d=\"M6 2h8l4 4v16H6zM14 2v5h5\"/>"),
         "bell" => Svg("<path d=\"M5 17h14l-2-3V9a5 5 0 0 0-10 0v5zM10 20h4\"/>"),
         "logout" => Svg("<path d=\"M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5\"/>"),
         _ => Svg("<path d=\"M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z\"/>")

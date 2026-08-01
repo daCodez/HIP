@@ -324,6 +324,7 @@ public sealed class HipPrivilegedAuthorizationTests
         };
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddHipAuthorizationTestDependencies();
         services.AddSingleton<IHostEnvironment>(new TestHostEnvironment(environmentName));
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
         services.AddSingleton<IOptions<HipProductionAuthenticationOptions>>(Options.Create(options));

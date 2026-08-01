@@ -30,7 +30,8 @@ public sealed record RegisterIdentitySigningKeyRequest(
 /// </summary>
 public sealed record IdentitySigningKeyRegistrationResult(
     HipIdentity Identity,
-    SigningKeyRing KeyRing);
+    SigningKeyRing KeyRing,
+    bool WasCreated = false);
 
 /// <summary>
 /// Describes an atomic transition from an active signing key to its replacement.

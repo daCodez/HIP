@@ -106,6 +106,14 @@ public sealed class WebsiteIdentityService(
                 throw new WebsiteIdentityRegistrationConflictException(domain, exception);
             }
 
+            // A simultaneous request can reconcile the winner's canonical key when the
+            // development signer is deterministic. That is not a successful registration
+            // for this request and must not disclose another success/private-key response.
+            if (!registration.WasCreated)
+            {
+                throw new WebsiteIdentityRegistrationConflictException(domain);
+            }
+
             var registeredKey = RequiredCanonicalInitialKey(registration, identityId, domain);
             if (!string.Equals(
                     registeredKey.PublicKey,

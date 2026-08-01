@@ -57,14 +57,15 @@ public sealed class SigningKeyLifecycleService(
             if (await repository.TryRegisterIdentityAsync(registrationBatch, cancellationToken)
                     .ConfigureAwait(false))
             {
-                return new IdentitySigningKeyRegistrationResult(identity, keyRing);
+                return new IdentitySigningKeyRegistrationResult(identity, keyRing, WasCreated: true);
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            var committed = await ReconcileInitialRegistrationAsync(
+                var committed = await ReconcileInitialRegistrationAsync(
                     identity,
                     keyRing,
+                    wasCreated: true,
                     cancellationToken)
                 .ConfigureAwait(false);
             if (committed is not null)
@@ -75,7 +76,11 @@ public sealed class SigningKeyLifecycleService(
             throw;
         }
 
-        return await ReconcileInitialRegistrationAsync(identity, keyRing, cancellationToken)
+        return await ReconcileInitialRegistrationAsync(
+                   identity,
+                   keyRing,
+                   wasCreated: false,
+                   cancellationToken)
                    .ConfigureAwait(false) ??
                throw new IdentitySigningKeyRegistrationConflictException(
                    identity.IdentityId,
@@ -452,6 +457,7 @@ public sealed class SigningKeyLifecycleService(
     private async Task<IdentitySigningKeyRegistrationResult?> ReconcileInitialRegistrationAsync(
         HipIdentity requestedIdentity,
         SigningKeyRing requestedRing,
+        bool wasCreated,
         CancellationToken cancellationToken)
     {
         var storedIdentity = await repository.GetRegisteredIdentityAsync(
@@ -501,7 +507,7 @@ public sealed class SigningKeyLifecycleService(
                 requestedKey.KeyId);
         }
 
-        return new IdentitySigningKeyRegistrationResult(storedIdentity, storedRing);
+        return new IdentitySigningKeyRegistrationResult(storedIdentity, storedRing, wasCreated);
     }
 
     private static bool IdentityMatches(

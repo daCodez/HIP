@@ -22,6 +22,9 @@ public static class HipAuthenticationClaimTypes
     /// <summary>Gets the compatibility claim used by the existing consumer portal.</summary>
     public const string ConsumerId = "hip_consumer_id";
 
+    /// <summary>Gets HIP's bounded, display-only user label claim name.</summary>
+    public const string DisplayName = "hip_display_name";
+
     /// <summary>Gets HIP's boolean marker that the external provider verified an account contact.</summary>
     public const string AccountContactVerified = "hip_account_contact_verified";
 
@@ -37,7 +40,8 @@ public static class HipAuthenticationClaimTypes
 /// </summary>
 /// <remarks>
 /// The OIDC handler remains responsible for validating tokens, issuer, audience, nonce, and signature. This mapper
-/// deliberately ignores email and display-name claims so mutable personal data cannot become a HIP identity key.
+/// deliberately ignores email claims. A bounded display name may be retained for presentation only; it is never used
+/// as an identity key, authorization input, or audit identifier.
 /// </remarks>
 public sealed class HipExternalClaimsMapper
 {
@@ -111,6 +115,11 @@ public sealed class HipExternalClaimsMapper
             new(HipAuthenticationClaimTypes.ActorId, actorId),
             new(HipAuthenticationClaimTypes.ConsumerId, actorId)
         };
+        var displayName = OptionalDisplayName(externalPrincipal);
+        if (displayName is not null)
+        {
+            claims.Add(new Claim(HipAuthenticationClaimTypes.DisplayName, displayName));
+        }
         if (HasVerifiedAccountContact(externalPrincipal))
         {
             claims.Add(new Claim(
@@ -120,6 +129,28 @@ public sealed class HipExternalClaimsMapper
         }
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
         return claims.ToArray();
+    }
+
+    private static string? OptionalDisplayName(ClaimsPrincipal principal)
+    {
+        var names = principal.Claims
+            .Where(claim => string.Equals(claim.Type, ClaimTypes.Name, StringComparison.Ordinal) ||
+                            string.Equals(claim.Type, "name", StringComparison.Ordinal))
+            .Select(claim => string.Join(' ', claim.Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
+            .Distinct(StringComparer.Ordinal)
+            .Take(2)
+            .ToArray();
+        if (names.Length != 1)
+        {
+            return null;
+        }
+
+        var name = names[0];
+        return name.Length is >= 2 and <= 80 &&
+               !name.Contains('@', StringComparison.Ordinal) &&
+               !name.Any(char.IsControl)
+            ? name
+            : null;
     }
 
     private static bool HasVerifiedAccountContact(ClaimsPrincipal principal)
