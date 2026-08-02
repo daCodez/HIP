@@ -40,7 +40,9 @@ public sealed class HipPortalNavigationTests
             ["admin reputation"] = Read(root, "Components", "Pages", "AdminReputationOverview.razor"),
             ["admin website identity"] = Read(root, "Components", "Pages", "AdminWebsiteIdentity.razor"),
             ["admin roles"] = Read(root, "Components", "Pages", "AdminRoles.razor"),
-            ["admin dashboard"] = Read(root, "Components", "Pages", "AdminDashboard.razor")
+            ["admin dashboard"] = Read(root, "Components", "Pages", "AdminDashboard.razor"),
+            ["public home"] = Read(root, "Components", "Pages", "PublicHome.razor"),
+            ["public layout"] = Read(root, "Components", "Layout", "PublicLayout.razor")
         };
 
         Assert.Multiple(() =>
@@ -54,6 +56,77 @@ public sealed class HipPortalNavigationTests
             Assert.That(sources["admin roles"], Does.Contain("PortalLinks.Public(\"/access\")"));
             Assert.That(sources["admin dashboard"], Does.Contain("href=\"/reputation\">View all"));
             Assert.That(sources["admin dashboard"], Does.Not.Contain("href=\"/admin/"));
+            Assert.That(sources["admin dashboard"], Does.Not.Contain("@page \"/\""));
+            Assert.That(sources["public home"], Does.Contain("@page \"/\""));
+            Assert.That(sources["public home"], Does.Contain("@attribute [AllowAnonymous]"));
+            Assert.That(sources["public home"], Does.Contain("@layout PublicLayout"));
+            Assert.That(sources["public home"], Does.Contain("PortalLinks.Consumer(\"/\")"));
+            Assert.That(sources["public home"], Does.Contain("PortalLinks.Admin(\"/\")"));
+            Assert.That(sources["public layout"], Does.Contain("PortalLinks.Consumer(\"/\")"));
+            Assert.That(sources["public layout"], Does.Contain("PortalLinks.Admin(\"/\")"));
+        });
+    }
+
+    [Test]
+    public void Public_experiences_use_the_public_layout_and_do_not_inherit_the_portal_shell()
+    {
+        var root = RepositoryRoot();
+        var publicPages = new[]
+        {
+            "PublicHome.razor",
+            "PublicPlatform.razor",
+            "PublicHowItWorks.razor",
+            "PublicVerification.razor",
+            "PublicDevelopers.razor",
+            "Lookup.razor",
+            "LookupDomain.razor",
+            "PublicDomainCertificate.razor",
+            "Safety.razor",
+            "AdminAccessStatusPage.razor"
+        };
+
+        Assert.Multiple(() =>
+        {
+            foreach (var page in publicPages)
+            {
+                var source = Read(root, "Components", "Pages", page);
+                Assert.That(source, Does.Contain("@layout PublicLayout"), page);
+                Assert.That(source, Does.Not.Contain("@layout ControlCenterLayout"), page);
+            }
+        });
+    }
+
+    [Test]
+    public void Public_marketing_routes_preserve_the_supplied_five_page_information_architecture()
+    {
+        var root = RepositoryRoot();
+        var expectedRoutes = new Dictionary<string, string[]>
+        {
+            ["PublicHome.razor"] = ["@page \"/\""],
+            ["PublicPlatform.razor"] = ["@page \"/platform\""],
+            ["PublicHowItWorks.razor"] = ["@page \"/how-it-works\"", "@page \"/how\""],
+            ["PublicVerification.razor"] = ["@page \"/verification\"", "@page \"/verify\""],
+            ["PublicDevelopers.razor"] = ["@page \"/developers\"", "@page \"/dev\""]
+        };
+        var layout = Read(root, "Components", "Layout", "PublicLayout.razor");
+
+        Assert.Multiple(() =>
+        {
+            foreach (var (page, routes) in expectedRoutes)
+            {
+                var source = Read(root, "Components", "Pages", page);
+                foreach (var route in routes)
+                {
+                    Assert.That(source, Does.Contain(route), page);
+                }
+            }
+
+            Assert.That(layout, Does.Contain("href=\"/platform\""));
+            Assert.That(layout, Does.Contain("href=\"/how-it-works\""));
+            Assert.That(layout, Does.Contain("href=\"/verification\""));
+            Assert.That(layout, Does.Contain("href=\"/developers\""));
+            Assert.That(layout, Does.Not.Contain("drop-shadow"));
+            Assert.That(File.Exists(Path.Combine(root, "src", "HIP.Web", "wwwroot", "images", "public", "extension-popup-example.png")), Is.True);
         });
     }
 

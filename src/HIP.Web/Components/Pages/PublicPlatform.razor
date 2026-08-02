@@ -1,0 +1,33 @@
+@page "/platform"
+@attribute [AllowAnonymous]
+@layout PublicLayout
+
+<PageTitle>Platform | HIP</PageTitle>
+<main class="hip-public-page">
+    <section class="hip-page-hero hip-grid-bg"><div class="hip-container"><p class="hip-eyebrow">The HIP platform</p><h1>Six signal families. <span>One readable assessment.</span></h1><p class="hip-lead">HIP keeps identity, safety, and evidence quality distinct, then explains how they shape the result.</p></div></section>
+    <section class="hip-section hip-container" aria-labelledby="signals-title">
+        <header class="hip-section-heading"><p class="hip-eyebrow">Signal families</p><h2 id="signals-title">No single badge decides trust.</h2></header>
+        <div class="hip-signal-cards">
+            <article><span>01</span><h3>Transport &amp; certificates</h3><p>HTTPS posture and certificate evidence establish how the connection is protected—not who deserves trust.</p></article>
+            <article><span>02</span><h3>DNS &amp; ownership</h3><p>DNS TXT and well-known proofs can establish domain control while keeping identity evidence separate from safety.</p></article>
+            <article><span>03</span><h3>Domain reputation</h3><p>Stored history and normalized provider evidence add context about what has been observed over time.</p></article>
+            <article><span>04</span><h3>Page behaviour</h3><p>Structural page and link signals can lower a result even when the parent domain has strong evidence.</p></article>
+            <article><span>05</span><h3>Wording &amp; pressure patterns</h3><p>Bounded risk rules identify suspicious interaction patterns without storing private page text or form values.</p></article>
+            <article><span>06</span><h3>External provider results</h3><p>Normalized evidence from configured providers contributes without becoming an unexplained black-box verdict.</p></article>
+        </div>
+    </section>
+    <section class="hip-section hip-section-alt"><div class="hip-container hip-split">
+        <div><p class="hip-eyebrow">Scoring with restraint</p><h2>A score appears only when the evidence earns it.</h2><p class="hip-lead-small">HIP publishes evidence coverage and confidence alongside identity state. If authenticated evidence is insufficient, current clients withhold the numeric score.</p><ul class="hip-check-list"><li>Domain, page, content-risk, and final scores remain distinct</li><li>Plain-language reasons travel with the result</li><li>Recommended actions range from allow to block</li><li>Verified identity never means automatically safe</li></ul></div>
+        <div class="hip-code-card"><div><span>assessment.yaml</span><span>illustrative</span></div><pre><code>domain: example.com
+identity: verified
+coverage: sufficient
+confidence: medium
+presentation: available
+final_hip_score: 82
+recommended_action: allow
+reasons:
+  - no dangerous links found
+  - identity evidence verified</code></pre></div>
+    </div></section>
+    <section class="hip-section hip-container"><div class="hip-cta-inline"><div><p class="hip-eyebrow">See the evidence</p><h2>Check a domain without signing in.</h2></div><a class="hip-button" href="/lookup">Open public lookup</a></div></section>
+</main>

@@ -302,7 +302,7 @@ public sealed class HipConsumerPageIsolationTests
                 "Components",
                 "Layout",
                 "ControlCenterNav.razor"));
-            Assert.That(navigation, Does.Contain("href=\"consumer/certificates\""));
+            Assert.That(navigation, Does.Contain("href=\"/certificates\""));
 
             var settings = ReadPage(root, "ConsumerSettingsPage.razor");
             var save = Section(settings, "private async Task SaveAsync()", "private void Apply");

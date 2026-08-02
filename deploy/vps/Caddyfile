@@ -15,9 +15,6 @@
     @legacyAdminPortal path_regexp legacyAdminPortal ^/admin(?:/(.*))?$
     redir @legacyAdminPortal https://{$HIP_ADMIN_HOST}/{re.legacyAdminPortal.1} 302
 
-    @publicRoot path /
-    redir @publicRoot /lookup 302
-
     reverse_proxy web:8080 {
         header_up X-HIP-Trusted-Staging-Proxy {$HIP_DEVELOPMENT_PROXY_SECRET}
         header_up -X-HIP-Admin-Role
@@ -43,7 +40,7 @@
     @legacyAdminPortal path_regexp legacyAdminPortal ^/admin(?:/(.*))?$
     redir @legacyAdminPortal https://{$HIP_ADMIN_HOST}/{re.legacyAdminPortal.1} 302
 
-    @publicExperience path /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
+    @publicExperience path /platform /how /how-it-works /verify /verification /dev /developers /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
     redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302
 
     @consumerUi not path /api/* /auth /auth/* /signin-oidc /signout-callback-oidc /login /forbidden /step-up /not-found /Error /_framework/* /_blazor /_blazor/* /_content/* /js/* /lib/* /*.css /*.js /favicon.png /hip-logo.svg /hip-logo-original.png
@@ -74,7 +71,7 @@
     @legacyAdminPortal path_regexp legacyAdminPortal ^/admin(?:/(.*))?$
     redir @legacyAdminPortal https://{$HIP_ADMIN_HOST}/{re.legacyAdminPortal.1} 302
 
-    @publicExperience path /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
+    @publicExperience path /platform /how /how-it-works /verify /verification /dev /developers /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
     redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302
 
     @adminUi not path /api/* /auth /auth/* /signin-oidc /signout-callback-oidc /login /forbidden /step-up /not-found /Error /_framework/* /_blazor /_blazor/* /_content/* /js/* /lib/* /*.css /*.js /favicon.png /hip-logo.svg /hip-logo-original.png
@@ -105,7 +102,7 @@
     @legacyAdminPortal path_regexp legacyAdminPortal ^/admin(?:/(.*))?$
     redir @legacyAdminPortal https://{$HIP_ADMIN_HOST}/{re.legacyAdminPortal.1} 302
 
-    @publicExperience path /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
+    @publicExperience path /platform /how /how-it-works /verify /verification /dev /developers /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
     redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302
 
     reverse_proxy api:8080

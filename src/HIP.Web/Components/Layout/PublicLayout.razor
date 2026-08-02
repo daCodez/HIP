@@ -1,0 +1,54 @@
+@inherits LayoutComponentBase
+@inject HipPortalLinks PortalLinks
+
+<div class="public-site-shell">
+    <a class="public-skip-link" href="#main-content">Skip to content</a>
+    <header class="public-header">
+        <a class="public-brand" href="/" aria-label="HIP home">
+            <img src="/hip-logo.svg?v=87b1fcee" alt="" width="40" height="40" />
+            <span><strong>HIP</strong><small>Human-Interactive Protocol</small></span>
+        </a>
+
+        <nav class="public-navigation public-navigation-wide" aria-label="Main navigation">
+            <a href="/platform">Platform</a>
+            <a href="/how-it-works">How it works</a>
+            <a href="/verification">Verification</a>
+            <a href="/developers">Developers</a>
+            <a href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a class="public-cta" href="/lookup">Check my domain</a>
+        </nav>
+
+        <details class="public-menu">
+            <summary>Menu</summary>
+            <nav class="public-navigation" aria-label="Mobile navigation">
+                <a href="/platform">Platform</a>
+                <a href="/how-it-works">How it works</a>
+                <a href="/verification">Verification</a>
+                <a href="/developers">Developers</a>
+                <a href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="/lookup">Check my domain</a>
+            </nav>
+        </details>
+    </header>
+
+    <div id="main-content" class="public-content">
+        @Body
+    </div>
+
+    <footer class="public-footer">
+        <div class="public-footer-brand">
+            <img src="/hip-logo.svg?v=87b1fcee" alt="" width="34" height="34" />
+            <p><strong>HIP</strong><span>Trust and identity protection.</span></p>
+        </div>
+        <nav aria-label="Footer navigation">
+            <a href="/platform">Platform</a>
+            <a href="/how-it-works">How it works</a>
+            <a href="/verification">Verification</a>
+            <a href="/developers">Developers</a>
+            <a href="/lookup">Public lookup</a>
+            <a href="@PortalLinks.Consumer("/")">Consumer app</a>
+            <a href="@PortalLinks.Admin("/")">Admin portal</a>
+        </nav>
+        <p class="public-footer-note">Verification confirms control or identity evidence. It does not automatically mean safe.</p>
+    </footer>
+</div>

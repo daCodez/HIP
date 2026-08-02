@@ -34,6 +34,7 @@ public sealed class VpsDeploymentSecurityTests
                 Assert.That(
                     Occurrences(caddySource, "redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302"),
                     Is.EqualTo(3));
+                Assert.That(Occurrences(caddySource, "path /platform /how /how-it-works /verify /verification /dev /developers"), Is.EqualTo(3));
                 Assert.That(caddySource, Does.Contain("rewrite @consumerUi /consumer{uri}"));
                 Assert.That(caddySource, Does.Contain("rewrite @adminUi /admin{uri}"));
             }
@@ -75,8 +76,10 @@ public sealed class VpsDeploymentSecurityTests
             Assert.That(overrideSource, Does.Contain("HIP_SIGNING_KEY_ID is required"));
             Assert.That(caddySource, Does.Not.Contain(
                 "header_up X-HIP-Trusted-Staging-Proxy "));
-            Assert.That(caddySource, Does.Contain("redir @publicRoot /lookup 302"));
-            Assert.That(stagingCaddySource, Does.Contain("redir @publicRoot /lookup 302"));
+            Assert.That(caddySource, Does.Not.Contain("@publicRoot path /"));
+            Assert.That(caddySource, Does.Not.Contain("redir @publicRoot /lookup 302"));
+            Assert.That(stagingCaddySource, Does.Not.Contain("@publicRoot path /"));
+            Assert.That(stagingCaddySource, Does.Not.Contain("redir @publicRoot /lookup 302"));
         });
     }
 

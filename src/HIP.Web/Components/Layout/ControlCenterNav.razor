@@ -172,7 +172,9 @@ else
         get
         {
             return Uri.TryCreate(Navigation.Uri, UriKind.Absolute, out var browserUri) &&
-                   PortalLinks.IsConsumer(browserUri);
+                   (PortalLinks.IsConsumer(browserUri) ||
+                    browserUri.AbsolutePath.Equals("/consumer", StringComparison.OrdinalIgnoreCase) ||
+                    browserUri.AbsolutePath.StartsWith("/consumer/", StringComparison.OrdinalIgnoreCase));
         }
     }
     private static RenderFragment Icon(string name) => name switch

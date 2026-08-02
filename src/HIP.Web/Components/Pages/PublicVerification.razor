@@ -1,0 +1,17 @@
+@page "/verification"
+@page "/verify"
+@attribute [AllowAnonymous]
+@layout PublicLayout
+
+<PageTitle>Verification | HIP</PageTitle>
+<main class="hip-public-page">
+    <section class="hip-page-hero hip-grid-bg"><div class="hip-container"><p class="hip-eyebrow">Website owner verification</p><h1>Prove control. <span>Keep safety separate.</span></h1><p class="hip-lead">HIP domain verification establishes control evidence through DNS or HTTPS. It never turns that fact alone into a safety guarantee.</p><div class="hip-hero-actions"><a class="hip-button" href="/lookup">Check a domain</a><a class="hip-button-secondary" href="/how-it-works">See how scoring works</a></div></div></section>
+    <section class="hip-section hip-container"><header class="hip-section-heading"><p class="hip-eyebrow">The owner path</p><h2>Four steps from claim to current evidence.</h2></header><ol class="hip-step-grid">
+        <li><span>01</span><h3>Register the domain</h3><p>Start an owner-bound certificate application in the consumer portal.</p></li>
+        <li><span>02</span><h3>Prove control</h3><p>Publish a DNS TXT record or a well-known HTTPS verification document.</p></li>
+        <li><span>03</span><h3>Review findings</h3><p>Address evidence gaps and use the maintained appeal workflow when a result needs review.</p></li>
+        <li><span>04</span><h3>Publish current state</h3><p>An active certificate can support a live, signed badge when production signing is ready.</p></li>
+    </ol></section>
+    <section class="hip-section hip-section-alt"><div class="hip-container hip-split"><div><p class="hip-eyebrow">Two control proofs</p><h2>Use the path that fits your infrastructure.</h2><p class="hip-lead-small">HIP verifies an exact domain. A proof demonstrates control; it does not transfer reputation to unrelated subdomains or pages.</p></div><div class="hip-proof-grid"><article><span>DNS</span><h3>TXT record</h3><p>Publish HIP’s challenge in DNS and keep the record available during verification.</p></article><article><span>HTTPS</span><h3>Well-known document</h3><p>Serve the challenge from <code>/.well-known/hip.json</code> on the exact domain.</p></article></div></div></section>
+    <section class="hip-section hip-container"><div class="hip-notice"><strong>Identity verified ≠ automatically safe</strong><p>Identity state, evidence coverage, confidence, page signals, and reputation remain visible as separate facts.</p></div></section>
+</main>

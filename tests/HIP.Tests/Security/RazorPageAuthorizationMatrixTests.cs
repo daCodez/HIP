@@ -16,7 +16,6 @@ public sealed class RazorPageAuthorizationMatrixTests
     [
         Page("AdminAccessStatusPage", "/access", AdminPolicies.CanViewOwnAdminAccess, DeniedPrincipal.Consumer, "<h1>Access status</h1>"),
         Page("AdminApiDeveloper", "/admin/api", AdminPolicies.CanViewServiceClients, DeniedPrincipal.Moderator, "Integrate HIP into your own tools"),
-        Page("AdminDashboard", "/", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Overview</h1>"),
         Page("AdminDashboard", "/admin", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Overview</h1>"),
         Page("AdminFeedbackLoop", "/admin/feedback", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Feedback Loop</h1>"),
         Page("AdminFeedbackLoop", "/admin/feedback/{Domain}", "/admin/feedback/example.com", AdminPolicies.CanViewAdminDashboard, DeniedPrincipal.Consumer, "<h1>Feedback Loop</h1>"),
@@ -92,7 +91,7 @@ public sealed class RazorPageAuthorizationMatrixTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(Cases, Has.Length.EqualTo(48), "The maintained matrix must contain every protected route template.");
+            Assert.That(Cases, Has.Length.EqualTo(47), "The maintained matrix must contain every protected route template.");
             Assert.That(
                 Cases.Select(item => item.ComponentName).Distinct(StringComparer.Ordinal).ToArray(),
                 Has.Length.EqualTo(40),
@@ -156,8 +155,8 @@ public sealed class RazorPageAuthorizationMatrixTests
         {
             Assert.That(adminResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(moderatorResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(adminHtml, Does.Contain("href=\"admin/api\""));
-            Assert.That(moderatorHtml, Does.Not.Contain("href=\"admin/api\""));
+            Assert.That(adminHtml, Does.Contain("href=\"/api\""));
+            Assert.That(moderatorHtml, Does.Not.Contain("href=\"/api\""));
         });
     }
 

@@ -196,8 +196,8 @@ public sealed class ConsumerPortalTests
         {
             Assert.That(html, Does.Contain("No registered devices"));
             Assert.That(html, Does.Contain("Not linked"));
-            Assert.That(html, Does.Contain("/consumer/licenses"));
-            Assert.That(html, Does.Contain("/consumer/security"));
+            Assert.That(html, Does.Contain("href=\"/licenses\""));
+            Assert.That(html, Does.Contain("href=\"/security\""));
             Assert.That(html, Does.Not.Contain("<strong>Dev</strong>"));
             Assert.That(html, Does.Not.Contain("<strong>Later</strong>"));
         });

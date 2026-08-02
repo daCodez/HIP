@@ -43,7 +43,7 @@ public sealed class AdminDomainCertificatePageTests
             Assert.That(styles, Does.Contain("overflow-x: auto"));
             Assert.That(styles, Does.Contain("min-width: 76rem"));
             Assert.That(styles, Does.Contain(".certificate-action-confirmation textarea"));
-            Assert.That(navigation, Does.Contain("href=\"admin/certificates\""));
+            Assert.That(navigation, Does.Contain("href=\"/certificates\""));
             Assert.That(navigation, Does.Contain("Policy=\"@AdminPolicies.CanViewReviews\""));
         });
     }

@@ -26,7 +26,7 @@ public sealed class AdminAuditTrailPageTests
         Assert.That(html, Does.Contain("Filter by target"));
         Assert.That(html, Does.Contain("aria-live=\"polite\""));
         Assert.That(html, Does.Contain("class=\"audit-results\""));
-        Assert.That(html, Does.Contain("href=\"admin/audit-logs\""));
+        Assert.That(html, Does.Contain("href=\"/audit-logs\""));
         Assert.That(html, Does.Contain(">Audit Trail</span>"));
     }
 

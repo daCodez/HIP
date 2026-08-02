@@ -347,7 +347,7 @@ public sealed class AdminDashboardTests
         {
             Assert.That(source, Does.Contain("Domain identity"));
             Assert.That(source, Does.Contain("Domain Trust Certificates"));
-            Assert.That(source, Does.Contain("/admin/identity/websites"));
+            Assert.That(source, Does.Contain("/identity/websites"));
             Assert.That(source, Does.Contain("Verification confirms control of a domain."));
             Assert.That(source, Does.Contain("It does not certify that the site is safe or compliant."));
         });
@@ -796,7 +796,7 @@ public sealed class AdminDashboardTests
         using var client = factory.CreateClient();
         AddRole(client, "ReadOnly");
 
-        var response = await client.GetAsync("/");
+        var response = await client.GetAsync("/admin");
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.Multiple(() =>

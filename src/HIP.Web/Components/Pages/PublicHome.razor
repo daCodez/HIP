@@ -1,0 +1,116 @@
+@page "/"
+@attribute [AllowAnonymous]
+@layout PublicLayout
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+@inject HipPortalLinks PortalLinks
+
+<PageTitle>HIP | Trust is your strongest signal</PageTitle>
+
+<main class="hip-public-page">
+    <section class="hip-hero hip-grid-bg" aria-labelledby="home-heading">
+        <div class="hip-container hip-hero-grid">
+            <div>
+                <p class="hip-eyebrow">Trust &amp; identity protection</p>
+                <h1 id="home-heading">Trust is your <span>strongest signal.</span></h1>
+                <p class="hip-lead">HIP turns identity, domain, page, and reputation evidence into a readable assessment—before a website asks for your trust.</p>
+                <form class="hip-domain-form" @onsubmit="SubmitLookup" @onsubmit:preventDefault="true">
+                    <label for="home-domain">Check a website</label>
+                    <div class="hip-domain-control">
+                        <span aria-hidden="true">https://</span>
+                        <input id="home-domain" @bind="_domain" inputmode="url" autocomplete="url" placeholder="example.com" aria-describedby="home-domain-help" />
+                        <button type="submit">Check domain</button>
+                    </div>
+                    <p id="home-domain-help">Enter a domain only. HIP does not need page text, passwords, or form contents for public lookup.</p>
+                    @if (_error is not null) { <p class="hip-form-error" role="alert">@_error</p> }
+                </form>
+            </div>
+
+            <aside class="hip-result-card" aria-label="Illustrative HIP result">
+                <div class="hip-result-top"><span>Illustrative result</span><span class="hip-status-dot">Mostly trusted</span></div>
+                <p class="hip-result-domain">example.com</p>
+                <div class="hip-score-row"><strong>82</strong><span>/100<br />HIP score</span></div>
+                <div class="hip-meter"><i style="width:82%"></i></div>
+                <dl class="hip-signal-list">
+                    <div><dt>Identity evidence</dt><dd>Verified</dd></div>
+                    <div><dt>Evidence coverage</dt><dd>Sufficient</dd></div>
+                    <div><dt>Page safety</dt><dd>Clean</dd></div>
+                </dl>
+                <p class="hip-caveat">Verified identity and a high score are evidence—not a guarantee of safety.</p>
+            </aside>
+        </div>
+    </section>
+
+    <div class="hip-signal-strip" aria-label="HIP signal families">
+        <span>Transport</span><span>Ownership</span><span>Reputation</span><span>Page behaviour</span><span>Pressure patterns</span><span>External evidence</span>
+    </div>
+
+    <section class="hip-section hip-container" aria-labelledby="audience-heading">
+        <header class="hip-section-heading"><p class="hip-eyebrow">Built for every trust decision</p><h2 id="audience-heading">Different questions. One evidence layer.</h2></header>
+        <div class="hip-audience-grid">
+            <article><img src="/images/public/audience-visitor.webp" alt="A person checking a website before sharing information" /><div><span>Everyday visitors</span><h3>Know before you engage</h3><p>See whether HIP has enough evidence to support a score, and what still deserves caution.</p></div></article>
+            <article><img src="/images/public/audience-owner.webp" alt="An independent website owner reviewing her site" /><div><span>Website owners</span><h3>Prove control, improve trust</h3><p>Verify a domain, resolve findings, and publish current evidence without implying automatic safety.</p></div></article>
+            <article><img src="/images/public/audience-developer.webp" alt="A developer reviewing a web integration" /><div><span>Developers</span><h3>Build with readable signals</h3><p>Use versioned endpoints, privacy-safe summaries, and explainable assessment fields.</p></div></article>
+            <article><img src="/images/public/audience-organization.webp" alt="A team reviewing websites they manage" /><div><span>Organizations</span><h3>See a shared trust posture</h3><p>Bring operational, identity, and evidence views together across the sites you manage.</p></div></article>
+        </div>
+    </section>
+
+    <section class="hip-section hip-section-alt" aria-labelledby="steps-heading">
+        <div class="hip-container">
+            <header class="hip-section-heading"><p class="hip-eyebrow">How it works</p><h2 id="steps-heading">From a domain to a decision you can explain.</h2></header>
+            <ol class="hip-step-grid">
+                <li><span>01</span><h3>Collect</h3><p>HIP gathers bounded identity, transport, page, and provider evidence.</p></li>
+                <li><span>02</span><h3>Detect</h3><p>Rules identify structural risk without collecting private page content.</p></li>
+                <li><span>03</span><h3>Score</h3><p>Evidence coverage and confidence decide whether a number can be shown.</p></li>
+                <li><span>04</span><h3>Explain</h3><p>Reasons and recommended actions keep the result useful and reviewable.</p></li>
+            </ol>
+            <a class="hip-text-link" href="/how-it-works">See the complete process <span aria-hidden="true">→</span></a>
+        </div>
+    </section>
+
+    <section class="hip-section hip-container hip-split" aria-labelledby="extension-heading">
+        <div>
+            <p class="hip-eyebrow">HIP in the browser</p>
+            <h2 id="extension-heading">Trust evidence at the moment it matters.</h2>
+            <p class="hip-lead-small">The HIP browser extension evaluates eligible pages automatically and keeps routine results in a compact popup. Higher-risk links can route to a separate safety view.</p>
+            <ul class="hip-check-list"><li>Privacy-safe scan summaries</li><li>Layered identity, page, and content signals</li><li>Plain-language reasons and next actions</li></ul>
+            <a class="hip-button-secondary" href="/platform">Explore the platform</a>
+        </div>
+        <figure class="hip-extension-frame">
+            <img src="/images/public/extension-popup-example.png" alt="HIP browser extension showing an illustrative trust assessment" />
+            <figcaption>HIP extension interface using clearly labeled sample data.</figcaption>
+        </figure>
+    </section>
+
+    <section class="hip-section hip-container hip-capabilities" aria-labelledby="capabilities-heading">
+        <header class="hip-section-heading"><p class="hip-eyebrow">What exists today</p><h2 id="capabilities-heading">A working V1 foundation, with clear boundaries.</h2></header>
+        <div class="hip-capability-grid">
+            <article><span>Available</span><h3>Public domain lookup</h3><p>Stored evidence, coverage, confidence, reasons, and recommended action.</p></article>
+            <article><span>Available</span><h3>Domain verification</h3><p>DNS TXT and HTTPS well-known proofs establish domain control.</p></article>
+            <article><span>Available</span><h3>Consumer protection portal</h3><p>Owner-bound devices, scans, reports, alerts, appeals, and certificates.</p></article>
+            <article><span>Available</span><h3>Browser extension</h3><p>Automatic scanning, popup summaries, feedback, and safety routing.</p></article>
+            <article class="is-operational"><span>Production requirement</span><h3>Managed certificate signing</h3><p>Signed public badges require an audited production signer and authorized key policy.</p></article>
+            <article class="is-operational"><span>Ongoing</span><h3>Provider operations</h3><p>External evidence depends on configured providers, monitoring, and recovery procedures.</p></article>
+        </div>
+    </section>
+
+    <section class="hip-section hip-cta-section">
+        <div class="hip-container hip-cta-grid">
+            <div><p class="hip-eyebrow">Evidence before trust</p><h2>Start with the domain in front of you.</h2><p>HIP will tell you what it knows, what it does not, and whether there is enough authenticated evidence to show a score.</p></div>
+            <div class="hip-cta-actions"><a class="hip-button" href="/lookup">Check a domain</a><a class="hip-button-secondary" href="@PortalLinks.Consumer("/")">Open consumer app</a><a class="hip-muted-link" href="@PortalLinks.Admin("/")">Administrator sign in</a></div>
+        </div>
+    </section>
+</main>
+
+@code {
+    private string? _domain;
+    private string? _error;
+    private void SubmitLookup()
+    {
+        var domain = (_domain ?? string.Empty).Trim().TrimEnd('.');
+        if (string.IsNullOrWhiteSpace(domain)) { _error = "Enter a domain to check."; return; }
+        if (domain.Contains('/') || domain.Contains(':') || domain.Any(char.IsWhiteSpace)) { _error = "Enter only the domain, not a full URL."; return; }
+        _error = null;
+        Navigation.NavigateTo($"/lookup/{Uri.EscapeDataString(domain)}");
+    }
+}

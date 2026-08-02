@@ -1,0 +1,23 @@
+@page "/how-it-works"
+@page "/how"
+@attribute [AllowAnonymous]
+@layout PublicLayout
+
+<PageTitle>How it works | HIP</PageTitle>
+<main class="hip-public-page">
+    <section class="hip-page-hero hip-grid-bg"><div class="hip-container"><p class="hip-eyebrow">How HIP works</p><h1>Trust decisions should be <span>inspectable.</span></h1><p class="hip-lead">HIP follows a bounded path from collection to publication, with review points and privacy limits built in.</p></div></section>
+    <section class="hip-section hip-container"><ol class="hip-process-list">
+        <li><span>01 / Collect</span><div><h2>Gather only the evidence needed.</h2><p>HIP accepts domain control proofs, privacy-safe browser summaries, stored history, and configured provider results. Browser scans exclude page text, form values, passwords, and unrelated history.</p></div></li>
+        <li><span>02 / Detect</span><div><h2>Evaluate structural signals.</h2><p>Versioned rules and safety checks identify risky links, redirects, download candidates, page structures, and other bounded indicators.</p></div></li>
+        <li><span>03 / Score</span><div><h2>Keep the layers visible.</h2><p>Domain trust, page trust, content risk, and the final HIP score remain separate. Coverage and confidence determine whether a numeric result should be displayed.</p></div></li>
+        <li><span>04 / Review &amp; appeal</span><div><h2>Leave room for correction.</h2><p>Owner and consumer workflows support findings, appeals, and review rather than treating an automated assessment as unquestionable.</p></div></li>
+        <li><span>05 / Publish</span><div><h2>Share a result with its limits.</h2><p>Public lookup and certificate-bound badges publish normalized evidence. Signed badges require a ready managed signer and valid certificate lifecycle.</p></div></li>
+    </ol></section>
+    <section class="hip-section hip-section-alt"><div class="hip-container"><header class="hip-section-heading"><p class="hip-eyebrow">Example breakdown</p><h2>One final result, four visible layers.</h2></header><div class="hip-score-breakdown">
+        <article><span>Domain trust</span><strong>90</strong><p>Ownership, transport, and reputation evidence.</p></article>
+        <article><span>Page trust</span><strong>84</strong><p>Signals belonging to the exact page under review.</p></article>
+        <article><span>Content risk</span><strong>12</strong><p>Risk is measured separately; lower is better.</p></article>
+        <article class="is-final"><span>Final HIP score</span><strong>82</strong><p>An illustrative, explainable projection—not live data.</p></article>
+    </div></div></section>
+    <section class="hip-section hip-container"><div class="hip-cta-inline"><div><p class="hip-eyebrow">See it in context</p><h2>Explore the platform’s signal families.</h2></div><a class="hip-button" href="/platform">Explore platform</a></div></section>
+</main>

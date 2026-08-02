@@ -1,0 +1,26 @@
+@page "/developers"
+@page "/dev"
+@attribute [AllowAnonymous]
+@layout PublicLayout
+
+<PageTitle>Developers | HIP</PageTitle>
+<main class="hip-public-page">
+    <section class="hip-page-hero hip-grid-bg"><div class="hip-container"><p class="hip-eyebrow">Developers</p><h1>Readable trust signals. <span>Versioned boundaries.</span></h1><p class="hip-lead">HIP’s V1 surfaces are built around explicit evidence states, privacy-safe inputs, and responses that explain when a score is unavailable.</p><div class="hip-hero-actions"><a class="hip-button" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer">View source on GitHub</a><a class="hip-button-secondary" href="https://github.com/daCodez/HIP/blob/master/docs/api-versioning.md" target="_blank" rel="noopener noreferrer">Read API guide</a></div></div></section>
+    <section class="hip-section hip-container hip-split"><div><p class="hip-eyebrow">Public lookup API</p><h2>Ask for evidence, not a magic verdict.</h2><p class="hip-lead-small">The public response includes identity status, coverage, confidence, reasons, recommended action, and a display score only when sufficient authenticated evidence exists.</p><ul class="hip-check-list"><li>Versioned <code>/api/v1</code> routes</li><li>Compatibility fields clearly separated from presentation state</li><li>No private user reports, scan history, or raw page contents</li></ul></div><div class="hip-code-card"><div><span>HTTP</span><span>public</span></div><pre><code>GET /api/v1/public/lookup/example.com
+
+{
+  "identityStatus": "Verified",
+  "evidenceCoverage": "Sufficient",
+  "evidenceConfidence": "Medium",
+  "scorePresentation": "Available",
+  "displayScore": 82,
+  "recommendedAction": "Allow"
+}</code></pre></div></section>
+    <section class="hip-section hip-section-alt"><div class="hip-container"><header class="hip-section-heading"><p class="hip-eyebrow">Build surfaces</p><h2>Use HIP where the decision happens.</h2></header><div class="hip-capability-grid">
+        <article><span>API</span><h3>Public lookup &amp; badges</h3><p>Query domain evidence and verify certificate-bound badge documents.</p></article>
+        <article><span>Browser</span><h3>Extension client</h3><p>Manifest V3 client with automatic scanning, popup summaries, and strict message boundaries.</p></article>
+        <article><span>Deployment</span><h3>Self-hosted services</h3><p>Containerized .NET services and documented VPS configuration live with the source.</p></article>
+        <article><span>Privacy</span><h3>Data minimisation</h3><p>Browser contracts prohibit page text, form values, passwords, tokens, and unrelated browsing history.</p></article>
+    </div></div></section>
+    <section class="hip-section hip-container"><div class="hip-notice"><strong>What HIP does not claim</strong><p>Encryption alone does not prove identity. Verification alone does not prove safety. A score is not shown when authenticated evidence is insufficient.</p></div></section>
+</main>

@@ -145,7 +145,7 @@ public sealed class AdminRuleBuilderPageTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(html, Does.Contain("href=\"/admin/licenses\""));
+            Assert.That(html, Does.Contain("href=\"/licenses\""));
             Assert.That(html, Does.Contain("data-enhance-nav=\"false\""));
         });
     }

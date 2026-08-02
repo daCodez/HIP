@@ -1,5 +1,6 @@
 @page "/access"
 @attribute [Authorize(Policy = AdminPolicies.CanViewOwnAdminAccess)]
+@layout PublicLayout
 @rendermode InteractiveServer
 @inject IAdminAccessService AccessService
 @inject IAdminAccessRequestService RequestService
