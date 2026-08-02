@@ -10,6 +10,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthorizationService AuthorizationService
 @inject IHostEnvironment HostEnvironment
+@inject HipPortalLinks PortalLinks
 
 <PageTitle>HIP Certificate Operations</PageTitle>
 
@@ -118,7 +119,7 @@
                                             }
                                             @if (item.CertificateId is not null)
                                             {
-                                                <a href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">Public certificate</a>
+                                                <a href="@PortalLinks.Public($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")" data-enhance-nav="false">Public certificate</a>
                                                 @if (item.CertificateStatus == DomainCertificateStatus.Active)
                                                 {
                                                     <button type="button" class="hip-secondary-action" @onclick="() => BeginAction(item, DomainCertificateStatus.Suspended)" disabled="@_submitting">Suspend</button>

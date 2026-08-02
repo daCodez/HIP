@@ -9,6 +9,12 @@
         -Server
     }
 
+    @consumerPortal path /consumer /consumer/*
+    redir @consumerPortal https://{$HIP_CONSUMER_HOST}{uri} 302
+
+    @adminPortal path /admin /admin/*
+    redir @adminPortal https://{$HIP_ADMIN_HOST}{uri} 302
+
     @publicRoot path /
     redir @publicRoot /lookup 302
 
@@ -30,6 +36,12 @@
         Referrer-Policy "strict-origin-when-cross-origin"
         -Server
     }
+
+    @adminPortal path /admin /admin/*
+    redir @adminPortal https://{$HIP_ADMIN_HOST}{uri} 302
+
+    @publicExperience path /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
+    redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302
 
     @portalRoot path /
     redir @portalRoot /consumer 302
@@ -53,6 +65,12 @@
         -Server
     }
 
+    @consumerPortal path /consumer /consumer/*
+    redir @consumerPortal https://{$HIP_CONSUMER_HOST}{uri} 302
+
+    @publicExperience path /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
+    redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302
+
     @portalRoot path /
     redir @portalRoot /admin 302
 
@@ -74,6 +92,15 @@
         Referrer-Policy "no-referrer"
         -Server
     }
+
+    @consumerPortal path /consumer /consumer/*
+    redir @consumerPortal https://{$HIP_CONSUMER_HOST}{uri} 302
+
+    @adminPortal path /admin /admin/*
+    redir @adminPortal https://{$HIP_ADMIN_HOST}{uri} 302
+
+    @publicExperience path /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
+    redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302
 
     reverse_proxy api:8080 {
         header_up -X-HIP-Admin-Role

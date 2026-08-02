@@ -14,6 +14,7 @@
 @inject IAuthorizationService AuthorizationService
 @inject IJSRuntime JavaScript
 @inject NavigationManager NavigationManager
+@inject HipPortalLinks PortalLinks
 
 <PageTitle>HIP Domain Certificates</PageTitle>
 
@@ -254,7 +255,7 @@
                     }
                     @if (item.CertificateId is not null)
                     {
-                        <a class="btn btn-primary" href="@($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")">View public certificate</a>
+                        <a class="btn btn-primary" href="@PortalLinks.Public($"/certificate/{Uri.EscapeDataString(item.CertificateId)}")" data-enhance-nav="false">View public certificate</a>
                     }
                     @if (item.CertificateId is not null && item.CertificateStatus == DomainCertificateStatus.Active)
                     {
@@ -877,7 +878,13 @@
             : "The badge retrieves only public certificate and trust status. It does not receive page text, form values, cookies, or visitor identity.";
     }
 
-    private string HipWebOrigin() => NavigationManager.BaseUri.TrimEnd('/');
+    private string HipWebOrigin()
+    {
+        var currentOrigin = NavigationManager.BaseUri.TrimEnd('/');
+        return new Uri(currentOrigin, UriKind.Absolute).IsLoopback
+            ? currentOrigin
+            : PortalLinks.Public("/").TrimEnd('/');
+    }
 
     private string WebsiteDocumentDownloadUrl() =>
         $"data:application/hip+json;charset=utf-8,{Uri.EscapeDataString(_websiteDocumentJson ?? string.Empty)}";

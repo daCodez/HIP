@@ -43,6 +43,7 @@ using HIP.Infrastructure;
 using HIP.Infrastructure.Persistence;
 using HIP.Web;
 using HIP.Web.Components;
+using HIP.Web.Navigation;
 using HIP.Web.Security;
 using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.Antiforgery;
@@ -85,6 +86,11 @@ builder.Services.AddOptions<HipPerformanceOptions>()
 builder.Services.AddOptions<HipSecurityOptions>()
     .Bind(builder.Configuration.GetSection(HipSecurityOptions.SectionName))
     .ValidateOnStart();
+builder.Services.AddOptions<HipPortalLinkOptions>()
+    .Bind(builder.Configuration.GetSection(HipPortalLinkOptions.SectionName))
+    .Validate(options => options.HasValidOrigins(), "HIP portal links must use bounded HTTPS origins.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<HipPortalLinks>();
 if (ShouldUseRedisOutputCache(builder.Configuration))
 {
     builder.AddRedisOutputCache("redis");

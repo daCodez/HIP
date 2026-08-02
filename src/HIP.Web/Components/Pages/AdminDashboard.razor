@@ -178,7 +178,7 @@
         </section>
 
         <section class="overview-panel evidence-table" aria-labelledby="recent-scans-heading">
-            <header><div><p class="kicker">Stored evidence</p><h2 id="recent-scans-heading">Recent scans</h2></div><a href="/admin/scans">View all</a></header>
+            <header><div><p class="kicker">Stored evidence</p><h2 id="recent-scans-heading">Recent scans</h2></div><a href="/admin/reputation">View all</a></header>
             @if (_summary.RecentScans.Count == 0)
             {
                 @Empty("No authoritative scans yet", ClientTelemetryCount > 0 ? $"HIP stored {ClientTelemetryCount} privacy-safe client {Pluralize(ClientTelemetryCount, "observation", "observations")}; they remain non-authoritative until verified evidence is available." : "Run the browser extension to submit privacy-safe telemetry. HIP will keep it separate from authoritative trust evidence.")

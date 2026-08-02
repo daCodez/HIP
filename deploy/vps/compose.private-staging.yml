@@ -163,6 +163,11 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       HipCertificates__PublicOrigin: https://guardwithhip.com
+      HipPortalLinks__PublicOrigin: https://${HIP_PUBLIC_HOST:?HIP_PUBLIC_HOST is required}
+      HipPortalLinks__ConsumerOrigin: https://${HIP_CONSUMER_HOST:?HIP_CONSUMER_HOST is required}
+      HipPortalLinks__AdminOrigin: https://${HIP_ADMIN_HOST:?HIP_ADMIN_HOST is required}
+      HipPortalLinks__ApiOrigin: https://${HIP_API_HOST:?HIP_API_HOST is required}
+      HipPortalLinks__IdentityOrigin: https://${HIP_IDENTITY_HOST:?HIP_IDENTITY_HOST is required}
       ConnectionStrings__HipDatabase: Host=postgres;Port=5432;Database=${HIP_POSTGRES_DB:?HIP_POSTGRES_DB is required};Username=${HIP_POSTGRES_USER:?HIP_POSTGRES_USER is required};Password=${HIP_POSTGRES_PASSWORD:?HIP_POSTGRES_PASSWORD is required}
       ConnectionStrings__redis: redis:6379,abortConnect=false
       HipInfrastructure__DatabaseProvider: PostgreSQL
@@ -208,6 +213,11 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
       HipCertificates__PublicOrigin: https://guardwithhip.com
+      HipPortalLinks__PublicOrigin: https://${HIP_PUBLIC_HOST:?HIP_PUBLIC_HOST is required}
+      HipPortalLinks__ConsumerOrigin: https://${HIP_CONSUMER_HOST:?HIP_CONSUMER_HOST is required}
+      HipPortalLinks__AdminOrigin: https://${HIP_ADMIN_HOST:?HIP_ADMIN_HOST is required}
+      HipPortalLinks__ApiOrigin: https://${HIP_API_HOST:?HIP_API_HOST is required}
+      HipPortalLinks__IdentityOrigin: https://${HIP_IDENTITY_HOST:?HIP_IDENTITY_HOST is required}
       ConnectionStrings__HipDatabase: Host=postgres;Port=5432;Database=${HIP_POSTGRES_DB:?HIP_POSTGRES_DB is required};Username=${HIP_POSTGRES_USER:?HIP_POSTGRES_USER is required};Password=${HIP_POSTGRES_PASSWORD:?HIP_POSTGRES_PASSWORD is required}
       ConnectionStrings__redis: redis:6379,abortConnect=false
       HipInfrastructure__DatabaseProvider: PostgreSQL

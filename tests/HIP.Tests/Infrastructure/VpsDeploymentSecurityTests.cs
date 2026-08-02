@@ -4,6 +4,41 @@ namespace HIP.Tests.Infrastructure;
 public sealed class VpsDeploymentSecurityTests
 {
     [Test]
+    public void Public_host_recovers_portal_paths_to_their_application_subdomains()
+    {
+        var root = RepositoryRoot();
+        var caddySources = new[]
+        {
+            File.ReadAllText(Path.Combine(root, "deploy", "vps", "Caddyfile")),
+            File.ReadAllText(Path.Combine(root, "deploy", "vps", "Caddyfile.production"))
+        };
+
+        Assert.Multiple(() =>
+        {
+            foreach (var caddySource in caddySources)
+            {
+                Assert.That(caddySource, Does.Contain("@consumerPortal path /consumer /consumer/*"));
+                Assert.That(
+                    caddySource,
+                    Does.Contain("redir @consumerPortal https://{$HIP_CONSUMER_HOST}{uri} 302"));
+                Assert.That(caddySource, Does.Contain("@adminPortal path /admin /admin/*"));
+                Assert.That(
+                    caddySource,
+                    Does.Contain("redir @adminPortal https://{$HIP_ADMIN_HOST}{uri} 302"));
+                Assert.That(
+                    Occurrences(caddySource, "redir @consumerPortal https://{$HIP_CONSUMER_HOST}{uri} 302"),
+                    Is.EqualTo(3));
+                Assert.That(
+                    Occurrences(caddySource, "redir @adminPortal https://{$HIP_ADMIN_HOST}{uri} 302"),
+                    Is.EqualTo(3));
+                Assert.That(
+                    Occurrences(caddySource, "redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302"),
+                    Is.EqualTo(3));
+            }
+        });
+    }
+
+    [Test]
     public void Production_override_removes_public_development_runtime_boundaries()
     {
         var root = RepositoryRoot();

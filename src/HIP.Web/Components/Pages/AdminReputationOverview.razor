@@ -2,6 +2,7 @@
 @attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
 @rendermode InteractiveServer
 @inject IAdminDashboardService DashboardService
+@inject HipPortalLinks PortalLinks
 
 <PageTitle>HIP Reputation Overview</PageTitle>
 
@@ -77,7 +78,7 @@
                             @foreach (var scan in _summary.RecentScans.Take(10))
                             {
                                 <tr>
-                                    <td><a href="@($"/lookup/{Uri.EscapeDataString(scan.Domain)}")">@scan.Domain</a></td>
+                                    <td><a href="@PortalLinks.Public($"/lookup/{Uri.EscapeDataString(scan.Domain)}")" data-enhance-nav="false">@scan.Domain</a></td>
                                     <td><span class="hip-pill">@scan.Status</span></td>
                                     <td><strong>@scan.Score</strong></td>
                                     <td>@scan.ConfidenceLevel</td>

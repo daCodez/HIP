@@ -9,6 +9,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthorizationService AuthorizationService
 @inject ICanonicalJsonService CanonicalJsonService
+@inject HipPortalLinks PortalLinks
 
 <PageTitle>HIP Domain Verification</PageTitle>
 
@@ -352,8 +353,8 @@
 
     private string LookupHref =>
         _registered is null
-            ? "/lookup"
-            : $"/lookup/domain/{Uri.EscapeDataString(_registered.WebsiteIdentity.Domain)}";
+            ? PortalLinks.Public("/lookup")
+            : PortalLinks.Public($"/lookup/domain/{Uri.EscapeDataString(_registered.WebsiteIdentity.Domain)}");
 
     protected override async Task OnInitializedAsync()
     {

@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject IConsumerPortalService ConsumerPortalService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject HipPortalLinks PortalLinks
 
 <PageTitle>HIP Consumer Portal</PageTitle>
 
@@ -58,7 +59,7 @@
             <a href="/consumer/devices">Devices</a>
             <a href="/consumer/licenses">Licenses</a>
             <a href="/consumer/security">Account Security</a>
-            <a href="/lookup">Public Lookup</a>
+            <a href="@PortalLinks.Public("/lookup")" data-enhance-nav="false">Public Lookup</a>
         </div>
     </section>
 </main>

@@ -6,6 +6,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthorizationService AuthorizationService
 @inject IHostEnvironment HostEnvironment
+@inject HipPortalLinks PortalLinks
 
 <PageTitle>HIP Users and Roles</PageTitle>
 
@@ -71,7 +72,7 @@
                 <div>
                     <h2 id="admin-users-heading">Administrator access</h2>
                     <p>Disabled assignments remain in the encrypted directory and audit trail. HIP stores only a privacy-safe actor ID and operator label.</p>
-                    <p>New administrators request access from <a href="/access">their access status page</a>; actor IDs are transferred automatically.</p>
+                    <p>New administrators request access from <a href="@PortalLinks.Public("/access")" data-enhance-nav="false">their access status page</a>; actor IDs are transferred automatically.</p>
                 </div>
 
             </div>

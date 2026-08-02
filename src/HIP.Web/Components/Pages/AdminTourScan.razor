@@ -1,4 +1,5 @@
 @page "/admin/tour-scan"
+@inject HipPortalLinks PortalLinks
 
 @attribute [Authorize(Policy = AdminPolicies.CanViewAdminDashboard)]
 
@@ -24,8 +25,8 @@
         </article>
         <p>HIP never read private message text to make this decision. It analyzed URL structure, sender history, and domain reputation.</p>
         <div class="hip-button-row">
-            <a href="/">Back to tour</a>
-            <a class="primary-button" href="/">Start using HIP</a>
+            <a href="@PortalLinks.Public("/")" data-enhance-nav="false">Back to tour</a>
+            <a class="primary-button" href="@PortalLinks.Public("/")" data-enhance-nav="false">Start using HIP</a>
         </div>
     </div>
 </section>

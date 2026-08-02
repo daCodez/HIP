@@ -1,4 +1,5 @@
 @inject NavigationManager Navigation
+@inject HipPortalLinks PortalLinks
 @implements IDisposable
 
 <div class="brand">
@@ -64,7 +65,7 @@ else
     <p class="group-title">Identity &amp; clients</p>
     <NavLink class="nav-item" href="admin/identity/websites" title="Domain Verification">@Icon("domain-check")<span>Domain Verification</span></NavLink>
     <NavLink class="nav-item" href="admin/platforms" title="Platform Connections">@Icon("plug")<span>Platform Connections</span></NavLink>
-    <NavLink class="nav-item" href="consumer/devices" title="Devices">@Icon("devices")<span>Devices</span></NavLink>
+    <a class="nav-item" href="@PortalLinks.Consumer("/consumer/devices")" data-enhance-nav="false" title="Devices">@Icon("devices")<span>Devices</span></a>
     <AuthorizeView Policy="@AdminPolicies.CanViewLicenses">
         <Authorized>
             <NavLink class="nav-item" href="/admin/licenses" data-enhance-nav="false" title="Licenses">@Icon("key")<span>Licenses</span></NavLink>
