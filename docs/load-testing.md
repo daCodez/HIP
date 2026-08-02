@@ -1,8 +1,8 @@
 # HIP Load Testing
 
-`eng/load/hip-load.mjs` is a dependency-free Node 20+ harness for the Phase 10 latency targets. It exercises cached public lookup and browser fast scoring by default. It adds an administrative paged-list scenario only when development admin identity headers are explicitly provided, and feedback writes only when `HIP_LOAD_ENABLE_WRITES=1` is explicitly set.
+`eng/load/hip-load.mjs` is a dependency-free Node 20+ harness for the Phase 10 latency targets. It exercises cached public lookup and browser fast scoring by default. It adds an administrative paged-list scenario only when a file-backed production session or loopback-only development identity is explicitly provided, and feedback writes only when `HIP_LOAD_ENABLE_WRITES=1` is explicitly set.
 
-The harness never prints header values or response bodies. Feedback uses unique `.invalid` targets, but it still creates durable test data; run the write scenario only in an isolated test environment that may be discarded.
+The harness never prints header values, cookie values, cookie-file paths, or response bodies. Feedback uses unique `.invalid` targets, but it still creates durable test data; run the write scenario only in an isolated test environment that may be discarded.
 
 ## Local smoke run
 
@@ -25,6 +25,22 @@ $env:HIP_LOAD_ENABLE_WRITES = '1'
 node eng/load/hip-load.mjs
 ```
 
+For a Production-mode admin-list run, write the dedicated load-test session's
+Cookie header value to a permission-restricted temporary file and point the
+harness at it. Do not use a personal browser session. The harness reads the
+file once, bounds and validates the value, never reports it, and sends it only
+to the protected admin scenario:
+
+```powershell
+$env:HIP_LOAD_AUTH_COOKIE_FILE = 'C:\secure-temp\hip-load.cookie'
+$env:HIP_LOAD_SCENARIOS = 'admin-paged-list'
+node eng/load/hip-load.mjs
+```
+
+Delete the temporary cookie file immediately after the bounded run. The
+`HIP_LOAD_ADMIN_ROLE` and `HIP_LOAD_ADMIN_USER` development headers are now
+rejected unless `HIP_LOAD_BASE_URL` is loopback.
+
 `HIP_LOAD_REQUESTS_PER_SECOND` is a process-wide rate, shared across all
 workers. Leave it unset only in an isolated environment whose rate limits and
 capacity are intentionally under test. `HIP_LOAD_SCENARIOS` accepts a
@@ -45,7 +61,8 @@ node eng/load/hip-load.mjs
 The report includes HTTP status counts and network-error counts so a 429 or a
 missing seeded record cannot be misreported as a latency regression.
 
-Use supported production authentication rather than development headers outside Development. A deployment test runner may inject an authenticated cookie or gateway credential by extending the harness without logging it.
+Use the file-backed dedicated session cookie for Production-mode admin load.
+Never extract or reuse a personal browser cookie for load testing.
 
 ## Gates
 

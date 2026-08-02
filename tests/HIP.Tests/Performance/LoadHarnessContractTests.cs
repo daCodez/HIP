@@ -22,6 +22,40 @@ public sealed class LoadHarnessContractTests
         });
     }
 
+    /// <summary>Production admin load uses a bounded file-backed cookie without printing the secret.</summary>
+    [Test]
+    public void Harness_supports_secret_safe_production_admin_authentication()
+    {
+        var script = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "eng", "load", "hip-load.mjs"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(script, Does.Contain("HIP_LOAD_AUTH_COOKIE_FILE"));
+            Assert.That(script, Does.Contain("readFileSync(adminCookieFile, 'utf8')"));
+            Assert.That(script, Does.Contain("throw new Error('Unable to read HIP_LOAD_AUTH_COOKIE_FILE.')"));
+            Assert.That(script, Does.Contain("return { Cookie: cookie }"));
+            Assert.That(script, Does.Not.Contain("console.log(cookie"));
+            Assert.That(script, Does.Not.Contain("console.log(adminCookieFile"));
+            Assert.That(script, Does.Not.Contain("process.stdout.write(adminCookieFile"));
+        });
+    }
+
+    /// <summary>Development identity headers must never be sent to a remote staging or production target.</summary>
+    [Test]
+    public void Harness_limits_development_admin_headers_to_loopback_targets()
+    {
+        var script = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "eng", "load", "hip-load.mjs"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(script, Does.Contain("if (!isLoopbackBaseUrl())"));
+            Assert.That(script, Does.Contain("Development admin headers are allowed only for a loopback load target."));
+            Assert.That(script, Does.Contain("hostname === 'localhost'"));
+            Assert.That(script, Does.Contain("hostname === '127.0.0.1'"));
+            Assert.That(script, Does.Contain("hostname === '[::1]'"));
+        });
+    }
+
     private static string FindRepositoryRoot()
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);

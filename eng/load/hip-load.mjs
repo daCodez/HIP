@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 const baseUrl = (process.env.HIP_LOAD_BASE_URL ?? 'http://localhost:5260').replace(/\/$/, '');
 const durationSeconds = boundedInt('HIP_LOAD_DURATION_SECONDS', 30, 5, 900);
@@ -8,6 +9,7 @@ const domain = process.env.HIP_LOAD_DOMAIN ?? 'example.com';
 const enableWrites = process.env.HIP_LOAD_ENABLE_WRITES === '1';
 const adminRole = process.env.HIP_LOAD_ADMIN_ROLE;
 const adminUser = process.env.HIP_LOAD_ADMIN_USER;
+const adminCookieFile = process.env.HIP_LOAD_AUTH_COOKIE_FILE;
 const deadline = Date.now() + durationSeconds * 1000;
 
 const availableScenarios = [
@@ -15,11 +17,15 @@ const availableScenarios = [
   scenario('browser-fast-score', 'POST', '/api/v1/browser/score-site', () => ({ url: `https://${domain}/`, domain }), 750),
 ];
 
-if (adminRole && adminUser) {
-  availableScenarios.push(scenario('admin-paged-list', 'GET', '/api/v1/licenses?page=1&pageSize=25', null, 750, {
-    'X-HIP-Admin-Role': adminRole,
-    'X-HIP-Admin-User': adminUser,
-  }));
+const adminHeaders = loadAdminHeaders();
+if (adminHeaders) {
+  availableScenarios.push(scenario(
+    'admin-paged-list',
+    'GET',
+    '/api/v1/licenses?page=1&pageSize=25',
+    null,
+    750,
+    adminHeaders));
 }
 
 if (enableWrites) {
@@ -137,6 +143,48 @@ function boundedInt(name, fallback, minimum, maximum) {
   const value = Number.parseInt(process.env[name] ?? `${fallback}`, 10);
   if (!Number.isInteger(value) || value < minimum || value > maximum) throw new Error(`${name} must be between ${minimum} and ${maximum}.`);
   return value;
+}
+
+/** Loads exactly one supported admin authentication mechanism without logging its secret material. */
+function loadAdminHeaders() {
+  if (adminCookieFile) {
+    if (adminRole || adminUser) {
+      throw new Error('HIP_LOAD_AUTH_COOKIE_FILE cannot be combined with development admin headers.');
+    }
+
+    let cookie;
+    try {
+      cookie = readFileSync(adminCookieFile, 'utf8').trim();
+    } catch {
+      throw new Error('Unable to read HIP_LOAD_AUTH_COOKIE_FILE.');
+    }
+    if (cookie.length === 0 || cookie.length > 8192 || /[\r\n\0]/u.test(cookie)) {
+      throw new Error('HIP_LOAD_AUTH_COOKIE_FILE must contain one bounded Cookie header value.');
+    }
+
+    return { Cookie: cookie };
+  }
+
+  if (adminRole || adminUser) {
+    if (!adminRole || !adminUser) {
+      throw new Error('HIP_LOAD_ADMIN_ROLE and HIP_LOAD_ADMIN_USER must be supplied together.');
+    }
+    if (!isLoopbackBaseUrl()) {
+      throw new Error('Development admin headers are allowed only for a loopback load target.');
+    }
+    return {
+      'X-HIP-Admin-Role': adminRole,
+      'X-HIP-Admin-User': adminUser,
+    };
+  }
+
+  return null;
+}
+
+/** Returns true only for hostnames that cannot route development identity headers off-device. */
+function isLoopbackBaseUrl() {
+  const hostname = new URL(baseUrl).hostname.toLowerCase();
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
 }
 
 function percentile(sorted, quantile) {
