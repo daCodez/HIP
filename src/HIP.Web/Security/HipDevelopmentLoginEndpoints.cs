@@ -134,9 +134,4 @@ public static class HipDevelopmentLoginEndpoints
             : fallback;
     }
 
-    /// <summary>Returns the isolated portal login path for a validated local destination.</summary>
-    internal static string LoginPathFor(string returnUrl) =>
-        returnUrl.StartsWith("/consumer", StringComparison.OrdinalIgnoreCase)
-            ? "/consumer/login"
-            : "/admin/login";
 }

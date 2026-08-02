@@ -151,7 +151,7 @@ public sealed class HipOpenIdConnectEvents(
         context.Response.Redirect(
             isStepUp
                 ? $"/step-up?error=unsatisfied&returnUrl={Uri.EscapeDataString(safeReturnUrl)}"
-                : $"{HipDevelopmentLoginEndpoints.LoginPathFor(safeReturnUrl)}?error=external-authentication");
+                : "/login?error=external-authentication");
         return Task.CompletedTask;
     }
 

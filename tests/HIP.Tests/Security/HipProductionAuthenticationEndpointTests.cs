@@ -44,6 +44,23 @@ public sealed class HipProductionAuthenticationEndpointTests
         });
     }
 
+    [Test]
+    public async Task Production_external_authentication_failure_uses_the_mapped_login_page()
+    {
+        await using var factory = await HipProductionAuthenticationTestHost.CreateAsync();
+        using var client = CreateClient(factory);
+
+        using var response = await client.GetAsync("/login?error=external-authentication");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(html, Does.Contain("We could not complete sign-in."));
+            Assert.That(html, Does.Contain("No provider details were stored by HIP."));
+        });
+    }
+
     [TestCase("/auth/login")]
     [TestCase("/auth/logout")]
     public async Task Production_authentication_posts_without_antiforgery_are_rejected(string path)

@@ -104,7 +104,7 @@ else
             </div>
             <form class="operator-signout" method="post" action="/auth/logout">
                 <AntiforgeryToken />
-                <input type="hidden" name="returnUrl" value="@(IsConsumerPortal ? "/consumer/login" : "/admin/login")" />
+                <input type="hidden" name="returnUrl" value="/login" />
                 <button type="submit" title="Sign out" aria-label="Sign out">
                     @Icon("logout")
                 </button>

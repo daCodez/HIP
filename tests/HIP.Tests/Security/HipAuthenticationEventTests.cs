@@ -419,13 +419,13 @@ public sealed class HipAuthenticationEventTests
         Assert.Multiple(() =>
         {
             Assert.That(context.Result?.Handled, Is.True);
-            Assert.That(httpContext.Response.Headers.Location.ToString(), Is.EqualTo("/admin/login?error=external-authentication"));
+            Assert.That(httpContext.Response.Headers.Location.ToString(), Is.EqualTo("/login?error=external-authentication"));
             Assert.That(httpContext.Response.Headers.Location.ToString(), Does.Not.Contain(sensitiveMarker));
         });
     }
 
     [Test]
-    public async Task Consumer_remote_failure_returns_to_the_consumer_login_page()
+    public async Task Consumer_remote_failure_returns_to_the_mapped_login_page()
     {
         var time = new AdjustableTimeProvider(new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero));
         var events = CreateOidcEvents(time, out var options);
@@ -446,7 +446,7 @@ public sealed class HipAuthenticationEventTests
             Assert.That(context.Result?.Handled, Is.True);
             Assert.That(
                 httpContext.Response.Headers.Location.ToString(),
-                Is.EqualTo("/consumer/login?error=external-authentication"));
+                Is.EqualTo("/login?error=external-authentication"));
         });
     }
 
