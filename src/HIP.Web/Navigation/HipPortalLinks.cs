@@ -68,7 +68,8 @@ public sealed class HipPortalLinks(IOptions<HipPortalLinkOptions> configuredOpti
         if (string.IsNullOrWhiteSpace(localPath) ||
             localPath[0] != '/' ||
             localPath.StartsWith("//", StringComparison.Ordinal) ||
-            Uri.TryCreate(localPath, UriKind.Absolute, out _))
+            localPath.Contains('\\') ||
+            localPath.Any(char.IsControl))
         {
             throw new ArgumentException("HIP portal links require a local absolute path.", nameof(localPath));
         }

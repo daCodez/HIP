@@ -20,6 +20,8 @@ public sealed class HipPortalNavigationTests
             Assert.That(links.Api("/health"), Is.EqualTo("https://api.guardwithhip.com/health"));
             Assert.That(links.Identity("/realms/hip/account"), Is.EqualTo("https://identity.guardwithhip.com/realms/hip/account"));
             Assert.That(() => links.Public("//outside.example/path"), Throws.ArgumentException);
+            Assert.That(() => links.Public("/\\outside.example/path"), Throws.ArgumentException);
+            Assert.That(() => links.Public("/lookup\r\noutside.example"), Throws.ArgumentException);
         });
     }
 
