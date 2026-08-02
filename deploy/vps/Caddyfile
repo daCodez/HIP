@@ -9,6 +9,9 @@
         -Server
     }
 
+    @publicRoot path /
+    redir @publicRoot /lookup 302
+
     reverse_proxy web:8080 {
         header_up X-HIP-Trusted-Staging-Proxy {$HIP_DEVELOPMENT_PROXY_SECRET}
         header_up -X-HIP-Admin-Role

@@ -17,6 +17,11 @@ public sealed class VpsDeploymentSecurityTests
             "deploy",
             "vps",
             "Caddyfile.production"));
+        var stagingCaddySource = File.ReadAllText(Path.Combine(
+            root,
+            "deploy",
+            "vps",
+            "Caddyfile"));
 
         Assert.Multiple(() =>
         {
@@ -33,6 +38,8 @@ public sealed class VpsDeploymentSecurityTests
             Assert.That(overrideSource, Does.Contain("HIP_SIGNING_KEY_ID is required"));
             Assert.That(caddySource, Does.Not.Contain(
                 "header_up X-HIP-Trusted-Staging-Proxy "));
+            Assert.That(caddySource, Does.Contain("redir @publicRoot /lookup 302"));
+            Assert.That(stagingCaddySource, Does.Contain("redir @publicRoot /lookup 302"));
         });
     }
 
