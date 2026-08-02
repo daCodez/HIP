@@ -35,6 +35,21 @@ public sealed class AdminDesignSystemTests
     }
 
     [Test]
+    public void Brand_fonts_use_privacy_safe_local_fallbacks_without_external_stylesheets()
+    {
+        var css = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "control-center.css"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(css, Does.Contain("'Satoshi'"));
+            Assert.That(css, Does.Contain("'JetBrains Mono'"));
+            Assert.That(css, Does.Not.Contain("@import"));
+            Assert.That(css, Does.Not.Contain("fonts.googleapis.com"));
+            Assert.That(css, Does.Not.Contain("api.fontshare.com"));
+        });
+    }
+
+    [Test]
     public void Admin_shell_uses_accessible_theme_control_and_persisted_theme_script()
     {
         var layout = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Layout", "ControlCenterLayout.razor"));
