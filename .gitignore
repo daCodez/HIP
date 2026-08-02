@@ -42,3 +42,4 @@ appsettings.Local.json
 
 # Local HIP development database
 hip-dev.db*
+.gstack/
