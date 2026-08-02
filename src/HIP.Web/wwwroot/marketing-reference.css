@@ -19,7 +19,8 @@
 }
 .hip-reference-page *,.hip-reference-page *::before,.hip-reference-page *::after{box-sizing:border-box}
 html:has(.hip-reference-page),body:has(.hip-reference-page){margin:0;padding:0;background:#0B1220;overflow-x:hidden;max-width:100%}
-.hip-reference-page{-webkit-font-smoothing:antialiased;font-family:Satoshi,ui-sans-serif,system-ui,sans-serif}
+.hip-reference-page{-webkit-font-smoothing:antialiased;font-family:Satoshi,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:normal}
+.hip-reference-page h1,.hip-reference-page h2,.hip-reference-page h3,.hip-reference-page h4,.hip-reference-page h5,.hip-reference-page h6{font-family:Satoshi,sans-serif}
 .hip-reference-page a{color:var(--action);text-decoration:none}
 .hip-reference-page a:hover{color:var(--text);text-decoration:underline;text-underline-offset:3px}
 .hip-reference-page input,.hip-reference-page button,.hip-reference-page textarea,.hip-reference-page select{font-family:inherit}
