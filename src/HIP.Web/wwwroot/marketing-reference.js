@@ -37,6 +37,175 @@
         navigate(domain ? `/lookup/${encodeURIComponent(domain)}` : "/lookup");
     }
 
+    /** Restores the supplied design's scroll reveals and pointer-driven motion. */
+    function bindMotion(root) {
+        const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        root.classList.add("hip-motion-ready");
+
+        const reveal = element => {
+            element.style.opacity = "1";
+            element.style.transform = "none";
+            element.style.clipPath = "none";
+        };
+
+        const rises = [...root.querySelectorAll("[data-rise]")];
+        const words = [...root.querySelectorAll("[data-words]")];
+        const cardGroups = [...root.querySelectorAll("[data-cards]")];
+
+        if (reducedMotion || !("IntersectionObserver" in window)) {
+            [...rises, ...words].forEach(reveal);
+        } else {
+            const revealObserver = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    const element = entry.target;
+                    element.style.transition = "opacity 700ms cubic-bezier(.22,1,.36,1), transform 700ms cubic-bezier(.22,1,.36,1), clip-path 800ms cubic-bezier(.22,1,.36,1)";
+                    requestAnimationFrame(() => {
+                        reveal(element);
+                        element.querySelectorAll("[data-words]").forEach(reveal);
+                    });
+                    revealObserver.unobserve(element);
+                });
+            }, { threshold: 0.08, rootMargin: "0px 0px -8%" });
+
+            rises.forEach(element => revealObserver.observe(element));
+            words.forEach(element => {
+                const startsHidden = Number.parseFloat(getComputedStyle(element).opacity) < 0.1;
+                if (!startsHidden) {
+                    element.style.opacity = "0.001";
+                    element.style.transform = "translateY(14px)";
+                    element.style.clipPath = "inset(0 -0.14em 105%)";
+                }
+                if (element.closest("[data-rise]")) return;
+                element.style.transition = "opacity 700ms cubic-bezier(.22,1,.36,1), transform 700ms cubic-bezier(.22,1,.36,1), clip-path 800ms cubic-bezier(.22,1,.36,1)";
+                requestAnimationFrame(() => requestAnimationFrame(() => reveal(element)));
+            });
+
+            const cardObserver = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    [...entry.target.children].forEach((card, index) => {
+                        card.style.transition = `opacity 560ms ${index * 70}ms cubic-bezier(.22,1,.36,1), transform 560ms ${index * 70}ms cubic-bezier(.22,1,.36,1), border-color 180ms ease`;
+                        requestAnimationFrame(() => {
+                            card.style.opacity = "1";
+                            card.style.transform = "none";
+                        });
+                    });
+                    cardObserver.unobserve(entry.target);
+                });
+            }, { threshold: 0.08, rootMargin: "0px 0px -6%" });
+
+            cardGroups.forEach(group => {
+                [...group.children].forEach(card => {
+                    card.style.opacity = "0";
+                    card.style.transform = "translateY(14px)";
+                });
+                cardObserver.observe(group);
+            });
+        }
+
+        root.querySelectorAll("[data-count]").forEach(counter => {
+            const match = counter.dataset.count.match(/^(\d+)(.*)$/);
+            if (!match) return;
+            const target = Number.parseInt(match[1], 10);
+            const suffix = match[2];
+            counter.textContent = `0${suffix}`;
+            delete counter.dataset.counted;
+
+            const countUp = () => {
+                if (counter.dataset.counted === "1") return;
+                counter.dataset.counted = "1";
+                if (reducedMotion) {
+                    counter.textContent = `${target}${suffix}`;
+                    return;
+                }
+                const started = performance.now();
+                const tick = now => {
+                    const progress = Math.min(1, (now - started) / 900);
+                    const eased = 1 - Math.pow(1 - progress, 3);
+                    counter.textContent = `${Math.round(target * eased)}${suffix}`;
+                    if (progress < 1) requestAnimationFrame(tick);
+                };
+                requestAnimationFrame(tick);
+            };
+
+            if (!("IntersectionObserver" in window)) {
+                countUp();
+            } else {
+                const counterObserver = new IntersectionObserver(entries => {
+                    if (entries.some(entry => entry.isIntersecting)) {
+                        countUp();
+                        counterObserver.disconnect();
+                    }
+                }, { threshold: 0.35 });
+                counterObserver.observe(counter);
+            }
+        });
+
+        root.querySelectorAll("[data-spot]").forEach(card => {
+            const layer = card.querySelector("[data-spot-layer]");
+            if (!layer || reducedMotion) return;
+            card.addEventListener("pointermove", event => {
+                const bounds = card.getBoundingClientRect();
+                layer.style.opacity = "1";
+                layer.style.background = `radial-gradient(240px circle at ${event.clientX - bounds.left}px ${event.clientY - bounds.top}px,var(--tint),transparent 70%)`;
+                card.style.borderColor = "color-mix(in srgb,var(--action) 45%,var(--border))";
+                card.style.transform = "translateY(-4px)";
+            });
+            card.addEventListener("pointerleave", () => {
+                layer.style.opacity = "0";
+                card.style.borderColor = "var(--border)";
+                card.style.transform = "none";
+            });
+        });
+
+        root.querySelectorAll("[data-tilt]").forEach(panel => {
+            if (reducedMotion) return;
+            panel.style.transition = "transform 180ms ease-out";
+            panel.addEventListener("pointermove", event => {
+                const bounds = panel.getBoundingClientRect();
+                const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+                const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+                panel.style.transform = `perspective(1100px) rotateX(${-y * 5}deg) rotateY(${x * 6}deg)`;
+            });
+            panel.addEventListener("pointerleave", () => panel.style.transform = "none");
+        });
+
+        root.querySelectorAll("[data-magnet]").forEach(button => {
+            if (reducedMotion) return;
+            button.style.transition = "transform 160ms ease-out, filter 160ms ease";
+            button.addEventListener("pointermove", event => {
+                const bounds = button.getBoundingClientRect();
+                const x = event.clientX - bounds.left - bounds.width / 2;
+                const y = event.clientY - bounds.top - bounds.height / 2;
+                button.style.transform = `translate(${x * 0.16}px,${y * 0.16}px)`;
+            });
+            button.addEventListener("pointerleave", () => button.style.transform = "none");
+        });
+
+        const parallax = [...root.querySelectorAll("[data-px]")];
+        if (!reducedMotion && parallax.length) {
+            let pending = false;
+            const updateParallax = () => {
+                pending = false;
+                parallax.forEach(element => {
+                    const bounds = element.getBoundingClientRect();
+                    const factor = Number.parseFloat(element.dataset.px) || 0;
+                    const offset = (window.innerHeight / 2 - (bounds.top + bounds.height / 2)) * factor;
+                    element.style.transform = `translate3d(0,${Math.max(-140, Math.min(140, offset)).toFixed(1)}px,0)`;
+                });
+            };
+            const requestParallax = () => {
+                if (pending) return;
+                pending = true;
+                requestAnimationFrame(updateParallax);
+            };
+            updateParallax();
+            window.addEventListener("scroll", requestParallax, { passive: true });
+            window.addEventListener("resize", requestParallax, { passive: true });
+        }
+    }
+
     /** Binds the interactions from the supplied reference without changing its DOM geometry. */
     function bindReferencePage() {
         const root = document.querySelector(".hip-reference-page");
@@ -45,6 +214,7 @@
         }
 
         root.dataset.hipReferenceBound = "true";
+        bindMotion(root);
 
         root.querySelector('[role="button"]')?.addEventListener("click", () => navigate("/"));
 

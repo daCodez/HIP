@@ -46,6 +46,11 @@ public sealed class MarketingReferencePageTests
             Assert.That(source, Does.Contain("openLookup(root)"));
             Assert.That(source, Does.Contain("button.title === \"Toggle theme\""));
             Assert.That(source, Does.Contain("aria-expanded"));
+            Assert.That(source, Does.Contain("IntersectionObserver"));
+            Assert.That(source, Does.Contain("[data-rise]"));
+            Assert.That(source, Does.Contain("[data-tilt]"));
+            Assert.That(source, Does.Contain("[data-spot]"));
+            Assert.That(source, Does.Contain("[data-count]"));
         });
     }
 

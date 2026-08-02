@@ -35,6 +35,8 @@ html:has(.hip-reference-page),body:has(.hip-reference-page){margin:0;padding:0;b
 @keyframes hipDash{to{stroke-dashoffset:-1000}}
 [data-motion="reduced"] [style*="animation:"]{animation:none !important}
 @media (max-width:1120px){[data-nav-full]{display:none !important}[data-nav-compact]{display:block !important}[data-gh-label]{display:none !important}}
+.hip-reference-page:not(.hip-motion-ready) [data-rise],.hip-reference-page:not(.hip-motion-ready) [data-words]{opacity:1!important;transform:none!important;clip-path:none!important}
+@media (prefers-reduced-motion:reduce){.hip-reference-page [data-rise],.hip-reference-page [data-words],.hip-reference-page [data-cards]>*{opacity:1!important;transform:none!important;clip-path:none!important;transition:none!important}}
 
 
 .hip-reference-page{min-height:100vh;background:#0B1220;color:var(--text)}
