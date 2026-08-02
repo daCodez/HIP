@@ -51,6 +51,15 @@
         const rises = [...root.querySelectorAll("[data-rise]")];
         const words = [...root.querySelectorAll("[data-words]")];
         const cardGroups = [...root.querySelectorAll("[data-cards]")];
+        const revealCards = group => {
+            [...group.children].forEach((card, index) => {
+                card.style.transition = `opacity 560ms ${index * 70}ms cubic-bezier(.22,1,.36,1), transform 560ms ${index * 70}ms cubic-bezier(.22,1,.36,1), border-color 180ms ease`;
+                requestAnimationFrame(() => {
+                    card.style.opacity = "1";
+                    card.style.transform = "none";
+                });
+            });
+        };
 
         if (reducedMotion || !("IntersectionObserver" in window)) {
             [...rises, ...words].forEach(reveal);
@@ -63,6 +72,7 @@
                     requestAnimationFrame(() => {
                         reveal(element);
                         element.querySelectorAll("[data-words]").forEach(reveal);
+                        element.querySelectorAll("[data-cards]").forEach(revealCards);
                     });
                     revealObserver.unobserve(element);
                 });
@@ -84,13 +94,7 @@
             const cardObserver = new IntersectionObserver(entries => {
                 entries.forEach(entry => {
                     if (!entry.isIntersecting) return;
-                    [...entry.target.children].forEach((card, index) => {
-                        card.style.transition = `opacity 560ms ${index * 70}ms cubic-bezier(.22,1,.36,1), transform 560ms ${index * 70}ms cubic-bezier(.22,1,.36,1), border-color 180ms ease`;
-                        requestAnimationFrame(() => {
-                            card.style.opacity = "1";
-                            card.style.transform = "none";
-                        });
-                    });
+                    revealCards(entry.target);
                     cardObserver.unobserve(entry.target);
                 });
             }, { threshold: 0.08, rootMargin: "0px 0px -6%" });
