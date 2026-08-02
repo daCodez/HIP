@@ -84,6 +84,28 @@ public sealed class VpsDeploymentSecurityTests
     }
 
     [Test]
+    public void Public_proxy_uses_reliable_http_protocols_until_quic_is_operational()
+    {
+        var root = RepositoryRoot();
+        var caddySources = new[]
+        {
+            File.ReadAllText(Path.Combine(root, "deploy", "vps", "Caddyfile")),
+            File.ReadAllText(Path.Combine(root, "deploy", "vps", "Caddyfile.production"))
+        };
+
+        Assert.Multiple(() =>
+        {
+            foreach (var caddySource in caddySources)
+            {
+                Assert.That(
+                    caddySource,
+                    Does.Match(@"^\{\r?\n    servers \{\r?\n        protocols h1 h2\r?\n    \}\r?\n\}"));
+                Assert.That(caddySource, Does.Not.Contain("protocols h1 h2 h3"));
+            }
+        });
+    }
+
+    [Test]
     public void Vps_external_images_are_digest_pinned_and_HIP_builds_are_revision_tagged()
     {
         var root = RepositoryRoot();
