@@ -1,10 +1,20 @@
 # syntax=docker/dockerfile:1
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:72dd743782f2ae7e5476fd64f6a460045e3998dc862218b80e6944cba79a01b0 AS softhsm-build
-ARG SOFTHSM_REVISION=13e6e86b83748fef74046dbf0c91f664b7acc1c3
+ARG OPENSSL_REVISION=8cf17aaeb4599f8af87fefd810b5b5fee90fe69e
+ARG SOFTHSM_REVISION=f12916ee8c6eb5c0025786479fcbf6b38480b134
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends autoconf automake build-essential ca-certificates git libltdl-dev libsqlite3-dev libssl-dev libtool pkg-config \
+    && apt-get install -y --no-install-recommends autoconf automake build-essential ca-certificates git libltdl-dev libsqlite3-dev libtool perl pkg-config \
     && rm -rf /var/lib/apt/lists/*
+WORKDIR /build/openssl
+RUN git init \
+    && git remote add origin https://github.com/openssl/openssl.git \
+    && git fetch --depth 1 origin "$OPENSSL_REVISION" \
+    && git checkout --detach FETCH_HEAD \
+    && test "$(git rev-parse HEAD)" = "$OPENSSL_REVISION"
+RUN ./Configure --prefix=/opt/openssl --openssldir=/opt/openssl/ssl shared \
+    && make -j2 \
+    && make install_sw
 WORKDIR /build/softhsm
 RUN git init \
     && git remote add origin https://github.com/softhsm/SoftHSMv2.git \
@@ -12,7 +22,8 @@ RUN git init \
     && git checkout --detach FETCH_HEAD \
     && test "$(git rev-parse HEAD)" = "$SOFTHSM_REVISION"
 RUN sh autogen.sh \
-    && ./configure --prefix=/usr/local --enable-mldsa --with-objectstore-backend-db \
+    && ./configure --prefix=/usr/local --enable-mldsa --with-objectstore-backend-db --with-openssl=/opt/openssl \
+    && grep -q '^#define WITH_ML_DSA' config.h \
     && make -j2 \
     && make DESTDIR=/opt/softhsm-root install
 
@@ -23,9 +34,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && install -d -o 1654 -g 1654 /var/lib/softhsm/tokens
 COPY --from=softhsm-build /opt/softhsm-root/usr/local/ /usr/local/
+COPY --from=softhsm-build /opt/openssl/ /opt/openssl/
 COPY deploy/softhsm/softhsm2.conf /etc/softhsm2.conf
-RUN ldconfig
-ENV SOFTHSM2_CONF=/etc/softhsm2.conf
+ENV PATH=/opt/openssl/bin:$PATH \
+    LD_LIBRARY_PATH=/opt/openssl/lib64:/opt/openssl/lib \
+    SOFTHSM2_CONF=/etc/softhsm2.conf
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl --fail http://localhost:8080/alive || exit 1

@@ -168,6 +168,14 @@ public sealed class VpsDeploymentSecurityTests
                 Assert.That(dockerfile, Does.Contain("org.opencontainers.image.revision"), dockerfilePath);
                 Assert.That(dockerfile, Does.Contain("org.opencontainers.image.version"), dockerfilePath);
             }
+
+            foreach (var dockerfilePath in dockerfiles.Skip(1).Take(2))
+            {
+                var dockerfile = File.ReadAllText(dockerfilePath);
+                Assert.That(dockerfile, Does.Match(@"ARG OPENSSL_REVISION=[a-f0-9]{40}"), dockerfilePath);
+                Assert.That(dockerfile, Does.Match(@"ARG SOFTHSM_REVISION=[a-f0-9]{40}"), dockerfilePath);
+                Assert.That(dockerfile, Does.Contain("grep -q '^#define WITH_ML_DSA' config.h"), dockerfilePath);
+            }
         });
     }
 

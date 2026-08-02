@@ -100,3 +100,8 @@ production trust root. The `IManagedTrustReceiptSigner` boundary remains the
 replacement point for a managed HSM or remote signing service; such a promotion
 still requires rotation, revocation, access-control, audit-log, outage, and
 recovery evidence. Do not weaken or disable the gate to promote a V1 release.
+
+The HIP runtime images compile pinned OpenSSL 3.5 and SoftHSM source revisions
+because the base distribution's OpenSSL 3.0 and the SoftHSM 2.7.0 release do not
+provide the required PKCS #11 ML-DSA implementation. Both revisions are verified
+during the image build, and the build fails unless SoftHSM reports ML-DSA support.
