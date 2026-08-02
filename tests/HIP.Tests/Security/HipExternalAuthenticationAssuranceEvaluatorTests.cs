@@ -81,6 +81,33 @@ public sealed class HipExternalAuthenticationAssuranceEvaluatorTests
     }
 
     [Test]
+    public void Explicit_password_and_otp_pair_can_supply_mfa_for_keycloak()
+    {
+        var options = ValidOptions();
+        options.AcceptStandardMfaAmr = false;
+        options.AcceptPasswordAndOtpMfaAmr = true;
+        options.TrustedMfaAcrValues.Clear();
+        var evaluator = CreateEvaluator(
+            new DateTimeOffset(2026, 8, 2, 12, 0, 0, TimeSpan.Zero),
+            options);
+
+        var accepted = evaluator.Evaluate(ExternalPrincipal(
+            new Claim("amr", "pwd"),
+            new Claim("amr", "otp")));
+        var passwordOnly = evaluator.Evaluate(ExternalPrincipal(new Claim("amr", "pwd")));
+        var otpOnly = evaluator.Evaluate(ExternalPrincipal(new Claim("amr", "otp")));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                accepted.Single(claim => claim.Type == HipAuthenticationClaimTypes.MultiFactorAuthenticated).Value,
+                Is.EqualTo("true"));
+            Assert.That(passwordOnly, Is.Empty);
+            Assert.That(otpOnly, Is.Empty);
+        });
+    }
+
+    [Test]
     public void Missing_mfa_evidence_does_not_create_an_mfa_claim()
     {
         var now = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);

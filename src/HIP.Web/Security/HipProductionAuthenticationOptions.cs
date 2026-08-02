@@ -75,6 +75,11 @@ public sealed class HipProductionAuthenticationOptions
     /// <summary>Gets or sets whether the exact standard OIDC <c>amr</c> value <c>mfa</c> is trusted.</summary>
     public bool AcceptStandardMfaAmr { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether the exact Keycloak <c>amr</c> pair <c>pwd</c> and <c>otp</c> is trusted as MFA.
+    /// </summary>
+    public bool AcceptPasswordAndOtpMfaAmr { get; set; }
+
     /// <summary>Gets or sets exact, case-sensitive OIDC <c>acr</c> values trusted as MFA evidence.</summary>
     public List<string> TrustedMfaAcrValues { get; set; } = [];
 
@@ -221,7 +226,9 @@ public sealed class HipProductionAuthenticationOptionsValidator : IValidateOptio
             failures.Add("Trusted OIDC MFA ACR values must be exact, unique, bounded protocol values.");
         }
 
-        if (!options.AcceptStandardMfaAmr && trustedAcrValues.Count == 0)
+        if (!options.AcceptStandardMfaAmr &&
+            !options.AcceptPasswordAndOtpMfaAmr &&
+            trustedAcrValues.Count == 0)
         {
             failures.Add("At least one explicit OIDC MFA evidence source must be enabled.");
         }

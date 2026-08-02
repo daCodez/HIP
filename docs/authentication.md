@@ -46,6 +46,8 @@ MFA recognition is deliberately provider-specific:
 
 - `AcceptStandardMfaAmr=true` accepts only the exact, case-sensitive RFC 8176
   `mfa` authentication-method reference; or
+- `AcceptPasswordAndOtpMfaAmr=true` accepts only the exact Keycloak `pwd` and
+  `otp` authentication-method references when both occur in the validated token; or
 - `TrustedMfaAcrValues` accepts only exact assurance-context values explicitly
   approved for the deployed identity provider.
 
@@ -133,6 +135,7 @@ HipAuthentication__RoleMappings__hip-admin=Admin
 HipAuthentication__IdleSessionLifetime=00:30:00
 HipAuthentication__AbsoluteSessionLifetime=08:00:00
 HipAuthentication__AcceptStandardMfaAmr=true
+HipAuthentication__AcceptPasswordAndOtpMfaAmr=false
 HipAuthentication__TrustedMfaAcrValues__0=<optional exact provider assurance context>
 HipAuthentication__RecentAuthenticationLifetime=00:10:00
 

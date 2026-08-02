@@ -33,17 +33,25 @@ public sealed class HipOpenIdConnectEvents(
         ArgumentNullException.ThrowIfNull(context);
         var properties = context.Properties ?? new AuthenticationProperties();
         context.Properties = properties;
+        var externalPrincipal = context.Principal ?? new ClaimsPrincipal();
         IReadOnlyCollection<Claim> identityClaims;
+        try
+        {
+            identityClaims = claimsMapper.Map(externalPrincipal);
+        }
+        catch (InvalidOperationException)
+        {
+            return Fail(context, "identity-mapping");
+        }
+
         IReadOnlyCollection<Claim> assuranceClaims;
         try
         {
-            var externalPrincipal = context.Principal ?? new ClaimsPrincipal();
-            identityClaims = claimsMapper.Map(externalPrincipal);
             assuranceClaims = assuranceEvaluator.Evaluate(externalPrincipal);
         }
         catch (InvalidOperationException)
         {
-            return Fail(context, properties);
+            return Fail(context, "assurance-mapping");
         }
 
         var now = timeProvider.GetUtcNow();
@@ -68,7 +76,7 @@ public sealed class HipOpenIdConnectEvents(
              !hasAuthenticationTime ||
              authenticationTime < now.Subtract(options.AbsoluteSessionLifetime)))
         {
-            return Fail(context, properties);
+            return Fail(context, "privileged-assurance");
         }
 
         if (isStepUp)
@@ -82,7 +90,7 @@ public sealed class HipOpenIdConnectEvents(
                     out var originalAbsoluteExpiry) ||
                 originalAbsoluteExpiry <= now)
             {
-                return Fail(context, properties);
+                return Fail(context, "step-up-assurance");
             }
 
             var returnedActorIds = identityClaims
@@ -95,7 +103,7 @@ public sealed class HipOpenIdConnectEvents(
             if (returnedActorIds.Length != 1 ||
                 !string.Equals(returnedActorIds[0], expectedActorId, StringComparison.Ordinal))
             {
-                return Fail(context, properties);
+                return Fail(context, "step-up-actor");
             }
 
             if (originalAbsoluteExpiry < absoluteExpiry)
@@ -185,10 +193,14 @@ public sealed class HipOpenIdConnectEvents(
         return failure is null ? "none" : "unclassified";
     }
 
-    private static Task Fail(
+    private Task Fail(
         TokenValidatedContext context,
-        AuthenticationProperties properties)
+        string rejectionReason)
     {
+        logger.LogWarning(
+            new EventId(2102, "OidcTokenRejected"),
+            "HIP OIDC token rejected. Reason={RejectionReason}",
+            rejectionReason);
         context.Principal = null;
         context.Fail(GenericMappingFailure);
         return Task.CompletedTask;

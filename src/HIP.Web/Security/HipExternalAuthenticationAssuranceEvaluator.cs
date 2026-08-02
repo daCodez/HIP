@@ -17,8 +17,11 @@ public sealed class HipExternalAuthenticationAssuranceEvaluator
     private const string AuthenticationContextReferenceClaimType = "acr";
     private const string AuthenticationTimeClaimType = "auth_time";
     private const string StandardMfaAuthenticationMethod = "mfa";
+    private const string PasswordAuthenticationMethod = "pwd";
+    private const string OneTimePasswordAuthenticationMethod = "otp";
     private const string HipMfaClaimValue = "true";
     private readonly bool acceptStandardMfaAmr;
+    private readonly bool acceptPasswordAndOtpMfaAmr;
     private readonly IReadOnlySet<string> trustedMfaAcrValues;
     private readonly TimeProvider timeProvider;
 
@@ -49,6 +52,7 @@ public sealed class HipExternalAuthenticationAssuranceEvaluator
         }
 
         acceptStandardMfaAmr = options.AcceptStandardMfaAmr;
+        acceptPasswordAndOtpMfaAmr = options.AcceptPasswordAndOtpMfaAmr;
         trustedMfaAcrValues = options.TrustedMfaAcrValues.ToHashSet(StringComparer.Ordinal);
     }
 
@@ -97,6 +101,9 @@ public sealed class HipExternalAuthenticationAssuranceEvaluator
 
         var accepted = acceptStandardMfaAmr &&
                        authenticationMethods.Contains(StandardMfaAuthenticationMethod, StringComparer.Ordinal);
+        accepted |= acceptPasswordAndOtpMfaAmr &&
+                    authenticationMethods.Contains(PasswordAuthenticationMethod, StringComparer.Ordinal) &&
+                    authenticationMethods.Contains(OneTimePasswordAuthenticationMethod, StringComparer.Ordinal);
 
         var acr = OptionalUniqueClaim(principal, AuthenticationContextReferenceClaimType);
         if (acr is not null)

@@ -85,6 +85,32 @@ public sealed class HipAuthenticationEventTests
         });
     }
 
+    [Test]
+    public async Task Token_rejection_logs_only_a_privacy_safe_reason()
+    {
+        const string sensitiveValue = "sensitive-external-identity";
+        var time = new AdjustableTimeProvider(new DateTimeOffset(2026, 8, 2, 12, 0, 0, TimeSpan.Zero));
+        var logger = new CapturingLogger<HipOpenIdConnectEvents>();
+        var events = CreateOidcEvents(time, ValidOptions(), out var options, logger);
+        var context = TokenContext(
+            options,
+            ExternalPrincipal(
+                new Claim(HipAuthenticationClaimTypes.Issuer, "https://identity.hip.test/tenant/v2.0"),
+                new Claim(ClaimTypes.Email, sensitiveValue)));
+
+        await events.TokenValidated(context);
+
+        var entry = logger.Entries.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(entry.LogLevel, Is.EqualTo(LogLevel.Warning));
+            Assert.That(entry.EventId, Is.EqualTo(new EventId(2102, "OidcTokenRejected")));
+            Assert.That(entry.Message, Does.Contain("Reason=identity-mapping"));
+            Assert.That(entry.Message, Does.Not.Contain(sensitiveValue));
+            Assert.That(entry.Exception, Is.Null);
+        });
+    }
+
     [TestCase(AdminRoles.Owner, "hip-owner")]
     [TestCase(AdminRoles.Admin, "hip-admin")]
     public async Task Privileged_login_without_accepted_mfa_fails_closed(
