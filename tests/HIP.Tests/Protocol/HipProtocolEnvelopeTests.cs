@@ -6,6 +6,7 @@ using HIP.Domain.Protocol;
 
 namespace HIP.Tests.Protocol;
 
+[NonParallelizable]
 public sealed class HipProtocolEnvelopeTests
 {
     [Test]

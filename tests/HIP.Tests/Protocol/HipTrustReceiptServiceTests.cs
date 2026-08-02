@@ -12,6 +12,7 @@ using HIP.Domain.Scoring;
 namespace HIP.Tests.Protocol;
 
 [TestFixture]
+[NonParallelizable]
 public sealed class HipTrustReceiptServiceTests
 {
     private const string IssuerId = "hip:web:receipt-issuer.example";

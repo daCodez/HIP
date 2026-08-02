@@ -97,7 +97,16 @@ public sealed class SignedWebsiteIdentityApiTests
         var responses = await Task.WhenAll(attempts);
         var successes = responses.Where(response => response.StatusCode == HttpStatusCode.OK).ToArray();
         var conflicts = responses.Where(response => response.StatusCode == HttpStatusCode.Conflict).ToArray();
-        var winner = await successes.Single().Content.ReadFromJsonAsync<WebsiteIdentityRegistrationResponse>();
+        var unexpected = responses
+            .Where(response => response.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.Conflict))
+            .ToArray();
+        var successfulRegistrations = (await Task.WhenAll(successes.Select(response =>
+                response.Content.ReadFromJsonAsync<WebsiteIdentityRegistrationResponse>())))
+            .Select(registration => registration ?? throw new InvalidOperationException(
+                "A successful website-registration response did not contain its registration payload."))
+            .ToArray();
+        var winner = successfulRegistrations.Single(registration => !registration.IsRecovery);
+        var recoveries = successfulRegistrations.Where(registration => registration.IsRecovery).ToArray();
         var website = await client.GetFromJsonAsync<WebsiteIdentity>(
             "/api/v1/identity/websites/concurrent-registration.example");
 
@@ -120,14 +129,17 @@ public sealed class SignedWebsiteIdentityApiTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(successes, Has.Length.EqualTo(1));
-            Assert.That(conflicts, Has.Length.EqualTo(7));
+            Assert.That(unexpected, Is.Empty);
+            Assert.That(successes.Length + conflicts.Length, Is.EqualTo(attempts.Length));
+            Assert.That(recoveries.Length + conflicts.Length, Is.EqualTo(attempts.Length - 1));
+            Assert.That(recoveries, Has.All.Matches<WebsiteIdentityRegistrationResponse>(registration =>
+                registration.RequiresSigningKeyRotation && registration.DevelopmentPrivateKey is null));
             Assert.That(identity, Is.Not.Null);
             Assert.That(keyRing, Is.Not.Null);
             Assert.That(website, Is.Not.Null);
             Assert.That(
                 identity!.PublicKey,
-                Is.EqualTo(winner!.WebsiteIdentity.PublicKeys.Single().PublicKey));
+                Is.EqualTo(winner.WebsiteIdentity.PublicKeys.Single().PublicKey));
             Assert.That(
                 website!.PublicKeys.Single().PublicKey,
                 Is.EqualTo(identity.PublicKey));

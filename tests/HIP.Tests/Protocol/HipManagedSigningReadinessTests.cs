@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HIP.Tests.Protocol;
 
+[NonParallelizable]
 public sealed class HipManagedSigningReadinessTests
 {
     [Test]

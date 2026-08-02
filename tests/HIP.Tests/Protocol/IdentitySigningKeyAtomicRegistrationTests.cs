@@ -10,6 +10,7 @@ namespace HIP.Tests.Protocol;
 /// <summary>
 /// Proves that initial identity and signing-key registration has one atomic, idempotent commit boundary.
 /// </summary>
+[NonParallelizable]
 public sealed class IdentitySigningKeyAtomicRegistrationTests
 {
     private static readonly DateTimeOffset CreatedAtUtc =

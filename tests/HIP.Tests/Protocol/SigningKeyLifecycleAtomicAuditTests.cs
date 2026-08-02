@@ -8,6 +8,7 @@ namespace HIP.Tests.Protocol;
 /// <summary>
 /// Proves signing-key state and its audit evidence share one compare-and-swap commit boundary.
 /// </summary>
+[NonParallelizable]
 public sealed class SigningKeyLifecycleAtomicAuditTests
 {
     private static readonly DateTimeOffset InitialTime =

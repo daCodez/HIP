@@ -8,6 +8,7 @@ namespace HIP.Tests.Protocol;
 
 /// <summary>Verifies signed receipts cannot treat browser-authored observations as authoritative evidence.</summary>
 [TestFixture]
+[NonParallelizable]
 public sealed class HipTrustReceiptAuthoritativeEvaluationServiceTests
 {
     /// <summary>

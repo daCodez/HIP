@@ -10,6 +10,7 @@ using HIP.Domain.Protocol;
 
 namespace HIP.Tests.Protocol;
 
+[NonParallelizable]
 public sealed class HipEnvelopeVerificationServiceTests
 {
     private const string IdentityId = "hip:web:envelope.example";

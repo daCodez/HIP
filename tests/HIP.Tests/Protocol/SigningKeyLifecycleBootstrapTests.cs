@@ -8,6 +8,7 @@ namespace HIP.Tests.Protocol;
 /// <summary>
 /// Proves legacy identity bootstrap is idempotent, fail-closed, and audit-safe under concurrency.
 /// </summary>
+[NonParallelizable]
 public sealed class SigningKeyLifecycleBootstrapTests
 {
     private const string FirstFingerprint = "sha256:AAAAAAAAAAAAAAAAAAAAAA";

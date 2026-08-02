@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HIP.Tests.Protocol;
 
+[NonParallelizable]
 public sealed class Rfc8785CanonicalJsonServiceTests
 {
     private readonly Rfc8785CanonicalJsonService service = new();

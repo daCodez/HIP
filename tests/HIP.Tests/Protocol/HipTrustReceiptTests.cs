@@ -7,6 +7,7 @@ using HIP.Domain.Risk;
 
 namespace HIP.Tests.Protocol;
 
+[NonParallelizable]
 public sealed class HipTrustReceiptTests
 {
     [Test]

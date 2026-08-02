@@ -5,6 +5,7 @@ using HIP.Application.Protocol;
 
 namespace HIP.Tests.Protocol;
 
+[NonParallelizable]
 public sealed class Rfc8785ExtendedNumberCorpusTests
 {
     private const ulong NegativeZeroBits = 0x8000000000000000UL;

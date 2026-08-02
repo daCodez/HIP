@@ -8,6 +8,7 @@ using System.Text.Json;
 
 namespace HIP.Tests.Protocol;
 
+[NonParallelizable]
 public sealed class SigningKeyRingLifecycleTests
 {
     private static readonly DateTimeOffset InitialTime =
