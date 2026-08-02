@@ -113,7 +113,6 @@
             if (!match) return;
             const target = Number.parseInt(match[1], 10);
             const suffix = match[2];
-            counter.textContent = `0${suffix}`;
             delete counter.dataset.counted;
 
             const countUp = () => {
@@ -123,6 +122,7 @@
                     counter.textContent = `${target}${suffix}`;
                     return;
                 }
+                counter.textContent = `0${suffix}`;
                 const started = performance.now();
                 const tick = now => {
                     const progress = Math.min(1, (now - started) / 900);
