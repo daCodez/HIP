@@ -1,11 +1,14 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Globalization;
 using System.Security.Claims;
+using HIP.Tests.Support;
 using HIP.Web.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace HIP.Tests.Security;
@@ -425,6 +428,33 @@ public sealed class HipAuthenticationEventTests
     }
 
     [Test]
+    public async Task Remote_failure_logs_only_a_privacy_safe_category()
+    {
+        const string sensitiveMarker = "sensitive-provider-state";
+        var time = new AdjustableTimeProvider(new DateTimeOffset(2026, 8, 2, 12, 0, 0, TimeSpan.Zero));
+        var logger = new CapturingLogger<HipOpenIdConnectEvents>();
+        var events = CreateOidcEvents(time, ValidOptions(), out var options, logger);
+        var context = new RemoteFailureContext(
+            new DefaultHttpContext(),
+            new AuthenticationScheme(HipAuthenticationSchemes.OpenIdConnect, null, typeof(OpenIdConnectHandler)),
+            options,
+            new AuthenticationFailureException($"Correlation failed: {sensitiveMarker}"));
+
+        await events.RemoteFailure(context);
+
+        var entry = logger.Entries.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(entry.LogLevel, Is.EqualTo(LogLevel.Warning));
+            Assert.That(entry.EventId, Is.EqualTo(new EventId(2101, "OidcRemoteFailure")));
+            Assert.That(entry.Message, Does.Contain("Category=correlation"));
+            Assert.That(entry.Message, Does.Contain("ExceptionType=AuthenticationFailureException"));
+            Assert.That(entry.Message, Does.Not.Contain(sensitiveMarker));
+            Assert.That(entry.Exception, Is.Null);
+        });
+    }
+
+    [Test]
     public async Task Consumer_remote_failure_returns_to_the_mapped_login_page()
     {
         var time = new AdjustableTimeProvider(new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero));
@@ -494,7 +524,8 @@ public sealed class HipAuthenticationEventTests
     private static HipOpenIdConnectEvents CreateOidcEvents(
         TimeProvider time,
         HipProductionAuthenticationOptions authOptions,
-        out OpenIdConnectOptions oidcOptions)
+        out OpenIdConnectOptions oidcOptions,
+        ILogger<HipOpenIdConnectEvents>? logger = null)
     {
         oidcOptions = new OpenIdConnectOptions();
         var configured = Options.Create(authOptions);
@@ -502,7 +533,8 @@ public sealed class HipAuthenticationEventTests
             new HipExternalClaimsMapper(configured),
             new HipExternalAuthenticationAssuranceEvaluator(configured, time),
             configured,
-            time);
+            time,
+            logger ?? NullLogger<HipOpenIdConnectEvents>.Instance);
     }
 
     private static TokenValidatedContext TokenContext(

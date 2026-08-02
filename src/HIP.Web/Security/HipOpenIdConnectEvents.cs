@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 namespace HIP.Web.Security;
 
@@ -10,7 +12,8 @@ public sealed class HipOpenIdConnectEvents(
     HipExternalClaimsMapper claimsMapper,
     HipExternalAuthenticationAssuranceEvaluator assuranceEvaluator,
     IOptions<HipProductionAuthenticationOptions> configuredOptions,
-    TimeProvider timeProvider) : OpenIdConnectEvents
+    TimeProvider timeProvider,
+    ILogger<HipOpenIdConnectEvents> logger) : OpenIdConnectEvents
 {
     private const string GenericMappingFailure = "External identity could not be accepted by HIP.";
     private readonly HipExternalClaimsMapper claimsMapper =
@@ -21,6 +24,8 @@ public sealed class HipOpenIdConnectEvents(
         configuredOptions?.Value ?? throw new ArgumentNullException(nameof(configuredOptions));
     private readonly TimeProvider timeProvider =
         timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly ILogger<HipOpenIdConnectEvents> logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
     public override Task TokenValidated(TokenValidatedContext context)
@@ -137,6 +142,11 @@ public sealed class HipOpenIdConnectEvents(
     public override Task RemoteFailure(RemoteFailureContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        logger.LogWarning(
+            new EventId(2101, "OidcRemoteFailure"),
+            "HIP OIDC remote failure. Category={FailureCategory} ExceptionType={ExceptionType}",
+            ClassifyRemoteFailure(context.Failure),
+            context.Failure?.GetType().Name ?? "None");
         var safeReturnUrl = context.Properties is null
             ? "/admin"
             : HipDevelopmentLoginEndpoints.SafeLocalReturnUrl(context.Properties.RedirectUri);
@@ -153,6 +163,26 @@ public sealed class HipOpenIdConnectEvents(
                 ? $"/step-up?error=unsatisfied&returnUrl={Uri.EscapeDataString(safeReturnUrl)}"
                 : "/login?error=external-authentication");
         return Task.CompletedTask;
+    }
+
+    /// <summary>Reduces an authentication exception to a bounded privacy-safe operational category.</summary>
+    private static string ClassifyRemoteFailure(Exception? failure)
+    {
+        for (var current = failure; current is not null; current = current.InnerException)
+        {
+            var message = current.Message;
+            if (message.Contains("correlation", StringComparison.OrdinalIgnoreCase)) return "correlation";
+            if (message.Contains("nonce", StringComparison.OrdinalIgnoreCase)) return "nonce";
+            if (message.Contains("state", StringComparison.OrdinalIgnoreCase)) return "state";
+            if (message.Contains("pushed authorization", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("PAR", StringComparison.OrdinalIgnoreCase)) return "pushed-authorization";
+            if (message.Contains("access_denied", StringComparison.OrdinalIgnoreCase)) return "provider-denied";
+            if (current is Microsoft.IdentityModel.Tokens.SecurityTokenException ||
+                message.Contains("token", StringComparison.OrdinalIgnoreCase)) return "token-validation";
+            if (current is OpenIdConnectProtocolException) return "protocol";
+        }
+
+        return failure is null ? "none" : "unclassified";
     }
 
     private static Task Fail(
