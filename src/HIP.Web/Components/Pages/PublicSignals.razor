@@ -1,0 +1,48 @@
+@page "/signals"
+@attribute [AllowAnonymous]
+@layout PublicLayout
+
+<PageTitle>Website Trust Signals | HIP Human-Interactive Protocol</PageTitle>
+<HeadContent>
+    <meta name="description" content="Explore the transport, identity, reputation, page-risk and independent evidence signals HIP uses to explain website trust scores." />
+</HeadContent>
+
+<main class="hip-public-page">
+    <section class="hip-page-hero hip-grid-bg">
+        <div class="hip-container">
+            <p class="hip-eyebrow">Website trust signals</p>
+            <h1>One score. Named, inspectable <span>evidence.</span></h1>
+            <p class="hip-lead">HIP groups website observations into signal families so each result can explain what was checked, what was found and how that evidence affected the outcome. No single positive signal proves a site is safe.</p>
+            <div class="hip-hero-actions">
+                <a class="hip-button" href="/website-trust-scanner">Check a website</a>
+                <a class="hip-button-secondary" href="/score-interpretation">Understand the score</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="hip-section">
+        <div class="hip-container">
+            <div class="hip-section-heading">
+                <p class="hip-eyebrow">Signal families</p>
+                <h2>What HIP can examine.</h2>
+            </div>
+            <div class="hip-capability-grid">
+                <article><span>01 · Transport</span><h3>HTTPS and certificates</h3><p>Redirect behaviour, encrypted transport, certificate validity, hostname coverage, issuer information and expiry risk.</p></article>
+                <article><span>02 · Identity</span><h3>DNS and domain control</h3><p>DNS records, mail-authentication posture and explicit ownership evidence. Domain control establishes control—not honesty or safety.</p></article>
+                <article><span>03 · Reputation</span><h3>History and reported risk</h3><p>Available domain history, confirmed threat evidence, bounded feedback and reviewed reputation information, with provenance retained.</p></article>
+                <article><span>04 · Page risk</span><h3>Forms, links and behaviour</h3><p>Privacy-safe structural observations such as login or payment fields, suspicious redirects, risky downloads and meaningful third-party changes.</p></article>
+                <article><span>05 · Content risk</span><h3>Pressure and impersonation labels</h3><p>Bounded risk labels for urgency, impersonation or credential pressure. HIP does not need to retain raw private page text to use these signals.</p></article>
+                <article><span>06 · Independent evidence</span><h3>External and reviewed sources</h3><p>Optional provider results and HIP review evidence enter through a normalized boundary. Providers supply facts; HIP rules decide the result.</p></article>
+            </div>
+        </div>
+    </section>
+
+    <section class="hip-section hip-section-alt">
+        <div class="hip-container">
+            <div class="hip-cta-inline">
+                <div><p class="hip-eyebrow">Evidence provenance</p><h2>See where signals come from.</h2></div>
+                <a class="hip-button-secondary" href="/evidence-providers">Review evidence providers</a>
+            </div>
+        </div>
+    </section>
+</main>

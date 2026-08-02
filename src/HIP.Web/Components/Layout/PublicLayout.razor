@@ -54,13 +54,25 @@ else
             <a href="/how-it-works">How it works</a>
             <a href="/verification">Verification</a>
             <a href="/developers">Developers</a>
+            <a href="/methodology">Methodology</a>
+            <a href="/signals">Signals</a>
+            <a href="/score-interpretation">Score guide</a>
+            <a href="/evidence-providers">Evidence providers</a>
             <a href="/lookup">Public lookup</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/appeals">Appeals</a>
             <a href="@PortalLinks.Consumer("/")">Consumer app</a>
             <a href="@PortalLinks.Admin("/")">Admin portal</a>
         </nav>
         <p class="public-footer-note">Verification confirms control or identity evidence. It does not automatically mean safe.</p>
     </footer>
 </div>
+}
+
+@if (IsCanonicalPublicHost)
+{
+    <div data-hip-badge="guardwithhip.com"></div>
+    <script src="/api/v1/badge/guardwithhip.com/script" async></script>
 }
 
 @code {
@@ -85,4 +97,12 @@ else
             return MarketingRoutes.Contains(normalizedPath);
         }
     }
+
+    /// <summary>
+    /// Limits HIP's self-badge to the exact certificate-bound public hostname so local development and alternate hosts
+    /// do not render a misleading domain-mismatch state.
+    /// </summary>
+    private bool IsCanonicalPublicHost =>
+        Uri.TryCreate(Navigation.Uri, UriKind.Absolute, out var uri) &&
+        uri.Host.Equals("guardwithhip.com", StringComparison.OrdinalIgnoreCase);
 }

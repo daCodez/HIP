@@ -1,0 +1,55 @@
+@page "/score-interpretation"
+@attribute [AllowAnonymous]
+@layout PublicLayout
+
+<PageTitle>How to Interpret a HIP Trust Score</PageTitle>
+<HeadContent>
+    <meta name="description" content="Understand HIP website trust-score ranges, evidence coverage, mandatory score caps and what a high or low score does—and does not—mean." />
+</HeadContent>
+
+<main class="hip-public-page">
+    <section class="hip-page-hero hip-grid-bg">
+        <div class="hip-container">
+            <p class="hip-eyebrow">Score interpretation</p>
+            <h1>A score is a summary, <span>not a promise.</span></h1>
+            <p class="hip-lead">A HIP public lookup score runs from 0 to 100 and summarizes the evidence available for that target at a recorded time. Always read the reasons, evidence coverage and checked date alongside the number.</p>
+        </div>
+    </section>
+
+    <section class="hip-section">
+        <div class="hip-container">
+            <div class="hip-section-heading">
+                <p class="hip-eyebrow">Current public bands</p>
+                <h2>How public lookup labels the score.</h2>
+            </div>
+            <div class="hip-score-breakdown hip-score-bands">
+                <article><span>0–9</span><strong>Dangerous</strong><p>Strong risk evidence requires a safety route. Do not proceed on the score alone.</p></article>
+                <article><span>10–24</span><strong>High risk</strong><p>Material warning signals call for a safety route and careful verification.</p></article>
+                <article><span>25–39</span><strong>Suspicious</strong><p>Risk indicators justify a clear warning before the user continues.</p></article>
+                <article><span>40–49</span><strong>Unknown</strong><p>The available evidence does not support a confident trust conclusion.</p></article>
+                <article><span>50–69</span><strong>Limited data</strong><p>Some evidence is available, but HIP cannot support a strong trust assertion.</p></article>
+                <article><span>70–84</span><strong>Mostly trusted</strong><p>Available evidence is generally positive, subject to every listed limitation and warning.</p></article>
+                <article class="is-final"><span>85–100</span><strong>Trusted</strong><p>Strong available evidence supports the result. It still cannot guarantee future behaviour or complete safety.</p></article>
+            </div>
+        </div>
+    </section>
+
+    <section class="hip-section hip-section-alt">
+        <div class="hip-container">
+            <div class="hip-section-heading">
+                <p class="hip-eyebrow">Safeguards</p>
+                <h2>Why arithmetic cannot hide critical risk.</h2>
+            </div>
+            <div class="hip-capability-grid">
+                <article><span>Score caps</span><h3>Confirmed threats dominate</h3><p>Confirmed phishing, malware or an approved critical-risk override can cap the final score at 9 even when other signals are positive.</p></article>
+                <article><span>Identity limits</span><h3>Strong downloads need strong identity</h3><p>A strong executable-download risk without strong identity evidence can cap the final score at 39.</p></article>
+                <article><span>Coverage limits</span><h3>Missing context limits confidence</h3><p>Unknown targets with limited evidence—and trusted parent domains with risky pages or user-generated content—can be capped at 69.</p></article>
+            </div>
+            <div class="hip-notice" style="margin-top: 42px;"><strong>Labels are not interchangeable guarantees.</strong><p>TLS proves encrypted transport. DNS verification proves domain control. A valid signature proves signer origin and content integrity. None of those facts, alone, proves that a site is safe or trustworthy.</p></div>
+            <div class="hip-hero-actions">
+                <a class="hip-button" href="/signals">Explore the signals</a>
+                <a class="hip-button-secondary" href="/methodology">Read the methodology</a>
+            </div>
+        </div>
+    </section>
+</main>

@@ -1,0 +1,34 @@
+@page "/appeals"
+@attribute [AllowAnonymous]
+@layout PublicLayout
+@inject HipPortalLinks PortalLinks
+
+<PageTitle>Appeals Policy | HIP Human-Interactive Protocol</PageTitle>
+<HeadContent>
+    <meta name="description" content="Learn how to challenge a HIP website finding, what evidence to provide, and how privacy-safe appeal review works." />
+</HeadContent>
+
+<main class="hip-public-page">
+    <section class="hip-page-hero hip-grid-bg">
+        <div class="hip-container">
+            <p class="hip-eyebrow">Appeals policy</p>
+            <h1>A finding can be <span>challenged.</span></h1>
+            <p class="hip-lead">Website owners and affected users can ask HIP to review an inaccurate or outdated finding. Appeals do not silently overwrite evidence: the request, review state and resulting decision remain attributable and auditable.</p>
+            <div class="hip-hero-actions">
+                <a class="hip-button" href="@PortalLinks.Consumer("/appeals")">Open my appeals</a>
+                <a class="hip-button-secondary" href="/verification">Review verification requirements</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="hip-section">
+        <div class="hip-container">
+            <ol class="hip-process-list">
+                <li><span>01 · Identify</span><div><h2>Reference the finding</h2><p>Identify the domain or result and explain which statement appears inaccurate, incomplete or stale.</p></div></li>
+                <li><span>02 · Support</span><div><h2>Provide privacy-safe evidence</h2><p>Include enough verifiable evidence for review, but never submit passwords, tokens, private messages or secrets.</p></div></li>
+                <li><span>03 · Review</span><div><h2>Separate ownership from judgment</h2><p>Domain control can establish who may speak for a site. It does not automatically invalidate a risk finding or establish safety.</p></div></li>
+                <li><span>04 · Record</span><div><h2>Explain the decision</h2><p>HIP records the review outcome and a bounded reason. If evidence changes, a new scan can confirm the updated public state.</p></div></li>
+            </ol>
+        </div>
+    </section>
+</main>

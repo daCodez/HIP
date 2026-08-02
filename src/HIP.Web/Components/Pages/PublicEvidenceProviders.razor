@@ -1,0 +1,66 @@
+@page "/evidence-providers"
+@attribute [AllowAnonymous]
+@layout PublicLayout
+
+<PageTitle>Website Evidence Providers | HIP Human-Interactive Protocol</PageTitle>
+<HeadContent>
+    <meta name="description" content="See how HIP combines direct website checks, privacy-safe browser observations, reviewed evidence and optional external security providers." />
+</HeadContent>
+
+<main class="hip-public-page">
+    <section class="hip-page-hero hip-grid-bg">
+        <div class="hip-container">
+            <p class="hip-eyebrow">Evidence providers</p>
+            <h1>Sources contribute facts. <span>HIP decides.</span></h1>
+            <p class="hip-lead">HIP accepts evidence from direct checks, privacy-safe client observations, reviewed HIP sources and optional third-party security providers. Every result crosses the same bounded normalization boundary before rules or scoring can use it.</p>
+        </div>
+    </section>
+
+    <section class="hip-section">
+        <div class="hip-container">
+            <div class="hip-section-heading">
+                <p class="hip-eyebrow">First-party evidence</p>
+                <h2>Signals HIP can collect and govern directly.</h2>
+            </div>
+            <div class="hip-capability-grid">
+                <article><span>Direct checks</span><h3>HIP scanners</h3><p>HIP collects supported transport, certificate, DNS, ownership and public website evidence through its own adapters.</p></article>
+                <article><span>Client observation</span><h3>Browser-observed signals</h3><p>The browser extension can submit bounded structural observations and counts without passwords, form values, cookies, private messages or raw private page content.</p></article>
+                <article><span>Human evidence</span><h3>Weighted feedback and review</h3><p>Bounded feedback and authorized review evidence can add context. Feedback is not a vote, and review decisions keep their provenance and reasons.</p></article>
+            </div>
+        </div>
+    </section>
+
+    <section class="hip-section hip-section-alt">
+        <div class="hip-container">
+            <div class="hip-section-heading">
+                <p class="hip-eyebrow">Optional external evidence</p>
+                <h2>Independent sources, when configured.</h2>
+            </div>
+            <div class="hip-capability-grid">
+                <article><span>TLS scanner</span><h3>SSL Labs / Qualys TLS</h3><p>Contributes deeper TLS configuration evidence. Availability, freshness and errors remain visible operational facts rather than hidden assumptions.</p></article>
+                <article><span>Threat intelligence</span><h3>Google Web Risk / Safe Browsing</h3><p>Can contribute matched phishing or threat-intelligence evidence. A clean response is supporting evidence, not proof of safety.</p></article>
+                <article><span>URL reputation</span><h3>VirusTotal</h3><p>Can contribute malware or malicious-URL indicators from its supported reputation response. HIP retains normalized evidence rather than raw provider bodies.</p></article>
+            </div>
+        </div>
+    </section>
+
+    <section class="hip-section">
+        <div class="hip-container">
+            <div class="hip-section-heading">
+                <p class="hip-eyebrow">Provider boundary</p>
+                <h2>What happens before evidence affects a score.</h2>
+            </div>
+            <ol class="hip-process-list">
+                <li><span>01 · Bind</span><div><h2>Confirm source and target</h2><p>HIP verifies the registered provider identity, provider type, normalized domain and required URL-hash binding.</p></div></li>
+                <li><span>02 · Bound</span><div><h2>Validate size and meaning</h2><p>Evidence counts, score and confidence ranges, text lengths, timestamps, latency and enum values are validated before use.</p></div></li>
+                <li><span>03 · Classify</span><div><h2>Record status and freshness</h2><p>Results are classified as succeeded, partial, timed out or failed, and as fresh, stale or expired where applicable.</p></div></li>
+                <li><span>04 · Minimize</span><div><h2>Keep only the safe projection</h2><p>The normalized contract retains public domain metadata, canonical hashes or bounded privacy-safe signals—not raw provider bodies or private page values.</p></div></li>
+            </ol>
+            <div class="hip-notice"><strong>Provider outages do not become verdicts.</strong><p>An optional provider failure lowers available confidence without taking down public lookup. Failed evidence carries no risk or trust authority, and no provider directly sets the final HIP score.</p></div>
+            <div class="hip-hero-actions">
+                <a class="hip-button" href="/methodology">Read the methodology</a>
+                <a class="hip-button-secondary" href="/signals">Explore signal families</a>
+            </div>
+        </div>
+    </section>
+</main>

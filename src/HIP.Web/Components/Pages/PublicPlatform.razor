@@ -11,13 +11,13 @@
     </linearGradient>
   </defs></svg><div data-dc-tpl="13" data-theme="dark" data-motion="full" style="background: var(--bg); color: var(--text); min-height: 100vh; font-family: Satoshi, sans-serif;"><div data-dc-tpl="14" aria-hidden="true" style="position: fixed; inset: 0px; z-index: 70; pointer-events: none; opacity: 0.05; mix-blend-mode: overlay; background-image: none;"></div><div data-dc-tpl="15" style="position: fixed; top: 0px; left: 0px; right: 0px; height: 2px; z-index: 80; pointer-events: none;"><div data-dc-tpl="16" data-progress="" style="height: 100%; width: 0%; background: linear-gradient(90deg,var(--blue),var(--action)); transform-origin: left center;"></div></div><header data-dc-tpl="17" style="position: sticky; top: 0px; z-index: 50; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border);">
   <div data-dc-tpl="18" style="max-width: 1240px; margin: 0px auto; padding: 14px clamp(16px, 3vw, 32px); display: flex; align-items: center; gap: clamp(10px, 1.4vw, 22px);">
-    <div data-dc-tpl="19" role="button" style="display: flex; align-items: center; gap: 11px; cursor: pointer; flex-shrink: 0;">
+    <a data-dc-tpl="19" href="/" aria-label="HIP home" style="display: flex; align-items: center; gap: 11px; cursor: pointer; flex-shrink: 0; text-decoration: none;">
       <img data-dc-tpl="20" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 40px; width: auto; display: block; flex-shrink: 0;">
       <div data-dc-tpl="21" style="display: flex; flex-direction: column; line-height: 1;">
         <span data-dc-tpl="22" style="font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); white-space: nowrap;">HIP</span>
         <span data-dc-tpl="23" style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-top: 5px; white-space: nowrap;">Human-Interactive Protocol</span>
       </div>
-    </div>
+    </a>
 
     <select data-dc-tpl="24" data-nav-compact="" style="display: none; flex-shrink: 0; padding: 8px 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer;">
       <option data-dc-tpl="25" value="home">Home</option>
@@ -28,13 +28,13 @@
     </select>
     <nav data-dc-tpl="30" data-nav-full="" style="display: flex; align-items: center; gap: 2px; margin-left: 4px; flex-shrink: 0;">
 
-        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--text);"><span class="sc-interp">Platform</span></button>
+        <a data-dc-tpl="32" href="/platform" aria-current="page" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--text);"><span class="sc-interp">Platform</span></a>
 
-        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">How it works</span></button>
+        <a data-dc-tpl="32" href="/how-it-works" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">How it works</span></a>
 
-        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Verification</span></button>
+        <a data-dc-tpl="32" href="/verification" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Verification</span></a>
 
-        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Developers</span></button>
+        <a data-dc-tpl="32" href="/developers" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Developers</span></a>
 
     </nav>
 
@@ -48,7 +48,7 @@
       <svg data-dc-tpl="41" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path data-dc-tpl="42" d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 014 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.19c0 .21.14.46.55.38A8 8 0 008 0z"></path></svg>
       <span data-dc-tpl="43" data-gh-label="">GitHub</span>
     </a>
-    <button data-dc-tpl="44" class="scp4" style="padding: 10px 16px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; flex-shrink: 0; white-space: nowrap;">Check my domain</button>
+    <a data-dc-tpl="44" href="/website-trust-scanner" class="scp4" style="padding: 10px 16px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; flex-shrink: 0; white-space: nowrap;">Check my domain</a>
   </div></header><main data-dc-tpl="386" style="max-width: 1240px; margin: 0px auto; padding: clamp(56px, 6vw, 80px) clamp(16px, 3vw, 32px) 110px;">
   <div data-dc-tpl="387" style="max-width: 680px; margin-bottom: 64px;">
     <div data-dc-tpl="388" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 16px;">PLATFORM</div>
@@ -119,23 +119,27 @@
     </div>
     <div data-dc-tpl="676" style="display: flex; flex-direction: column; gap: 11px;">
       <div data-dc-tpl="677" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PRODUCT</div>
-      <button data-dc-tpl="678" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">Platform</button>
-      <button data-dc-tpl="679" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">How it works</button>
-      <button data-dc-tpl="680" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">Verification</button>
-      <button data-dc-tpl="681" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">Developers</button>
+      <a data-dc-tpl="678" href="/platform" class="scp7" style="font-size: 14.5px; color: var(--text);">Platform</a>
+      <a data-dc-tpl="679" href="/how-it-works" class="scp7" style="font-size: 14.5px; color: var(--text);">How it works</a>
+      <a data-dc-tpl="680" href="/verification" class="scp7" style="font-size: 14.5px; color: var(--text);">Verification</a>
+      <a data-dc-tpl="681" href="/developers" class="scp7" style="font-size: 14.5px; color: var(--text);">Developers</a>
+      <a href="/methodology" class="scp7" style="font-size: 14.5px; color: var(--text);">Methodology</a>
+      <a href="/signals" class="scp7" style="font-size: 14.5px; color: var(--text);">Signals</a>
+      <a href="/score-interpretation" class="scp7" style="font-size: 14.5px; color: var(--text);">Score guide</a>
+      <a href="/evidence-providers" class="scp7" style="font-size: 14.5px; color: var(--text);">Evidence providers</a>
     </div>
     <div data-dc-tpl="682" style="display: flex; flex-direction: column; gap: 11px;">
       <div data-dc-tpl="683" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">OPEN SOURCE</div>
       <a data-dc-tpl="684" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Repository</a>
-      <a data-dc-tpl="685" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Detection rules</a>
-      <a data-dc-tpl="686" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Contributing</a>
-      <a data-dc-tpl="687" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Issues</a>
+      <a data-dc-tpl="685" href="https://github.com/daCodez/HIP/blob/master/docs/rules-engine.md" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Detection rules</a>
+      <a data-dc-tpl="686" href="https://github.com/daCodez/HIP/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Contributing</a>
+      <a data-dc-tpl="687" href="https://github.com/daCodez/HIP/issues" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Issues</a>
     </div>
     <div data-dc-tpl="688" style="display: flex; flex-direction: column; gap: 11px;">
       <div data-dc-tpl="689" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PROJECT</div>
-      <a data-dc-tpl="690" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Roadmap</a>
-      <a data-dc-tpl="691" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Privacy approach</a>
-      <a data-dc-tpl="692" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Appeals policy</a>
+      <a data-dc-tpl="690" href="https://github.com/daCodez/HIP/blob/master/docs/project-reference/HIP_Implementation_Backlog.md" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Roadmap</a>
+      <a data-dc-tpl="691" href="/privacy" class="scp7" style="font-size: 14.5px; color: var(--text);">Privacy approach</a>
+      <a data-dc-tpl="692" href="/appeals" class="scp7" style="font-size: 14.5px; color: var(--text);">Appeals policy</a>
     </div>
   </div>
   <div data-dc-tpl="693" style="max-width: 1240px; margin: 0px auto; padding: 22px 32px 40px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; font-size: 13px; color: var(--muted);">

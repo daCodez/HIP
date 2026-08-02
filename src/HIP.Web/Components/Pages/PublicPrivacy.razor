@@ -1,0 +1,29 @@
+@page "/privacy"
+@attribute [AllowAnonymous]
+@layout PublicLayout
+
+<PageTitle>Privacy Approach | HIP Human-Interactive Protocol</PageTitle>
+<HeadContent>
+    <meta name="description" content="Read HIP's privacy-first approach to website scanning, client telemetry, identifiers, retention and public trust evidence." />
+</HeadContent>
+
+<main class="hip-public-page">
+    <section class="hip-page-hero hip-grid-bg">
+        <div class="hip-container">
+            <p class="hip-eyebrow">Privacy approach</p>
+            <h1>Collect less. Explain <span>what remains.</span></h1>
+            <p class="hip-lead">HIP is designed to evaluate public trust and risk evidence without collecting passwords, form values, private messages, cookies, browsing history or unrelated raw page content.</p>
+        </div>
+    </section>
+
+    <section class="hip-section">
+        <div class="hip-container">
+            <div class="hip-capability-grid">
+                <article><span>Minimize</span><h3>Use the smallest useful signal</h3><p>HIP prefers domains, URL hashes, signal counts, scores, reasons, provider names and timestamps over raw private content.</p></article>
+                <article><span>Separate</span><h3>Distinguish evidence types</h3><p>Client observations remain separate from authoritative scans until verified evidence supports a public result.</p></article>
+                <article><span>Protect</span><h3>Keep secrets out</h3><p>Passwords, tokens, cookies, private messages, sensitive identifiers and private evidence do not belong in public APIs, logs or test fixtures.</p></article>
+            </div>
+            <div class="hip-notice" style="margin-top: 42px;"><strong>Public overview</strong><p>This page summarizes HIP's engineering privacy defaults. Deployment-specific notices and legally required disclosures must remain accurate for the operator and jurisdiction where HIP is offered.</p></div>
+        </div>
+    </section>
+</main>

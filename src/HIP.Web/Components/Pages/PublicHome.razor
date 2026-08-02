@@ -3,7 +3,22 @@
 @layout PublicLayout
 @inject HipPortalLinks PortalLinks
 
-<PageTitle>HIP | Trust is your strongest signal</PageTitle>
+<PageTitle>HIP Website Trust Scanner | Explainable Security &amp; Risk Scores</PageTitle>
+<HeadContent>
+    <meta name="description" content="Scan a website for HTTPS, certificate, DNS, reputation and page-risk signals. HIP explains every trust score in plain language." />
+    <script type="application/ld+json">
+        {
+          "\u0040context": "https://schema.org",
+          "\u0040type": "Organization",
+          "\u0040id": "https://guardwithhip.com/#organization",
+          "name": "HIP",
+          "alternateName": "Human-Interactive Protocol",
+          "url": "https://guardwithhip.com/",
+          "description": "HIP is an open-source website trust and risk-scoring platform that explains the evidence behind each result.",
+          "sameAs": ["https://github.com/daCodez/HIP"]
+        }
+    </script>
+</HeadContent>
 
 <nav hidden aria-hidden="true"><a href="@PortalLinks.Consumer("/")">Consumer app</a><a href="@PortalLinks.Admin("/")">Admin portal</a></nav>
 
@@ -14,13 +29,13 @@
     </linearGradient>
   </defs></svg><div data-dc-tpl="13" data-theme="dark" data-motion="full" style="background: var(--bg); color: var(--text); min-height: 100vh; font-family: Satoshi, sans-serif;"><div data-dc-tpl="14" aria-hidden="true" style="position: fixed; inset: 0px; z-index: 70; pointer-events: none; opacity: 0.05; mix-blend-mode: overlay; background-image: none;"></div><div data-dc-tpl="15" style="position: fixed; top: 0px; left: 0px; right: 0px; height: 2px; z-index: 80; pointer-events: none;"><div data-dc-tpl="16" data-progress="" style="height: 100%; width: 0%; background: linear-gradient(90deg,var(--blue),var(--action)); transform-origin: left center;"></div></div><header data-dc-tpl="17" style="position: sticky; top: 0px; z-index: 50; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border);">
   <div data-dc-tpl="18" style="max-width: 1240px; margin: 0px auto; padding: 14px clamp(16px, 3vw, 32px); display: flex; align-items: center; gap: clamp(10px, 1.4vw, 22px);">
-    <div data-dc-tpl="19" role="button" style="display: flex; align-items: center; gap: 11px; cursor: pointer; flex-shrink: 0;">
+    <a data-dc-tpl="19" href="/" aria-label="HIP home" style="display: flex; align-items: center; gap: 11px; cursor: pointer; flex-shrink: 0; text-decoration: none;">
       <img data-dc-tpl="20" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 40px; width: auto; display: block; flex-shrink: 0;">
       <div data-dc-tpl="21" style="display: flex; flex-direction: column; line-height: 1;">
         <span data-dc-tpl="22" style="font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); white-space: nowrap;">HIP</span>
         <span data-dc-tpl="23" style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-top: 5px; white-space: nowrap;">Human-Interactive Protocol</span>
       </div>
-    </div>
+    </a>
 
     <select data-dc-tpl="24" data-nav-compact="" style="display: none; flex-shrink: 0; padding: 8px 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer;">
       <option data-dc-tpl="25" value="home" selected>Home</option>
@@ -31,13 +46,13 @@
     </select>
     <nav data-dc-tpl="30" data-nav-full="" style="display: flex; align-items: center; gap: 2px; margin-left: 4px; flex-shrink: 0;">
 
-        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Platform</span></button>
+        <a data-dc-tpl="32" href="/platform" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Platform</span></a>
 
-        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">How it works</span></button>
+        <a data-dc-tpl="32" href="/how-it-works" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">How it works</span></a>
 
-        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Verification</span></button>
+        <a data-dc-tpl="32" href="/verification" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Verification</span></a>
 
-        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Developers</span></button>
+        <a data-dc-tpl="32" href="/developers" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Developers</span></a>
 
     </nav>
 
@@ -53,7 +68,7 @@
       <svg data-dc-tpl="41" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path data-dc-tpl="42" d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 014 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.19c0 .21.14.46.55.38A8 8 0 008 0z"></path></svg>
       <span data-dc-tpl="43" data-gh-label="">GitHub</span>
     </a>
-    <button data-dc-tpl="44" class="scp4" style="padding: 10px 16px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; flex-shrink: 0; white-space: nowrap;">Check my domain</button>
+    <a data-dc-tpl="44" href="/website-trust-scanner" class="scp4" style="padding: 10px 16px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; flex-shrink: 0; white-space: nowrap;">Check my domain</a>
   </div></header><main data-dc-tpl="46">
 
 
@@ -69,7 +84,7 @@
           Open source · Apache-2.0 · community-built
         </div>
         <h1 data-dc-tpl="56" data-words="" style="font-size: clamp(40px, 5.6vw, 68px); line-height: 1.03; letter-spacing: -0.032em; font-weight: 800; margin: 0px 0px 22px; text-wrap: balance;">Trust is your<br data-dc-tpl="57">strongest signal.</h1>
-        <p data-dc-tpl="58" style="font-size: 19.5px; line-height: 1.6; color: var(--muted); margin: 0px 0px 34px; max-width: 530px; text-wrap: pretty;">Paste a web address and HIP checks for trust and risk signals, then explains what it found — in words anyone can read.</p>
+        <p data-dc-tpl="58" style="font-size: 19.5px; line-height: 1.6; color: var(--muted); margin: 0px 0px 34px; max-width: 530px; text-wrap: pretty;">HIP (Human-Interactive Protocol) is an open-source website trust and risk-scoring platform at guardwithhip.com. Paste a web address and HIP explains the signals it finds in words anyone can read.</p>
         <div data-dc-tpl="59" style="display: flex; flex-direction: column; gap: 12px; max-width: 520px;">
           <div data-dc-tpl="60" style="display: flex; gap: 10px; flex-wrap: wrap;">
             <div data-dc-tpl="61" style="flex: 1 1 0px; min-width: 0px; display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 0px 14px;">
@@ -155,7 +170,7 @@
           <svg data-dc-tpl="115" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px;"><circle data-dc-tpl="116" cx="12" cy="8" r="3.6"></circle><path data-dc-tpl="117" d="M4.5 20a7.5 7.5 0 0115 0"></path></svg>
           <h3 data-dc-tpl="118" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px;">If you are visiting a site</h3>
           <p data-dc-tpl="119" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px 0px 18px; flex: 1 1 0%;">Check an address before you enter a password or pay for anything. The browser extension shows the score as you browse.</p>
-          <button data-dc-tpl="120" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">Check a website →</button>
+          <a data-dc-tpl="120" href="/website-trust-scanner" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">Check a website →</a>
         </div>
       </div>
       <div data-dc-tpl="121" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; position: relative; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
@@ -164,7 +179,7 @@
           <svg data-dc-tpl="124" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px;"><path data-dc-tpl="125" d="M4 20V9l8-5 8 5v11"></path><path data-dc-tpl="126" d="M9.5 20v-6h5v6"></path></svg>
           <h3 data-dc-tpl="127" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px;">If you run a website</h3>
           <p data-dc-tpl="128" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px 0px 18px; flex: 1 1 0%;">See what visitors see, fix what is weak, verify that you own the domain, and earn a badge that proves it.</p>
-          <button data-dc-tpl="129" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">How verification works →</button>
+          <a data-dc-tpl="129" href="/verification" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">How verification works →</a>
         </div>
       </div>
       <div data-dc-tpl="130" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; position: relative; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
@@ -173,7 +188,7 @@
           <svg data-dc-tpl="133" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px;"><path data-dc-tpl="134" d="M9 7l-5 5 5 5M15 7l5 5-5 5"></path></svg>
           <h3 data-dc-tpl="135" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px;">If you build software</h3>
           <p data-dc-tpl="136" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px 0px 18px; flex: 1 1 0%;">Read every rule, query scores from your own product, self-host the scanner, or propose a detection we are missing.</p>
-          <button data-dc-tpl="137" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">Developer docs →</button>
+          <a data-dc-tpl="137" href="/developers" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">Developer docs →</a>
         </div>
       </div>
       <div data-dc-tpl="138" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; position: relative; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
@@ -182,7 +197,7 @@
           <svg data-dc-tpl="141" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px;"><path data-dc-tpl="142" d="M3 20h18M5 20V8l7-4 7 4v12"></path><path data-dc-tpl="143" d="M9 12h.01M15 12h.01M9 16h.01M15 16h.01"></path></svg>
           <h3 data-dc-tpl="144" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px;">If you run an organization</h3>
           <p data-dc-tpl="145" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px 0px 18px; flex: 1 1 0%;">Keep an eye on every domain you own, catch expiring certificates early, and keep a dated record of what changed.</p>
-          <button data-dc-tpl="146" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">See the platform →</button>
+          <a data-dc-tpl="146" href="/platform" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">See the platform →</a>
         </div>
       </div>
     </div>
@@ -328,7 +343,7 @@
           <li data-dc-tpl="269" style="display: flex; gap: 11px; font-size: 15px; color: var(--text);"><svg data-dc-tpl="270" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.2" stroke-linecap="round" style="flex-shrink: 0; margin-top: 2px;"><path data-dc-tpl="271" d="M20 6.5L9.5 17 4 11.5"></path></svg>Expires with the verification record, and is withdrawn if the score drops</li>
           <li data-dc-tpl="272" style="display: flex; gap: 11px; font-size: 15px; color: var(--text);"><svg data-dc-tpl="273" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.2" stroke-linecap="round" style="flex-shrink: 0; margin-top: 2px;"><path data-dc-tpl="274" d="M20 6.5L9.5 17 4 11.5"></path></svg>One line of HTML, no tracking scripts</li>
         </ul>
-        <button data-dc-tpl="275" class="scp4" style="padding: 12px 20px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer;">How verification works</button>
+      <a data-dc-tpl="275" href="/verification" class="scp4" style="padding: 12px 20px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer;">How verification works</a>
       </div>
       <div data-dc-tpl="276" style="display: flex; flex-direction: column; gap: 16px;">
         <div data-dc-tpl="277" style="background: rgb(11, 18, 32); border: 1px solid rgb(31, 41, 55); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 14px;">
@@ -513,7 +528,7 @@
         <h2 data-dc-tpl="380" style="font-size: clamp(32px, 3.8vw, 44px); line-height: 1.1; letter-spacing: -0.03em; font-weight: 800; margin: 0px 0px 16px; text-wrap: balance;">See what your domain says about you.</h2>
         <p data-dc-tpl="381" style="font-size: 18px; line-height: 1.6; color: var(--muted); margin: 0px auto 32px; max-width: 520px;">One scan, plain-language reasons, and a checklist you can actually work through.</p>
         <div data-dc-tpl="382" style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-          <button data-dc-tpl="383" data-magnet="" class="scp4" style="padding: 14px 26px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 11px; font-size: 16px; font-weight: 700; cursor: pointer; transition: none; will-change: transform;">Check my domain</button>
+          <a data-dc-tpl="383" href="/website-trust-scanner" data-magnet="" class="scp4" style="padding: 14px 26px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 11px; font-size: 16px; font-weight: 700; cursor: pointer; transition: none; will-change: transform;">Check my domain</a>
           <a data-dc-tpl="384" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp3" style="padding: 14px 24px; border: 1px solid var(--border); background: var(--bg); border-radius: 11px; font-size: 16px; font-weight: 600; color: var(--text);">View on GitHub</a>
         </div>
       </div>
@@ -532,23 +547,27 @@
     </div>
     <div data-dc-tpl="676" style="display: flex; flex-direction: column; gap: 11px;">
       <div data-dc-tpl="677" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PRODUCT</div>
-      <button data-dc-tpl="678" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">Platform</button>
-      <button data-dc-tpl="679" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">How it works</button>
-      <button data-dc-tpl="680" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">Verification</button>
-      <button data-dc-tpl="681" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">Developers</button>
+      <a data-dc-tpl="678" href="/platform" class="scp7" style="font-size: 14.5px; color: var(--text);">Platform</a>
+      <a data-dc-tpl="679" href="/how-it-works" class="scp7" style="font-size: 14.5px; color: var(--text);">How it works</a>
+      <a data-dc-tpl="680" href="/verification" class="scp7" style="font-size: 14.5px; color: var(--text);">Verification</a>
+      <a data-dc-tpl="681" href="/developers" class="scp7" style="font-size: 14.5px; color: var(--text);">Developers</a>
+      <a href="/methodology" class="scp7" style="font-size: 14.5px; color: var(--text);">Methodology</a>
+      <a href="/signals" class="scp7" style="font-size: 14.5px; color: var(--text);">Signals</a>
+      <a href="/score-interpretation" class="scp7" style="font-size: 14.5px; color: var(--text);">Score guide</a>
+      <a href="/evidence-providers" class="scp7" style="font-size: 14.5px; color: var(--text);">Evidence providers</a>
     </div>
     <div data-dc-tpl="682" style="display: flex; flex-direction: column; gap: 11px;">
       <div data-dc-tpl="683" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">OPEN SOURCE</div>
       <a data-dc-tpl="684" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Repository</a>
-      <a data-dc-tpl="685" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Detection rules</a>
-      <a data-dc-tpl="686" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Contributing</a>
-      <a data-dc-tpl="687" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Issues</a>
+      <a data-dc-tpl="685" href="https://github.com/daCodez/HIP/blob/master/docs/rules-engine.md" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Detection rules</a>
+      <a data-dc-tpl="686" href="https://github.com/daCodez/HIP/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Contributing</a>
+      <a data-dc-tpl="687" href="https://github.com/daCodez/HIP/issues" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Issues</a>
     </div>
     <div data-dc-tpl="688" style="display: flex; flex-direction: column; gap: 11px;">
       <div data-dc-tpl="689" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PROJECT</div>
-      <a data-dc-tpl="690" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Roadmap</a>
-      <a data-dc-tpl="691" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Privacy approach</a>
-      <a data-dc-tpl="692" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Appeals policy</a>
+      <a data-dc-tpl="690" href="https://github.com/daCodez/HIP/blob/master/docs/project-reference/HIP_Implementation_Backlog.md" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Roadmap</a>
+      <a data-dc-tpl="691" href="/privacy" class="scp7" style="font-size: 14.5px; color: var(--text);">Privacy approach</a>
+      <a data-dc-tpl="692" href="/appeals" class="scp7" style="font-size: 14.5px; color: var(--text);">Appeals policy</a>
     </div>
   </div>
   <div data-dc-tpl="693" style="max-width: 1240px; margin: 0px auto; padding: 22px 32px 40px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; font-size: 13px; color: var(--muted);">

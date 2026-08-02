@@ -1,0 +1,47 @@
+@page "/methodology"
+@attribute [AllowAnonymous]
+@layout PublicLayout
+
+<PageTitle>Trust Score Methodology | HIP Human-Interactive Protocol</PageTitle>
+<HeadContent>
+    <meta name="description" content="Learn how HIP combines website evidence into an explainable trust score, including signal sources, weighting, limits and review safeguards." />
+</HeadContent>
+
+<main class="hip-public-page">
+    <section class="hip-page-hero hip-grid-bg">
+        <div class="hip-container">
+            <p class="hip-eyebrow">Trust score methodology</p>
+            <h1>Every score keeps its <span>reasons.</span></h1>
+            <p class="hip-lead">HIP turns normalized evidence into an explainable score. Providers contribute evidence; they do not directly decide the final result. Detection and scoring rules remain reviewable and versioned.</p>
+        </div>
+    </section>
+
+    <section class="hip-section">
+        <div class="hip-container">
+            <ol class="hip-process-list">
+                <li><span>01 · Collect</span><div><h2>Gather bounded evidence</h2><p>HIP checks transport, certificates, DNS, domain verification, reputation and supported page-risk signals. Each observation records its source and freshness where available.</p></div></li>
+                <li><span>02 · Normalize</span><div><h2>Translate evidence into stable facts</h2><p>External responses are reduced to privacy-safe, typed facts before rules can use them. Raw provider payloads and private page content are not scoring inputs.</p></div></li>
+                <li><span>03 · Evaluate</span><div><h2>Apply versioned rules</h2><p>Detection rules identify relevant facts. Weighted scoring rules add or subtract bounded amounts, while mandatory constraints prevent strong positive signals from hiding critical risks.</p></div></li>
+                <li><span>04 · Explain</span><div><h2>Publish the result and its limits</h2><p>The result includes the score, reasons, checked date and available evidence coverage. A valid signature, encrypted connection or verified domain proves only its specific claim—not that a site is automatically safe.</p></div></li>
+            </ol>
+            <div class="hip-hero-actions">
+                <a class="hip-button" href="/website-trust-scanner">Check a website</a>
+                <a class="hip-button-secondary" href="https://github.com/daCodez/HIP/blob/master/docs/rules-engine.md" target="_blank" rel="noopener noreferrer">Read the rules-engine documentation</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="hip-section hip-section-alt">
+        <div class="hip-container">
+            <div class="hip-section-heading">
+                <p class="hip-eyebrow">Evidence library</p>
+                <h2>Follow the score back to its sources.</h2>
+            </div>
+            <div class="hip-capability-grid">
+                <article><span>Inputs</span><h3><a class="hip-text-link" href="/signals">Website trust signals</a></h3><p>See the evidence families HIP can examine and the limits attached to each one.</p></article>
+                <article><span>Output</span><h3><a class="hip-text-link" href="/score-interpretation">Score interpretation</a></h3><p>Understand current public score bands, mandatory caps, confidence and safe use.</p></article>
+                <article><span>Provenance</span><h3><a class="hip-text-link" href="/evidence-providers">Evidence providers</a></h3><p>Distinguish direct HIP checks, client observations, reviewed evidence and optional external sources.</p></article>
+            </div>
+        </div>
+    </section>
+</main>
