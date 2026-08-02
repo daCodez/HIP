@@ -129,12 +129,25 @@ services:
       HipSecurity__LegacyRecordEncryptionKeys__1: ${HIP_LEGACY_RECORD_ENCRYPTION_KEY_1:?HIP_LEGACY_RECORD_ENCRYPTION_KEY_1 is required}
       HipSecurity__PrivacyHashingKey: ${HIP_PRIVACY_HASHING_KEY:?HIP_PRIVACY_HASHING_KEY is required}
       HipSecurity__LegacyPrivacyHashingKeys__0: ${HIP_LEGACY_PRIVACY_HASHING_KEY_0:?HIP_LEGACY_PRIVACY_HASHING_KEY_0 is required}
+      HipManagedSigning__ExpectedIssuerId: ${HIP_SIGNING_ISSUER_ID:?HIP_SIGNING_ISSUER_ID is required}
+      HipManagedSigning__ExpectedKeyId: ${HIP_SIGNING_KEY_ID:?HIP_SIGNING_KEY_ID is required}
+      HipManagedSigning__ExpectedAlgorithm: ML-DSA-65
+      HipManagedSigning__Provider: SoftHsm
+      HipManagedSigning__SoftHsm__LibraryPath: /usr/local/lib/softhsm/libsofthsm2.so
+      HipManagedSigning__SoftHsm__TokenLabel: hip-signing
+      HipManagedSigning__SoftHsm__UserPinFilePath: /run/secrets/hip-softhsm-user-pin
+      HipManagedSigning__SoftHsm__KeyLabel: hip-mldsa-65
+      HipManagedSigning__SoftHsm__ProvisioningLockFilePath: /var/lib/softhsm/hip-signing-provision.lock
+      HipManagedSigning__SoftHsm__ProvisionKeyIfMissing: "true"
       ExternalSiteEvidence__ExternalProvidersEnabled: "true"
       ExternalSiteEvidence__SslLabs__Enabled: "true"
       ExternalSiteEvidence__GoogleWebRisk__Enabled: "false"
       ExternalSiteEvidence__VirusTotal__Enabled: "false"
     ports:
       - "127.0.0.1:5099:8080"
+    volumes:
+      - ${HIP_SOFTHSM_TOKEN_PATH:?HIP_SOFTHSM_TOKEN_PATH is required}:/var/lib/softhsm
+      - ${HIP_SOFTHSM_USER_PIN_PATH:?HIP_SOFTHSM_USER_PIN_PATH is required}:/run/secrets/hip-softhsm-user-pin:ro
     networks: [backend, egress]
     depends_on:
       postgres: { condition: service_healthy }
@@ -176,6 +189,16 @@ services:
       HipSecurity__LegacyRecordEncryptionKeys__1: ${HIP_LEGACY_RECORD_ENCRYPTION_KEY_1:?HIP_LEGACY_RECORD_ENCRYPTION_KEY_1 is required}
       HipSecurity__PrivacyHashingKey: ${HIP_PRIVACY_HASHING_KEY:?HIP_PRIVACY_HASHING_KEY is required}
       HipSecurity__LegacyPrivacyHashingKeys__0: ${HIP_LEGACY_PRIVACY_HASHING_KEY_0:?HIP_LEGACY_PRIVACY_HASHING_KEY_0 is required}
+      HipManagedSigning__ExpectedIssuerId: ${HIP_SIGNING_ISSUER_ID:?HIP_SIGNING_ISSUER_ID is required}
+      HipManagedSigning__ExpectedKeyId: ${HIP_SIGNING_KEY_ID:?HIP_SIGNING_KEY_ID is required}
+      HipManagedSigning__ExpectedAlgorithm: ML-DSA-65
+      HipManagedSigning__Provider: SoftHsm
+      HipManagedSigning__SoftHsm__LibraryPath: /usr/local/lib/softhsm/libsofthsm2.so
+      HipManagedSigning__SoftHsm__TokenLabel: hip-signing
+      HipManagedSigning__SoftHsm__UserPinFilePath: /run/secrets/hip-softhsm-user-pin
+      HipManagedSigning__SoftHsm__KeyLabel: hip-mldsa-65
+      HipManagedSigning__SoftHsm__ProvisioningLockFilePath: /var/lib/softhsm/hip-signing-provision.lock
+      HipManagedSigning__SoftHsm__ProvisionKeyIfMissing: "true"
       HipDevelopmentProxy__Enabled: "true"
       HipDevelopmentProxy__PublicHosts__0: ${HIP_PUBLIC_HOST:?HIP_PUBLIC_HOST is required}
       HipDevelopmentProxy__PublicHosts__1: ${HIP_CONSUMER_HOST:?HIP_CONSUMER_HOST is required}
@@ -189,6 +212,9 @@ services:
       ExternalSiteEvidence__VirusTotal__Enabled: "false"
     ports:
       - "127.0.0.1:5123:8080"
+    volumes:
+      - ${HIP_SOFTHSM_TOKEN_PATH:?HIP_SOFTHSM_TOKEN_PATH is required}:/var/lib/softhsm
+      - ${HIP_SOFTHSM_USER_PIN_PATH:?HIP_SOFTHSM_USER_PIN_PATH is required}:/run/secrets/hip-softhsm-user-pin:ro
     networks: [backend, egress]
     depends_on:
       api: { condition: service_healthy }
@@ -226,6 +252,17 @@ services:
       HipSecurity__LegacyRecordEncryptionKeys__1: ${HIP_LEGACY_RECORD_ENCRYPTION_KEY_1:?HIP_LEGACY_RECORD_ENCRYPTION_KEY_1 is required}
       HipSecurity__PrivacyHashingKey: ${HIP_PRIVACY_HASHING_KEY:?HIP_PRIVACY_HASHING_KEY is required}
       HipSecurity__LegacyPrivacyHashingKeys__0: ${HIP_LEGACY_PRIVACY_HASHING_KEY_0:?HIP_LEGACY_PRIVACY_HASHING_KEY_0 is required}
+      HipManagedSigning__Required: "true"
+      HipManagedSigning__ExpectedIssuerId: ${HIP_SIGNING_ISSUER_ID:?HIP_SIGNING_ISSUER_ID is required}
+      HipManagedSigning__ExpectedKeyId: ${HIP_SIGNING_KEY_ID:?HIP_SIGNING_KEY_ID is required}
+      HipManagedSigning__ExpectedAlgorithm: ML-DSA-65
+      HipManagedSigning__Provider: SoftHsm
+      HipManagedSigning__SoftHsm__LibraryPath: /usr/local/lib/softhsm/libsofthsm2.so
+      HipManagedSigning__SoftHsm__TokenLabel: hip-signing
+      HipManagedSigning__SoftHsm__UserPinFilePath: /run/secrets/hip-softhsm-user-pin
+      HipManagedSigning__SoftHsm__KeyLabel: hip-mldsa-65
+      HipManagedSigning__SoftHsm__ProvisioningLockFilePath: /var/lib/softhsm/hip-signing-provision.lock
+      HipManagedSigning__SoftHsm__ProvisionKeyIfMissing: "true"
       HipAuthentication__Authority: https://${HIP_IDENTITY_HOST:?HIP_IDENTITY_HOST is required}/realms/hip
       HipAuthentication__ClientId: hip-web
       HipAuthentication__ClientSecret: ${HIP_OIDC_CLIENT_SECRET:?HIP_OIDC_CLIENT_SECRET is required}
@@ -249,6 +286,8 @@ services:
     volumes:
       - ${HIP_SESSION_KEYRING_PATH:?HIP_SESSION_KEYRING_PATH is required}:/var/lib/hip/session-keys
       - ${HIP_SESSION_CERTIFICATE_PATH:?HIP_SESSION_CERTIFICATE_PATH is required}:/run/secrets/hip-session-protection.pfx:ro
+      - ${HIP_SOFTHSM_TOKEN_PATH:?HIP_SOFTHSM_TOKEN_PATH is required}:/var/lib/softhsm
+      - ${HIP_SOFTHSM_USER_PIN_PATH:?HIP_SOFTHSM_USER_PIN_PATH is required}:/run/secrets/hip-softhsm-user-pin:ro
     ports:
       - "127.0.0.1:5124:8080"
     networks: [backend, egress]

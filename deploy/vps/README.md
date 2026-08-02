@@ -55,22 +55,46 @@ environment and mounted secret files, never in Git. Before a rollout:
 6. retain the prior complete release until rollback and sign-in checks pass.
 
 `provision-identity-secrets.sh` creates missing staging identity/session secrets
-without writing them to standard output. It does not provide HIP's managed V1
-certificate-signing key custody; that separate launch dependency must remain
-fail-closed until an audited managed signer is configured.
+without writing them to standard output. Certificate signing is configured
+separately through the managed-signer provider boundary described below.
 
 ## Managed signing launch gate
 
-The production override requires an explicit `HIP_SIGNING_ISSUER_ID` and
-`HIP_SIGNING_KEY_ID`. It also enables the startup readiness gate in every public
-HIP host. Startup fails unless deployment composition replaces
-`UnavailableManagedTrustReceiptSigner` with an audited managed-custody adapter,
-the returned key exactly matches those identifiers and ML-DSA-65, the signer is
-explicitly allowlisted, the platform verification provider is available, and
-the same active public key exists in HIP's durable lifecycle state.
+The VPS composition requires an explicit `HIP_SIGNING_ISSUER_ID` and
+`HIP_SIGNING_KEY_ID` and selects the `SoftHsm` starter provider. The Production
+consumer host enables the startup readiness gate; the production override
+enables it for every public HIP host. A gated host fails startup unless the
+token, PIN file, exact configured ML-DSA-65 key, explicit allowlists, platform
+verifier, and durable public lifecycle state all agree.
 
 The readiness check requests metadata only; it does not create a signature or
-request private key material. Selecting and auditing the HSM or signing-service
-adapter is a production infrastructure decision and must include key creation,
-rotation, revocation, access-control, audit-log, outage, and recovery evidence.
-Do not weaken or disable the gate to promote a V1 release.
+request private key material. The SoftHSM adapter generates a non-exportable
+ML-DSA-65 key only when the explicitly selected key is absent, serializes initial
+provisioning across HIP hosts, and stores only the public key in HIP's database.
+
+Set these host paths in the protected deployment environment:
+
+```text
+HIP_SOFTHSM_TOKEN_PATH=/opt/hip/shared/softhsm
+HIP_SOFTHSM_USER_PIN_PATH=/opt/hip/shared/secrets/softhsm-user-pin
+HIP_SOFTHSM_SO_PIN_PATH=/opt/hip/shared/secrets/softhsm-so-pin
+```
+
+After building the production images and before the first production `up`, run:
+
+```sh
+./deploy/vps/provision-softhsm.sh
+```
+
+The script is idempotent, does not print either PIN, initializes only a missing
+`hip-signing` token, and leaves ML-DSA key generation to HIP's fail-closed
+provider. Back up the token directory and Security Officer PIN separately before
+issuance. Losing either the token data or all recovery material makes the signing
+key unrecoverable.
+
+SoftHSM is software-backed starter custody on the existing VPS. It must not be
+described as a hardware HSM, independently managed custody, or an audited
+production trust root. The `IManagedTrustReceiptSigner` boundary remains the
+replacement point for a managed HSM or remote signing service; such a promotion
+still requires rotation, revocation, access-control, audit-log, outage, and
+recovery evidence. Do not weaken or disable the gate to promote a V1 release.

@@ -7,6 +7,16 @@ services:
       HipManagedSigning__ExpectedIssuerId: ${HIP_SIGNING_ISSUER_ID:?HIP_SIGNING_ISSUER_ID is required}
       HipManagedSigning__ExpectedKeyId: ${HIP_SIGNING_KEY_ID:?HIP_SIGNING_KEY_ID is required}
       HipManagedSigning__ExpectedAlgorithm: ML-DSA-65
+      HipManagedSigning__Provider: SoftHsm
+      HipManagedSigning__SoftHsm__LibraryPath: /usr/local/lib/softhsm/libsofthsm2.so
+      HipManagedSigning__SoftHsm__TokenLabel: hip-signing
+      HipManagedSigning__SoftHsm__UserPinFilePath: /run/secrets/hip-softhsm-user-pin
+      HipManagedSigning__SoftHsm__KeyLabel: hip-mldsa-65
+      HipManagedSigning__SoftHsm__ProvisioningLockFilePath: /var/lib/softhsm/hip-signing-provision.lock
+      HipManagedSigning__SoftHsm__ProvisionKeyIfMissing: "true"
+    volumes:
+      - ${HIP_SOFTHSM_TOKEN_PATH:?HIP_SOFTHSM_TOKEN_PATH is required}:/var/lib/softhsm
+      - ${HIP_SOFTHSM_USER_PIN_PATH:?HIP_SOFTHSM_USER_PIN_PATH is required}:/run/secrets/hip-softhsm-user-pin:ro
 
   web:
     env_file: !reset []
@@ -19,6 +29,13 @@ services:
       HipManagedSigning__ExpectedIssuerId: ${HIP_SIGNING_ISSUER_ID:?HIP_SIGNING_ISSUER_ID is required}
       HipManagedSigning__ExpectedKeyId: ${HIP_SIGNING_KEY_ID:?HIP_SIGNING_KEY_ID is required}
       HipManagedSigning__ExpectedAlgorithm: ML-DSA-65
+      HipManagedSigning__Provider: SoftHsm
+      HipManagedSigning__SoftHsm__LibraryPath: /usr/local/lib/softhsm/libsofthsm2.so
+      HipManagedSigning__SoftHsm__TokenLabel: hip-signing
+      HipManagedSigning__SoftHsm__UserPinFilePath: /run/secrets/hip-softhsm-user-pin
+      HipManagedSigning__SoftHsm__KeyLabel: hip-mldsa-65
+      HipManagedSigning__SoftHsm__ProvisioningLockFilePath: /var/lib/softhsm/hip-signing-provision.lock
+      HipManagedSigning__SoftHsm__ProvisionKeyIfMissing: "true"
       HipAuthentication__Authority: https://${HIP_IDENTITY_HOST:?HIP_IDENTITY_HOST is required}/realms/hip
       HipAuthentication__ClientId: hip-web
       HipAuthentication__ClientSecret: ${HIP_OIDC_CLIENT_SECRET:?HIP_OIDC_CLIENT_SECRET is required}
@@ -37,6 +54,8 @@ services:
     volumes:
       - ${HIP_SESSION_KEYRING_PATH:?HIP_SESSION_KEYRING_PATH is required}:/var/lib/hip/session-keys
       - ${HIP_SESSION_CERTIFICATE_PATH:?HIP_SESSION_CERTIFICATE_PATH is required}:/run/secrets/hip-session-protection.pfx:ro
+      - ${HIP_SOFTHSM_TOKEN_PATH:?HIP_SOFTHSM_TOKEN_PATH is required}:/var/lib/softhsm
+      - ${HIP_SOFTHSM_USER_PIN_PATH:?HIP_SOFTHSM_USER_PIN_PATH is required}:/run/secrets/hip-softhsm-user-pin:ro
 
   consumer-web:
     environment:
@@ -44,6 +63,18 @@ services:
       HipManagedSigning__ExpectedIssuerId: ${HIP_SIGNING_ISSUER_ID:?HIP_SIGNING_ISSUER_ID is required}
       HipManagedSigning__ExpectedKeyId: ${HIP_SIGNING_KEY_ID:?HIP_SIGNING_KEY_ID is required}
       HipManagedSigning__ExpectedAlgorithm: ML-DSA-65
+      HipManagedSigning__Provider: SoftHsm
+      HipManagedSigning__SoftHsm__LibraryPath: /usr/local/lib/softhsm/libsofthsm2.so
+      HipManagedSigning__SoftHsm__TokenLabel: hip-signing
+      HipManagedSigning__SoftHsm__UserPinFilePath: /run/secrets/hip-softhsm-user-pin
+      HipManagedSigning__SoftHsm__KeyLabel: hip-mldsa-65
+      HipManagedSigning__SoftHsm__ProvisioningLockFilePath: /var/lib/softhsm/hip-signing-provision.lock
+      HipManagedSigning__SoftHsm__ProvisionKeyIfMissing: "true"
+    volumes:
+      - ${HIP_SESSION_KEYRING_PATH:?HIP_SESSION_KEYRING_PATH is required}:/var/lib/hip/session-keys
+      - ${HIP_SESSION_CERTIFICATE_PATH:?HIP_SESSION_CERTIFICATE_PATH is required}:/run/secrets/hip-session-protection.pfx:ro
+      - ${HIP_SOFTHSM_TOKEN_PATH:?HIP_SOFTHSM_TOKEN_PATH is required}:/var/lib/softhsm
+      - ${HIP_SOFTHSM_USER_PIN_PATH:?HIP_SOFTHSM_USER_PIN_PATH is required}:/run/secrets/hip-softhsm-user-pin:ro
 
   caddy:
     environment:

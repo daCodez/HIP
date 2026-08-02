@@ -23,11 +23,13 @@ using HIP.Infrastructure.Identity;
 using HIP.Infrastructure.Certificates;
 using HIP.Infrastructure.Persistence;
 using HIP.Infrastructure.Persistence.Repositories;
+using HIP.Infrastructure.Protocol;
 using HIP.Infrastructure.Security;
 using StackExchange.Redis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace HIP.Infrastructure;
 
@@ -143,7 +145,57 @@ public static class DependencyInjection
         services.AddScoped<IDashboardScanAggregateStore, EfDashboardScanAggregateStore>();
         services.AddScoped<IPlatformConnectionRepository, EfPlatformConnectionRepository>();
 
+        AddManagedSigningProvider(services, configuration);
+
         return services;
+    }
+
+    /// <summary>Registers the explicitly selected managed signing provider and its exact authority allowlists.</summary>
+    private static void AddManagedSigningProvider(IServiceCollection services, IConfiguration configuration)
+    {
+        var section = configuration.GetSection(HipManagedSigningReadinessOptions.SectionName);
+        var providerName = section["Provider"];
+        if (string.IsNullOrWhiteSpace(providerName))
+        {
+            return;
+        }
+
+        if (!string.Equals(providerName, SoftHsmManagedSigningOptions.ProviderName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("HipManagedSigning:Provider must name a registered signing provider.");
+        }
+
+        var signerOptions = section.Get<HipManagedSigningReadinessOptions>()
+            ?? throw new InvalidOperationException("HIP managed signing settings are unavailable.");
+        var softHsm = section.GetSection("SoftHsm").Get<SoftHsmManagedSigningOptions>()
+            ?? throw new InvalidOperationException("HIP SoftHSM settings are unavailable.");
+        var validationError = softHsm.Validate();
+        if (validationError is not null)
+        {
+            throw new InvalidOperationException(validationError);
+        }
+
+        var authorizedSigner = new HipTrustReceiptAuthorizedSigner(
+            signerOptions.ExpectedIssuerId,
+            signerOptions.ExpectedKeyId);
+        var certificateSigner = new DomainCertificateAuthorizedSigner(
+            signerOptions.ExpectedIssuerId,
+            signerOptions.ExpectedKeyId);
+        var identity = new SoftHsmManagedSignerIdentityOptions(
+            authorizedSigner.IssuerId,
+            authorizedSigner.KeyId,
+            "HIP Software Signing Authority",
+            "system:softhsm-signing-authority");
+
+        services.RemoveAll<IManagedTrustReceiptSigner>();
+        services.RemoveAll<HipTrustReceiptIssuerPolicy>();
+        services.RemoveAll<DomainCertificateSigningAuthorityPolicy>();
+        services.AddSingleton(softHsm);
+        services.AddSingleton(identity);
+        services.AddSingleton<ISoftHsmPkcs11Client, SoftHsmPkcs11Client>();
+        services.AddScoped<IManagedTrustReceiptSigner, SoftHsmManagedTrustReceiptSigner>();
+        services.AddSingleton(new HipTrustReceiptIssuerPolicy([authorizedSigner]));
+        services.AddSingleton(new DomainCertificateSigningAuthorityPolicy([certificateSigner]));
     }
 
     /// <summary>

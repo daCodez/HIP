@@ -50,6 +50,11 @@ public sealed class VpsDeploymentSecurityTests
             "deploy",
             "vps",
             "compose.production.override.yml"));
+        var stagingComposeSource = File.ReadAllText(Path.Combine(
+            root,
+            "deploy",
+            "vps",
+            "compose.private-staging.yml"));
         var caddySource = File.ReadAllText(Path.Combine(
             root,
             "deploy",
@@ -74,6 +79,12 @@ public sealed class VpsDeploymentSecurityTests
                 Is.EqualTo(3));
             Assert.That(overrideSource, Does.Contain("HIP_SIGNING_ISSUER_ID is required"));
             Assert.That(overrideSource, Does.Contain("HIP_SIGNING_KEY_ID is required"));
+            Assert.That(Occurrences(overrideSource, "HipManagedSigning__Provider: SoftHsm"), Is.EqualTo(3));
+            Assert.That(Occurrences(overrideSource, "hip-softhsm-user-pin:ro"), Is.EqualTo(3));
+            Assert.That(Occurrences(overrideSource, "HipManagedSigning__SoftHsm__ProvisionKeyIfMissing: \"true\""), Is.EqualTo(3));
+            Assert.That(Occurrences(stagingComposeSource, "HipManagedSigning__Provider: SoftHsm"), Is.EqualTo(3));
+            Assert.That(Occurrences(stagingComposeSource, "hip-softhsm-user-pin:ro"), Is.EqualTo(3));
+            Assert.That(Occurrences(stagingComposeSource, "HipManagedSigning__Required: \"true\""), Is.EqualTo(1));
             Assert.That(caddySource, Does.Not.Contain(
                 "header_up X-HIP-Trusted-Staging-Proxy "));
             Assert.That(caddySource, Does.Not.Contain("@publicRoot path /"));
