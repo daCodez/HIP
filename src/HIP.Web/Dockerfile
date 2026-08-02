@@ -15,6 +15,8 @@ RUN git init \
 RUN ./Configure --prefix=/opt/openssl --openssldir=/opt/openssl/ssl shared \
     && make -j2 \
     && make install_sw
+RUN test -d /opt/openssl/lib64 \
+    && ln -s lib64 /opt/openssl/lib
 WORKDIR /build/softhsm
 RUN git init \
     && git remote add origin https://github.com/softhsm/SoftHSMv2.git \
