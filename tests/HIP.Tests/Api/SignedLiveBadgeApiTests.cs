@@ -44,7 +44,10 @@ public sealed class SignedLiveBadgeApiTests
             Assert.That(script, Does.Contain("Not enough evidence yet"));
             Assert.That(script, Does.Contain("payload.certificate"));
             Assert.That(script, Does.Contain("certificate.domain !== domain"));
-            Assert.That(script, Does.Contain("certificate.isActive"));
+            Assert.That(script, Does.Contain("certificate.isActive !== true"));
+            Assert.That(script, Does.Contain("certificate.status !== \"Active\""));
+            Assert.That(script, Does.Contain("certificate.signatureStatus !== \"Verified\""));
+            Assert.That(script, Does.Contain("container.remove()"));
             Assert.That(script, Does.Contain("expiresAt <= Date.now()"));
             Assert.That(script, Does.Contain("HIP Unavailable"));
             Assert.That(script, Does.Contain("position: fixed"));

@@ -4350,13 +4350,17 @@ public partial class Program
     });
 
   function render(badge) {
+    if (!badge) {
+      container.remove();
+      return;
+    }
+
     const certificate = badge.certificate;
-    const active = certificate && certificate.isActive === true && certificate.domain === domain;
-    const variant = certificate ? String(active ? certificate.level : certificate.status).toLowerCase() : "unknown";
+    const variant = String(certificate.level).toLowerCase();
     const checked = badge.lastCheckedUtc ? new Date(badge.lastCheckedUtc).toLocaleDateString() : "Unknown";
-    const lookupUrl = new URL(certificate?.publicCertificateUrl || badge.lookupUrl || badge.publicLookupUrl || `/lookup/${badge.domain}`, apiBase).toString();
+    const lookupUrl = new URL(certificate.publicCertificateUrl || badge.lookupUrl || badge.publicLookupUrl || `/lookup/${badge.domain}`, apiBase).toString();
     const identityStatus = badge.identityVerificationStatus === "Verified" ? "Verified" : badge.identityVerificationStatus === "Pending" ? "Pending" : "Unverified";
-    const label = active && identityStatus === "Verified" ? "HIP Identity Verified" : active ? "HIP Identity Pending" : certificate ? `HIP ${certificate.status}` : "HIP Identity Unverified";
+    const label = identityStatus === "Verified" ? "HIP Identity Verified" : "HIP Identity Pending";
     const safetyAssessment = badge.scorePresentation === "Available" && badge.displayScore !== null && badge.displayScore !== undefined && Number.isFinite(Number(badge.displayScore))
       ? `<span class="hip-badge-fact"><b>Safety score</b>${escapeHtml(badge.displayScore)}/100 (${escapeHtml(badge.status)})</span>`
       : '<span class="hip-badge-fact"><b>Safety assessment</b>Not enough evidence yet</span>';
@@ -4376,7 +4380,7 @@ public partial class Program
               <button type="button" data-hip-action="close" aria-label="Close HIP badge" title="Close">×</button>
             </span>
           </div>
-          <span class="hip-badge-fact"><b>Certificate</b>${escapeHtml(certificate?.status || "Not issued")} · ${escapeHtml(certificate?.level || "None")}</span>
+          <span class="hip-badge-fact"><b>Certificate</b>${escapeHtml(certificate.status)} · ${escapeHtml(certificate.level)}</span>
           <span class="hip-badge-fact"><b>Identity</b>${escapeHtml(identityStatus)}</span>
           <span class="hip-badge-fact"><b>Evidence</b>${escapeHtml(badge.evidenceCoverage || "Insufficient")} · ${escapeHtml(badge.evidenceConfidence || "None")} confidence</span>
           ${safetyAssessment}
@@ -4435,8 +4439,14 @@ public partial class Program
     const expiresAt = payload && Date.parse(payload.expiresAtUtc);
     const certificate = badge && badge.certificate;
     const signedCertificate = payload && payload.certificate;
-    const certificateMatches = (!certificate && !signedCertificate) ||
-      (certificate && signedCertificate &&
+    const certificateExpiresAt = certificate && Date.parse(certificate.expiresAtUtc);
+    if (!certificate || certificate.isActive !== true || certificate.domain !== domain ||
+        certificate.status !== "Active" || certificate.signatureStatus !== "Verified" ||
+        !Number.isFinite(certificateExpiresAt) || certificateExpiresAt <= Date.now()) {
+      return null;
+    }
+
+    const certificateMatches = signedCertificate &&
        certificate.certificateId === signedCertificate.certificateId &&
        certificate.domain === signedCertificate.domain &&
        certificate.level === signedCertificate.level &&
@@ -4444,7 +4454,7 @@ public partial class Program
        certificate.signatureStatus === signedCertificate.signatureStatus &&
        certificate.expiresAtUtc === signedCertificate.expiresAtUtc &&
        certificate.publicCertificateUrl === signedCertificate.publicCertificateUrl &&
-       certificate.isActive === signedCertificate.isActive);
+       certificate.isActive === signedCertificate.isActive;
     if (!badge || badge.isAvailable !== true || badge.signatureStatus !== "Verified" ||
         !signed || !payload || !signed.signature ||
         payload.documentType !== "hip-live-badge" || payload.version !== "1.0" ||
@@ -4457,8 +4467,6 @@ public partial class Program
         payload.verifiedDomain !== badge.verifiedDomain ||
         payload.identityVerificationStatus !== badge.identityVerificationStatus ||
         payload.verifiedMeaning !== badge.verifiedMeaning || !certificateMatches ||
-        (certificate && certificate.domain !== domain) ||
-        (certificate?.isActive === true && (certificate.status !== "Active" || certificate.signatureStatus !== "Verified")) ||
         !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       throw new Error("HIP badge signature state is unavailable or inconsistent.");
     }

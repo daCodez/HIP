@@ -94,6 +94,10 @@ public sealed class LiveTrustBadgeApiTests
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/javascript"));
         Assert.That(script, Does.Contain("renderHipLiveTrustBadge"));
         Assert.That(script, Does.Contain("HIP Identity Verified"));
+        Assert.That(script, Does.Contain("certificate.isActive !== true"));
+        Assert.That(script, Does.Contain("certificate.status !== \"Active\""));
+        Assert.That(script, Does.Contain("certificate.signatureStatus !== \"Verified\""));
+        Assert.That(script, Does.Contain("container.remove()"));
         Assert.That(script, Does.Contain("Not enough evidence yet"));
         Assert.That(script, Does.Contain("displayScore"));
         Assert.That(script, Does.Not.Contain("badge.score)}/100"));
