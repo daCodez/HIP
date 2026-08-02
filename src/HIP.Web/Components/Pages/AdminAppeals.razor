@@ -93,7 +93,7 @@
                                 <td><span class="hip-pill @StatusTone(appeal.Status)">@appeal.Status</span></td>
                                 <td>@appeal.CreatedAtUtc.UtcDateTime.ToString("u")</td>
                                 <td>@(string.IsNullOrWhiteSpace(appeal.Decision) ? "Pending" : appeal.Decision)</td>
-                                <td><a href="@($"/admin/appeals/{Uri.EscapeDataString(appeal.AppealId)}")">Review appeal</a></td>
+                                <td><a href="@($"/appeals/{Uri.EscapeDataString(appeal.AppealId)}")">Review appeal</a></td>
                             </tr>
                         }
                     </tbody>

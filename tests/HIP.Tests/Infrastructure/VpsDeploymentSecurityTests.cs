@@ -17,23 +17,25 @@ public sealed class VpsDeploymentSecurityTests
         {
             foreach (var caddySource in caddySources)
             {
-                Assert.That(caddySource, Does.Contain("@consumerPortal path /consumer /consumer/*"));
+                Assert.That(caddySource, Does.Contain("@legacyConsumerPortal path_regexp legacyConsumerPortal ^/consumer(?:/(.*))?$"));
                 Assert.That(
                     caddySource,
-                    Does.Contain("redir @consumerPortal https://{$HIP_CONSUMER_HOST}{uri} 302"));
-                Assert.That(caddySource, Does.Contain("@adminPortal path /admin /admin/*"));
+                    Does.Contain("redir @legacyConsumerPortal https://{$HIP_CONSUMER_HOST}/{re.legacyConsumerPortal.1} 302"));
+                Assert.That(caddySource, Does.Contain("@legacyAdminPortal path_regexp legacyAdminPortal ^/admin(?:/(.*))?$"));
                 Assert.That(
                     caddySource,
-                    Does.Contain("redir @adminPortal https://{$HIP_ADMIN_HOST}{uri} 302"));
+                    Does.Contain("redir @legacyAdminPortal https://{$HIP_ADMIN_HOST}/{re.legacyAdminPortal.1} 302"));
                 Assert.That(
-                    Occurrences(caddySource, "redir @consumerPortal https://{$HIP_CONSUMER_HOST}{uri} 302"),
-                    Is.EqualTo(3));
+                    Occurrences(caddySource, "redir @legacyConsumerPortal https://{$HIP_CONSUMER_HOST}/{re.legacyConsumerPortal.1} 302"),
+                    Is.EqualTo(4));
                 Assert.That(
-                    Occurrences(caddySource, "redir @adminPortal https://{$HIP_ADMIN_HOST}{uri} 302"),
-                    Is.EqualTo(3));
+                    Occurrences(caddySource, "redir @legacyAdminPortal https://{$HIP_ADMIN_HOST}/{re.legacyAdminPortal.1} 302"),
+                    Is.EqualTo(4));
                 Assert.That(
                     Occurrences(caddySource, "redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302"),
                     Is.EqualTo(3));
+                Assert.That(caddySource, Does.Contain("rewrite @consumerUi /consumer{uri}"));
+                Assert.That(caddySource, Does.Contain("rewrite @adminUi /admin{uri}"));
             }
         });
     }

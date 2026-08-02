@@ -18,80 +18,80 @@
 {
 <nav class="nav" aria-label="HIP consumer navigation">
             <p class="group-title">Consumer portal</p>
-            <NavLink class="nav-item" href="consumer" Match="NavLinkMatch.All" title="Home">@Icon("home")<span>Home</span></NavLink>
-            <NavLink class="nav-item" href="consumer/scans" title="Scan History">@Icon("history")<span>Scan History</span></NavLink>
-            <NavLink class="nav-item" href="consumer/certificates" title="Domain Certificates">@Icon("certificate")<span>Domain Certificates</span></NavLink>
-            <NavLink class="nav-item" href="consumer/devices" title="Devices">@Icon("devices")<span>Devices</span></NavLink>
-            <NavLink class="nav-item" href="consumer/alerts" title="Alert Settings">@Icon("bell")<span>Alert Settings</span></NavLink>
-            <NavLink class="nav-item" href="consumer/reports" title="Reports">@Icon("report")<span>Reports</span></NavLink>
-            <NavLink class="nav-item" href="consumer/appeals" title="Appeals">@Icon("gavel")<span>Appeals</span></NavLink>
-            <NavLink class="nav-item" href="consumer/licenses" title="Licenses">@Icon("key")<span>Licenses</span></NavLink>
-            <NavLink class="nav-item" href="consumer/security" title="Account Security">@Icon("lock")<span>Account Security</span></NavLink>
+            <NavLink class="nav-item" href="/" Match="NavLinkMatch.All" title="Home">@Icon("home")<span>Home</span></NavLink>
+            <NavLink class="nav-item" href="/scans" title="Scan History">@Icon("history")<span>Scan History</span></NavLink>
+            <NavLink class="nav-item" href="/certificates" title="Domain Certificates">@Icon("certificate")<span>Domain Certificates</span></NavLink>
+            <NavLink class="nav-item" href="/devices" title="Devices">@Icon("devices")<span>Devices</span></NavLink>
+            <NavLink class="nav-item" href="/alerts" title="Alert Settings">@Icon("bell")<span>Alert Settings</span></NavLink>
+            <NavLink class="nav-item" href="/reports" title="Reports">@Icon("report")<span>Reports</span></NavLink>
+            <NavLink class="nav-item" href="/appeals" title="Appeals">@Icon("gavel")<span>Appeals</span></NavLink>
+            <NavLink class="nav-item" href="/licenses" title="Licenses">@Icon("key")<span>Licenses</span></NavLink>
+            <NavLink class="nav-item" href="/security" title="Account Security">@Icon("lock")<span>Account Security</span></NavLink>
         </nav>
 }
 else
 {
 <nav class="nav" aria-label="HIP admin navigation">
     <p class="group-title">Command</p>
-    <NavLink class="nav-item" href="admin" Match="NavLinkMatch.All" title="Overview">@Icon("dashboard")<span>Overview</span></NavLink>
+    <NavLink class="nav-item" href="/" Match="NavLinkMatch.All" title="Overview">@Icon("dashboard")<span>Overview</span></NavLink>
 
     <p class="group-title">Trust operations</p>
     <AuthorizeView Policy="@AdminPolicies.CanViewReviews">
         <Authorized>
-            <NavLink class="nav-item" href="admin/alerts" title="Alert Center">@Icon("bell")<span>Alert Center</span></NavLink>
-            <NavLink class="nav-item" href="admin/review" title="Review Queue">@Icon("review")<span>Review Queue</span></NavLink>
-            <NavLink class="nav-item" href="admin/certificates" title="Certificates">@Icon("certificate")<span>Certificates</span></NavLink>
-            <NavLink class="nav-item" href="admin/review-queue" title="Safety Signals">@Icon("radar")<span>Safety Signals</span></NavLink>
+            <NavLink class="nav-item" href="/alerts" title="Alert Center">@Icon("bell")<span>Alert Center</span></NavLink>
+            <NavLink class="nav-item" href="/review" title="Review Queue">@Icon("review")<span>Review Queue</span></NavLink>
+            <NavLink class="nav-item" href="/certificates" title="Certificates">@Icon("certificate")<span>Certificates</span></NavLink>
+            <NavLink class="nav-item" href="/review-queue" title="Safety Signals">@Icon("radar")<span>Safety Signals</span></NavLink>
         </Authorized>
     </AuthorizeView>
-    <NavLink class="nav-item" href="admin/message-shield" title="Message Shield">@Icon("message-shield")<span>Message Shield</span></NavLink>
+    <NavLink class="nav-item" href="/message-shield" title="Message Shield">@Icon("message-shield")<span>Message Shield</span></NavLink>
     <AuthorizeView Policy="@AdminPolicies.CanViewAppeals">
         <Authorized>
-            <NavLink class="nav-item" href="admin/appeals" title="Appeals">@Icon("gavel")<span>Appeals</span></NavLink>
+            <NavLink class="nav-item" href="/appeals" title="Appeals">@Icon("gavel")<span>Appeals</span></NavLink>
         </Authorized>
     </AuthorizeView>
 
     <p class="group-title">Intelligence</p>
-    <NavLink class="nav-item" href="admin/reputation" title="Score Overview">@Icon("gauge")<span>Score Overview</span></NavLink>
-    <NavLink class="nav-item" href="admin/reputation/signals" title="Trust Signals">@Icon("signal")<span>Trust Signals</span></NavLink>
-    <NavLink class="nav-item" href="admin/reputation/senders" title="Sender Profiles">@Icon("contact")<span>Sender Profiles</span></NavLink>
+    <NavLink class="nav-item" href="/reputation" title="Score Overview">@Icon("gauge")<span>Score Overview</span></NavLink>
+    <NavLink class="nav-item" href="/reputation/signals" title="Trust Signals">@Icon("signal")<span>Trust Signals</span></NavLink>
+    <NavLink class="nav-item" href="/reputation/senders" title="Sender Profiles">@Icon("contact")<span>Sender Profiles</span></NavLink>
     <AuthorizeView Policy="@AdminPolicies.CanViewReviews">
         <Authorized>
-            <NavLink class="nav-item" href="admin/reports" title="Reports">@Icon("report")<span>Reports</span></NavLink>
+            <NavLink class="nav-item" href="/reports" title="Reports">@Icon("report")<span>Reports</span></NavLink>
         </Authorized>
     </AuthorizeView>
-    <NavLink class="nav-item" href="admin/feedback" title="Feedback Loop">@Icon("feedback")<span>Feedback Loop</span></NavLink>
+    <NavLink class="nav-item" href="/feedback" title="Feedback Loop">@Icon("feedback")<span>Feedback Loop</span></NavLink>
 
     <p class="group-title">Identity &amp; clients</p>
-    <NavLink class="nav-item" href="admin/identity/websites" title="Domain Verification">@Icon("domain-check")<span>Domain Verification</span></NavLink>
-    <NavLink class="nav-item" href="admin/platforms" title="Platform Connections">@Icon("plug")<span>Platform Connections</span></NavLink>
-    <a class="nav-item" href="@PortalLinks.Consumer("/consumer/devices")" data-enhance-nav="false" title="Devices">@Icon("devices")<span>Devices</span></a>
+    <NavLink class="nav-item" href="/identity/websites" title="Domain Verification">@Icon("domain-check")<span>Domain Verification</span></NavLink>
+    <NavLink class="nav-item" href="/platforms" title="Platform Connections">@Icon("plug")<span>Platform Connections</span></NavLink>
+    <a class="nav-item" href="@PortalLinks.Consumer("/devices")" data-enhance-nav="false" title="Devices">@Icon("devices")<span>Devices</span></a>
     <AuthorizeView Policy="@AdminPolicies.CanViewLicenses">
         <Authorized>
-            <NavLink class="nav-item" href="/admin/licenses" data-enhance-nav="false" title="Licenses">@Icon("key")<span>Licenses</span></NavLink>
+            <NavLink class="nav-item" href="/licenses" title="Licenses">@Icon("key")<span>Licenses</span></NavLink>
         </Authorized>
     </AuthorizeView>
     <AuthorizeView Policy="@AdminPolicies.CanSupportLicenses">
         <Authorized>
-            <NavLink class="nav-item" href="admin/sl-hud-simulator" title="HUD Simulator">@Icon("gamepad")<span>HUD Simulator</span></NavLink>
+            <NavLink class="nav-item" href="/sl-hud-simulator" title="HUD Simulator">@Icon("gamepad")<span>HUD Simulator</span></NavLink>
         </Authorized>
     </AuthorizeView>
 
     <p class="group-title">Automation</p>
-    <NavLink class="nav-item" href="admin/rules" title="Rule Builder">@Icon("workflow")<span>Rule Builder</span></NavLink>
-    <NavLink class="nav-item" href="admin/self-healing" title="Self-Healing">@Icon("repair")<span>Self-Healing</span></NavLink>
-    <NavLink class="nav-item" href="admin/reputation-overrides" title="Reputation Overrides">@Icon("sliders")<span>Reputation Overrides</span></NavLink>
+    <NavLink class="nav-item" href="/rules" title="Rule Builder">@Icon("workflow")<span>Rule Builder</span></NavLink>
+    <NavLink class="nav-item" href="/self-healing" title="Self-Healing">@Icon("repair")<span>Self-Healing</span></NavLink>
+    <NavLink class="nav-item" href="/reputation-overrides" title="Reputation Overrides">@Icon("sliders")<span>Reputation Overrides</span></NavLink>
 
     <p class="group-title">System</p>
-    <NavLink class="nav-item" href="admin/audit-logs" title="Audit Trail">@Icon("audit")<span>Audit Trail</span></NavLink>
+    <NavLink class="nav-item" href="/audit-logs" title="Audit Trail">@Icon("audit")<span>Audit Trail</span></NavLink>
     <AuthorizeView Policy="@AdminPolicies.CanViewServiceClients">
         <Authorized>
-            <NavLink class="nav-item" href="admin/api" title="API &amp; Developer">@Icon("code")<span>API &amp; Developer</span></NavLink>
+            <NavLink class="nav-item" href="/api" title="API &amp; Developer">@Icon("code")<span>API &amp; Developer</span></NavLink>
         </Authorized>
     </AuthorizeView>
-    <NavLink class="nav-item" href="admin/privacy" title="Privacy &amp; Safety">@Icon("lock")<span>Privacy &amp; Safety</span></NavLink>
-    <NavLink class="nav-item" href="admin/roles" title="Users &amp; Roles">@Icon("users")<span>Users &amp; Roles</span></NavLink>
-    <NavLink class="nav-item" href="admin/settings" title="Settings">@Icon("settings")<span>Settings</span></NavLink>
+    <NavLink class="nav-item" href="/privacy" title="Privacy &amp; Safety">@Icon("lock")<span>Privacy &amp; Safety</span></NavLink>
+    <NavLink class="nav-item" href="/roles" title="Users &amp; Roles">@Icon("users")<span>Users &amp; Roles</span></NavLink>
+    <NavLink class="nav-item" href="/settings" title="Settings">@Icon("settings")<span>Settings</span></NavLink>
 </nav>
 }
 
@@ -171,11 +171,8 @@ else
     {
         get
         {
-            var route = Navigation.ToBaseRelativePath(Navigation.Uri)
-                .Split('?', '#')[0]
-                .Trim('/');
-            return route.Equals("consumer", StringComparison.OrdinalIgnoreCase) ||
-                   route.StartsWith("consumer/", StringComparison.OrdinalIgnoreCase);
+            return Uri.TryCreate(Navigation.Uri, UriKind.Absolute, out var browserUri) &&
+                   PortalLinks.IsConsumer(browserUri);
         }
     }
     private static RenderFragment Icon(string name) => name switch

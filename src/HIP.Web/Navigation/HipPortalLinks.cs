@@ -63,6 +63,24 @@ public sealed class HipPortalLinks(IOptions<HipPortalLinkOptions> configuredOpti
     /// <summary>Builds a link to the identity provider.</summary>
     public string Identity(string localPath) => Build(options.IdentityOrigin, localPath);
 
+    /// <summary>Returns whether an absolute browser URI belongs to the canonical Consumer application.</summary>
+    public bool IsConsumer(Uri browserUri)
+    {
+        ArgumentNullException.ThrowIfNull(browserUri);
+        if (!browserUri.IsAbsoluteUri ||
+            !Uri.TryCreate(options.ConsumerOrigin, UriKind.Absolute, out var consumerOrigin))
+        {
+            return false;
+        }
+
+        return Uri.Compare(
+            browserUri,
+            consumerOrigin,
+            UriComponents.SchemeAndServer,
+            UriFormat.SafeUnescaped,
+            StringComparison.OrdinalIgnoreCase) == 0;
+    }
+
     private static string Build(string origin, string localPath)
     {
         if (string.IsNullOrWhiteSpace(localPath) ||

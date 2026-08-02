@@ -15,13 +15,15 @@ public sealed class HipPortalNavigationTests
         Assert.Multiple(() =>
         {
             Assert.That(links.Public("/lookup/example.com"), Is.EqualTo("https://guardwithhip.com/lookup/example.com"));
-            Assert.That(links.Consumer("/consumer/devices"), Is.EqualTo("https://app.guardwithhip.com/consumer/devices"));
-            Assert.That(links.Admin("/admin/message-shield"), Is.EqualTo("https://admin.guardwithhip.com/admin/message-shield"));
+            Assert.That(links.Consumer("/devices"), Is.EqualTo("https://app.guardwithhip.com/devices"));
+            Assert.That(links.Admin("/message-shield"), Is.EqualTo("https://admin.guardwithhip.com/message-shield"));
             Assert.That(links.Api("/health"), Is.EqualTo("https://api.guardwithhip.com/health"));
             Assert.That(links.Identity("/realms/hip/account"), Is.EqualTo("https://identity.guardwithhip.com/realms/hip/account"));
             Assert.That(() => links.Public("//outside.example/path"), Throws.ArgumentException);
             Assert.That(() => links.Public("/\\outside.example/path"), Throws.ArgumentException);
             Assert.That(() => links.Public("/lookup\r\noutside.example"), Throws.ArgumentException);
+            Assert.That(links.IsConsumer(new Uri("https://app.guardwithhip.com/devices")), Is.True);
+            Assert.That(links.IsConsumer(new Uri("https://admin.guardwithhip.com/devices")), Is.False);
         });
     }
 
@@ -43,16 +45,35 @@ public sealed class HipPortalNavigationTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(sources["admin navigation"], Does.Contain("PortalLinks.Consumer(\"/consumer/devices\")"));
+            Assert.That(sources["admin navigation"], Does.Contain("PortalLinks.Consumer(\"/devices\")"));
             Assert.That(sources["consumer home"], Does.Contain("PortalLinks.Public(\"/lookup\")"));
             Assert.That(sources["consumer certificates"], Does.Contain("PortalLinks.Public($\"/certificate/"));
             Assert.That(sources["admin certificates"], Does.Contain("PortalLinks.Public($\"/certificate/"));
             Assert.That(sources["admin reputation"], Does.Contain("PortalLinks.Public($\"/lookup/"));
             Assert.That(sources["admin website identity"], Does.Contain("PortalLinks.Public($\"/lookup/domain/"));
             Assert.That(sources["admin roles"], Does.Contain("PortalLinks.Public(\"/access\")"));
-            Assert.That(sources["admin dashboard"], Does.Contain("href=\"/admin/reputation\">View all"));
-            Assert.That(sources["admin dashboard"], Does.Not.Contain("href=\"/admin/scans\""));
+            Assert.That(sources["admin dashboard"], Does.Contain("href=\"/reputation\">View all"));
+            Assert.That(sources["admin dashboard"], Does.Not.Contain("href=\"/admin/"));
         });
+    }
+
+    [Test]
+    public void Browser_navigation_never_emits_admin_or_consumer_folder_prefixes()
+    {
+        var root = RepositoryRoot();
+        var componentRoot = Path.Combine(root, "src", "HIP.Web", "Components");
+        var failures = Directory.GetFiles(componentRoot, "*.razor", SearchOption.AllDirectories)
+            .Where(path => !path.EndsWith("DevLauncher.razor", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(path => File.ReadAllLines(path)
+                .Where(line => !line.TrimStart().StartsWith("@page", StringComparison.Ordinal))
+                .Where(line => Regex.IsMatch(
+                    line,
+                    "(?:href|action)=\\\"(?:@\\(\\$?\\\")?/?(?:admin|consumer)(?:/|\\\")",
+                    RegexOptions.IgnoreCase))
+                .Select(line => $"{Path.GetRelativePath(root, path)}: {line.Trim()}"))
+            .ToArray();
+
+        Assert.That(failures, Is.Empty);
     }
 
     [Test]
@@ -83,7 +104,11 @@ public sealed class HipPortalNavigationTests
                     Source = Path.GetRelativePath(root, source.Path),
                     Target = match.Groups["target"].Value
                 }))
-            .Where(link => !pageRoutes.Contains(link.Target) && !endpointTargets.Contains(link.Target))
+            .Where(link =>
+                !pageRoutes.Contains(link.Target) &&
+                !endpointTargets.Contains(link.Target) &&
+                !pageRoutes.Contains($"/admin{(link.Target == "/" ? string.Empty : link.Target)}") &&
+                !pageRoutes.Contains($"/consumer{(link.Target == "/" ? string.Empty : link.Target)}"))
             .Select(link => $"{link.Source}: {link.Target}")
             .ToArray();
 

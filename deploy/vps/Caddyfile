@@ -9,11 +9,11 @@
         -Server
     }
 
-    @consumerPortal path /consumer /consumer/*
-    redir @consumerPortal https://{$HIP_CONSUMER_HOST}{uri} 302
+    @legacyConsumerPortal path_regexp legacyConsumerPortal ^/consumer(?:/(.*))?$
+    redir @legacyConsumerPortal https://{$HIP_CONSUMER_HOST}/{re.legacyConsumerPortal.1} 302
 
-    @adminPortal path /admin /admin/*
-    redir @adminPortal https://{$HIP_ADMIN_HOST}{uri} 302
+    @legacyAdminPortal path_regexp legacyAdminPortal ^/admin(?:/(.*))?$
+    redir @legacyAdminPortal https://{$HIP_ADMIN_HOST}/{re.legacyAdminPortal.1} 302
 
     @publicRoot path /
     redir @publicRoot /lookup 302
@@ -37,14 +37,17 @@
         -Server
     }
 
-    @adminPortal path /admin /admin/*
-    redir @adminPortal https://{$HIP_ADMIN_HOST}{uri} 302
+    @legacyConsumerPortal path_regexp legacyConsumerPortal ^/consumer(?:/(.*))?$
+    redir @legacyConsumerPortal https://{$HIP_CONSUMER_HOST}/{re.legacyConsumerPortal.1} 302
+
+    @legacyAdminPortal path_regexp legacyAdminPortal ^/admin(?:/(.*))?$
+    redir @legacyAdminPortal https://{$HIP_ADMIN_HOST}/{re.legacyAdminPortal.1} 302
 
     @publicExperience path /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
     redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302
 
-    @portalRoot path /
-    redir @portalRoot /consumer 302
+    @consumerUi not path /api/* /auth /auth/* /signin-oidc /signout-callback-oidc /login /forbidden /step-up /not-found /Error /_framework/* /_blazor /_blazor/* /_content/* /js/* /lib/* /*.css /*.js /favicon.png /hip-logo.svg /hip-logo-original.png
+    rewrite @consumerUi /consumer{uri}
 
     reverse_proxy consumer-web:8080 {
         header_up -X-HIP-Admin-Role
@@ -65,14 +68,17 @@
         -Server
     }
 
-    @consumerPortal path /consumer /consumer/*
-    redir @consumerPortal https://{$HIP_CONSUMER_HOST}{uri} 302
+    @legacyConsumerPortal path_regexp legacyConsumerPortal ^/consumer(?:/(.*))?$
+    redir @legacyConsumerPortal https://{$HIP_CONSUMER_HOST}/{re.legacyConsumerPortal.1} 302
+
+    @legacyAdminPortal path_regexp legacyAdminPortal ^/admin(?:/(.*))?$
+    redir @legacyAdminPortal https://{$HIP_ADMIN_HOST}/{re.legacyAdminPortal.1} 302
 
     @publicExperience path /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
     redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302
 
-    @portalRoot path /
-    redir @portalRoot /admin 302
+    @adminUi not path /api/* /auth /auth/* /signin-oidc /signout-callback-oidc /login /forbidden /step-up /not-found /Error /_framework/* /_blazor /_blazor/* /_content/* /js/* /lib/* /*.css /*.js /favicon.png /hip-logo.svg /hip-logo-original.png
+    rewrite @adminUi /admin{uri}
 
     reverse_proxy consumer-web:8080 {
         header_up -X-HIP-Admin-Role
@@ -93,11 +99,11 @@
         -Server
     }
 
-    @consumerPortal path /consumer /consumer/*
-    redir @consumerPortal https://{$HIP_CONSUMER_HOST}{uri} 302
+    @legacyConsumerPortal path_regexp legacyConsumerPortal ^/consumer(?:/(.*))?$
+    redir @legacyConsumerPortal https://{$HIP_CONSUMER_HOST}/{re.legacyConsumerPortal.1} 302
 
-    @adminPortal path /admin /admin/*
-    redir @adminPortal https://{$HIP_ADMIN_HOST}{uri} 302
+    @legacyAdminPortal path_regexp legacyAdminPortal ^/admin(?:/(.*))?$
+    redir @legacyAdminPortal https://{$HIP_ADMIN_HOST}/{re.legacyAdminPortal.1} 302
 
     @publicExperience path /lookup /lookup/* /certificate /certificate/* /access /access/* /safety /safety/*
     redir @publicExperience https://{$HIP_PUBLIC_HOST}{uri} 302

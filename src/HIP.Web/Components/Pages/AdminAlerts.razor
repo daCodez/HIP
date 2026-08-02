@@ -193,12 +193,12 @@
 
     private static string DetailHref(AdminRecentThreatItem alert) =>
         !string.IsNullOrWhiteSpace(alert.RelatedScanId)
-            ? $"/admin/scans/{Uri.EscapeDataString(alert.RelatedScanId)}"
+            ? $"/scans/{Uri.EscapeDataString(alert.RelatedScanId)}"
             : !string.IsNullOrWhiteSpace(alert.RelatedReviewId)
-                ? $"/admin/review/{Uri.EscapeDataString(alert.RelatedReviewId)}"
+                ? $"/review/{Uri.EscapeDataString(alert.RelatedReviewId)}"
                 : !string.IsNullOrWhiteSpace(alert.RelatedRuleId)
-                    ? $"/admin/rules/{Uri.EscapeDataString(alert.RelatedRuleId)}"
-                    : "/admin/review-queue";
+                    ? $"/rules/{Uri.EscapeDataString(alert.RelatedRuleId)}"
+                    : "/review-queue";
 
     private static int SeverityRank(string severity) => severity.ToUpperInvariant() switch
     {

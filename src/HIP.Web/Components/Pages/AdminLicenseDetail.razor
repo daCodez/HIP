@@ -6,10 +6,10 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 <PageTitle>Manage License | HIP Admin</PageTitle>
 <main class="license-detail-page">
-    <section class="hip-page-heading license-heading"><div><span class="hip-eyebrow">HIP Admin · licenses</span><h1>Manage license</h1><p>Review access, connected devices, and safety preferences.</p></div><a class="hip-secondary-action" href="/admin/licenses">Back to licenses</a></section>
+    <section class="hip-page-heading license-heading"><div><span class="hip-eyebrow">HIP Admin · licenses</span><h1>Manage license</h1><p>Review access, connected devices, and safety preferences.</p></div><a class="hip-secondary-action" href="/licenses">Back to licenses</a></section>
     @if (License is null)
     {
-        <section class="hip-panel padded license-not-found"><h2>License not found</h2><p>This license may have been removed, or the link may be incomplete.</p><a class="hip-primary-action" href="/admin/licenses">View all licenses</a></section>
+        <section class="hip-panel padded license-not-found"><h2>License not found</h2><p>This license may have been removed, or the link may be incomplete.</p><a class="hip-primary-action" href="/licenses">View all licenses</a></section>
     }
     else
     {
@@ -56,7 +56,7 @@
     private bool _requiresStepUp;
     private bool _canSupportLicenses;
     private bool _canAdministerLicenses;
-    private string StepUpHref => $"/step-up?returnUrl={Uri.EscapeDataString($"/admin/licenses/{Uri.EscapeDataString(LicenseId)}")}";
+    private string StepUpHref => $"/step-up?returnUrl={Uri.EscapeDataString($"/licenses/{Uri.EscapeDataString(LicenseId)}")}";
     protected override async Task OnInitializedAsync()
     {
         var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();

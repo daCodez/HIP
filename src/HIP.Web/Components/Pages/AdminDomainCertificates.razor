@@ -41,7 +41,7 @@
             <article class="score-card"><span>Pending certificate reviews</span><strong>@PendingReviews.Count</strong><p>Policy or evidence requires an authorized decision.</p></article>
             <article class="score-card"><span>Recently issued certificates</span><strong>@RecentlyIssued.Count</strong><p>Current signed certificates in this page.</p></article>
             <article class="score-card"><span>Recently revoked certificates</span><strong>@RecentlyRevoked.Count</strong><p>Current certificates whose live lifecycle is revoked.</p></article>
-            <article class="score-card"><span>Failed verification attempts</span><strong>Open</strong><p><a href="/admin/identity/websites">Open domain verification operations</a></p></article>
+            <article class="score-card"><span>Failed verification attempts</span><strong>Open</strong><p><a href="/identity/websites">Open domain verification operations</a></p></article>
         </section>
 
         <section class="lookup-result certificate-review-explainer" aria-labelledby="security-review-explainer-title">
@@ -105,7 +105,7 @@
                                     <td><time datetime="@item.UpdatedAtUtc.ToString("O")">@item.UpdatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</time></td>
                                     <td>
                                         <div class="certificate-row-actions">
-                                            <a href="@($"/admin/identity/websites?domain={Uri.EscapeDataString(item.Domain)}")">Verification</a>
+                                            <a href="@($"/identity/websites?domain={Uri.EscapeDataString(item.Domain)}")">Verification</a>
                                             @if (item.ApplicationStatus == DomainCertificateApplicationStatus.Submitted)
                                             {
                                                 <button type="button" class="hip-secondary-action" @onclick="() => BeginApplicationDecision(item, DomainCertificateApplicationStatus.Approved)" disabled="@_submitting">Approve</button>

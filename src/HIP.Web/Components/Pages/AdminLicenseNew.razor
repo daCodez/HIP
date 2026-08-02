@@ -7,7 +7,7 @@
 @inject IWebHostEnvironment HostEnvironment
 <PageTitle>Create a License | HIP Admin</PageTitle>
 <main class="license-create-page">
-    <section class="hip-page-heading license-heading"><div><span class="hip-eyebrow">HIP Admin · licenses</span><h1>Create a license</h1><p>Give a Second Life HUD owner access to HIP.</p></div><a class="hip-secondary-action" href="/admin/licenses">Back to licenses</a></section>
+    <section class="hip-page-heading license-heading"><div><span class="hip-eyebrow">HIP Admin · licenses</span><h1>Create a license</h1><p>Give a Second Life HUD owner access to HIP.</p></div><a class="hip-secondary-action" href="/licenses">Back to licenses</a></section>
     <section class="license-create-grid">
         <article class="hip-panel padded license-form-panel">
             <div><span class="license-step">Step 1</span><h2>Choose access</h2><p>You can change or cancel access later.</p></div>
@@ -29,7 +29,7 @@
         <article class="hip-panel padded license-result-panel">
             <div><span class="license-step">Step 2</span><h2>Share the license code</h2></div>
             @if (CreatedCode is null) { <div class="license-result-placeholder"><div aria-hidden="true">•••• •••• ••••</div><p>The code will appear here after you create the license.</p></div> }
-            else { <div class="license-code-result" role="status"><span>New license code</span><code>@CreatedCode.SetupCode</code><small>Expires @CreatedCode.SetupCodeExpiresAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'")</small></div><a class="hip-secondary-action" href="@($"/admin/licenses/{CreatedCode.LicenseId}")">Manage this license</a> }
+            else { <div class="license-code-result" role="status"><span>New license code</span><code>@CreatedCode.SetupCode</code><small>Expires @CreatedCode.SetupCodeExpiresAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'")</small></div><a class="hip-secondary-action" href="@($"/licenses/{CreatedCode.LicenseId}")">Manage this license</a> }
             <div class="license-copy-warning"><strong>Copy this code before leaving this page</strong><p>For safety, HIP will hide most of the code after you leave. Give it only to the HUD owner.</p></div>
         </article>
     </section>
@@ -41,7 +41,7 @@
     private CreateSetupCodeResponse? CreatedCode { get; set; }
     private string? _error;
     private bool _requiresStepUp;
-    private const string StepUpHref = "/step-up?returnUrl=%2Fadmin%2Flicenses%2Fnew";
+    private const string StepUpHref = "/step-up?returnUrl=%2Flicenses%2Fnew";
 
     /// <summary>
     /// Creates a setup code only after rechecking recent privileged authentication in the active circuit.

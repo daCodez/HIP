@@ -54,7 +54,7 @@
                 }
                 @if (_detail.Summary.RecommendedReview)
                 {
-                    <a class="hip-primary-action" href="/admin/review">Open review queue</a>
+                    <a class="hip-primary-action" href="/review">Open review queue</a>
                 }
                 <h3>Recent privacy-safe events</h3>
                 <div class="hip-table-wrap">
@@ -90,7 +90,7 @@
                                     <td>@item.Domain @if (item.ReviewThresholdReached) { <span class="hip-pill caution">Threshold reached</span> }</td>
                                     <td>@item.LooksSafeCount</td><td>@item.LooksSuspiciousCount</td><td>@item.ReportIssueCount</td>
                                     <td>@item.LatestSubmittedAtUtc.UtcDateTime.ToString("u")</td>
-                                    <td><a href="@($"/admin/feedback/{Uri.EscapeDataString(item.Domain)}")">Inspect evidence</a></td>
+                                    <td><a href="@($"/feedback/{Uri.EscapeDataString(item.Domain)}")">Inspect evidence</a></td>
                                 </tr>
                             }
                         </tbody>

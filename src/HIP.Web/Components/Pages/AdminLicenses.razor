@@ -10,7 +10,7 @@
         <div><span class="hip-eyebrow">HIP Admin · licenses</span><h1>Licenses</h1><p>Manage access to the HIP HUD in Second Life.</p></div>
         <AuthorizeView Policy="@AdminPolicies.CanAdministerLicenses">
             <Authorized>
-                <a class="hip-primary-action" href="/admin/licenses/new">Create a license</a>
+                <a class="hip-primary-action" href="/licenses/new">Create a license</a>
             </Authorized>
         </AuthorizeView>
     </section>
@@ -44,7 +44,7 @@
                 {
                     @foreach (var license in VisibleLicenses)
                     {
-                        <tr><td><div class="license-code"><code>@license.MaskedSetupCode</code><small>@license.LicenseId</small></div></td><td><span class="license-status @StatusTone(license.Status)">@StatusLabel(license.Status)</span></td><td>@license.ActivationCount of @license.AllowedDeviceCount</td><td>@(license.HudVersion ?? "Not connected")</td><td>@FormatDate(license.LastSeenAtUtc)</td><td>@SetupCodeState(license)</td><td><a class="license-manage-link" href="@($"/admin/licenses/{license.LicenseId}")">View</a></td></tr>
+                        <tr><td><div class="license-code"><code>@license.MaskedSetupCode</code><small>@license.LicenseId</small></div></td><td><span class="license-status @StatusTone(license.Status)">@StatusLabel(license.Status)</span></td><td>@license.ActivationCount of @license.AllowedDeviceCount</td><td>@(license.HudVersion ?? "Not connected")</td><td>@FormatDate(license.LastSeenAtUtc)</td><td>@SetupCodeState(license)</td><td><a class="license-manage-link" href="@($"/licenses/{license.LicenseId}")">View</a></td></tr>
                     }
                 }
                 </tbody>
