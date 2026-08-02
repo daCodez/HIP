@@ -1,6 +1,15 @@
 @inherits LayoutComponentBase
 @inject HipPortalLinks PortalLinks
+@inject NavigationManager Navigation
 
+@if (IsMarketingRoute)
+{
+    <div class="hip-reference-page">
+        @Body
+    </div>
+}
+else
+{
 <div class="public-site-shell">
     <a class="public-skip-link" href="#main-content">Skip to content</a>
     <header class="public-header">
@@ -52,3 +61,28 @@
         <p class="public-footer-note">Verification confirms control or identity evidence. It does not automatically mean safe.</p>
     </footer>
 </div>
+}
+
+@code {
+    private static readonly HashSet<string> MarketingRoutes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "/",
+        "/platform",
+        "/how",
+        "/how-it-works",
+        "/verify",
+        "/verification",
+        "/dev",
+        "/developers"
+    };
+
+    private bool IsMarketingRoute
+    {
+        get
+        {
+            var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+            var normalizedPath = relativePath.Length == 0 ? "/" : $"/{relativePath}";
+            return MarketingRoutes.Contains(normalizedPath);
+        }
+    }
+}

@@ -1,0 +1,48 @@
+@font-face{font-family:'Satoshi';src:url('/fonts/satoshi-400.woff2') format('woff2');font-weight:400;font-display:swap;font-style:normal}
+@font-face{font-family:'Satoshi';src:url('/fonts/satoshi-500.woff2') format('woff2');font-weight:500;font-display:swap;font-style:normal}
+@font-face{font-family:'Satoshi';src:url('/fonts/satoshi-700.woff2') format('woff2');font-weight:700;font-display:swap;font-style:normal}
+@font-face{font-family:'Satoshi';src:url('/fonts/satoshi-900.woff2') format('woff2');font-weight:900;font-display:swap;font-style:normal}
+@font-face{font-family:'JetBrains Mono';src:url('/fonts/jetbrains-mono-latin.woff2') format('woff2');font-weight:400 700;font-display:swap;font-style:normal}
+
+
+.hip-reference-page{
+  --bg:#0B1220; --surface:#111827; --elev:#161E2E; --border:#1F2937;
+  --text:#F8FAFB; --secondary:#D1D5DB; --muted:#9CA3AF; --action:#14B8A6; --action-ink:#04121B;
+  --blue:#1F6FEB; --info:#3B82F6; --violet:#7C3AED; --ok:#22C55E; --warn:#F59E0B; --danger:#EF4444; --critical:#B91C1C;
+  --hairline:rgba(255,255,255,.06); --tint:rgba(20,184,166,.10); --grid:rgba(255,255,255,.04);
+}
+[data-theme="light"]{
+  --bg:#FFFFFF; --surface:#F8FAFC; --elev:#F1F5F9; --border:#E5E7EB;
+  --text:#0F172A; --secondary:#334155; --muted:#64748B; --action:#14B8A6; --action-ink:#04121B;
+  --blue:#1F6FEB; --info:#3B82F6; --violet:#7C3AED; --ok:#22C55E; --warn:#F59E0B; --danger:#EF4444; --critical:#B91C1C;
+  --hairline:rgba(15,23,42,.06); --tint:rgba(20,184,166,.09); --grid:rgba(15,23,42,.045);
+}
+.hip-reference-page *,.hip-reference-page *::before,.hip-reference-page *::after{box-sizing:border-box}
+html:has(.hip-reference-page),body:has(.hip-reference-page){margin:0;padding:0;background:#0B1220;overflow-x:hidden;max-width:100%}
+.hip-reference-page{-webkit-font-smoothing:antialiased;font-family:Satoshi,ui-sans-serif,system-ui,sans-serif}
+.hip-reference-page a{color:var(--action);text-decoration:none}
+.hip-reference-page a:hover{color:var(--text);text-decoration:underline;text-underline-offset:3px}
+.hip-reference-page input,.hip-reference-page button,.hip-reference-page textarea,.hip-reference-page select{font-family:inherit}
+@keyframes hipPulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:1;transform:scale(1.35)}}
+@keyframes hipSweep{0%{transform:translateY(-100%)}100%{transform:translateY(320%)}}
+@keyframes hipSpin{to{transform:rotate(360deg)}}
+@keyframes hipMarquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes hipFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+@keyframes hipAurora{0%{transform:translate3d(-6%,-4%,0) scale(1.05)}33%{transform:translate3d(6%,3%,0) scale(1.18)}66%{transform:translate3d(-3%,6%,0) scale(1.1)}100%{transform:translate3d(-6%,-4%,0) scale(1.05)}}
+@keyframes hipSheen{0%{transform:translateX(-120%) skewX(-18deg)}100%{transform:translateX(320%) skewX(-18deg)}}
+@keyframes hipRing{0%{transform:scale(.6);opacity:.55}100%{transform:scale(2.4);opacity:0}}
+@keyframes hipDash{to{stroke-dashoffset:-1000}}
+[data-motion="reduced"] [style*="animation:"]{animation:none !important}
+@media (max-width:1120px){[data-nav-full]{display:none !important}[data-nav-compact]{display:block !important}[data-gh-label]{display:none !important}}
+
+
+.hip-reference-page{min-height:100vh;background:#0B1220;color:var(--text)}
+.hip-reference-page>.sc-host{min-height:100vh}
+.scp0:hover{background:var(--elev)!important}
+.scp1:hover{border-color:var(--action)!important}
+.scp2:hover{color:var(--action)!important;border-color:var(--action)!important}
+.scp3:hover{border-color:var(--action)!important;text-decoration:none!important}
+.scp4:hover{filter:brightness(1.08)!important}
+.scp5:hover{text-decoration:underline!important;text-underline-offset:3px!important}
+.scp6:hover{filter:brightness(1.08)!important;text-decoration:none!important}
+.scp7:hover{color:var(--action)!important}

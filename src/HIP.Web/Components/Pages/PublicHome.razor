@@ -1,116 +1,557 @@
 @page "/"
 @attribute [AllowAnonymous]
 @layout PublicLayout
-@rendermode InteractiveServer
-@inject NavigationManager Navigation
 @inject HipPortalLinks PortalLinks
 
 <PageTitle>HIP | Trust is your strongest signal</PageTitle>
 
-<main class="hip-public-page">
-    <section class="hip-hero hip-grid-bg" aria-labelledby="home-heading">
-        <div class="hip-container hip-hero-grid">
-            <div>
-                <p class="hip-eyebrow">Trust &amp; identity protection</p>
-                <h1 id="home-heading">Trust is your <span>strongest signal.</span></h1>
-                <p class="hip-lead">HIP turns identity, domain, page, and reputation evidence into a readable assessment—before a website asks for your trust.</p>
-                <form class="hip-domain-form" @onsubmit="SubmitLookup" @onsubmit:preventDefault="true">
-                    <label for="home-domain">Check a website</label>
-                    <div class="hip-domain-control">
-                        <span aria-hidden="true">https://</span>
-                        <input id="home-domain" @bind="_domain" inputmode="url" autocomplete="url" placeholder="example.com" aria-describedby="home-domain-help" />
-                        <button type="submit">Check domain</button>
-                    </div>
-                    <p id="home-domain-help">Enter a domain only. HIP does not need page text, passwords, or form contents for public lookup.</p>
-                    @if (_error is not null) { <p class="hip-form-error" role="alert">@_error</p> }
-                </form>
-            </div>
+<nav hidden aria-hidden="true"><a href="@PortalLinks.Consumer("/")">Consumer app</a><a href="@PortalLinks.Admin("/")">Admin portal</a></nav>
 
-            <aside class="hip-result-card" aria-label="Illustrative HIP result">
-                <div class="hip-result-top"><span>Illustrative result</span><span class="hip-status-dot">Mostly trusted</span></div>
-                <p class="hip-result-domain">example.com</p>
-                <div class="hip-score-row"><strong>82</strong><span>/100<br />HIP score</span></div>
-                <div class="hip-meter"><i style="width:82%"></i></div>
-                <dl class="hip-signal-list">
-                    <div><dt>Identity evidence</dt><dd>Verified</dd></div>
-                    <div><dt>Evidence coverage</dt><dd>Sufficient</dd></div>
-                    <div><dt>Page safety</dt><dd>Clean</dd></div>
-                </dl>
-                <p class="hip-caveat">Verified identity and a high score are evidence—not a guarantee of safety.</p>
-            </aside>
-        </div>
-    </section>
-
-    <div class="hip-signal-strip" aria-label="HIP signal families">
-        <span>Transport</span><span>Ownership</span><span>Reputation</span><span>Page behaviour</span><span>Pressure patterns</span><span>External evidence</span>
+<div class="sc-host" data-sc-name="index"><svg data-dc-tpl="7" width="0" height="0" aria-hidden="true" focusable="false" style="position: absolute;">
+  <defs data-dc-tpl="8">
+    <linearGradient data-dc-tpl="9" id="hipTealBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop data-dc-tpl="10" offset="0" stop-color="#22D3EE"></stop><stop data-dc-tpl="11" offset="0.55" stop-color="#14B8A6"></stop><stop data-dc-tpl="12" offset="1" stop-color="#1F6FEB"></stop>
+    </linearGradient>
+  </defs></svg><div data-dc-tpl="13" data-theme="dark" data-motion="full" style="background: var(--bg); color: var(--text); min-height: 100vh; font-family: Satoshi, sans-serif;"><div data-dc-tpl="14" aria-hidden="true" style="position: fixed; inset: 0px; z-index: 70; pointer-events: none; opacity: 0.05; mix-blend-mode: overlay; background-image: none;"></div><div data-dc-tpl="15" style="position: fixed; top: 0px; left: 0px; right: 0px; height: 2px; z-index: 80; pointer-events: none;"><div data-dc-tpl="16" data-progress="" style="height: 100%; width: 0%; background: linear-gradient(90deg,var(--blue),var(--action)); transform-origin: left center;"></div></div><header data-dc-tpl="17" style="position: sticky; top: 0px; z-index: 50; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border);">
+  <div data-dc-tpl="18" style="max-width: 1240px; margin: 0px auto; padding: 14px clamp(16px, 3vw, 32px); display: flex; align-items: center; gap: clamp(10px, 1.4vw, 22px);">
+    <div data-dc-tpl="19" role="button" style="display: flex; align-items: center; gap: 11px; cursor: pointer; flex-shrink: 0;">
+      <img data-dc-tpl="20" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 40px; width: auto; display: block; flex-shrink: 0;">
+      <div data-dc-tpl="21" style="display: flex; flex-direction: column; line-height: 1;">
+        <span data-dc-tpl="22" style="font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); white-space: nowrap;">HIP</span>
+        <span data-dc-tpl="23" style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-top: 5px; white-space: nowrap;">Human-Interactive Protocol</span>
+      </div>
     </div>
 
-    <section class="hip-section hip-container" aria-labelledby="audience-heading">
-        <header class="hip-section-heading"><p class="hip-eyebrow">Built for every trust decision</p><h2 id="audience-heading">Different questions. One evidence layer.</h2></header>
-        <div class="hip-audience-grid">
-            <article><img src="/images/public/audience-visitor.webp" alt="A person checking a website before sharing information" /><div><span>Everyday visitors</span><h3>Know before you engage</h3><p>See whether HIP has enough evidence to support a score, and what still deserves caution.</p></div></article>
-            <article><img src="/images/public/audience-owner.webp" alt="An independent website owner reviewing her site" /><div><span>Website owners</span><h3>Prove control, improve trust</h3><p>Verify a domain, resolve findings, and publish current evidence without implying automatic safety.</p></div></article>
-            <article><img src="/images/public/audience-developer.webp" alt="A developer reviewing a web integration" /><div><span>Developers</span><h3>Build with readable signals</h3><p>Use versioned endpoints, privacy-safe summaries, and explainable assessment fields.</p></div></article>
-            <article><img src="/images/public/audience-organization.webp" alt="A team reviewing websites they manage" /><div><span>Organizations</span><h3>See a shared trust posture</h3><p>Bring operational, identity, and evidence views together across the sites you manage.</p></div></article>
-        </div>
-    </section>
+    <select data-dc-tpl="24" data-nav-compact="" style="display: none; flex-shrink: 0; padding: 8px 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer;">
+      <option data-dc-tpl="25" value="home" selected>Home</option>
+      <option data-dc-tpl="26" value="platform">Platform</option>
+      <option data-dc-tpl="27" value="how">How it works</option>
+      <option data-dc-tpl="28" value="verify">Verification</option>
+      <option data-dc-tpl="29" value="dev">Developers</option>
+    </select>
+    <nav data-dc-tpl="30" data-nav-full="" style="display: flex; align-items: center; gap: 2px; margin-left: 4px; flex-shrink: 0;">
 
-    <section class="hip-section hip-section-alt" aria-labelledby="steps-heading">
-        <div class="hip-container">
-            <header class="hip-section-heading"><p class="hip-eyebrow">How it works</p><h2 id="steps-heading">From a domain to a decision you can explain.</h2></header>
-            <ol class="hip-step-grid">
-                <li><span>01</span><h3>Collect</h3><p>HIP gathers bounded identity, transport, page, and provider evidence.</p></li>
-                <li><span>02</span><h3>Detect</h3><p>Rules identify structural risk without collecting private page content.</p></li>
-                <li><span>03</span><h3>Score</h3><p>Evidence coverage and confidence decide whether a number can be shown.</p></li>
-                <li><span>04</span><h3>Explain</h3><p>Reasons and recommended actions keep the result useful and reviewable.</p></li>
-            </ol>
-            <a class="hip-text-link" href="/how-it-works">See the complete process <span aria-hidden="true">→</span></a>
-        </div>
-    </section>
+        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Platform</span></button>
 
-    <section class="hip-section hip-container hip-split" aria-labelledby="extension-heading">
-        <div>
-            <p class="hip-eyebrow">HIP in the browser</p>
-            <h2 id="extension-heading">Trust evidence at the moment it matters.</h2>
-            <p class="hip-lead-small">The HIP browser extension evaluates eligible pages automatically and keeps routine results in a compact popup. Higher-risk links can route to a separate safety view.</p>
-            <ul class="hip-check-list"><li>Privacy-safe scan summaries</li><li>Layered identity, page, and content signals</li><li>Plain-language reasons and next actions</li></ul>
-            <a class="hip-button-secondary" href="/platform">Explore the platform</a>
-        </div>
-        <figure class="hip-extension-frame">
-            <img src="/images/public/extension-popup-example.png" alt="HIP browser extension showing an illustrative trust assessment" />
-            <figcaption>HIP extension interface using clearly labeled sample data.</figcaption>
-        </figure>
-    </section>
+        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">How it works</span></button>
 
-    <section class="hip-section hip-container hip-capabilities" aria-labelledby="capabilities-heading">
-        <header class="hip-section-heading"><p class="hip-eyebrow">What exists today</p><h2 id="capabilities-heading">A working V1 foundation, with clear boundaries.</h2></header>
-        <div class="hip-capability-grid">
-            <article><span>Available</span><h3>Public domain lookup</h3><p>Stored evidence, coverage, confidence, reasons, and recommended action.</p></article>
-            <article><span>Available</span><h3>Domain verification</h3><p>DNS TXT and HTTPS well-known proofs establish domain control.</p></article>
-            <article><span>Available</span><h3>Consumer protection portal</h3><p>Owner-bound devices, scans, reports, alerts, appeals, and certificates.</p></article>
-            <article><span>Available</span><h3>Browser extension</h3><p>Automatic scanning, popup summaries, feedback, and safety routing.</p></article>
-            <article class="is-operational"><span>Production requirement</span><h3>Managed certificate signing</h3><p>Signed public badges require an audited production signer and authorized key policy.</p></article>
-            <article class="is-operational"><span>Ongoing</span><h3>Provider operations</h3><p>External evidence depends on configured providers, monitoring, and recovery procedures.</p></article>
-        </div>
-    </section>
+        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Verification</span></button>
 
-    <section class="hip-section hip-cta-section">
-        <div class="hip-container hip-cta-grid">
-            <div><p class="hip-eyebrow">Evidence before trust</p><h2>Start with the domain in front of you.</h2><p>HIP will tell you what it knows, what it does not, and whether there is enough authenticated evidence to show a score.</p></div>
-            <div class="hip-cta-actions"><a class="hip-button" href="/lookup">Check a domain</a><a class="hip-button-secondary" href="@PortalLinks.Consumer("/")">Open consumer app</a><a class="hip-muted-link" href="@PortalLinks.Admin("/")">Administrator sign in</a></div>
-        </div>
-    </section>
-</main>
+        <button data-dc-tpl="32" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Developers</span></button>
 
-@code {
-    private string? _domain;
-    private string? _error;
-    private void SubmitLookup()
-    {
-        var domain = (_domain ?? string.Empty).Trim().TrimEnd('.');
-        if (string.IsNullOrWhiteSpace(domain)) { _error = "Enter a domain to check."; return; }
-        if (domain.Contains('/') || domain.Contains(':') || domain.Any(char.IsWhiteSpace)) { _error = "Enter only the domain, not a full URL."; return; }
-        _error = null;
-        Navigation.NavigateTo($"/lookup/{Uri.EscapeDataString(domain)}");
-    }
-}
+    </nav>
+
+    <div data-dc-tpl="33" style="flex: 1 1 0%;"></div>
+
+
+      <button data-dc-tpl="35" title="Switch hero direction" class="scp1" style="width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 9px; cursor: pointer; font-size: 13px; font-weight: 800; color: var(--action); flex-shrink: 0;"><span class="sc-interp">A</span></button>
+
+    <button data-dc-tpl="36" title="Toggle theme" class="scp2" style="width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 9px; cursor: pointer; color: var(--muted); flex-shrink: 0;">
+      <svg data-dc-tpl="37" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path data-dc-tpl="38" d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3L4.9 4.9M19.1 19.1l-1.4-1.4M17.7 6.3l1.4-1.4M4.9 19.1l1.4-1.4"></path><circle data-dc-tpl="39" cx="12" cy="12" r="4.2"></circle></svg>
+    </button>
+    <a data-dc-tpl="40" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp3" style="display: flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid var(--border); background: var(--surface); border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--text); flex-shrink: 0;">
+      <svg data-dc-tpl="41" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path data-dc-tpl="42" d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 014 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.19c0 .21.14.46.55.38A8 8 0 008 0z"></path></svg>
+      <span data-dc-tpl="43" data-gh-label="">GitHub</span>
+    </a>
+    <button data-dc-tpl="44" class="scp4" style="padding: 10px 16px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; flex-shrink: 0; white-space: nowrap;">Check my domain</button>
+  </div></header><main data-dc-tpl="46">
+
+
+
+  <section data-dc-tpl="48" style="position: relative; overflow: hidden; border-bottom: 1px solid var(--border); min-height: 88vh; display: flex; align-items: center;">
+    <div data-dc-tpl="49" data-px="0.14" style="position: absolute; inset: -14% -2%; background-image: linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px); background-size: 56px 56px; mask-image: radial-gradient(900px 560px at 24% 34%, rgb(0, 0, 0), transparent); will-change: transform; transform: translate3d(0px, -2px, 0px);"></div>
+    <div data-dc-tpl="50" data-px="0.34" style="position: absolute; top: -220px; left: -160px; width: 760px; height: 760px; background: radial-gradient(circle,var(--tint),transparent 66%); pointer-events: none; animation: 26s ease-in-out 0s infinite normal none running hipAurora; will-change: transform; transform: translate3d(0px, 84.3px, 0px);"></div>
+    <div data-dc-tpl="51" data-px="0.22" style="position: absolute; bottom: -260px; right: -140px; width: 640px; height: 640px; background: radial-gradient(circle, rgba(31, 111, 235, 0.16), transparent 68%); pointer-events: none; animation: 34s ease-in-out 0s infinite reverse none running hipAurora; will-change: transform; transform: translate3d(0px, -72.5px, 0px);"></div>
+    <div data-dc-tpl="52" style="position: relative; max-width: 1240px; margin: 0px auto; padding: clamp(64px, 8vw, 104px) clamp(16px, 3vw, 32px) clamp(60px, 7vw, 96px); display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: clamp(40px, 5vw, 72px); align-items: center;">
+      <div data-dc-tpl="53">
+        <div data-dc-tpl="54" style="display: inline-flex; align-items: center; gap: 9px; padding: 6px 13px 6px 9px; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 26px;">
+          <span data-dc-tpl="55" style="width: 6px; height: 6px; border-radius: 50%; background: var(--action); animation: 2.4s ease-in-out 0s infinite normal none running hipPulse;"></span>
+          Open source · Apache-2.0 · community-built
+        </div>
+        <h1 data-dc-tpl="56" data-words="" style="font-size: clamp(40px, 5.6vw, 68px); line-height: 1.03; letter-spacing: -0.032em; font-weight: 800; margin: 0px 0px 22px; text-wrap: balance;">Trust is your<br data-dc-tpl="57">strongest signal.</h1>
+        <p data-dc-tpl="58" style="font-size: 19.5px; line-height: 1.6; color: var(--muted); margin: 0px 0px 34px; max-width: 530px; text-wrap: pretty;">Paste a web address and HIP checks for trust and risk signals, then explains what it found — in words anyone can read.</p>
+        <div data-dc-tpl="59" style="display: flex; flex-direction: column; gap: 12px; max-width: 520px;">
+          <div data-dc-tpl="60" style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <div data-dc-tpl="61" style="flex: 1 1 0px; min-width: 0px; display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 0px 14px;">
+              <svg data-dc-tpl="62" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round"><circle data-dc-tpl="63" cx="12" cy="12" r="9"></circle><path data-dc-tpl="64" d="M3 12h18M12 3c2.6 3 2.6 15 0 18M12 3c-2.6 3-2.6 15 0 18"></path></svg>
+              <input data-dc-tpl="65" placeholder="yourdomain.com" value="" style="flex: 1 1 0px; min-width: 0px; border: 0px; outline: 0px; background: transparent; color: var(--text); font-size: 15.5px; padding: 14px 0px; font-family: &quot;JetBrains Mono&quot;, monospace;">
+            </div>
+            <button data-dc-tpl="66" data-magnet="" class="scp4" style="padding: 0px 22px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 11px; font-size: 15px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: none; will-change: transform;">Check my domain</button>
+          </div>
+          <div data-dc-tpl="67" style="display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--muted);">
+            <span data-dc-tpl="68">No account needed for a first scan.</span>
+            <a data-dc-tpl="69" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" style="font-weight: 600;">View on GitHub →</a>
+          </div>
+        </div>
+      </div>
+      <div data-dc-tpl="70" data-px="-0.09" style="position: relative; will-change: transform; min-height: 560px; display: flex; align-items: center; transform: translate3d(0px, 2px, 0px);">
+        <img src="/images/public/reference/trust-globe.png" alt="" aria-hidden="true" style="position: absolute; top: 50%; left: 50%; width: 760px; height: 760px; transform: translate(-42%, -50%); pointer-events: none; opacity: 0.95;">
+        <div data-dc-tpl="72" data-tilt="" style="position: relative; width: 100%; transform-style: preserve-3d; transition: none;"><div style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; box-shadow: rgba(0, 0, 0, 0.22) 0px 20px 60px; overflow: hidden;"><div style="display: flex; align-items: center; gap: 8px; padding: 13px 18px; border-bottom: 1px solid var(--border); background: var(--elev);"><span style="width: 9px; height: 9px; border-radius: 50%; background: var(--border);"></span><span style="width: 9px; height: 9px; border-radius: 50%; background: var(--border);"></span><span style="width: 9px; height: 9px; border-radius: 50%; background: var(--border);"></span><span style="margin-left: 10px; font-size: 12px; color: var(--muted); font-family: &quot;JetBrains Mono&quot;, monospace;">hip · trust result</span></div><div style="padding: 26px;"><div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 24px;"><div><div style="font-size: 13px; color: var(--muted); margin-bottom: 7px; font-family: &quot;JetBrains Mono&quot;, monospace;">example.com</div><div style="display: flex; align-items: baseline; gap: 10px;"><span data-count="82" style="font-size: 48px; font-weight: 800; letter-spacing: -0.03em; color: var(--action); font-family: &quot;JetBrains Mono&quot;, monospace;" data-counted="1">82</span><span style="font-size: 15px; color: var(--muted);">/ 100 · checked today</span></div></div><span style="padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(34, 197, 94, 0.14); color: var(--ok); white-space: nowrap;">Mostly healthy</span></div><div style="height: 6px; border-radius: 4px; background: var(--elev); overflow: hidden; margin-bottom: 26px;"><div style="width: 82%; height: 100%; background: linear-gradient(90deg, var(--blue), var(--action));"></div></div><div style="display: flex; flex-direction: column; gap: 10px;"><div style="display: flex; align-items: flex-start; gap: 13px; padding: 13px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 11px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; margin-top: 5px;"></span><span style="flex: 1 1 0%; min-width: 0px;"><span style="display: block; font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.35;">Connection is encrypted</span><span style="display: block; font-size: 12.5px; color: var(--muted); line-height: 1.45; margin-top: 2px;">Your traffic to this site is private</span></span><span style="font-size: 11.5px; font-weight: 700; color: var(--ok); white-space: nowrap; margin-top: 2px;">Safe</span></div><div style="display: flex; align-items: flex-start; gap: 13px; padding: 13px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 11px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; margin-top: 5px;"></span><span style="flex: 1 1 0%; min-width: 0px;"><span style="display: block; font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.35;">Security certificate is valid</span><span style="display: block; font-size: 12.5px; color: var(--muted); line-height: 1.45; margin-top: 2px;">Issued by a trusted authority, renews in 74 days</span></span><span style="font-size: 11.5px; font-weight: 700; color: var(--ok); white-space: nowrap; margin-top: 2px;">Safe</span></div><div style="display: flex; align-items: flex-start; gap: 13px; padding: 13px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 11px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; margin-top: 5px;"></span><span style="flex: 1 1 0%; min-width: 0px;"><span style="display: block; font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.35;">Domain ownership verified</span><span style="display: block; font-size: 12.5px; color: var(--muted); line-height: 1.45; margin-top: 2px;">The owner proved they control this domain</span></span><span style="font-size: 11.5px; font-weight: 700; color: var(--ok); white-space: nowrap; margin-top: 2px;">Verified</span></div><div style="display: flex; align-items: flex-start; gap: 13px; padding: 13px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 11px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex-shrink: 0; margin-top: 5px;"></span><span style="flex: 1 1 0%; min-width: 0px;"><span style="display: block; font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.35;">Weak email protection</span><span style="display: block; font-size: 12.5px; color: var(--muted); line-height: 1.45; margin-top: 2px;">Someone could send email pretending to be this domain</span></span><span style="font-size: 11.5px; font-weight: 700; color: var(--warn); white-space: nowrap; margin-top: 2px;">Needs work</span></div></div><div style="margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted);">Every score comes with its reasons. Nothing is hidden.</div></div></div></div>
+        <div data-dc-tpl="73" data-px="-0.22" style="position: absolute; top: -34px; right: 6px; z-index: 2; display: flex; align-items: center; gap: 9px; padding: 9px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; box-shadow: rgba(0, 0, 0, 0.28) 0px 12px 34px; font-size: 12.5px; font-weight: 600; color: var(--text); animation: 7s ease-in-out 0s infinite normal none running hipFloat; transform: translate3d(0px, -64.9px, 0px);">
+          <span data-dc-tpl="74" style="width: 6px; height: 6px; border-radius: 50%; background: var(--ok);"></span>Connection is encrypted
+        </div>
+        <div data-dc-tpl="75" data-px="-0.3" style="position: absolute; bottom: -30px; left: -34px; z-index: 2; display: flex; align-items: center; gap: 9px; padding: 9px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; box-shadow: rgba(0, 0, 0, 0.28) 0px 12px 34px; font-size: 12.5px; font-weight: 600; color: var(--text); animation: 9s ease-in-out 1.4s infinite normal none running hipFloat; transform: translate3d(0px, 99.2px, 0px);">
+          <span data-dc-tpl="76" style="width: 6px; height: 6px; border-radius: 50%; background: var(--warn);"></span>Weak email protection
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+
+
+
+
+  <section data-dc-tpl="99" style="border-bottom: 1px solid var(--border); background: var(--surface);">
+    <div data-dc-tpl="100" style="display: flex; align-items: center; gap: 22px; padding: 22px 0px 22px 32px; overflow: hidden;">
+      <span data-dc-tpl="101" style="font-size: 11px; font-weight: 800; letter-spacing: 0.18em; color: var(--muted); flex-shrink: 0;">SIGNALS CHECKED</span>
+      <div data-dc-tpl="102" style="position: relative; flex: 1 1 0%; overflow: hidden; mask-image: linear-gradient(90deg, transparent, rgb(0, 0, 0) 4%, rgb(0, 0, 0) 88%, transparent);">
+        <div data-dc-tpl="103" style="display: flex; width: max-content; animation: 34s linear 0s infinite normal none running hipMarquee;">
+          <div data-dc-tpl="104" style="display: flex; gap: 10px; padding-right: 10px;">
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Secure connection</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Valid certificate</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Who owns the domain</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Past reputation</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">How the page behaves</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Pressure tactics in the wording</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Independent security checks</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Secure connection</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Valid certificate</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Who owns the domain</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Past reputation</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">How the page behaves</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Pressure tactics in the wording</span></span>
+
+              <span data-dc-tpl="106" style="padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); background: var(--bg); white-space: nowrap;"><span class="sc-interp">Independent security checks</span></span>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section data-dc-tpl="107" data-rise="" style="max-width: 1240px; margin: 0px auto; padding: clamp(64px, 7vw, 92px) clamp(16px, 3vw, 32px) 20px; transition: none; opacity: 0; transform: translateY(16px);" data-reveal="rise">
+    <div data-dc-tpl="108" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 14px;">WHO IT IS FOR</div>
+    <h2 data-dc-tpl="109" data-words="" style="font-size: clamp(30px, 3.4vw, 40px); line-height: 1.12; letter-spacing: -0.025em; font-weight: 800; margin: 0px 0px 16px; max-width: 640px; text-wrap: balance; transition: none; clip-path: inset(0px -0.14em 105%); transform: translateY(14px); opacity: 0.001;" data-reveal="words">Four ways people use HIP.</h2>
+    <p data-dc-tpl="110" style="font-size: 17px; line-height: 1.6; color: var(--muted); margin: 0px 0px 44px; max-width: 600px; text-wrap: pretty;">One shared trust layer, seen from four sides.</p>
+    <div data-dc-tpl="111" data-cards="" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+      <div data-dc-tpl="112" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; position: relative; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <image-slot data-dc-tpl="113" id="hip-who-visitor" shape="rect" placeholder="Photo: everyday visitor" style="width: 100%; height: 180px; position: relative;"></image-slot>
+        <div data-dc-tpl="114" style="padding: 26px; display: flex; flex-direction: column; flex: 1 1 0%; position: relative;">
+          <svg data-dc-tpl="115" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px;"><circle data-dc-tpl="116" cx="12" cy="8" r="3.6"></circle><path data-dc-tpl="117" d="M4.5 20a7.5 7.5 0 0115 0"></path></svg>
+          <h3 data-dc-tpl="118" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px;">If you are visiting a site</h3>
+          <p data-dc-tpl="119" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px 0px 18px; flex: 1 1 0%;">Check an address before you enter a password or pay for anything. The browser extension shows the score as you browse.</p>
+          <button data-dc-tpl="120" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">Check a website →</button>
+        </div>
+      </div>
+      <div data-dc-tpl="121" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; position: relative; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <image-slot data-dc-tpl="122" id="hip-who-owner" shape="rect" placeholder="Photo: website owner" style="width: 100%; height: 180px; position: relative;"></image-slot>
+        <div data-dc-tpl="123" style="padding: 26px; display: flex; flex-direction: column; flex: 1 1 0%; position: relative;">
+          <svg data-dc-tpl="124" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px;"><path data-dc-tpl="125" d="M4 20V9l8-5 8 5v11"></path><path data-dc-tpl="126" d="M9.5 20v-6h5v6"></path></svg>
+          <h3 data-dc-tpl="127" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px;">If you run a website</h3>
+          <p data-dc-tpl="128" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px 0px 18px; flex: 1 1 0%;">See what visitors see, fix what is weak, verify that you own the domain, and earn a badge that proves it.</p>
+          <button data-dc-tpl="129" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">How verification works →</button>
+        </div>
+      </div>
+      <div data-dc-tpl="130" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; position: relative; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <image-slot data-dc-tpl="131" id="hip-who-dev" shape="rect" placeholder="Photo: developer" style="width: 100%; height: 180px; position: relative;"></image-slot>
+        <div data-dc-tpl="132" style="padding: 26px; display: flex; flex-direction: column; flex: 1 1 0%; position: relative;">
+          <svg data-dc-tpl="133" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px;"><path data-dc-tpl="134" d="M9 7l-5 5 5 5M15 7l5 5-5 5"></path></svg>
+          <h3 data-dc-tpl="135" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px;">If you build software</h3>
+          <p data-dc-tpl="136" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px 0px 18px; flex: 1 1 0%;">Read every rule, query scores from your own product, self-host the scanner, or propose a detection we are missing.</p>
+          <button data-dc-tpl="137" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">Developer docs →</button>
+        </div>
+      </div>
+      <div data-dc-tpl="138" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; position: relative; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <image-slot data-dc-tpl="139" id="hip-who-org" shape="rect" placeholder="Photo: team or office" style="width: 100%; height: 180px; position: relative;"></image-slot>
+        <div data-dc-tpl="140" style="padding: 26px; display: flex; flex-direction: column; flex: 1 1 0%; position: relative;">
+          <svg data-dc-tpl="141" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px;"><path data-dc-tpl="142" d="M3 20h18M5 20V8l7-4 7 4v12"></path><path data-dc-tpl="143" d="M9 12h.01M15 12h.01M9 16h.01M15 16h.01"></path></svg>
+          <h3 data-dc-tpl="144" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px;">If you run an organization</h3>
+          <p data-dc-tpl="145" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px 0px 18px; flex: 1 1 0%;">Keep an eye on every domain you own, catch expiring certificates early, and keep a dated record of what changed.</p>
+          <button data-dc-tpl="146" class="scp5" style="align-self: flex-start; background: none; border: 0px; padding: 0px; font-size: 13.5px; font-weight: 700; color: var(--action); cursor: pointer; font-family: inherit;">See the platform →</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section data-dc-tpl="147" data-rise="" style="max-width: 1240px; margin: 0px auto; padding: clamp(64px, 7vw, 100px) clamp(16px, 3vw, 32px) 40px; transition: none; opacity: 0; transform: translateY(16px);" data-reveal="rise">
+    <div data-dc-tpl="148" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 14px;">HOW IT WORKS</div>
+    <h2 data-dc-tpl="149" style="font-size: clamp(30px, 3.4vw, 40px); line-height: 1.12; letter-spacing: -0.025em; font-weight: 800; margin: 0px 0px 14px; max-width: 640px; text-wrap: balance;">From a domain name to a decision you can explain.</h2>
+    <p data-dc-tpl="150" style="font-size: 17px; line-height: 1.6; color: var(--muted); margin: 0px 0px 52px; max-width: 600px;">Four steps, all of them inspectable. If you disagree with a result, you can see why it happened and appeal it.</p>
+    <div data-dc-tpl="151" data-cards="" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px;">
+      <div data-dc-tpl="152" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="153" style="width: 34px; height: 34px; border-radius: 9px; background: var(--tint); color: var(--action); display: grid; place-items: center; font-size: 14px; font-weight: 800; font-family: &quot;JetBrains Mono&quot;, monospace; margin-bottom: 18px; position: relative;">01</div>
+        <h3 data-dc-tpl="154" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px; letter-spacing: -0.01em; position: relative;">Scan</h3>
+        <p data-dc-tpl="155" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Enter a domain or page. HIP fetches it and collects transport, DNS, content and reputation signals.</p>
+      </div>
+      <div data-dc-tpl="156" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="157" style="width: 34px; height: 34px; border-radius: 9px; background: var(--tint); color: var(--action); display: grid; place-items: center; font-size: 14px; font-weight: 800; font-family: &quot;JetBrains Mono&quot;, monospace; margin-bottom: 18px; position: relative;">02</div>
+        <h3 data-dc-tpl="158" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px; letter-spacing: -0.01em; position: relative;">Score</h3>
+        <p data-dc-tpl="159" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Detection rules and weighted scoring rules combine the signals into one trust score — with every reason listed.</p>
+      </div>
+      <div data-dc-tpl="160" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="161" style="width: 34px; height: 34px; border-radius: 9px; background: var(--tint); color: var(--action); display: grid; place-items: center; font-size: 14px; font-weight: 800; font-family: &quot;JetBrains Mono&quot;, monospace; margin-bottom: 18px; position: relative;">03</div>
+        <h3 data-dc-tpl="162" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px; letter-spacing: -0.01em; position: relative;">Fix &amp; verify</h3>
+        <p data-dc-tpl="163" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Owners register a domain, prove control with a DNS record, resolve findings and re-scan to confirm.</p>
+      </div>
+      <div data-dc-tpl="164" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="165" style="width: 34px; height: 34px; border-radius: 9px; background: var(--tint); color: var(--action); display: grid; place-items: center; font-size: 14px; font-weight: 800; font-family: &quot;JetBrains Mono&quot;, monospace; margin-bottom: 18px; position: relative;">04</div>
+        <h3 data-dc-tpl="166" style="font-size: 18px; font-weight: 700; margin: 0px 0px 9px; letter-spacing: -0.01em; position: relative;">Show it</h3>
+        <p data-dc-tpl="167" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Complete HIP domain verification to qualify for an earned trust badge. Visitors also see results in the portal and browser extension.</p>
+      </div>
+    </div>
+  </section>
+
+
+  <section data-dc-tpl="168" data-rise="" style="max-width: 1240px; margin: 0px auto; padding: clamp(56px, 6vw, 80px) clamp(16px, 3vw, 32px) 40px; transition: none; opacity: 0; transform: translateY(16px);" data-reveal="rise">
+    <div data-dc-tpl="169" style="display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; margin-bottom: 44px; flex-wrap: wrap;">
+      <div data-dc-tpl="170">
+        <div data-dc-tpl="171" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 14px;">CAPABILITIES</div>
+        <h2 data-dc-tpl="172" style="font-size: clamp(30px, 3.4vw, 40px); line-height: 1.12; letter-spacing: -0.025em; font-weight: 800; margin: 0px; max-width: 560px; text-wrap: balance;">What HIP does today — and what is planned.</h2>
+      </div>
+      <div data-dc-tpl="173" style="display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--muted);">
+        <span data-dc-tpl="174" style="display: inline-flex; align-items: center; gap: 7px;"><span data-dc-tpl="175" style="width: 8px; height: 8px; border-radius: 2px; background: var(--action);"></span>Available now</span>
+        <span data-dc-tpl="176" style="display: inline-flex; align-items: center; gap: 7px;"><span data-dc-tpl="177" style="width: 8px; height: 8px; border-radius: 2px; background: var(--violet);"></span>Planned</span>
+      </div>
+    </div>
+    <div data-dc-tpl="178" data-cards="" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+      <div data-dc-tpl="179" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="180" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; position: relative;">
+          <svg data-dc-tpl="181" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect data-dc-tpl="182" x="3" y="10" width="18" height="11" rx="2.5"></rect><path data-dc-tpl="183" d="M7.5 10V7a4.5 4.5 0 019 0v3"></path></svg>
+          <span data-dc-tpl="184" style="padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; background: var(--tint); color: var(--action);">NOW</span>
+        </div>
+        <h3 data-dc-tpl="185" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 8px; position: relative;">HTTPS &amp; certificate checks</h3>
+        <p data-dc-tpl="186" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Redirect behaviour, protocol versions, issuer, validity window and expiry risk — flagged before your visitors see a warning.</p>
+      </div>
+      <div data-dc-tpl="187" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="188" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; position: relative;">
+          <svg data-dc-tpl="189" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle data-dc-tpl="190" cx="12" cy="12" r="9"></circle><path data-dc-tpl="191" d="M3 12h18M12 3c2.7 3 2.7 15 0 18M12 3c-2.7 3-2.7 15 0 18"></path></svg>
+          <span data-dc-tpl="192" style="padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; background: var(--tint); color: var(--action);">NOW</span>
+        </div>
+        <h3 data-dc-tpl="193" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 8px; position: relative;">DNS &amp; domain verification</h3>
+        <p data-dc-tpl="194" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Records, mail-authentication signals and a TXT-record proof of ownership that links a domain to its HIP profile.</p>
+      </div>
+      <div data-dc-tpl="195" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="196" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; position: relative;">
+          <svg data-dc-tpl="197" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path data-dc-tpl="198" d="M4 19V5M4 19h16"></path><path data-dc-tpl="199" d="M8 15l3.5-4.5L15 13l4-6"></path></svg>
+          <span data-dc-tpl="200" style="padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; background: var(--tint); color: var(--action);">NOW</span>
+        </div>
+        <h3 data-dc-tpl="201" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 8px; position: relative;">Explainable trust scores</h3>
+        <p data-dc-tpl="202" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">One score, and underneath it every signal that moved it, how much, and in which direction. No black box.</p>
+      </div>
+      <div data-dc-tpl="203" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="204" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; position: relative;">
+          <svg data-dc-tpl="205" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path data-dc-tpl="206" d="M4 6h16M4 12h10M4 18h13"></path><circle data-dc-tpl="207" cx="19" cy="12" r="2"></circle></svg>
+          <span data-dc-tpl="208" style="padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; background: var(--tint); color: var(--action);">NOW</span>
+        </div>
+        <h3 data-dc-tpl="209" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 8px; position: relative;">Editable detection &amp; scoring rules</h3>
+        <p data-dc-tpl="210" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Rules live in readable files, versioned in the open. Change a weight, propose a rule, see the effect on a score.</p>
+      </div>
+      <div data-dc-tpl="211" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="212" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; position: relative;">
+          <svg data-dc-tpl="213" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path data-dc-tpl="214" d="M3 5.5h18v11H3z"></path><path data-dc-tpl="215" d="M8 20.5h8M12 16.5v4"></path><path data-dc-tpl="216" d="M8.5 11l2 2 4.5-4.5"></path></svg>
+          <span data-dc-tpl="217" style="padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; background: var(--tint); color: var(--action);">NOW</span>
+        </div>
+        <h3 data-dc-tpl="218" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 8px; position: relative;">Browser extension warnings</h3>
+        <p data-dc-tpl="219" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Checks the page you are on, shows its score in the toolbar, and speaks up only when a risk is meaningful.</p>
+      </div>
+      <div data-dc-tpl="220" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="221" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; position: relative;">
+          <svg data-dc-tpl="222" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path data-dc-tpl="223" d="M12 3l8 2.9v6.4c0 5-3.3 9-8 10.7-4.7-1.7-8-5.7-8-10.7V5.9L12 3z"></path><path data-dc-tpl="224" d="M9 12.2l2.3 2.3L15.6 10"></path></svg>
+          <span data-dc-tpl="225" style="padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; background: var(--tint); color: var(--action);">NOW</span>
+        </div>
+        <h3 data-dc-tpl="226" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 8px; position: relative;">Domain verification &amp; trust badges</h3>
+        <p data-dc-tpl="227" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Domains that pass verification and review earn a trust badge that links back to a live, dated result.</p>
+      </div>
+      <div data-dc-tpl="228" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="229" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; position: relative;">
+          <svg data-dc-tpl="230" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path data-dc-tpl="231" d="M12 3v18M6 7l6-4 6 4"></path><path data-dc-tpl="232" d="M4 11h16v10H4z"></path></svg>
+          <span data-dc-tpl="233" style="padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; background: var(--tint); color: var(--action);">NOW</span>
+        </div>
+        <h3 data-dc-tpl="234" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 8px; position: relative;">Appeals, feedback &amp; audit history</h3>
+        <p data-dc-tpl="235" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Disagree with a finding? Submit an appeal, get a manual review, and keep a dated record of every change.</p>
+      </div>
+      <div data-dc-tpl="236" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="237" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; position: relative;">
+          <svg data-dc-tpl="238" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect data-dc-tpl="239" x="3" y="4" width="18" height="7" rx="2"></rect><rect data-dc-tpl="240" x="3" y="14" width="18" height="6" rx="2"></rect><path data-dc-tpl="241" d="M7 7.5h.01M7 17h.01"></path></svg>
+          <span data-dc-tpl="242" style="padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; background: rgba(124, 58, 237, 0.14); color: var(--violet);">PLANNED</span>
+        </div>
+        <h3 data-dc-tpl="243" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 8px; position: relative;">HIP-aware DNS</h3>
+        <p data-dc-tpl="244" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">A resolver that carries trust results at lookup time, so protection works before a page even loads.</p>
+      </div>
+      <div data-dc-tpl="245" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="246" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; position: relative;">
+          <svg data-dc-tpl="247" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path data-dc-tpl="248" d="M4 6h16v12H4z"></path><path data-dc-tpl="249" d="M4 8l8 5 8-5"></path></svg>
+          <span data-dc-tpl="250" style="padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; background: rgba(124, 58, 237, 0.14); color: var(--violet);">PLANNED</span>
+        </div>
+        <h3 data-dc-tpl="251" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 8px; position: relative;">Links, messages, images &amp; files</h3>
+        <p data-dc-tpl="252" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">The same trust layer applied to email and chat links — without storing private conversations or extra personal data.</p>
+      </div>
+    </div>
+  </section>
+
+
+  <section data-dc-tpl="253" data-rise="" style="padding: 80px 0px 40px; transition: none; opacity: 0; transform: translateY(16px);" data-reveal="rise">
+    <div data-dc-tpl="254" style="max-width: 1240px; margin: 0px auto; padding: 0px clamp(16px, 3vw, 32px);">
+      <div data-dc-tpl="255" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 14px;">THE PORTAL</div>
+      <h2 data-dc-tpl="256" style="font-size: clamp(30px, 3.4vw, 40px); line-height: 1.12; letter-spacing: -0.025em; font-weight: 800; margin: 0px 0px 14px; max-width: 620px; text-wrap: balance;">Your domain, its signals, and what to do next.</h2>
+      <p data-dc-tpl="257" style="font-size: 17px; line-height: 1.6; color: var(--muted); margin: 0px 0px 20px; max-width: 600px;">Every finding is a row you can open. Every row says what was checked, what was found, and how much it affects the score.</p>
+      <p data-dc-tpl="258" style="font-size: 12.5px; color: var(--muted); margin: 0px 0px 34px; font-family: &quot;JetBrains Mono&quot;, monospace;">// Illustrative interface — example data for one domain</p>
+      <div style="background: var(--elev); border: 1px solid var(--border); border-radius: 22px; padding: 18px; box-shadow: rgba(0, 0, 0, 0.24) 0px 24px 70px;"><div style="display: flex; align-items: center; gap: 14px; padding: 6px 10px 18px;"><div style="display: flex; gap: 7px;"><span style="width: 9px; height: 9px; border-radius: 50%; background: var(--border);"></span><span style="width: 9px; height: 9px; border-radius: 50%; background: var(--border);"></span><span style="width: 9px; height: 9px; border-radius: 50%; background: var(--border);"></span></div><span style="font-size: 12.5px; color: var(--muted); font-family: &quot;JetBrains Mono&quot;, monospace;">portal.hip · example.com</span><span style="flex: 1 1 0%;"></span><span style="display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted);"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--action); animation: 2.4s ease-in-out 0s infinite normal none running hipPulse;"></span>Live</span></div><div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 14px;"><div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px;"><div style="font-size: 11px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 14px;">TRUST SCORE</div><div data-count="94" style="font-size: 34px; font-weight: 800; letter-spacing: -0.03em; color: var(--text); margin-bottom: 8px; font-family: &quot;JetBrains Mono&quot;, monospace;">94</div><div style="font-size: 12.5px; color: var(--ok);">↗ 6 pts since last scan</div></div><div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px;"><div style="font-size: 11px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 14px;">SIGNALS CHECKED</div><div data-count="38" style="font-size: 34px; font-weight: 800; letter-spacing: -0.03em; color: var(--text); margin-bottom: 8px; font-family: &quot;JetBrains Mono&quot;, monospace;">38</div><div style="font-size: 12.5px; color: var(--muted);">across 6 families</div></div><div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px;"><div style="font-size: 11px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 14px;">NEEDS REVIEW</div><div data-count="2" style="font-size: 34px; font-weight: 800; letter-spacing: -0.03em; color: var(--text); margin-bottom: 8px; font-family: &quot;JetBrains Mono&quot;, monospace;">2</div><div style="font-size: 12.5px; color: var(--warn);">1 medium severity</div></div><div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px;"><div style="font-size: 11px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 14px;">CERTIFICATE</div><div data-count="74d" style="font-size: 34px; font-weight: 800; letter-spacing: -0.03em; color: var(--text); margin-bottom: 8px; font-family: &quot;JetBrains Mono&quot;, monospace;">74d</div><div style="font-size: 12.5px; color: var(--muted);">renews automatically</div></div></div><div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;"><div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--border);"><span style="font-size: 15px; font-weight: 700; color: var(--text);">Findings</span><span style="font-size: 12.5px; color: var(--muted);">Rule set v2.4 · scanned 30 Jul 2026</span></div><div style="display: grid; grid-template-columns: minmax(190px, 1fr) minmax(84px, 150px) 106px 62px; gap: 16px; align-items: center; padding: 15px 20px; border-top: 0px;"><div><div style="font-size: 14.5px; color: var(--text); margin-bottom: 4px; line-height: 1.4;">Connection is encrypted</div><div style="font-size: 11.5px; color: var(--muted); font-family: &quot;JetBrains Mono&quot;, monospace;">https.enforced</div></div><span style="font-size: 13px; color: var(--muted);">Connection</span><span style="justify-self: start; padding: 4px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: rgba(34, 197, 94, 0.14); color: var(--ok);">Safe</span><span style="justify-self: end; font-size: 13px; font-weight: 700; color: var(--ok); font-family: &quot;JetBrains Mono&quot;, monospace;">+12</span></div><div style="display: grid; grid-template-columns: minmax(190px, 1fr) minmax(84px, 150px) 106px 62px; gap: 16px; align-items: center; padding: 15px 20px; border-top: 1px solid var(--hairline);"><div><div style="font-size: 14.5px; color: var(--text); margin-bottom: 4px; line-height: 1.4;">Security certificate is valid</div><div style="font-size: 11.5px; color: var(--muted); font-family: &quot;JetBrains Mono&quot;, monospace;">cert.valid</div></div><span style="font-size: 13px; color: var(--muted);">Certificate</span><span style="justify-self: start; padding: 4px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: rgba(34, 197, 94, 0.14); color: var(--ok);">Safe</span><span style="justify-self: end; font-size: 13px; font-weight: 700; color: var(--ok); font-family: &quot;JetBrains Mono&quot;, monospace;">+8</span></div><div style="display: grid; grid-template-columns: minmax(190px, 1fr) minmax(84px, 150px) 106px 62px; gap: 16px; align-items: center; padding: 15px 20px; border-top: 1px solid var(--hairline);"><div><div style="font-size: 14.5px; color: var(--text); margin-bottom: 4px; line-height: 1.4;">Domain ownership verified</div><div style="font-size: 11.5px; color: var(--muted); font-family: &quot;JetBrains Mono&quot;, monospace;">owner.txt</div></div><span style="font-size: 13px; color: var(--muted);">Ownership</span><span style="justify-self: start; padding: 4px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: rgba(34, 197, 94, 0.14); color: var(--ok);">Verified</span><span style="justify-self: end; font-size: 13px; font-weight: 700; color: var(--ok); font-family: &quot;JetBrains Mono&quot;, monospace;">+6</span></div><div style="display: grid; grid-template-columns: minmax(190px, 1fr) minmax(84px, 150px) 106px 62px; gap: 16px; align-items: center; padding: 15px 20px; border-top: 1px solid var(--hairline);"><div><div style="font-size: 14.5px; color: var(--text); margin-bottom: 4px; line-height: 1.4;">Weak email protection</div><div style="font-size: 11.5px; color: var(--muted); font-family: &quot;JetBrains Mono&quot;, monospace;">mail.auth_partial</div></div><span style="font-size: 13px; color: var(--muted);">Email</span><span style="justify-self: start; padding: 4px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: rgba(245, 158, 11, 0.14); color: var(--warn);">Needs work</span><span style="justify-self: end; font-size: 13px; font-weight: 700; color: var(--warn); font-family: &quot;JetBrains Mono&quot;, monospace;">−6</span></div><div style="display: grid; grid-template-columns: minmax(190px, 1fr) minmax(84px, 150px) 106px 62px; gap: 16px; align-items: center; padding: 15px 20px; border-top: 1px solid var(--hairline);"><div><div style="font-size: 14.5px; color: var(--text); margin-bottom: 4px; line-height: 1.4;">A new third-party script appeared</div><div style="font-size: 11.5px; color: var(--muted); font-family: &quot;JetBrains Mono&quot;, monospace;">third.party_new</div></div><span style="font-size: 13px; color: var(--muted);">Page behaviour</span><span style="justify-self: start; padding: 4px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: rgba(245, 158, 11, 0.14); color: var(--warn);">Monitor</span><span style="justify-self: end; font-size: 13px; font-weight: 700; color: var(--warn); font-family: &quot;JetBrains Mono&quot;, monospace;">−2</span></div><div style="display: grid; grid-template-columns: minmax(190px, 1fr) minmax(84px, 150px) 106px 62px; gap: 16px; align-items: center; padding: 15px 20px; border-top: 1px solid var(--hairline);"><div><div style="font-size: 14.5px; color: var(--text); margin-bottom: 4px; line-height: 1.4;">No harmful behaviour found</div><div style="font-size: 11.5px; color: var(--muted); font-family: &quot;JetBrains Mono&quot;, monospace;">provider.gsb</div></div><span style="font-size: 13px; color: var(--muted);">Reputation</span><span style="justify-self: start; padding: 4px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: rgba(34, 197, 94, 0.14); color: var(--ok);">Safe</span><span style="justify-self: end; font-size: 13px; font-weight: 700; color: var(--ok); font-family: &quot;JetBrains Mono&quot;, monospace;">+4</span></div></div></div>
+    </div>
+  </section>
+
+
+  <section data-dc-tpl="259" data-rise="" style="max-width: 1240px; margin: 0px auto; padding: clamp(56px, 6vw, 80px) clamp(16px, 3vw, 32px) 40px; transition: none; opacity: 0; transform: translateY(16px);" data-reveal="rise">
+    <div data-dc-tpl="260" style="background: var(--surface); border: 1px solid var(--border); border-radius: 22px; padding: clamp(28px, 3.6vw, 52px); display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 56px; align-items: center;">
+      <div data-dc-tpl="261">
+        <div data-dc-tpl="262" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 14px;">VERIFICATION</div>
+        <h2 data-dc-tpl="263" style="font-size: clamp(26px, 3vw, 34px); line-height: 1.15; letter-spacing: -0.025em; font-weight: 800; margin: 0px 0px 16px; text-wrap: balance;">The badge is earned, not bought.</h2>
+        <p data-dc-tpl="264" style="font-size: 16.5px; line-height: 1.65; color: var(--muted); margin: 0px 0px 22px; text-wrap: pretty;">Registering a domain is not enough. You have to prove you control it, resolve the problems HIP found, and pass a review before the badge is granted. The badge you then embed links to a live result page with the date, the checks and the score history — so a visitor can verify the claim instead of trusting it.</p>
+        <ul data-dc-tpl="265" style="list-style: none; margin: 0px 0px 28px; padding: 0px; display: flex; flex-direction: column; gap: 11px;">
+          <li data-dc-tpl="266" style="display: flex; gap: 11px; font-size: 15px; color: var(--text);"><svg data-dc-tpl="267" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.2" stroke-linecap="round" style="flex-shrink: 0; margin-top: 2px;"><path data-dc-tpl="268" d="M20 6.5L9.5 17 4 11.5"></path></svg>Granted only after ownership proof and review</li>
+          <li data-dc-tpl="269" style="display: flex; gap: 11px; font-size: 15px; color: var(--text);"><svg data-dc-tpl="270" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.2" stroke-linecap="round" style="flex-shrink: 0; margin-top: 2px;"><path data-dc-tpl="271" d="M20 6.5L9.5 17 4 11.5"></path></svg>Expires with the verification record, and is withdrawn if the score drops</li>
+          <li data-dc-tpl="272" style="display: flex; gap: 11px; font-size: 15px; color: var(--text);"><svg data-dc-tpl="273" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.2" stroke-linecap="round" style="flex-shrink: 0; margin-top: 2px;"><path data-dc-tpl="274" d="M20 6.5L9.5 17 4 11.5"></path></svg>One line of HTML, no tracking scripts</li>
+        </ul>
+        <button data-dc-tpl="275" class="scp4" style="padding: 12px 20px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer;">How verification works</button>
+      </div>
+      <div data-dc-tpl="276" style="display: flex; flex-direction: column; gap: 16px;">
+        <div data-dc-tpl="277" style="background: rgb(11, 18, 32); border: 1px solid rgb(31, 41, 55); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 14px;">
+          <div data-dc-tpl="278" style="font-size: 10.5px; font-weight: 800; letter-spacing: 0.18em; color: rgb(156, 163, 175);">WEBSITE BADGE — DARK</div>
+          <div data-dc-tpl="279" style="display: inline-flex; align-items: center; gap: 11px; background: rgb(17, 24, 39); border: 1px solid rgb(31, 41, 55); border-radius: 11px; padding: 11px 15px; align-self: flex-start;">
+            <img data-dc-tpl="280" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 30px; width: auto; display: block; flex-shrink: 0;">
+            <div data-dc-tpl="281" style="display: flex; flex-direction: column; line-height: 1.25;">
+              <span data-dc-tpl="282" style="font-size: 10.5px; color: rgb(156, 163, 175); font-weight: 500;">Protected by</span>
+              <span data-dc-tpl="283" style="font-size: 16px; font-weight: 800; color: rgb(248, 250, 251); letter-spacing: -0.01em;">HIP</span>
+            </div>
+            <div data-dc-tpl="284" style="width: 1px; height: 26px; background: rgb(31, 41, 55);"></div>
+            <span data-dc-tpl="285" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 700; color: rgb(20, 184, 166);">94</span>
+          </div>
+        </div>
+        <div data-dc-tpl="286" style="background: rgb(248, 250, 252); border: 1px solid rgb(229, 231, 235); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 14px;">
+          <div data-dc-tpl="287" style="font-size: 10.5px; font-weight: 800; letter-spacing: 0.18em; color: rgb(100, 116, 139);">WEBSITE BADGE — LIGHT</div>
+          <div data-dc-tpl="288" style="display: inline-flex; align-items: center; gap: 11px; background: rgb(255, 255, 255); border: 1px solid rgb(229, 231, 235); border-radius: 11px; padding: 11px 15px; align-self: flex-start;">
+            <img data-dc-tpl="289" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 30px; width: auto; display: block; flex-shrink: 0;">
+            <div data-dc-tpl="290" style="display: flex; flex-direction: column; line-height: 1.25;">
+              <span data-dc-tpl="291" style="font-size: 10.5px; color: rgb(100, 116, 139); font-weight: 500;">Protected by</span>
+              <span data-dc-tpl="292" style="font-size: 16px; font-weight: 800; color: rgb(15, 23, 42); letter-spacing: -0.01em;">HIP</span>
+            </div>
+            <div data-dc-tpl="293" style="width: 1px; height: 26px; background: rgb(229, 231, 235);"></div>
+            <span data-dc-tpl="294" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 700; color: rgb(20, 184, 166);">94</span>
+          </div>
+        </div>
+        <div data-dc-tpl="295" style="background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 15px; font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12px; line-height: 1.7; color: var(--muted); overflow: auto;">&lt;a href="https://hip.example/r/yourdomain.com"&gt;<br data-dc-tpl="296">  &lt;img src="https://hip.example/badge/yourdomain.com.svg" alt="Verified by HIP" /&gt;<br data-dc-tpl="297">&lt;/a&gt;</div>
+      </div>
+    </div>
+  </section>
+
+
+  <section data-dc-tpl="298" data-rise="" style="position: relative; overflow: hidden; margin-top: 80px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); transition: none; opacity: 0; transform: translateY(16px);" data-reveal="rise">
+    <div data-dc-tpl="299" data-px="0.18" style="position: absolute; inset: -16% -4%; background: radial-gradient(600px 400px at 20% 30%,var(--tint),transparent 70%),radial-gradient(600px 400px at 82% 70%,rgba(31,111,235,.13),transparent 70%); pointer-events: none; will-change: transform;"></div>
+    <div data-dc-tpl="300" style="position: relative; max-width: 1240px; margin: 0px auto; padding: clamp(64px, 7vw, 96px) clamp(16px, 3vw, 32px); display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: clamp(36px, 4vw, 64px); align-items: center;">
+      <div data-dc-tpl="301">
+        <div data-dc-tpl="302" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 14px;">BROWSER EXTENSION</div>
+        <h2 data-dc-tpl="303" data-words="" style="font-size: clamp(30px, 3.4vw, 40px); line-height: 1.12; letter-spacing: -0.025em; font-weight: 800; margin: 0px 0px 16px; text-wrap: balance; transition: none; clip-path: inset(0px -0.14em 105%); transform: translateY(14px); opacity: 0.001;" data-reveal="words">It speaks up only when it matters.</h2>
+        <p data-dc-tpl="304" style="font-size: 17px; line-height: 1.65; color: var(--muted); margin: 0px 0px 26px; max-width: 520px; text-wrap: pretty;">The extension checks the page you are on and keeps its score in the toolbar. Quiet on a healthy site; a clear, readable warning when a real risk appears — with the reason attached, so you can decide for yourself.</p>
+        <div data-dc-tpl="305" style="display: flex; flex-direction: column; gap: 11px; max-width: 460px;">
+          <div data-dc-tpl="306" style="display: flex; align-items: center; gap: 12px; padding: 13px 15px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;">
+            <span data-dc-tpl="307" style="position: relative; width: 8px; height: 8px; flex-shrink: 0;"><span data-dc-tpl="308" style="position: absolute; inset: 0px; border-radius: 50%; background: var(--ok);"></span><span data-dc-tpl="309" style="position: absolute; inset: 0px; border-radius: 50%; border: 1px solid var(--ok); animation: 2.6s ease-out 0s infinite normal none running hipRing;"></span></span>
+            <span data-dc-tpl="310" style="font-size: 14.5px; color: var(--text); flex: 1 1 0%;">Score in the toolbar, always one click from its reasons</span>
+          </div>
+          <div data-dc-tpl="311" style="display: flex; align-items: center; gap: 12px; padding: 13px 15px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;">
+            <span data-dc-tpl="312" style="position: relative; width: 8px; height: 8px; flex-shrink: 0;"><span data-dc-tpl="313" style="position: absolute; inset: 0px; border-radius: 50%; background: var(--warn);"></span><span data-dc-tpl="314" style="position: absolute; inset: 0px; border-radius: 50%; border: 1px solid var(--warn); animation: 2.6s ease-out 0.9s infinite normal none running hipRing;"></span></span>
+            <span data-dc-tpl="315" style="font-size: 14.5px; color: var(--text); flex: 1 1 0%;">Interrupts only for meaningful risk, never for noise</span>
+          </div>
+          <div data-dc-tpl="316" style="display: flex; align-items: center; gap: 12px; padding: 13px 15px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;">
+            <svg data-dc-tpl="317" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="2" stroke-linecap="round" style="flex-shrink: 0;"><rect data-dc-tpl="318" x="4" y="10" width="16" height="10" rx="2.5"></rect><path data-dc-tpl="319" d="M8 10V7.5a4 4 0 018 0V10"></path></svg>
+            <span data-dc-tpl="320" style="font-size: 14.5px; color: var(--text); flex: 1 1 0%;">Source in the same repository — see exactly what it sends</span>
+          </div>
+        </div>
+      </div>
+      <div data-dc-tpl="321" data-px="-0.08" style="position: relative; will-change: transform;">
+        <div data-dc-tpl="322" data-tilt="" style="transition: none; border-radius: 18px; overflow: hidden; border: 1px solid var(--border); box-shadow: rgba(0, 0, 0, 0.35) 0px 30px 80px; background: var(--surface);">
+          <div data-dc-tpl="323" style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--elev);">
+            <span data-dc-tpl="324" style="width: 9px; height: 9px; border-radius: 50%; background: var(--border);"></span>
+            <span data-dc-tpl="325" style="width: 9px; height: 9px; border-radius: 50%; background: var(--border);"></span>
+            <span data-dc-tpl="326" style="width: 9px; height: 9px; border-radius: 50%; background: var(--border);"></span>
+            <span data-dc-tpl="327" style="margin-left: 10px; font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12px; color: var(--muted);">extension · popup</span>
+          </div>
+          <image-slot data-dc-tpl="328" id="hip-extension" shape="rect" placeholder="Drop an extension screenshot" style="width: 100%; height: 340px;"></image-slot>
+        </div>
+        <div data-dc-tpl="329" data-px="-0.24" style="position: absolute; bottom: -26px; left: -26px; z-index: 2; display: flex; align-items: center; gap: 10px; padding: 11px 15px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: rgba(0, 0, 0, 0.32) 0px 14px 40px; animation: 8s ease-in-out 0s infinite normal none running hipFloat;">
+          <svg data-dc-tpl="330" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2" stroke-linecap="round"><path data-dc-tpl="331" d="M12 3l9.5 17H2.5L12 3z"></path><path data-dc-tpl="332" d="M12 10v4M12 17h.01"></path></svg>
+          <div data-dc-tpl="333" style="display: flex; flex-direction: column; line-height: 1.3;">
+            <span data-dc-tpl="334" style="font-size: 13px; font-weight: 700; color: var(--text);">Login form posts over HTTP</span>
+            <span data-dc-tpl="335" style="font-size: 11.5px; color: var(--muted);">Reason shown · appealable</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section data-dc-tpl="336" data-rise="" style="max-width: 1240px; margin: 0px auto; padding: clamp(56px, 6vw, 80px) clamp(16px, 3vw, 32px) 40px; transition: none; opacity: 0; transform: translateY(16px);" data-reveal="rise">
+    <div data-dc-tpl="337" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 14px;">INTEGRATIONS</div>
+    <h2 data-dc-tpl="338" style="font-size: clamp(30px, 3.4vw, 40px); line-height: 1.12; letter-spacing: -0.025em; font-weight: 800; margin: 0px 0px 14px; max-width: 620px; text-wrap: balance;">HIP does not ask you to take its word for it.</h2>
+    <p data-dc-tpl="339" style="font-size: 17px; line-height: 1.6; color: var(--muted); margin: 0px 0px 46px; max-width: 620px;">Independent providers contribute signals alongside HIP's own checks. Each one is attributed in the result, so you can see which source raised what.</p>
+    <div data-dc-tpl="340" data-cards="" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px;">
+      <div data-dc-tpl="341" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="342" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; position: relative;">
+          <div data-dc-tpl="343" style="width: 38px; height: 38px; border-radius: 10px; background: var(--elev); border: 1px solid var(--border); display: grid; place-items: center; font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 700; color: var(--action);">SL</div>
+          <span data-dc-tpl="344" style="width: 7px; height: 7px; border-radius: 50%; background: var(--ok);"></span>
+        </div>
+        <h3 data-dc-tpl="345" style="font-size: 16px; font-weight: 700; margin: 0px 0px 7px; position: relative;">SSL Labs</h3>
+        <p data-dc-tpl="346" style="font-size: 13.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Deep TLS configuration grading for the certificate signal.</p>
+      </div>
+      <div data-dc-tpl="347" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="348" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; position: relative;">
+          <div data-dc-tpl="349" style="width: 38px; height: 38px; border-radius: 10px; background: var(--elev); border: 1px solid var(--border); display: grid; place-items: center; font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 700; color: var(--action);">SB</div>
+          <span data-dc-tpl="350" style="width: 7px; height: 7px; border-radius: 50%; background: var(--ok);"></span>
+        </div>
+        <h3 data-dc-tpl="351" style="font-size: 16px; font-weight: 700; margin: 0px 0px 7px; position: relative;">Google Safe Browsing</h3>
+        <p data-dc-tpl="352" style="font-size: 13.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Known phishing and malware listings for the reputation signal.</p>
+      </div>
+      <div data-dc-tpl="353" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="354" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; position: relative;">
+          <div data-dc-tpl="355" style="width: 38px; height: 38px; border-radius: 10px; background: var(--elev); border: 1px solid var(--border); display: grid; place-items: center; font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 700; color: var(--action);">VT</div>
+          <span data-dc-tpl="356" style="width: 7px; height: 7px; border-radius: 50%; background: var(--ok);"></span>
+        </div>
+        <h3 data-dc-tpl="357" style="font-size: 16px; font-weight: 700; margin: 0px 0px 7px; position: relative;">VirusTotal</h3>
+        <p data-dc-tpl="358" style="font-size: 13.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Multi-engine verdicts on URLs and downloadable files.</p>
+      </div>
+      <div data-dc-tpl="359" style="background: var(--surface); border: 1px dashed var(--border); border-radius: 16px; padding: 24px; position: relative; overflow: hidden; transition: none;" data-spot=""><div data-spot-layer="" style="position: absolute; inset: 0px; opacity: 0; pointer-events: none;"></div>
+        <div data-dc-tpl="360" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; position: relative;">
+          <div data-dc-tpl="361" style="width: 38px; height: 38px; border-radius: 10px; background: rgba(124, 58, 237, 0.12); border: 1px solid var(--border); display: grid; place-items: center; font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 700; color: var(--violet);">DNS</div>
+          <span data-dc-tpl="362" style="padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 700; background: rgba(124, 58, 237, 0.14); color: var(--violet);">PLANNED</span>
+        </div>
+        <h3 data-dc-tpl="363" style="font-size: 16px; font-weight: 700; margin: 0px 0px 7px; position: relative;">HIP-aware resolvers</h3>
+        <p data-dc-tpl="364" style="font-size: 13.5px; line-height: 1.6; color: var(--muted); margin: 0px; position: relative;">Trust results delivered at DNS lookup time. In design.</p>
+      </div>
+    </div>
+  </section>
+
+
+  <section data-dc-tpl="365" data-rise="" style="max-width: 900px; margin: 0px auto; padding: clamp(56px, 6vw, 80px) clamp(16px, 3vw, 32px) 40px; transition: none; opacity: 0; transform: translateY(16px);" data-reveal="rise">
+    <div data-dc-tpl="366" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 14px;">QUESTIONS</div>
+    <h2 data-dc-tpl="367" style="font-size: clamp(29px, 3.2vw, 38px); line-height: 1.12; letter-spacing: -0.025em; font-weight: 800; margin: 0px 0px 40px;">Fair questions about a young project.</h2>
+    <div data-dc-tpl="368" style="display: flex; flex-direction: column; gap: 10px;">
+
+        <div data-dc-tpl="370" style="background: var(--surface); border: 1px solid var(--border); border-radius: 13px; overflow: hidden;">
+          <button data-dc-tpl="371" class="scp0" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 22px; background: none; border: 0px; cursor: pointer; text-align: left; color: var(--text); font-size: 16.5px; font-weight: 600;">
+            <span class="sc-interp">Is a high HIP score a guarantee that a site is safe?</span>
+            <span data-dc-tpl="372" style="font-size: 22px; color: var(--action); flex-shrink: 0; font-weight: 400; transform: rotate(45deg); transition: transform 0.2s;">+</span>
+          </button>
+
+            <p data-dc-tpl="374" style="margin: 0px; padding: 0px 22px 22px; font-size: 15.5px; line-height: 1.68; color: var(--muted); max-width: 660px; text-wrap: pretty;"><span class="sc-interp">No. A score describes what HIP checked on a specific date and what it found. It is strong evidence, not a promise — HIP cannot see everything, and no system prevents every threat. The date and the checked-signal list are always shown next to the score for exactly this reason.</span></p>
+
+        </div>
+
+        <div data-dc-tpl="370" style="background: var(--surface); border: 1px solid var(--border); border-radius: 13px; overflow: hidden;">
+          <button data-dc-tpl="371" class="scp0" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 22px; background: none; border: 0px; cursor: pointer; text-align: left; color: var(--text); font-size: 16.5px; font-weight: 600;">
+            <span class="sc-interp">How is this different from a security vendor's rating?</span>
+            <span data-dc-tpl="372" style="font-size: 22px; color: var(--action); flex-shrink: 0; font-weight: 400; transform: none; transition: transform 0.2s;">+</span>
+          </button>
+
+        </div>
+
+        <div data-dc-tpl="370" style="background: var(--surface); border: 1px solid var(--border); border-radius: 13px; overflow: hidden;">
+          <button data-dc-tpl="371" class="scp0" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 22px; background: none; border: 0px; cursor: pointer; text-align: left; color: var(--text); font-size: 16.5px; font-weight: 600;">
+            <span class="sc-interp">What happens if HIP gets my site wrong?</span>
+            <span data-dc-tpl="372" style="font-size: 22px; color: var(--action); flex-shrink: 0; font-weight: 400; transform: none; transition: transform 0.2s;">+</span>
+          </button>
+
+        </div>
+
+        <div data-dc-tpl="370" style="background: var(--surface); border: 1px solid var(--border); border-radius: 13px; overflow: hidden;">
+          <button data-dc-tpl="371" class="scp0" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 22px; background: none; border: 0px; cursor: pointer; text-align: left; color: var(--text); font-size: 16.5px; font-weight: 600;">
+            <span class="sc-interp">Do I have to install anything on my website?</span>
+            <span data-dc-tpl="372" style="font-size: 22px; color: var(--action); flex-shrink: 0; font-weight: 400; transform: none; transition: transform 0.2s;">+</span>
+          </button>
+
+        </div>
+
+        <div data-dc-tpl="370" style="background: var(--surface); border: 1px solid var(--border); border-radius: 13px; overflow: hidden;">
+          <button data-dc-tpl="371" class="scp0" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 22px; background: none; border: 0px; cursor: pointer; text-align: left; color: var(--text); font-size: 16.5px; font-weight: 600;">
+            <span class="sc-interp">What data does HIP keep about visitors?</span>
+            <span data-dc-tpl="372" style="font-size: 22px; color: var(--action); flex-shrink: 0; font-weight: 400; transform: none; transition: transform 0.2s;">+</span>
+          </button>
+
+        </div>
+
+        <div data-dc-tpl="370" style="background: var(--surface); border: 1px solid var(--border); border-radius: 13px; overflow: hidden;">
+          <button data-dc-tpl="371" class="scp0" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 22px; background: none; border: 0px; cursor: pointer; text-align: left; color: var(--text); font-size: 16.5px; font-weight: 600;">
+            <span class="sc-interp">Which parts are not built yet?</span>
+            <span data-dc-tpl="372" style="font-size: 22px; color: var(--action); flex-shrink: 0; font-weight: 400; transform: none; transition: transform 0.2s;">+</span>
+          </button>
+
+        </div>
+
+    </div>
+  </section>
+
+
+  <section data-dc-tpl="375" data-rise="" style="max-width: 1240px; margin: 0px auto; padding: clamp(56px, 6vw, 80px) clamp(16px, 3vw, 32px) 110px; transition: none; opacity: 0; transform: translateY(16px);" data-reveal="rise">
+    <div data-dc-tpl="376" style="position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: clamp(52px, 7vw, 82px) clamp(24px, 4vw, 56px); text-align: center;">
+      <div data-dc-tpl="377" style="position: absolute; inset: -40%; background: radial-gradient(closest-side,var(--tint),transparent 70%),radial-gradient(closest-side at 70% 40%,rgba(31,111,235,.14),transparent 70%); animation: 28s ease-in-out 0s infinite normal none running hipAurora; pointer-events: none;"></div>
+      <div data-dc-tpl="378" data-px="0.1" style="position: absolute; inset: -20% 0px; background-image: linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px); background-size: 44px 44px; mask-image: radial-gradient(620px 340px at 50% 30%, rgb(0, 0, 0), transparent); will-change: transform;"></div>
+      <div data-dc-tpl="379" style="position: relative;">
+        <h2 data-dc-tpl="380" style="font-size: clamp(32px, 3.8vw, 44px); line-height: 1.1; letter-spacing: -0.03em; font-weight: 800; margin: 0px 0px 16px; text-wrap: balance;">See what your domain says about you.</h2>
+        <p data-dc-tpl="381" style="font-size: 18px; line-height: 1.6; color: var(--muted); margin: 0px auto 32px; max-width: 520px;">One scan, plain-language reasons, and a checklist you can actually work through.</p>
+        <div data-dc-tpl="382" style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+          <button data-dc-tpl="383" data-magnet="" class="scp4" style="padding: 14px 26px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 11px; font-size: 16px; font-weight: 700; cursor: pointer; transition: none; will-change: transform;">Check my domain</button>
+          <a data-dc-tpl="384" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp3" style="padding: 14px 24px; border: 1px solid var(--border); background: var(--bg); border-radius: 11px; font-size: 16px; font-weight: 600; color: var(--text);">View on GitHub</a>
+        </div>
+      </div>
+    </div>
+  </section></main><footer data-dc-tpl="667" style="border-top: 1px solid var(--border); background: var(--surface);">
+  <div data-dc-tpl="668" style="max-width: 1240px; margin: 0px auto; padding: 56px 32px 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 40px;">
+    <div data-dc-tpl="669">
+      <div data-dc-tpl="670" style="display: flex; align-items: center; gap: 11px; margin-bottom: 16px;">
+        <img data-dc-tpl="671" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 42px; width: auto; display: block; flex-shrink: 0;">
+        <div data-dc-tpl="672" style="display: flex; flex-direction: column; line-height: 1;">
+          <span data-dc-tpl="673" style="font-size: 21px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); white-space: nowrap;">HIP</span>
+          <span data-dc-tpl="674" style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-top: 5px; white-space: nowrap;">Human-Interactive Protocol</span>
+        </div>
+      </div>
+      <p data-dc-tpl="675" style="font-size: 14.5px; line-height: 1.65; color: var(--muted); margin: 0px; max-width: 280px;">An open trust and risk layer for websites and online content. Community-built, evidence-first.</p>
+    </div>
+    <div data-dc-tpl="676" style="display: flex; flex-direction: column; gap: 11px;">
+      <div data-dc-tpl="677" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PRODUCT</div>
+      <button data-dc-tpl="678" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">Platform</button>
+      <button data-dc-tpl="679" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">How it works</button>
+      <button data-dc-tpl="680" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">Verification</button>
+      <button data-dc-tpl="681" class="scp7" style="background: none; border: 0px; padding: 0px; text-align: left; font-size: 14.5px; color: var(--text); cursor: pointer;">Developers</button>
+    </div>
+    <div data-dc-tpl="682" style="display: flex; flex-direction: column; gap: 11px;">
+      <div data-dc-tpl="683" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">OPEN SOURCE</div>
+      <a data-dc-tpl="684" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Repository</a>
+      <a data-dc-tpl="685" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Detection rules</a>
+      <a data-dc-tpl="686" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Contributing</a>
+      <a data-dc-tpl="687" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Issues</a>
+    </div>
+    <div data-dc-tpl="688" style="display: flex; flex-direction: column; gap: 11px;">
+      <div data-dc-tpl="689" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PROJECT</div>
+      <a data-dc-tpl="690" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Roadmap</a>
+      <a data-dc-tpl="691" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Privacy approach</a>
+      <a data-dc-tpl="692" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Appeals policy</a>
+    </div>
+  </div>
+  <div data-dc-tpl="693" style="max-width: 1240px; margin: 0px auto; padding: 22px 32px 40px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; font-size: 13px; color: var(--muted);">
+    <span data-dc-tpl="694">HIP is an open-source project. A trust score reflects the checks HIP ran on a given date — not a guarantee of safety.</span>
+    <span data-dc-tpl="695" style="font-family: &quot;JetBrains Mono&quot;, monospace;">HIP · Human-Interactive Protocol</span>
+  </div></footer></div></div>
