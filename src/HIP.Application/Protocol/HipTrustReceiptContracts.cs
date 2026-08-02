@@ -184,6 +184,15 @@ public interface IManagedTrustReceiptSigner
         CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Optional provider-specific readiness proof. Implementations must sign only a fixed non-document challenge
+/// and verify it without persisting a receipt, certificate, badge, or private key material.
+/// </summary>
+public interface IManagedSigningReadinessProbe
+{
+    Task ValidateSigningAsync(CancellationToken cancellationToken);
+}
+
 /// <summary>Secure default used when no managed receipt-signing integration is configured.</summary>
 public sealed class UnavailableManagedTrustReceiptSigner : IManagedTrustReceiptSigner
 {

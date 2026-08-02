@@ -15,8 +15,9 @@ internal sealed class SoftHsmManagedTrustReceiptSigner(
     MlDsa65SignatureProvider verifier,
     ISigningKeyLifecycleService lifecycleService,
     ISigningKeyLifecycleRepository repository,
-    TimeProvider timeProvider) : IManagedTrustReceiptSigner
+    TimeProvider timeProvider) : IManagedTrustReceiptSigner, IManagedSigningReadinessProbe
 {
+    private const string ReadinessChallenge = "sha256:8b8eae3278f3a8f210a264c2a5f9af81f595e93f4c8a2a6562b8b75c460d98b0";
     private readonly SoftHsmManagedSignerIdentityOptions identity = identityOptions;
     private readonly ISoftHsmPkcs11Client token = softHsm;
     private readonly MlDsa65SignatureProvider signatureVerifier = verifier;
@@ -91,6 +92,13 @@ internal sealed class SoftHsmManagedTrustReceiptSigner(
         }
 
         return signature;
+    }
+
+    /// <summary>Proves that the selected non-exportable key can sign and that HIP can verify the result.</summary>
+    public async Task ValidateSigningAsync(CancellationToken cancellationToken)
+    {
+        var signingKey = await GetSigningKeyAsync(cancellationToken).ConfigureAwait(false);
+        _ = await SignHashAsync(signingKey, ReadinessChallenge, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task EnsureLifecycleStateAsync(string publicKey, CancellationToken cancellationToken)

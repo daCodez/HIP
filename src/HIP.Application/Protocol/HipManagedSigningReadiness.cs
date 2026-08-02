@@ -21,7 +21,7 @@ public sealed class HipManagedSigningReadinessOptions
 /// <summary>
 /// Fails startup when a V1 deployment requires signing but managed custody,
 /// authorization, provider support, or durable public lifecycle state is absent.
-/// No signing operation or private key material is requested by this check.
+/// Providers may additionally prove signing with a fixed non-document challenge; private key material is never requested.
 /// </summary>
 public static class HipManagedSigningReadiness
 {
@@ -97,6 +97,11 @@ public static class HipManagedSigningReadiness
         {
             throw new InvalidOperationException(
                 "The managed signing key is not active in HIP's durable public key lifecycle state.");
+        }
+
+        if (signer is IManagedSigningReadinessProbe signingProbe)
+        {
+            await signingProbe.ValidateSigningAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 }

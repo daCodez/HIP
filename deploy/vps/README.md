@@ -67,10 +67,12 @@ enables it for every public HIP host. A gated host fails startup unless the
 token, PIN file, exact configured ML-DSA-65 key, explicit allowlists, platform
 verifier, and durable public lifecycle state all agree.
 
-The readiness check requests metadata only; it does not create a signature or
-request private key material. The SoftHSM adapter generates a non-exportable
-ML-DSA-65 key only when the explicitly selected key is absent, serializes initial
-provisioning across HIP hosts, and stores only the public key in HIP's database.
+The readiness check never requests private key material or persists a signed
+document. The SoftHSM adapter additionally signs and verifies a fixed
+non-document challenge so a broken PKCS #11 signing path fails before traffic is
+accepted. It generates a non-exportable ML-DSA-65 key only when the explicitly
+selected key is absent, serializes initial provisioning across HIP hosts, and
+stores only the public key in HIP's database.
 
 Set these host paths in the protected deployment environment:
 
