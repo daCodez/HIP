@@ -5,9 +5,10 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../src/xrayController.js", import.meta.url), "utf8");
 
-function createHarness() {
+function createHarness({ mounted = true } = {}) {
   const calls = [];
   let observerCallback;
+  let intervalCallback;
   const observer = { observe: () => calls.push("observe"), disconnect: () => calls.push("disconnect") };
   const renderer = {
     mountLauncher: () => calls.push("mount-launcher"),
@@ -17,9 +18,12 @@ function createHarness() {
     setProgress: message => calls.push(`progress:${message}`),
     focus: () => calls.push("focus"),
     updateMarkerPositions: () => calls.push("position"),
+    resetForNavigation: () => calls.push("reset-navigation"),
+    isMounted: () => mounted,
     destroy: () => calls.push("destroy")
   };
   const windowObject = {
+    location: { href: "https://example.test/one" },
     addEventListener: type => calls.push(`add:${type}`),
     removeEventListener: type => calls.push(`remove:${type}`),
     requestAnimationFrame: callback => { callback(); return 1; },
@@ -40,9 +44,16 @@ function createHarness() {
     createRenderer: controls => ({ ...renderer, controls }),
     mutationObserverFactory: callback => { observerCallback = callback; return observer; },
     schedule: callback => { callback(); return 1; },
-    cancelScheduled: () => calls.push("clear-timeout")
+    cancelScheduled: () => calls.push("clear-timeout"),
+    startInterval: callback => { intervalCallback = callback; calls.push("start-interval"); return 7; },
+    cancelInterval: handle => calls.push(`cancel-interval:${handle}`)
   });
-  return { calls, controller, mutate: records => observerCallback(records) };
+  return {
+    calls,
+    controller,
+    mutate: records => observerCallback(records),
+    navigate: url => { windowObject.location.href = url; intervalCallback(); }
+  };
 }
 
 test("start is idempotent and reports real scan progress", () => {
@@ -82,4 +93,23 @@ test("destroy removes the persistent page trigger on navigation teardown", () =>
   harness.controller.installLauncher();
   harness.controller.destroy();
   assert.ok(harness.calls.includes("destroy"));
+  assert.ok(harness.calls.includes("cancel-interval:7"));
+});
+
+test("SPA navigation clears active results and leaves one launcher", () => {
+  const harness = createHarness();
+  harness.controller.start();
+  harness.navigate("https://example.test/two");
+  assert.equal(harness.controller.getState().active, false);
+  assert.equal(harness.calls.filter(item => item === "show-launcher").length, 1);
+  assert.equal(harness.calls.filter(item => item === "reset-navigation").length, 1);
+});
+
+test("externally removed injected UI tears down listeners and observers", () => {
+  const harness = createHarness({ mounted: false });
+  harness.controller.start();
+  harness.mutate([{ removedNodes: [{ nodeType: 1 }], addedNodes: [] }]);
+  assert.equal(harness.controller.getState().active, false);
+  assert.ok(harness.calls.includes("destroy"));
+  assert.ok(harness.calls.includes("disconnect"));
 });

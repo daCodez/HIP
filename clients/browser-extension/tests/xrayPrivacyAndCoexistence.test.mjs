@@ -21,7 +21,8 @@ test("X-ray owns one isolated shadow root and does not alter host forms", () => 
   assert.match(renderer, /attachShadow\(\{ mode: "open" \}\)/);
   assert.match(renderer, /pointer-events:\s*none/);
   assert.doesNotMatch(renderer, /insertBefore|setAttribute\(|removeAttribute\(|autofocus|autocomplete/);
-  assert.doesNotMatch(renderer, /\.focus\s*\(/);
+  assert.doesNotMatch(renderer, /target\.focus|selectedTarget\.focus|documentObject\.activeElement/);
+  assert.match(renderer, /findRow\(selectedFindingId\).*focus/s);
   assert.doesNotMatch(controller, /document\.addEventListener/);
 });
 
@@ -59,7 +60,7 @@ test("scan theatre transitions into the marketing-style trust result", () => {
   assert.match(renderer, /scanning this page/i);
   assert.match(renderer, /Reading page structure/);
   assert.match(renderer, /Applying local HIP rules/);
-  assert.match(renderer, /hip · trust result/i);
+  assert.match(renderer, /HIP · PAGE X-RAY RESULTS/i);
   assert.match(renderer, /result-score/);
   assert.match(renderer, /result-progress-fill/);
   assert.match(renderer, /Every score comes with its reasons\. Nothing is hidden\./);
