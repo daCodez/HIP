@@ -44,14 +44,15 @@
         <form @onsubmit="StartVerificationAsync" @onsubmit:preventDefault>
             <label>
                 Public domain
-                <input @bind="_domain" autocomplete="url" maxlength="253" placeholder="example.com" required />
+                <input @bind="_domain" autocomplete="url" maxlength="253" placeholder="example.com" required
+                       disabled="@(_loading || _starting)" />
             </label>
             <label>
                 Public display name
-                <input @bind="_displayName" maxlength="200" required />
+                <input @bind="_displayName" maxlength="200" required disabled="@(_loading || _starting)" />
             </label>
-            <button class="btn btn-primary" type="submit" disabled="@_starting">
-                @(_starting ? "Starting…" : "Start verification")
+            <button class="btn btn-primary" type="submit" disabled="@(_loading || _starting)">
+                @(_loading ? "Loading…" : _starting ? "Starting…" : "Start verification")
             </button>
         </form>
         @if (_enrollmentError is not null)

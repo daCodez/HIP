@@ -228,6 +228,8 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(certificates, Does.Contain("linked to a different HIP account"));
             Assert.That(certificates, Does.Contain("could not save this enrollment"));
             Assert.That(certificates, Does.Contain("Start verification"));
+            Assert.That(certificates, Does.Contain("disabled=\"@(_loading || _starting)\""));
+            Assert.That(certificates, Does.Contain("@(_loading ? \"Loading…\" : _starting ? \"Starting…\" : \"Start verification\")"));
             Assert.That(certificates, Does.Contain("Install live badge"));
             Assert.That(certificates, Does.Contain("Copy badge code"));
             Assert.That(certificates, Does.Contain("NavigationManager.BaseUri.TrimEnd('/')"));
