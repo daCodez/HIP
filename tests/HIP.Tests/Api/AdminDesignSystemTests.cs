@@ -99,6 +99,21 @@ public sealed class AdminDesignSystemTests
         });
     }
 
+    /// <summary>Ensures the Blazor circuit error banner appears only when the runtime explicitly activates it.</summary>
+    [Test]
+    public void Blazor_error_banner_is_hidden_until_a_runtime_error_occurs()
+    {
+        var layout = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "Components", "Layout", "ControlCenterLayout.razor"));
+        var appCss = File.ReadAllText(WorkspaceFile("src", "HIP.Web", "wwwroot", "app.css"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(layout, Does.Contain("id=\"blazor-error-ui\""));
+            Assert.That(appCss, Does.Match(@"(?s)#blazor-error-ui\s*\{[^}]*display:\s*none;"));
+            Assert.That(appCss, Does.Contain("#blazor-error-ui .dismiss"));
+        });
+    }
+
     [Test]
     public void Dashboard_uses_reference_logo_evidence_heading_neutral_threat_rows_and_no_footer_quick_links()
     {
