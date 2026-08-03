@@ -42,7 +42,7 @@ public sealed class PublicSeoTests
             Assert.That(html, Does.Contain("<meta name=\"description\" content=\"Scan a website for HTTPS, certificate, DNS, reputation and page-risk signals. HIP explains every trust score in plain language.\""));
             Assert.That(html, Does.Contain("type=\"application/ld+json\""));
             Assert.That(html, Does.Contain("\"sameAs\": [\"https://github.com/daCodez/HIP\"]"));
-            Assert.That(html, Does.Contain("HIP (Human-Interactive Protocol) is an open-source website trust and risk-scoring platform at guardwithhip.com"));
+            Assert.That(html, Does.Contain("HIP (Human Identity Protocol) is an open-source website trust and risk-scoring platform at guardwithhip.com"));
             Assert.That(html, Does.Contain("href=\"/platform\""));
             Assert.That(html, Does.Contain("href=\"/website-trust-scanner\""));
             Assert.That(html, Does.Contain("href=\"/tools/lookalike-detector\""));

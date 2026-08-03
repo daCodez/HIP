@@ -80,12 +80,12 @@ public sealed class HipPortalNavigationTests
             "PublicHowItWorks.razor",
             "PublicVerification.razor",
             "PublicDevelopers.razor",
-            "PublicMethodology.razor"
+            "PublicMethodology.razor",
+            "Lookup.razor",
+            "LookupDomain.razor"
         };
         var operationalPublicPages = new[]
         {
-            "Lookup.razor",
-            "LookupDomain.razor",
             "PublicDomainCertificate.razor",
             "Safety.razor",
             "AdminAccessStatusPage.razor"
@@ -136,9 +136,11 @@ public sealed class HipPortalNavigationTests
             }
 
             Assert.That(layout, Does.Contain("(\"/platform\", \"Platform\")"));
-            Assert.That(layout, Does.Contain("(\"/how-it-works\", \"How it works\")"));
-            Assert.That(layout, Does.Contain("(\"/verification\", \"Verification\")"));
-            Assert.That(layout, Does.Contain("(\"/developers\", \"Developers\")"));
+            Assert.That(layout, Does.Contain("(\"/website-trust-scanner\", \"Scanner\")"));
+            Assert.That(layout, Does.Contain("(\"/tools/lookalike-detector\", \"Lookalikes\")"));
+            Assert.That(layout, Does.Contain("(\"/browser-extension\", \"Extension\")"));
+            Assert.That(layout, Does.Contain("(\"/domain-verification\", \"Verification\")"));
+            Assert.That(layout, Does.Contain("(\"/methodology\", \"Methodology\")"));
             Assert.That(layout, Does.Not.Contain("drop-shadow"));
             Assert.That(File.Exists(Path.Combine(root, "src", "HIP.Web", "wwwroot", "images", "public", "extension-popup-example.png")), Is.True);
         });

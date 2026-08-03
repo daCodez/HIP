@@ -52,7 +52,10 @@ public sealed class ResourceBoundSecurityTests
         await using var factory = new HipWebApplicationFactory<Program>();
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints;
         var dnsEndpoints = endpoints
-            .Where(endpoint => endpoint.DisplayName?.Contains("domain-verification", StringComparison.OrdinalIgnoreCase) is true)
+            .OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.RoutePattern.RawText?.StartsWith(
+                "/api/v1/identity/domain-verification/",
+                StringComparison.OrdinalIgnoreCase) is true)
             .ToArray();
 
         Assert.Multiple(() =>
