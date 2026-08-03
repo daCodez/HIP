@@ -6,6 +6,25 @@ namespace HIP.Tests.Navigation;
 /// <summary>Verifies public discovery metadata, crawl controls, and indexable marketing routes.</summary>
 public sealed class PublicSeoTests
 {
+    /// <summary>Confirms the canonical domain publishes its HIP verification document at the standard discovery path.</summary>
+    [Test]
+    public async Task Well_known_hip_document_is_public_for_canonical_domain()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/.well-known/hip.json");
+        var json = await response.Content.ReadAsStringAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/json"));
+            Assert.That(json, Does.Contain("\"domain\": \"guardwithhip.com\""));
+            Assert.That(json, Does.Contain("\"hipIdentityId\": \"hip:web:guardwithhip.com\""));
+        });
+    }
+
     /// <summary>Confirms the homepage exposes the requested title, description, entity definition, and crawlable navigation.</summary>
     [Test]
     public async Task Homepage_exposes_search_metadata_entity_copy_and_real_links()
