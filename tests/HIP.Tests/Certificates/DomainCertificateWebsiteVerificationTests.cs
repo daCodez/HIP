@@ -278,6 +278,68 @@ public sealed class DomainCertificateWebsiteVerificationTests
     }
 
     [Test]
+    public async Task Current_website_challenge_restores_the_prepared_flag_without_disclosing_the_token()
+    {
+        const string domain = "example.com";
+        const string owner = "owner-1";
+        const string domainActor = "domain-owner";
+        var website = new WebsiteIdentity(
+            domain, "hip:web:example.com", [], VerificationStatus.Verified,
+            VerificationMethod.DnsTxt, Now.AddDays(-1), Now.AddHours(-1));
+        var challenge = new DomainVerificationRequest(
+            domain, VerificationMethod.WellKnownHipJson, "secret-challenge", VerificationStatus.Pending,
+            Now, null, Now.AddHours(1));
+        var enrollments = new StubEnrollmentRepository(new DomainEnrollmentStateRecord(
+            "enrollment-1", owner, domain, DomainEnrollmentStatus.OwnershipVerified, Now.AddHours(-1), null));
+        var requests = new StubVerificationRequests(challenge);
+        var websiteIdentities = new StubWebsiteIdentityService(website, challenge);
+        var service = CreateService(
+            website, enrollments, new StubDomainVerificationService(requests), requests, new StubFetcher(),
+            websiteIdentities);
+
+        var result = await service.GetCurrentWebsiteChallengeAsync(
+            owner, domainActor, domain, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateWebsiteChallengeStatus.Available));
+            Assert.That(result.Domain, Is.EqualTo(domain));
+            Assert.That(result.ChallengeExpiresAtUtc, Is.EqualTo(challenge.ExpiresAtUtc));
+            Assert.That(typeof(DomainCertificateWebsiteChallengeResult).GetProperty("ChallengeToken"), Is.Null);
+            Assert.That(websiteIdentities.LastActorId, Is.EqualTo(domainActor));
+        });
+    }
+
+    [Test]
+    public async Task Current_website_challenge_is_not_disclosed_to_a_different_account()
+    {
+        const string domain = "example.com";
+        var website = new WebsiteIdentity(
+            domain, "hip:web:example.com", [], VerificationStatus.Verified,
+            VerificationMethod.DnsTxt, Now.AddDays(-1), Now.AddHours(-1));
+        var challenge = new DomainVerificationRequest(
+            domain, VerificationMethod.WellKnownHipJson, "secret-challenge", VerificationStatus.Pending,
+            Now, null, Now.AddHours(1));
+        var enrollments = new StubEnrollmentRepository(new DomainEnrollmentStateRecord(
+            "enrollment-1", "owner-1", domain, DomainEnrollmentStatus.OwnershipVerified, Now.AddHours(-1), null));
+        var requests = new StubVerificationRequests(challenge);
+        var websiteIdentities = new StubWebsiteIdentityService(website, challenge);
+        var service = CreateService(
+            website, enrollments, new StubDomainVerificationService(requests), requests, new StubFetcher(),
+            websiteIdentities);
+
+        var result = await service.GetCurrentWebsiteChallengeAsync(
+            "owner-2", "other-domain-actor", domain, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateWebsiteChallengeStatus.NotFound));
+            Assert.That(result.Domain, Is.Null);
+            Assert.That(websiteIdentities.ActorIds, Is.Empty);
+        });
+    }
+
+    [Test]
     public async Task Prepare_and_check_use_an_owner_bound_single_use_https_challenge()
     {
         const string domain = "example.com";

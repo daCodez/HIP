@@ -246,6 +246,8 @@ public sealed class HipConsumerPageIsolationTests
             Assert.That(certificates, Does.Contain("Generate replacement DNS value"));
             Assert.That(certificates, Does.Contain("GenerateReplacementDnsChallengeAsync(item)"));
             Assert.That(certificates, Does.Contain("EnrollmentService.PrepareWebsiteVerificationAsync"));
+            Assert.That(certificates, Does.Contain("EnrollmentService.GetCurrentWebsiteChallengeAsync"));
+            Assert.That(certificates, Does.Contain("HasPreparedWebsiteChallenge(item)"));
             Assert.That(certificates, Does.Contain("Prepare website file"));
             Assert.That(certificates, Does.Contain("Download hip.json"));
             Assert.That(certificates, Does.Contain("EnrollmentService.CheckWebsiteAsync"));
@@ -253,8 +255,6 @@ public sealed class HipConsumerPageIsolationTests
                 "@(_checkingWebsiteEnrollmentId == item.EnrollmentId ? \"Verifying…\" : \"Verify website\")"));
             Assert.That(certificates, Does.Not.Contain(
                 "@(_checkingWebsiteEnrollmentId == item.EnrollmentId ? \"Checking…\" : \"Check website\")"));
-            Assert.That(certificates, Does.Match(
-                @"(?s)@if \(_websiteEnrollmentId.*?Download hip\.json.*?</div>\s*}\s*<button.*?Verify website"));
             Assert.That(certificates, Does.Contain("/.well-known/hip.json"));
             Assert.That(certificates, Does.Contain("_hip."));
             Assert.That(certificates, Does.Contain("Domain ownership"));

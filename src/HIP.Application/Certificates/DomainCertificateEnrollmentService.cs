@@ -79,6 +79,22 @@ public sealed record DomainCertificateWebsitePrepareResult(
     DomainCertificateWebsitePrepareStatus Status,
     HipWellKnownDocument? Document = null);
 
+/// <summary>Owner-safe outcome of retrieving the current HTTPS website-control challenge state.</summary>
+public enum DomainCertificateWebsiteChallengeStatus
+{
+    InvalidRequest,
+    NotFound,
+    Available,
+    Expired,
+    Unavailable
+}
+
+/// <summary>Current website challenge state without disclosing its stored token.</summary>
+public sealed record DomainCertificateWebsiteChallengeResult(
+    DomainCertificateWebsiteChallengeStatus Status,
+    string? Domain = null,
+    DateTimeOffset? ChallengeExpiresAtUtc = null);
+
 /// <summary>Safe outcome of checking challenge-bound HTTPS website control.</summary>
 public enum DomainCertificateWebsiteCheckStatus
 {
@@ -166,6 +182,16 @@ public interface IDomainCertificateEnrollmentService
         string domain,
         CancellationToken cancellationToken);
     Task<DomainCertificateWebsitePrepareResult> PrepareWebsiteVerificationAsync(
+        string ownerId,
+        string websiteOwnerActorId,
+        string domain,
+        CancellationToken cancellationToken);
+
+    Task<DomainCertificateWebsiteChallengeResult> GetCurrentWebsiteChallengeAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken);
+    Task<DomainCertificateWebsiteChallengeResult> GetCurrentWebsiteChallengeAsync(
         string ownerId,
         string websiteOwnerActorId,
         string domain,
@@ -515,6 +541,101 @@ public sealed class DomainCertificateEnrollmentService(
         string domain,
         CancellationToken cancellationToken) =>
         PrepareWebsiteVerificationAsync(ownerId, ownerId, domain, cancellationToken);
+
+    public Task<DomainCertificateWebsiteChallengeResult> GetCurrentWebsiteChallengeAsync(
+        string ownerId,
+        string domain,
+        CancellationToken cancellationToken) =>
+        GetCurrentWebsiteChallengeAsync(ownerId, ownerId, domain, cancellationToken);
+
+    /// <summary>
+    /// Reports whether an active website challenge has already been prepared for this owner and enrollment.
+    /// </summary>
+    public async Task<DomainCertificateWebsiteChallengeResult> GetCurrentWebsiteChallengeAsync(
+        string ownerId,
+        string websiteOwnerActorId,
+        string domain,
+        CancellationToken cancellationToken)
+    {
+        string normalized;
+        try
+        {
+            ValidateIdentifier(ownerId, 256);
+            ValidateIdentifier(websiteOwnerActorId, 256);
+            normalized = normalizer.Normalize(domain);
+        }
+        catch (ArgumentException)
+        {
+            return new DomainCertificateWebsiteChallengeResult(
+                DomainCertificateWebsiteChallengeStatus.InvalidRequest);
+        }
+
+        try
+        {
+            var enrollment = await enrollmentRepository.GetCurrentAsync(ownerId, normalized, cancellationToken)
+                .ConfigureAwait(false);
+            if (enrollment is null ||
+                enrollment.Status != DomainEnrollmentStatus.OwnershipVerified ||
+                enrollment.DnsVerifiedAtUtc is null ||
+                enrollment.WebsiteVerifiedAtUtc is not null)
+            {
+                return new DomainCertificateWebsiteChallengeResult(
+                    DomainCertificateWebsiteChallengeStatus.NotFound);
+            }
+
+            var website = await GetWebsiteIdentityAsync(
+                ownerId,
+                websiteOwnerActorId,
+                normalized,
+                cancellationToken).ConfigureAwait(false);
+            if (website is null || website.VerificationStatus != VerificationStatus.Verified)
+            {
+                return new DomainCertificateWebsiteChallengeResult(
+                    DomainCertificateWebsiteChallengeStatus.NotFound);
+            }
+
+            var challenge = await domainVerificationService.GetAsync(
+                normalized,
+                VerificationMethod.WellKnownHipJson,
+                cancellationToken).ConfigureAwait(false);
+            if (challenge is null ||
+                challenge.Status is VerificationStatus.Revoked or VerificationStatus.Suspended)
+            {
+                return new DomainCertificateWebsiteChallengeResult(
+                    DomainCertificateWebsiteChallengeStatus.NotFound);
+            }
+
+            if (challenge.ExpiresAtUtc is not { } expiresAtUtc ||
+                expiresAtUtc <= timeProvider.GetUtcNow() ||
+                challenge.Status == VerificationStatus.Expired ||
+                challenge.VerificationAttemptCount >= verificationLifecycle.MaximumVerificationAttempts)
+            {
+                return new DomainCertificateWebsiteChallengeResult(
+                    DomainCertificateWebsiteChallengeStatus.Expired,
+                    normalized,
+                    challenge.ExpiresAtUtc);
+            }
+
+            return new DomainCertificateWebsiteChallengeResult(
+                DomainCertificateWebsiteChallengeStatus.Available,
+                normalized,
+                expiresAtUtc);
+        }
+        catch (WebsiteIdentityRegistrationConflictException)
+        {
+            return new DomainCertificateWebsiteChallengeResult(
+                DomainCertificateWebsiteChallengeStatus.NotFound);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new DomainCertificateWebsiteChallengeResult(
+                DomainCertificateWebsiteChallengeStatus.Unavailable);
+        }
+    }
 
     /// <summary>Prepares website verification using the authenticated website owner actor.</summary>
     public async Task<DomainCertificateWebsitePrepareResult> PrepareWebsiteVerificationAsync(

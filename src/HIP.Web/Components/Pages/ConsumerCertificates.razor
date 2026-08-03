@@ -207,10 +207,13 @@
                          item.DnsVerifiedAtUtc is not null &&
                          item.WebsiteVerifiedAtUtc is null)
                     {
-                        <button class="btn btn-primary" type="button" disabled="@(_preparingWebsiteEnrollmentId is not null)"
-                                @onclick="() => PrepareWebsiteVerificationAsync(item)">
-                            @(_preparingWebsiteEnrollmentId == item.EnrollmentId ? "Preparing…" : "Prepare website file")
-                        </button>
+                        @if (!HasPreparedWebsiteChallenge(item))
+                        {
+                            <button class="btn btn-primary" type="button" disabled="@(_preparingWebsiteEnrollmentId is not null)"
+                                    @onclick="() => PrepareWebsiteVerificationAsync(item)">
+                                @(_preparingWebsiteEnrollmentId == item.EnrollmentId ? "Preparing…" : "Prepare website file")
+                            </button>
+                        }
                         @if (_websiteEnrollmentId == item.EnrollmentId && _websiteDocumentJson is not null)
                         {
                             <div class="website-verification-instructions">
@@ -218,10 +221,13 @@
                                 <a class="btn" href="@WebsiteDocumentDownloadUrl()" download="hip.json">Download hip.json</a>
                             </div>
                         }
-                        <button class="btn btn-primary" type="button" disabled="@(_checkingWebsiteEnrollmentId is not null)"
-                                @onclick="() => CheckWebsiteAsync(item)">
-                            @(_checkingWebsiteEnrollmentId == item.EnrollmentId ? "Verifying…" : "Verify website")
-                        </button>
+                        @if (HasPreparedWebsiteChallenge(item))
+                        {
+                            <button class="btn btn-primary" type="button" disabled="@(_checkingWebsiteEnrollmentId is not null)"
+                                    @onclick="() => CheckWebsiteAsync(item)">
+                                @(_checkingWebsiteEnrollmentId == item.EnrollmentId ? "Verifying…" : "Verify website")
+                            </button>
+                        }
                     }
                     @if (item.IdentityCompletedAtUtc is not null && item.CertificateId is null &&
                          item.ApplicationStatus is DomainCertificateApplicationStatus.Draft or DomainCertificateApplicationStatus.ChangesRequested)
@@ -288,6 +294,8 @@
     private DomainCertificateEnrollmentStartResult? _challenge;
     private IReadOnlyDictionary<string, DomainCertificateDnsChallengeResult> _dnsChallenges =
         new Dictionary<string, DomainCertificateDnsChallengeResult>(StringComparer.Ordinal);
+    private IReadOnlyDictionary<string, DomainCertificateWebsiteChallengeResult> _websiteChallenges =
+        new Dictionary<string, DomainCertificateWebsiteChallengeResult>(StringComparer.Ordinal);
     private string? _replacingDnsEnrollmentId;
     private string? _checkingEnrollmentId;
     private string? _reviewingEnrollmentId;
@@ -331,6 +339,7 @@
         {
             _items = access.Value ?? [];
             await LoadDnsChallengesAsync(authenticationState.User);
+            await LoadWebsiteChallengesAsync(authenticationState.User);
         }
 
         _loading = false;
@@ -382,6 +391,57 @@
 
         return challenges;
     }
+
+    /// <summary>Restores the prepared-file flag from the active owner-bound website challenge.</summary>
+    private async Task LoadWebsiteChallengesAsync(ClaimsPrincipal principal)
+    {
+        var eligibleDomains = _items
+            .Where(item => item.EnrollmentStatus == DomainEnrollmentStatus.OwnershipVerified &&
+                           item.DnsVerifiedAtUtc is not null &&
+                           item.WebsiteVerifiedAtUtc is null)
+            .Select(item => item.Domain)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (eligibleDomains.Length == 0)
+        {
+            _websiteChallenges = new Dictionary<string, DomainCertificateWebsiteChallengeResult>(StringComparer.Ordinal);
+            return;
+        }
+
+        var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+            principal,
+            AuthorizationService,
+            ConsumerPolicies.CanUseConsumerPortal,
+            consumerId => LoadWebsiteChallengesForOwnerAsync(
+                consumerId,
+                WebsiteOwnerActorId(principal, consumerId),
+                eligibleDomains));
+        _websiteChallenges = access.Succeeded && access.Value is not null
+            ? access.Value
+            : new Dictionary<string, DomainCertificateWebsiteChallengeResult>(StringComparer.Ordinal);
+    }
+
+    private async Task<IReadOnlyDictionary<string, DomainCertificateWebsiteChallengeResult>> LoadWebsiteChallengesForOwnerAsync(
+        string consumerId,
+        string websiteOwnerActorId,
+        IReadOnlyCollection<string> domains)
+    {
+        var challenges = new Dictionary<string, DomainCertificateWebsiteChallengeResult>(StringComparer.Ordinal);
+        foreach (var domain in domains)
+        {
+            challenges[domain] = await EnrollmentService.GetCurrentWebsiteChallengeAsync(
+                consumerId,
+                websiteOwnerActorId,
+                domain,
+                CancellationToken.None);
+        }
+
+        return challenges;
+    }
+
+    private bool HasPreparedWebsiteChallenge(OwnerDomainCertificateSummary item) =>
+        _websiteChallenges.TryGetValue(item.Domain, out var challenge) &&
+        challenge.Status == DomainCertificateWebsiteChallengeStatus.Available;
 
     private async Task StartVerificationAsync()
     {
@@ -587,6 +647,16 @@
                 _websiteDocumentJson = JsonSerializer.Serialize(
                     access.Value.Document,
                     new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
+                var challenges = new Dictionary<string, DomainCertificateWebsiteChallengeResult>(
+                    _websiteChallenges,
+                    StringComparer.Ordinal)
+                {
+                    [item.Domain] = new DomainCertificateWebsiteChallengeResult(
+                        DomainCertificateWebsiteChallengeStatus.Available,
+                        item.Domain,
+                        access.Value.Document.ExpiresAtUtc)
+                };
+                _websiteChallenges = challenges;
                 _certificateActionMessage = "Website challenge ready. Publish the downloaded file, then check the website.";
             }
             else
