@@ -37,7 +37,7 @@ public sealed partial class CiSecurityBaselineTests
             Assert.That(workflow, Does.Contain("npm audit --audit-level=high"));
             Assert.That(workflow, Does.Contain("run: npm test"));
             Assert.That(workflow, Does.Contain("npx playwright install --with-deps chromium"));
-            Assert.That(workflow, Does.Contain("run: npm run test:e2e"));
+            Assert.That(workflow, Does.Contain("run: xvfb-run --auto-servernum npm run test:e2e"));
             Assert.That(usesLines, Is.Not.Empty);
             Assert.That(usesLines, Is.All.Match(ActionPinPattern()));
         });

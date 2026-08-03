@@ -96,4 +96,4 @@ jobs:
 
       - name: Run browser extension end-to-end tests
         working-directory: clients/browser-extension
-        run: npm run test:e2e
+        run: xvfb-run --auto-servernum npm run test:e2e
