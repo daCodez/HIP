@@ -11,6 +11,29 @@ namespace HIP.Tests.Api;
 public sealed class PublicLookupPageTests
 {
     /// <summary>
+    /// Verifies the lookup entry point uses the current marketing shell and retains its privacy-safe guidance.
+    /// </summary>
+    [Test]
+    public async Task Lookup_entry_page_matches_the_marketing_site_shell()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/lookup");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(html, Does.Contain("hip-marketing-site"));
+            Assert.That(html, Does.Contain("Know what"));
+            Assert.That(html, Does.Contain("TRUST STACK"));
+            Assert.That(html, Does.Contain("no path, account information, or private URL"));
+            Assert.That(html, Does.Not.Contain("public-site-shell"));
+        });
+    }
+
+    /// <summary>
     /// Verifies the lookup page renders a clear no-data state for domains without stored HIP scans.
     /// </summary>
     [Test]
@@ -26,9 +49,13 @@ public sealed class PublicLookupPageTests
         var html = await response.Content.ReadAsStringAsync();
         Assert.Multiple(() =>
         {
+            Assert.That(html, Does.Contain("hip-marketing-site"));
+            Assert.That(html, Does.Contain("hip · trust result"));
+            Assert.That(html, Does.Contain("trust-window"));
             Assert.That(html, Does.Contain("Not Enough Data Yet"));
             Assert.That(html, Does.Contain("HIP has no authoritative site-safety assessment for this domain yet"));
             Assert.That(html, Does.Contain("Data source"));
+            Assert.That(html, Does.Not.Contain("public-site-shell"));
         });
     }
 }

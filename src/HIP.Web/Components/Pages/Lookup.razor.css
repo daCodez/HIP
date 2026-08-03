@@ -1,0 +1,36 @@
+.lookup-landing{position:relative;overflow:hidden;color:var(--text);background:var(--bg)}
+.lookup-hero{position:relative;isolation:isolate;max-width:1240px;min-height:680px;margin:0 auto;padding:clamp(72px,9vw,120px) clamp(20px,4vw,48px);display:grid;grid-template-columns:minmax(0,1.08fr) minmax(340px,.72fr);align-items:center;gap:clamp(48px,7vw,96px)}
+.lookup-grid{position:absolute;z-index:-2;inset:-10% -20%;background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:52px 52px;mask-image:radial-gradient(ellipse 65% 65% at 25% 45%,#000 20%,transparent 75%)}
+.lookup-glow{position:absolute;z-index:-1;width:620px;height:620px;left:-290px;top:20px;border-radius:50%;background:radial-gradient(circle,rgba(20,184,166,.16),transparent 68%);filter:blur(12px);pointer-events:none}
+.lookup-copy{max-width:680px}
+.lookup-eyebrow{display:flex;align-items:center;gap:10px;margin:0 0 22px;color:var(--action);font:800 11.5px/1.2 'JetBrains Mono',monospace;letter-spacing:.16em}
+h1{margin:0;color:var(--text);font-size:clamp(48px,6.4vw,84px);line-height:.95;letter-spacing:-.055em;font-weight:800}
+h1 span{color:transparent;background:linear-gradient(100deg,var(--action),#22d3ee 46%,var(--blue));background-clip:text;-webkit-background-clip:text}
+.lookup-lead{max-width:630px;margin:28px 0 0;color:var(--secondary);font-size:clamp(17px,1.7vw,20px);line-height:1.68}
+.domain-search{margin-top:38px}
+.domain-search>label{display:block;margin-bottom:10px;color:var(--text);font-size:13px;font-weight:750}
+.search-control{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;padding:7px 7px 7px 16px;border:1px solid var(--border);border-radius:13px;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:0 20px 55px rgba(0,0,0,.22);transition:border-color .18s ease,box-shadow .18s ease}
+.search-control:focus-within{border-color:var(--action);box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 18%,transparent),0 20px 55px rgba(0,0,0,.22)}
+.search-control svg{color:var(--muted)}
+.search-control input{min-width:0;padding:11px 0;color:var(--text);border:0;outline:0;background:transparent;font-size:16px}
+.search-control input::placeholder{color:var(--muted)}
+.search-control button{display:flex;align-items:center;gap:11px;padding:12px 18px;border:0;border-radius:9px;color:var(--action-ink);background:var(--action);font-size:14px;font-weight:800;cursor:pointer;transition:filter .16s ease,transform .16s ease}
+.search-control button:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.search-control button:focus-visible{outline:3px solid var(--info);outline-offset:3px}
+.search-help{margin:10px 0 0;color:var(--muted);font-size:12.5px}
+.lookup-error{margin:12px 0 0;padding:10px 12px;color:#fecaca;border:1px solid color-mix(in srgb,var(--danger) 45%,transparent);border-radius:8px;background:color-mix(in srgb,var(--danger) 11%,transparent);font-size:13px}
+.protocol-card{overflow:hidden;border:1px solid var(--border);border-radius:18px;background:linear-gradient(145deg,color-mix(in srgb,var(--surface) 94%,transparent),color-mix(in srgb,var(--elev) 84%,transparent));box-shadow:0 28px 70px rgba(0,0,0,.28)}
+.protocol-header{display:flex;justify-content:space-between;gap:16px;padding:17px 20px;border-bottom:1px solid var(--border);color:var(--muted);font:700 10.5px/1.2 'JetBrains Mono',monospace;letter-spacing:.12em}
+.protocol-live{display:flex;align-items:center;gap:7px;letter-spacing:0;text-transform:none}.protocol-live i{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 5px color-mix(in srgb,var(--ok) 12%,transparent)}
+.protocol-card ol{list-style:none;margin:0;padding:8px 20px}
+.protocol-card li{display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:14px;padding:19px 2px;border-bottom:1px solid var(--hairline)}
+.protocol-card li:last-child{border-bottom:0}.protocol-index{color:var(--muted);font:600 10px/1 'JetBrains Mono',monospace}.protocol-card li div{display:grid;gap:3px}.protocol-card strong{color:var(--text);font-size:16px}.protocol-card small{color:var(--muted);font-size:12.5px}.protocol-state{padding:5px 8px;color:var(--secondary);border:1px solid var(--border);border-radius:999px;font-size:10.5px;font-weight:700}.protocol-hip{position:relative}.protocol-hip::before{content:"";position:absolute;left:-20px;top:8px;bottom:8px;width:2px;background:linear-gradient(var(--action),var(--blue))}.protocol-hip strong,.protocol-hip .protocol-state{color:var(--action)}
+.protocol-card>p{margin:0;padding:16px 20px;color:var(--muted);border-top:1px solid var(--border);background:color-mix(in srgb,var(--bg) 30%,transparent);font-size:12.5px;line-height:1.55}
+.lookup-principles{padding:82px max(20px,calc((100vw - 1176px)/2)) 100px;border-top:1px solid var(--border);background:var(--surface)}
+.section-heading{max-width:680px}.section-heading>p{margin:0 0 14px;color:var(--action);font:800 11.5px/1.2 'JetBrains Mono',monospace;letter-spacing:.15em}.section-heading h2{margin:0;color:var(--text);font-size:clamp(32px,4vw,50px);line-height:1.06;letter-spacing:-.035em}
+.principle-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin-top:45px;border:1px solid var(--border);border-radius:16px;overflow:hidden;background:var(--border)}
+.principle-grid article{min-height:210px;padding:29px;background:var(--bg)}
+.principle-grid article>span{color:var(--action);font:700 10.5px/1.2 'JetBrains Mono',monospace;letter-spacing:.13em}.principle-grid h3{margin:42px 0 9px;color:var(--text);font-size:20px}.principle-grid p{margin:0;color:var(--muted);font-size:14.5px;line-height:1.62}
+@media(max-width:900px){.lookup-hero{grid-template-columns:1fr;min-height:0}.protocol-card{max-width:620px}.principle-grid{grid-template-columns:1fr}.principle-grid article{min-height:0}.principle-grid h3{margin-top:24px}}
+@media(max-width:560px){.lookup-hero{padding-top:60px}.search-control{grid-template-columns:auto minmax(0,1fr);padding:10px 12px}.search-control button{grid-column:1/-1;justify-content:center}.protocol-card li{grid-template-columns:24px minmax(0,1fr)}.protocol-state{grid-column:2;justify-self:start}.lookup-principles{padding-top:64px;padding-bottom:72px}}
+@media(prefers-reduced-motion:reduce){.search-control,.search-control button{transition:none}}

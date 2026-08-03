@@ -1,168 +1,174 @@
 @page "/lookup/domain/{Domain}"
 @page "/lookup/{Domain}"
 @attribute [AllowAnonymous]
-@layout PublicLayout
+@layout MarketingLayout
 @inject IPublicDomainLookupService LookupService
 
-<PageTitle>HIP Domain Lookup</PageTitle>
+<PageTitle>@(_lookup?.Domain ?? "Domain") trust result | HIP</PageTitle>
+<HeadContent>
+    <meta name="description" content="Public HIP identity, evidence coverage, trust score, and known risk information for this domain." />
+    <meta property="og:title" content="HIP domain trust result" />
+    <meta property="og:description" content="See the public evidence behind this HIP domain result." />
+</HeadContent>
 
-<main class="hip-lookup-page">
+<main class="lookup-result-page">
     @if (_lookup is null && _error is null)
     {
-        <p>Loading HIP lookup...</p>
+        <section class="state-panel" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <p>Loading HIP lookup…</p>
+        </section>
     }
     else if (_error is not null)
     {
-        <section class="hip-lookup-panel">
+        <section class="state-panel state-error">
+            <p class="result-eyebrow">PUBLIC HIP LOOKUP</p>
             <h1>Lookup unavailable</h1>
             <p>@_error</p>
-            <a href="/lookup">Try another lookup</a>
+            <a class="primary-link" href="/lookup">Try another lookup <span aria-hidden="true">→</span></a>
         </section>
     }
     else if (_lookup is not null)
     {
-        <section class="hip-lookup-panel">
-            <p class="eyebrow">Public HIP Lookup</p>
-            <div class="lookup-heading">
-                <div>
-                    <h1>@_lookup.Domain</h1>
-                    <p>TCP connects devices. TLS encrypts the connection. HIP verifies trust, origin, reputation, and risk.</p>
+        <div class="result-shell">
+            <nav class="result-nav" aria-label="Lookup actions">
+                <a href="/lookup"><span aria-hidden="true">←</span> Check another domain</a>
+                <span><i></i> Checked @_lookup.LastCheckedUtc.ToString("MMM d, yyyy")</span>
+            </nav>
+
+            <section class="trust-window status-@StatusClass" aria-labelledby="result-domain" data-rise>
+                <header class="window-bar">
+                    <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                    <strong>hip · trust result</strong>
+                    <span>PUBLIC EVIDENCE</span>
+                </header>
+
+                <div class="trust-summary">
+                    <div class="domain-heading">
+                        <p>DOMAIN</p>
+                        <h1 id="result-domain">@_lookup.Domain</h1>
+                        <span class="status-pill"><i></i>@StatusLabel</span>
+                    </div>
+
+                    <div class="score-row">
+                        <div class="score-value">
+                            @if (_lookup.DisplayScore is int displayScore)
+                            {
+                                <strong>@displayScore</strong><span>/ 100</span>
+                            }
+                            else
+                            {
+                                <strong class="score-pending">—</strong><span>Not enough evidence yet</span>
+                            }
+                        </div>
+                        <p>@_lookup.RecommendedAction</p>
+                    </div>
+
+                    <div class="score-track" aria-hidden="true"><i style="@ScoreWidth"></i></div>
+
+                    <dl class="summary-facts">
+                        <div><dt>Identity</dt><dd>@_lookup.IdentityStatus</dd></div>
+                        <div><dt>Evidence</dt><dd>@_lookup.EvidenceCoverage</dd></div>
+                        <div><dt>Confidence</dt><dd>@_lookup.EvidenceConfidence</dd></div>
+                        <div><dt>Data source</dt><dd>@_lookup.DataSource</dd></div>
+                        <div><dt>Verification</dt><dd>@_lookup.VerificationMethod</dd></div>
+                    </dl>
+
+                    <p class="trust-caveat">Every score comes with its reasons. Identity verification confirms control or authenticated identity evidence; it does not guarantee safety.</p>
                 </div>
-                <a href="/lookup">Check another domain</a>
-            </div>
-
-            <div class="score-card status-@_lookup.Status.ToString().ToLowerInvariant()">
-                <span>Safety assessment</span>
-                <strong>@(_lookup.DisplayScore is int displayScore ? $"{displayScore}/100" : "Not enough evidence yet")</strong>
-                <p>Identity status: @_lookup.IdentityStatus</p>
-                <p>Evidence coverage: @_lookup.EvidenceCoverage</p>
-                <p>Evidence confidence: @_lookup.EvidenceConfidence</p>
-                <p>Data source: @_lookup.DataSource</p>
-                <p>Verification method: @_lookup.VerificationMethod</p>
-                <p>Last checked UTC: @_lookup.LastCheckedUtc.ToString("u")</p>
-            </div>
-
-            @if (_lookup.DisplayScore is not null)
-            {
-                <section class="lookup-section">
-                    <h2>Layered HIP Score</h2>
-                    <p>@_lookup.FinalHipScoreExplanation</p>
-                    <div class="breakdown-grid">
-                        <article class="breakdown-card">
-                            <h3>Domain Trust</h3>
-                            <strong>@_lookup.DomainTrustScore/100</strong>
-                            <p>How trustworthy the root domain is overall. This does not automatically make every page safe.</p>
-                        </article>
-                        <article class="breakdown-card">
-                            <h3>Page Trust</h3>
-                            <strong>@_lookup.PageTrustScore/100</strong>
-                            <p>How trustworthy this exact page or URL context is.</p>
-                        </article>
-                        <article class="breakdown-card">
-                            <h3>Content Risk</h3>
-                            <strong>@_lookup.ContentRiskScore/100 risk</strong>
-                            <p>How risky the observed content signals are. Higher means more risk.</p>
-                        </article>
-                    </div>
-                </section>
-            }
-
-            @if (_lookup.DataSource == "BrowserPluginScan")
-            {
-                <section class="lookup-section">
-                    <h2>Last HIP Scan</h2>
-                    <p>This is the latest public-safe browser plugin scan summary for this domain. HIP does not expose page URLs, page text, form contents, user identity, private messages, or raw scan payloads here.</p>
-                    <div class="breakdown-grid">
-                        <article class="breakdown-card">
-                            <h3>Links scanned</h3>
-                            <strong>@_lookup.LinksScanned</strong>
-                        </article>
-                        <article class="breakdown-card">
-                            <h3>Risky links found</h3>
-                            <strong>@_lookup.RiskyLinksFound</strong>
-                        </article>
-                        <article class="breakdown-card">
-                            <h3>Suspicious links</h3>
-                            <strong>@_lookup.SuspiciousLinksFound</strong>
-                        </article>
-                        <article class="breakdown-card">
-                            <h3>Dangerous links</h3>
-                            <strong>@_lookup.DangerousLinksFound</strong>
-                        </article>
-                    </div>
-                </section>
-            }
-            else
-            {
-                <section class="lookup-section">
-                    <h2>Not Enough Data Yet</h2>
-                    <p>@_lookup.Message</p>
-                    <p>HIP will show stored browser scan data here after a HIP client scans this domain.</p>
-                </section>
-            }
-
-            <section class="lookup-section">
-                <h2>Important Context</h2>
-                <p>Identity verification confirms control or authenticated identity evidence. It does not prove that a site is safe. HIP shows a numeric score only when authenticated safety evidence is sufficient.</p>
             </section>
 
             @if (_lookup.DisplayScore is not null)
             {
-                <section class="lookup-section">
-                    <h2>Score Ranges</h2>
-                    <ul class="range-list">
-                        <li>0-9 = Dangerous</li>
-                        <li>10-24 = High Risk</li>
-                        <li>25-39 = Suspicious</li>
-                        <li>40-49 = Unknown</li>
-                        <li>50-69 = Limited Trust Data</li>
-                        <li>70-84 = Mostly Trusted</li>
-                        <li>85-100 = Trusted</li>
-                    </ul>
+                <section class="result-section" aria-labelledby="layers-heading" data-rise>
+                    <div class="section-intro">
+                        <p>THE RESULT</p>
+                        <div><h2 id="layers-heading">Layered HIP score</h2><span>@_lookup.FinalHipScoreExplanation</span></div>
+                    </div>
+                    <div class="metric-grid metric-grid-three">
+                        <article><span>DOMAIN TRUST</span><strong>@_lookup.DomainTrustScore<small>/100</small></strong><p>How trustworthy the root domain is overall. This does not automatically make every page safe.</p></article>
+                        <article><span>PAGE TRUST</span><strong>@_lookup.PageTrustScore<small>/100</small></strong><p>How trustworthy this exact page or URL context is.</p></article>
+                        <article class="risk-metric"><span>CONTENT RISK</span><strong>@_lookup.ContentRiskScore<small>/100 risk</small></strong><p>How risky the observed content signals are. Higher means more risk.</p></article>
+                    </div>
                 </section>
             }
 
+            <section class="result-section" aria-labelledby="scan-heading" data-rise>
+                <div class="section-intro">
+                    <p>EVIDENCE</p>
+                    <div>
+                        <h2 id="scan-heading">@(_lookup.DataSource == "BrowserPluginScan" ? "Latest public-safe scan" : "Not Enough Data Yet")</h2>
+                        @if (_lookup.DataSource == "BrowserPluginScan")
+                        {
+                            <span>HIP publishes counts and conclusions, never page text, form contents, private messages, user identity, or raw scan payloads.</span>
+                        }
+                        else
+                        {
+                            <span>@_lookup.Message HIP will show stored browser scan data here after a HIP client scans this domain.</span>
+                        }
+                    </div>
+                </div>
+                @if (_lookup.DataSource == "BrowserPluginScan")
+                {
+                    <div class="metric-grid scan-grid">
+                        <article><span>LINKS SCANNED</span><strong>@_lookup.LinksScanned</strong></article>
+                        <article><span>RISKY</span><strong>@_lookup.RiskyLinksFound</strong></article>
+                        <article><span>SUSPICIOUS</span><strong>@_lookup.SuspiciousLinksFound</strong></article>
+                        <article><span>DANGEROUS</span><strong>@_lookup.DangerousLinksFound</strong></article>
+                    </div>
+                }
+            </section>
+
+            <div class="detail-grid">
+                <section class="result-section detail-card" aria-labelledby="explanation-heading" data-rise>
+                    <p class="section-label">WHY HIP REACHED THIS RESULT</p>
+                    <h2 id="explanation-heading">Explanation</h2>
+                    <ul class="finding-list">
+                        @foreach (var explanation in _lookup.Reasons.Take(6))
+                        {
+                            <li><i aria-hidden="true"></i><span>@explanation</span></li>
+                        }
+                    </ul>
+                </section>
+
+                <section class="result-section detail-card" aria-labelledby="identity-heading" data-rise>
+                    <p class="section-label">SIGNED IDENTITY FOUNDATION</p>
+                    <h2 id="identity-heading">Identity evidence</h2>
+                    <dl class="identity-facts">
+                        <div><dt>Verification status</dt><dd>@_lookup.IdentityVerificationStatus</dd></div>
+                        <div><dt>Verified organization</dt><dd>@(_lookup.VerifiedOrganization ?? "Not configured")</dd></div>
+                    </dl>
+                    <p>HIP verifies domain control through the configured DNS TXT or website challenge and keeps safety evidence separate from that identity result.</p>
+                </section>
+            </div>
+
             @if (_lookup.KnownRisks.Count > 0)
             {
-                <section class="lookup-section">
-                    <h2>Known Public Risks</h2>
-                    <ul>
+                <section class="result-section risk-section" aria-labelledby="risks-heading" data-rise>
+                    <p class="section-label">PUBLIC WARNINGS</p>
+                    <h2 id="risks-heading">Known public risks</h2>
+                    <ul class="finding-list warning-list">
                         @foreach (var risk in _lookup.KnownRisks)
                         {
-                            <li>@risk</li>
+                            <li><i aria-hidden="true"></i><span>@risk</span></li>
                         }
                     </ul>
                 </section>
             }
 
-            <section class="lookup-section">
-                <h2>Explanation</h2>
-                <ul>
-                    @foreach (var explanation in _lookup.Reasons.Take(6))
-                    {
-                        <li>@explanation</li>
-                    }
-                </ul>
-            </section>
-
-            <section class="lookup-section">
-                <h2>Signed Identity Foundation</h2>
-                <p>Verification status: @_lookup.IdentityVerificationStatus</p>
-                <p>Verified organization: @(_lookup.VerifiedOrganization ?? "Not configured")</p>
-                <p>HIP verifies domain control through the configured DNS TXT or website challenge and keeps safety evidence separate from that identity result.</p>
-            </section>
-
             @if (_lookup.DisplayScore is not null)
             {
-                <section class="lookup-section">
-                    <h2>Score Breakdown</h2>
-                    <div class="breakdown-grid">
+                <section class="result-section" aria-labelledby="breakdown-heading" data-rise>
+                    <div class="section-intro">
+                        <p>DETAIL</p>
+                        <div><h2 id="breakdown-heading">Score breakdown</h2><span>Category-level evidence used in this public result.</span></div>
+                    </div>
+                    <div class="breakdown-list">
                         @foreach (var score in _lookup.ScoreBreakdown.Where(score => score.Category != "Final"))
                         {
-                            <article class="breakdown-card">
-                                <h3>@score.Category Score</h3>
-                                <strong>@score.Score/100</strong>
-                                <p>Status: @score.Status</p>
+                            <article>
+                                <div><span>@score.Category</span><small>@score.Status</small></div>
+                                <strong>@score.Score<small>/100</small></strong>
                                 <p>@score.Explanation</p>
                                 <ul>
                                     @foreach (var reason in score.Reasons)
@@ -178,29 +184,26 @@
 
             @if (_lookup.PublicBadgeEligible)
             {
-                <section class="lookup-section">
-                    <h2>Badge Preview</h2>
-                    <div class="hip-trust-badge-preview">
-                        <span>@(_lookup.IdentityStatus == "Verified" ? "HIP Identity Verified" : $"HIP Identity {_lookup.IdentityStatus}")</span>
-                        @if (_lookup.DisplayScore is int badgeScore)
-                        {
-                            <strong>Safety score: @badgeScore/100</strong>
-                        }
-                        else
-                        {
-                            <strong>Safety evidence: Not enough evidence yet</strong>
-                        }
-                        <span>Evidence: @_lookup.EvidenceCoverage (@_lookup.EvidenceConfidence confidence)</span>
-                        <small>Identity verification does not automatically mean safe.</small>
+                <section class="result-section badge-section" aria-labelledby="badge-heading" data-rise>
+                    <div>
+                        <p class="section-label">FOR SITE OWNERS</p>
+                        <h2 id="badge-heading">Badge preview</h2>
+                        <p>Identity is @(_lookup.IdentityStatus == "Verified" ? "verified" : _lookup.IdentityStatus.ToLowerInvariant()). Safety evidence remains a separate result.</p>
+                    </div>
+                    <div class="badge-preview">
+                        <img src="/images/public/marketing/hip-logo.png" alt="" />
+                        <span>Protected by<strong>HIP</strong></span>
+                        <i></i>
+                        <b>@(_lookup.DisplayScore is int badgeScore ? badgeScore.ToString() : "—")</b>
                     </div>
                 </section>
             }
 
-            <section class="lookup-section">
-                <h2>Share</h2>
-                <p><a href="@_lookup.PublicLookupUrl">@_lookup.PublicLookupUrl</a></p>
+            <section class="share-strip" aria-label="Share this result">
+                <span>PUBLIC RESULT URL</span>
+                <a href="@_lookup.PublicLookupUrl">@_lookup.PublicLookupUrl</a>
             </section>
-        </section>
+        </div>
     }
 </main>
 
@@ -210,6 +213,10 @@
 
     private PublicDomainLookupResponse? _lookup;
     private string? _error;
+
+    private string StatusClass => _lookup?.Status.ToString().ToLowerInvariant() ?? "unknown";
+    private string StatusLabel => Humanize(_lookup?.Status.ToString() ?? "Unknown");
+    private string ScoreWidth => $"width:{Math.Clamp(_lookup?.DisplayScore ?? 0, 0, 100)}%";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -229,4 +236,8 @@
             _error = ex.Message;
         }
     }
+
+    /// <summary>Turns protocol enum names into compact user-facing status labels.</summary>
+    private static string Humanize(string value) =>
+        System.Text.RegularExpressions.Regex.Replace(value, "([a-z])([A-Z])", "$1 $2");
 }

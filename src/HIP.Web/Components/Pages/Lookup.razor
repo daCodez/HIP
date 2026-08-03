@@ -1,34 +1,90 @@
 @page "/lookup"
 @attribute [AllowAnonymous]
-@layout PublicLayout
+@layout MarketingLayout
 @rendermode InteractiveServer
 @inject NavigationManager Navigation
 
-<PageTitle>Public HIP Lookup</PageTitle>
+<PageTitle>Check a website | HIP Domain Lookup</PageTitle>
+<HeadContent>
+    <meta name="description" content="Look up a domain's public HIP identity, evidence coverage, trust score, and known risks." />
+    <meta property="og:title" content="Check a website | HIP Domain Lookup" />
+    <meta property="og:description" content="See the public trust and identity evidence HIP has for a domain." />
+    <link rel="canonical" href="https://guardwithhip.com/lookup" />
+</HeadContent>
 
-<main class="hip-lookup-page">
-    <section class="hip-lookup-hero">
-        <p class="eyebrow">Human Identity Protocol</p>
-        <h1>Check a website's HIP trust score</h1>
-        <p>TCP connects devices. TLS encrypts the connection. HIP verifies trust, origin, reputation, and risk.</p>
+<main class="lookup-landing">
+    <section class="lookup-hero" aria-labelledby="lookup-title">
+        <div class="lookup-grid" aria-hidden="true"></div>
+        <div class="lookup-glow" aria-hidden="true"></div>
 
-        <form class="lookup-form" @onsubmit="SubmitLookup">
-            <label for="domainInput">Domain</label>
-            <div>
-                <input id="domainInput" @bind="_domain" placeholder="zerotoherobudgeting.com" autocomplete="off" />
-                <button type="submit">Check Domain</button>
+        <div class="lookup-copy" data-rise>
+            <p class="lookup-eyebrow"><span class="pulse-dot"></span> PUBLIC HIP LOOKUP</p>
+            <h1 id="lookup-title">Know what you're<br /><span>dealing with.</span></h1>
+            <p class="lookup-lead">Enter a domain to see the identity, origin, reputation, and risk evidence HIP can verify — with every conclusion explained.</p>
+
+            <form class="domain-search" @onsubmit="SubmitLookup">
+                <label for="domainInput">Website domain</label>
+                <div class="search-control">
+                    <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+                    <input id="domainInput" @bind="_domain" placeholder="example.com" autocomplete="url" inputmode="url" aria-describedby="domain-help" />
+                    <button type="submit">Check domain <span aria-hidden="true">→</span></button>
+                </div>
+                <p id="domain-help" class="search-help">Enter the domain only — no path, account information, or private URL.</p>
+                @if (_error is not null)
+                {
+                    <p class="lookup-error" role="alert">@_error</p>
+                }
+            </form>
+        </div>
+
+        <aside class="protocol-card" aria-label="How HIP complements internet security" data-rise>
+            <div class="protocol-header">
+                <span>TRUST STACK</span>
+                <span class="protocol-live"><i></i> Public evidence</span>
             </div>
-            @if (_error is not null)
-            {
-                <p class="lookup-error">@_error</p>
-            }
-        </form>
+            <ol>
+                <li>
+                    <span class="protocol-index">01</span>
+                    <div><strong>TCP</strong><small>Connects devices</small></div>
+                    <span class="protocol-state">Connected</span>
+                </li>
+                <li>
+                    <span class="protocol-index">02</span>
+                    <div><strong>TLS</strong><small>Encrypts transport</small></div>
+                    <span class="protocol-state">Encrypted</span>
+                </li>
+                <li class="protocol-hip">
+                    <span class="protocol-index">03</span>
+                    <div><strong>HIP</strong><small>Verifies trust and origin</small></div>
+                    <span class="protocol-state">Explained</span>
+                </li>
+            </ol>
+            <p>HIP adds an evidence layer. It does not replace TLS or promise that a verified identity is safe.</p>
+        </aside>
     </section>
 
-    <section class="hip-lookup-info">
-        <h2>What HIP Means</h2>
-        <p>HIP is a trust and origin verification layer above TCP and TLS. It helps answer who created something, where it came from, whether it changed, and how risky it is to interact with.</p>
-        <p>A verified identity does not automatically mean safe. It means HIP knows who signed or owns it. The trust score still matters.</p>
+    <section class="lookup-principles" aria-labelledby="principles-title">
+        <div class="section-heading" data-rise>
+            <p>WHAT THE RESULT TELLS YOU</p>
+            <h2 id="principles-title">One lookup. Three separate questions.</h2>
+        </div>
+        <div class="principle-grid">
+            <article data-rise>
+                <span>IDENTITY</span>
+                <h3>Who controls it?</h3>
+                <p>Domain and signed identity evidence show whether control has been verified.</p>
+            </article>
+            <article data-rise>
+                <span>ORIGIN</span>
+                <h3>Where did it come from?</h3>
+                <p>Public evidence describes the source and integrity signals HIP can establish.</p>
+            </article>
+            <article data-rise>
+                <span>RISK</span>
+                <h3>What should I watch?</h3>
+                <p>Safety signals, known risks, and evidence gaps stay visible instead of being hidden behind a score.</p>
+            </article>
+        </div>
     </section>
 </main>
 
