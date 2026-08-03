@@ -74,6 +74,11 @@ accepted. It generates a non-exportable ML-DSA-65 key only when the explicitly
 selected key is absent, serializes initial provisioning across HIP hosts, and
 stores only the public key in HIP's database.
 
+The same selected provider also supplies one non-exportable ML-DSA-65 key per
+new website identity. HIP derives a stable, privacy-safe token label from the
+identity and lifecycle key identifiers, persists only the public key, and never
+returns provider-managed private material to the browser.
+
 Set these host paths in the protected deployment environment:
 
 ```text

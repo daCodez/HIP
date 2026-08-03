@@ -193,6 +193,8 @@ public static class DependencyInjection
         services.AddSingleton(softHsm);
         services.AddSingleton(identity);
         services.AddSingleton<ISoftHsmPkcs11Client, SoftHsmPkcs11Client>();
+        services.RemoveAll<IManagedIdentityKeyProvider>();
+        services.AddSingleton<IManagedIdentityKeyProvider, SoftHsmManagedIdentityKeyProvider>();
         services.AddScoped<IManagedTrustReceiptSigner, SoftHsmManagedTrustReceiptSigner>();
         services.AddSingleton(new HipTrustReceiptIssuerPolicy([authorizedSigner]));
         services.AddSingleton(new DomainCertificateSigningAuthorityPolicy([certificateSigner]));

@@ -12,6 +12,37 @@ namespace HIP.Tests.Identity;
 public sealed class IdentitySigningTests
 {
     [Test]
+    public async Task Website_registration_uses_managed_key_provider_without_exporting_private_material()
+    {
+        var lifecycleRepository = new InMemorySigningKeyLifecycleRepository();
+        var managedKeyPair = new DevelopmentHipCryptoProvider().GenerateKeyPair();
+        var service = new WebsiteIdentityService(
+            new UnavailableHipCryptoProvider(),
+            lifecycleRepository,
+            new InMemoryDomainVerificationService(),
+            new TestWebsiteIdentityRepository(),
+            new AuditLogService(lifecycleRepository),
+            SigningKeyLifecycle(lifecycleRepository),
+            lifecycleRepository,
+            managedIdentityKeyProvider: new StubManagedIdentityKeyProvider(managedKeyPair));
+
+        var response = await service.RegisterAsync(
+            new WebsiteIdentityRegistrationRequest(
+                "managed.example",
+                "Managed Example",
+                VerificationMethod.DnsTxt),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.WebsiteIdentity.PublicKeys.Single().PublicKey,
+                Is.EqualTo(managedKeyPair.PublicKey));
+            Assert.That(response.DevelopmentPrivateKey, Is.Null);
+            Assert.That(response.Warning, Does.Contain("provider-managed"));
+        });
+    }
+
+    [Test]
     public async Task Identity_can_be_created()
     {
         var service = Service(out _);
@@ -509,6 +540,18 @@ public sealed class IdentitySigningTests
 
         public Task<IReadOnlyCollection<WebsiteIdentity>> ListAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyCollection<WebsiteIdentity>>(identities.Values.ToArray());
+    }
+
+    private sealed class StubManagedIdentityKeyProvider(HipKeyPair keyPair) : IManagedIdentityKeyProvider
+    {
+        public Task<HipManagedIdentityKey> GetOrCreateAsync(
+            string identityId,
+            string keyId,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(new HipManagedIdentityKey(keyPair.PublicKey, keyPair.Algorithm));
+        }
     }
 
     /// <summary>

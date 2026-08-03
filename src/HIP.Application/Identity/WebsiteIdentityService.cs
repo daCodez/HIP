@@ -19,13 +19,16 @@ public sealed class WebsiteIdentityService(
     ISigningKeyLifecycleService signingKeyLifecycleService,
     ISigningKeyLifecycleRepository signingKeyLifecycleRepository,
     IWebsiteOwnershipClaimRepository? ownershipClaimRepository = null,
-    IPrivacyHashingService? privacyHashingService = null) : IWebsiteIdentityService
+    IPrivacyHashingService? privacyHashingService = null,
+    IManagedIdentityKeyProvider? managedIdentityKeyProvider = null) : IWebsiteIdentityService
 {
     private const string InitialKeyId = HipIdentityService.InitialSigningKeyId;
     private const string NewRegistrationWarning =
         "Development private key is returned once by the non-production placeholder crypto provider and cannot be reissued by HIP.";
     private const string RecoveryWarning =
         "Registration recovered using the existing public key. HIP did not retain or reissue the development private key; rotate to client-owned key material before signing.";
+    private const string ManagedKeyWarning =
+        "The identity key is provider-managed. HIP returned only its public key; private material remains inside configured custody.";
     private readonly IWebsiteOwnershipClaimRepository ownershipClaims =
         ownershipClaimRepository ?? new InMemoryWebsiteOwnershipClaimRepository();
     private readonly IPrivacyHashingService privacyHasher =
@@ -76,13 +79,22 @@ public sealed class WebsiteIdentityService(
                 throw new WebsiteIdentityRegistrationConflictException(domain);
             }
 
-            var keyPair = cryptoProvider.GenerateKeyPair();
+            var managedKey = managedIdentityKeyProvider is null
+                ? null
+                : await managedIdentityKeyProvider.GetOrCreateAsync(
+                        identityId,
+                        InitialKeyId,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            var keyPair = managedKey is null ? cryptoProvider.GenerateKeyPair() : null;
+            var publicKey = managedKey?.PublicKey ?? keyPair!.PublicKey;
+            var algorithm = managedKey?.Algorithm ?? keyPair!.Algorithm;
             var identity = new HipIdentity(
                 identityId,
                 IdentitySubjectType.Website,
                 string.IsNullOrWhiteSpace(request.DisplayName) ? domain : request.DisplayName.Trim(),
-                keyPair.PublicKey,
-                keyPair.Algorithm,
+                publicKey,
+                algorithm,
                 VerificationStatus.Pending,
                 DateTimeOffset.UtcNow,
                 domain);
@@ -117,17 +129,17 @@ public sealed class WebsiteIdentityService(
             var registeredKey = RequiredCanonicalInitialKey(registration, identityId, domain);
             if (!string.Equals(
                     registeredKey.PublicKey,
-                    keyPair.PublicKey,
+                    publicKey,
                     StringComparison.Ordinal) ||
                 !string.Equals(
                     registeredKey.Algorithm,
-                    keyPair.Algorithm,
+                    algorithm,
                     StringComparison.Ordinal))
             {
                 throw new WebsiteIdentityRegistrationConflictException(domain);
             }
 
-            developmentPrivateKey = keyPair.PrivateKey;
+            developmentPrivateKey = keyPair?.PrivateKey;
         }
         else
         {
@@ -205,7 +217,9 @@ public sealed class WebsiteIdentityService(
             website,
             verification,
             developmentPrivateKey,
-            isRecovery ? RecoveryWarning : NewRegistrationWarning,
+            isRecovery
+                ? RecoveryWarning
+                : managedIdentityKeyProvider is null ? NewRegistrationWarning : ManagedKeyWarning,
             IsRecovery: isRecovery,
             RequiresSigningKeyRotation: isRecovery);
     }

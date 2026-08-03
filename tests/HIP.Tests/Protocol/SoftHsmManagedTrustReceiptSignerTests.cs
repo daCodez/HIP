@@ -131,6 +131,10 @@ public sealed class SoftHsmManagedTrustReceiptSignerTests
                     .ImplementationType,
                 Is.EqualTo(typeof(SoftHsmManagedTrustReceiptSigner)));
             Assert.That(
+                services.Last(descriptor => descriptor.ServiceType == typeof(IManagedIdentityKeyProvider))
+                    .ImplementationType,
+                Is.EqualTo(typeof(SoftHsmManagedIdentityKeyProvider)));
+            Assert.That(
                 provider.GetRequiredService<HipTrustReceiptIssuerPolicy>()
                     .IsAuthorized("hip:authority:softhsm", "hip-mldsa-65-1"),
                 Is.True);
@@ -138,6 +142,22 @@ public sealed class SoftHsmManagedTrustReceiptSignerTests
                 provider.GetRequiredService<HIP.Application.Certificates.DomainCertificateSigningAuthorityPolicy>()
                     .IsAuthorized("hip:authority:softhsm", "hip-mldsa-65-1"),
                 Is.True);
+        });
+    }
+
+    [Test]
+    public void Managed_identity_key_labels_are_stable_distinct_and_do_not_expose_identity_text()
+    {
+        var first = SoftHsmManagedIdentityKeyProvider.KeyLabel("hip:web:example.com", "default");
+        var same = SoftHsmManagedIdentityKeyProvider.KeyLabel("hip:web:example.com", "default");
+        var different = SoftHsmManagedIdentityKeyProvider.KeyLabel("hip:web:other.example", "default");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first, Is.EqualTo(same));
+            Assert.That(first, Is.Not.EqualTo(different));
+            Assert.That(first, Does.Match("^hip-identity-[0-9a-f]{32}$"));
+            Assert.That(first, Does.Not.Contain("example.com"));
         });
     }
 
@@ -158,6 +178,10 @@ public sealed class SoftHsmManagedTrustReceiptSignerTests
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(new SoftHsmSigningKey(key.ExportSubjectPublicKeyInfoPem()));
         }
+
+        public Task<SoftHsmSigningKey> GetOrCreateSigningKeyAsync(
+            string keyLabel,
+            CancellationToken cancellationToken) => GetSigningKeyAsync(cancellationToken);
 
         public Task<byte[]> SignAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
         {

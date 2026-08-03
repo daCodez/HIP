@@ -15,6 +15,7 @@
 @inject IJSRuntime JavaScript
 @inject NavigationManager NavigationManager
 @inject HipPortalLinks PortalLinks
+@inject ILogger<ConsumerCertificates> Logger
 
 <PageTitle>HIP Domain Certificates</PageTitle>
 
@@ -429,6 +430,11 @@
                     _ => "HIP could not start this enrollment right now."
                 };
             }
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "HIP could not start the authenticated domain verification enrollment.");
+            _enrollmentError = "HIP could not start this enrollment right now. No domain identity was changed.";
         }
         finally
         {

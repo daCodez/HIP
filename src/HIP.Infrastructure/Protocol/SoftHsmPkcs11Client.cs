@@ -12,6 +12,10 @@ internal interface ISoftHsmPkcs11Client
 {
     Task<SoftHsmSigningKey> GetSigningKeyAsync(CancellationToken cancellationToken);
 
+    Task<SoftHsmSigningKey> GetOrCreateSigningKeyAsync(
+        string keyLabel,
+        CancellationToken cancellationToken);
+
     Task<byte[]> SignAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken);
 }
 
@@ -35,9 +39,15 @@ internal sealed class SoftHsmPkcs11Client(SoftHsmManagedSigningOptions options) 
     private readonly Pkcs11InteropFactories factories = new();
 
     public async Task<SoftHsmSigningKey> GetSigningKeyAsync(CancellationToken cancellationToken)
+        => await GetOrCreateSigningKeyAsync(settings.KeyLabel, cancellationToken).ConfigureAwait(false);
+
+    public async Task<SoftHsmSigningKey> GetOrCreateSigningKeyAsync(
+        string keyLabel,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var existing = ReadPublicKey(required: !settings.ProvisionKeyIfMissing);
+        var normalizedLabel = NormalizeKeyLabel(keyLabel);
+        var existing = ReadPublicKey(normalizedLabel, required: !settings.ProvisionKeyIfMissing);
         if (existing is not null)
         {
             return existing;
@@ -45,14 +55,14 @@ internal sealed class SoftHsmPkcs11Client(SoftHsmManagedSigningOptions options) 
 
         await using var provisioningLock = await AcquireProvisioningLockAsync(cancellationToken)
             .ConfigureAwait(false);
-        existing = ReadPublicKey(required: false);
+        existing = ReadPublicKey(normalizedLabel, required: false);
         if (existing is not null)
         {
             return existing;
         }
 
-        GenerateKeyPair();
-        return ReadPublicKey(required: true)!;
+        GenerateKeyPair(normalizedLabel);
+        return ReadPublicKey(normalizedLabel, required: true)!;
     }
 
     public Task<byte[]> SignAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
@@ -70,7 +80,7 @@ internal sealed class SoftHsmPkcs11Client(SoftHsmManagedSigningOptions options) 
         try
         {
             session.Login(CKU.CKU_USER, pin);
-            var privateKey = FindRequiredKey(session, CKO.CKO_PRIVATE_KEY);
+            var privateKey = FindRequiredKey(session, CKO.CKO_PRIVATE_KEY, settings.KeyLabel);
             using var mechanism = factories.MechanismFactory.Create(MlDsaSigningMechanism);
             var signature = session.Sign(mechanism, privateKey, data.ToArray());
             if (signature.Length != MlDsa65SignatureSize)
@@ -103,12 +113,12 @@ internal sealed class SoftHsmPkcs11Client(SoftHsmManagedSigningOptions options) 
         return PemEncoding.WriteString("PUBLIC KEY", writer.Encode());
     }
 
-    private SoftHsmSigningKey? ReadPublicKey(bool required)
+    private SoftHsmSigningKey? ReadPublicKey(string keyLabel, bool required)
     {
         using var library = LoadLibrary();
         var slot = GetRequiredSlot(library);
         using var session = slot.OpenSession(SessionType.ReadOnly);
-        var keys = FindKeys(session, CKO.CKO_PUBLIC_KEY);
+        var keys = FindKeys(session, CKO.CKO_PUBLIC_KEY, keyLabel);
         if (keys.Count == 0 && !required)
         {
             return null;
@@ -140,7 +150,7 @@ internal sealed class SoftHsmPkcs11Client(SoftHsmManagedSigningOptions options) 
         return new SoftHsmSigningKey(EncodePublicKey(value.GetValueAsByteArray()));
     }
 
-    private void GenerateKeyPair()
+    private void GenerateKeyPair(string keyLabel)
     {
         using var library = LoadLibrary();
         var slot = GetRequiredSlot(library);
@@ -149,18 +159,18 @@ internal sealed class SoftHsmPkcs11Client(SoftHsmManagedSigningOptions options) 
         try
         {
             session.Login(CKU.CKU_USER, pin);
-            if (FindKeys(session, CKO.CKO_PUBLIC_KEY).Count != 0 ||
-                FindKeys(session, CKO.CKO_PRIVATE_KEY).Count != 0)
+            if (FindKeys(session, CKO.CKO_PUBLIC_KEY, keyLabel).Count != 0 ||
+                FindKeys(session, CKO.CKO_PRIVATE_KEY, keyLabel).Count != 0)
             {
                 return;
             }
 
-            var keyId = StrictUtf8.GetBytes(settings.KeyLabel.Trim());
+            var keyId = StrictUtf8.GetBytes(keyLabel);
             var publicAttributes = new List<IObjectAttribute>
             {
                 factories.ObjectAttributeFactory.Create(CKA.CKA_TOKEN, true),
                 factories.ObjectAttributeFactory.Create(CKA.CKA_PRIVATE, false),
-                factories.ObjectAttributeFactory.Create(CKA.CKA_LABEL, settings.KeyLabel.Trim()),
+                factories.ObjectAttributeFactory.Create(CKA.CKA_LABEL, keyLabel),
                 factories.ObjectAttributeFactory.Create(CKA.CKA_ID, keyId),
                 factories.ObjectAttributeFactory.Create((ulong)CKA.CKA_KEY_TYPE, MlDsaKeyType),
                 factories.ObjectAttributeFactory.Create(ParameterSetAttribute, MlDsa65ParameterSet),
@@ -170,7 +180,7 @@ internal sealed class SoftHsmPkcs11Client(SoftHsmManagedSigningOptions options) 
             {
                 factories.ObjectAttributeFactory.Create(CKA.CKA_TOKEN, true),
                 factories.ObjectAttributeFactory.Create(CKA.CKA_PRIVATE, true),
-                factories.ObjectAttributeFactory.Create(CKA.CKA_LABEL, settings.KeyLabel.Trim()),
+                factories.ObjectAttributeFactory.Create(CKA.CKA_LABEL, keyLabel),
                 factories.ObjectAttributeFactory.Create(CKA.CKA_ID, keyId),
                 factories.ObjectAttributeFactory.Create((ulong)CKA.CKA_KEY_TYPE, MlDsaKeyType),
                 factories.ObjectAttributeFactory.Create(CKA.CKA_SIGN, true),
@@ -190,9 +200,9 @@ internal sealed class SoftHsmPkcs11Client(SoftHsmManagedSigningOptions options) 
         }
     }
 
-    private IObjectHandle FindRequiredKey(ISession session, CKO keyClass)
+    private IObjectHandle FindRequiredKey(ISession session, CKO keyClass, string keyLabel)
     {
-        var keys = FindKeys(session, keyClass);
+        var keys = FindKeys(session, keyClass, keyLabel);
         if (keys.Count != 1)
         {
             throw new InvalidOperationException(
@@ -204,12 +214,12 @@ internal sealed class SoftHsmPkcs11Client(SoftHsmManagedSigningOptions options) 
         return keys[0];
     }
 
-    private List<IObjectHandle> FindKeys(ISession session, CKO keyClass)
+    private List<IObjectHandle> FindKeys(ISession session, CKO keyClass, string keyLabel)
     {
         var template = new List<IObjectAttribute>
         {
             factories.ObjectAttributeFactory.Create(CKA.CKA_CLASS, keyClass),
-            factories.ObjectAttributeFactory.Create(CKA.CKA_LABEL, settings.KeyLabel.Trim()),
+            factories.ObjectAttributeFactory.Create(CKA.CKA_LABEL, NormalizeKeyLabel(keyLabel)),
             factories.ObjectAttributeFactory.Create((ulong)CKA.CKA_KEY_TYPE, MlDsaKeyType)
         };
         try
@@ -223,6 +233,18 @@ internal sealed class SoftHsmPkcs11Client(SoftHsmManagedSigningOptions options) 
                 attribute.Dispose();
             }
         }
+    }
+
+    private static string NormalizeKeyLabel(string keyLabel)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(keyLabel);
+        var normalized = keyLabel.Trim();
+        if (normalized.Length > 128 || normalized.Any(char.IsControl))
+        {
+            throw new ArgumentException("The SoftHSM key label is invalid.", nameof(keyLabel));
+        }
+
+        return normalized;
     }
 
     private IPkcs11Library LoadLibrary()
