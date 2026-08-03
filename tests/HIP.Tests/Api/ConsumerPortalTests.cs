@@ -135,6 +135,25 @@ public sealed class ConsumerPortalTests
     }
 
     [Test]
+    public async Task Invalid_badge_configuration_is_rejected()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = ConsumerClient(factory);
+
+        var response = await client.PostAsJsonAsync("/api/v1/consumer/settings", new ConsumerSettings(
+            EnablePopupAlerts: true,
+            EnablePrivateWarnings: true,
+            EnableSafetyPageRouting: true,
+            ScanMode: "Normal",
+            BadgeConfigurations: new Dictionary<string, ConsumerBadgeConfiguration>(StringComparer.Ordinal)
+            {
+                ["example.com"] = new("dark", "bottom-right", 12)
+            }));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
     public async Task Consumer_apis_are_protected()
     {
         await using var factory = new HipWebApplicationFactory<Program>();

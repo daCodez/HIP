@@ -117,6 +117,124 @@ test("extension rejects certificate presentation fields that differ from the sig
     globalThis.fetch = originalFetch;
   }
 });
+
+test("extension verifies a changed lifecycle state without rewriting the signed issuance record", async () => {
+  const originalFetch = globalThis.fetch;
+  const currentCertificateState = {
+    certificateId: "hip-domain-cert-0001",
+    domain: "example.com",
+    level: "Verified",
+    status: "Suspended",
+    signatureStatus: "Verified",
+    expiresAtUtc: "2026-08-24T00:00:00Z",
+    publicCertificateUrl: "https://hiptrust.com/certificate/hip-domain-cert-0001",
+    isActive: false
+  };
+  globalThis.fetch = async url => {
+    if (url.endsWith("/badge/domain/example.com")) {
+      return response({
+        domain: "example.com",
+        signedBadge: {
+          payload: { domain: "example.com", certificate: currentCertificateState },
+          signature: { value: "signed" }
+        },
+        certificate: currentCertificateState
+      });
+    }
+    if (url.endsWith("/badge/verify")) {
+      return response({ isVerified: true, status: "Verified" });
+    }
+    return response({
+      signedCertificate: {
+        payload: {
+          certificateId: "hip-domain-cert-0001",
+          domain: "example.com",
+          level: 1,
+          status: 3,
+          expiresAtUtc: "2026-08-24T00:00:00Z",
+          publicCertificateUrl: "https://hiptrust.com/certificate/hip-domain-cert-0001"
+        }
+      },
+      currentStatus: 4,
+      signatureStatus: 0,
+      validityStatus: 0,
+      isActive: false
+    });
+  };
+
+  try {
+    const client = new HipApiClient({
+      apiBaseUrl: "http://localhost:5099",
+      webBaseUrl: "http://localhost:5123"
+    });
+
+    const result = await client.verifyDomainCertificate("example.com");
+
+    assert.equal(result.status, "Suspended");
+    assert.equal(result.isActive, false);
+    assert.equal(result.signatureStatus, "Verified");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("extension rejects an active claim that conflicts with current lifecycle validity", async () => {
+  const originalFetch = globalThis.fetch;
+  const activeCertificateState = {
+    certificateId: "hip-domain-cert-0001",
+    domain: "example.com",
+    level: "Verified",
+    status: "Active",
+    signatureStatus: "Verified",
+    expiresAtUtc: "2026-08-24T00:00:00Z",
+    publicCertificateUrl: "https://hiptrust.com/certificate/hip-domain-cert-0001",
+    isActive: true
+  };
+  globalThis.fetch = async url => {
+    if (url.endsWith("/badge/domain/example.com")) {
+      return response({
+        domain: "example.com",
+        signedBadge: {
+          payload: { domain: "example.com", certificate: activeCertificateState },
+          signature: { value: "signed" }
+        },
+        certificate: activeCertificateState
+      });
+    }
+    if (url.endsWith("/badge/verify")) {
+      return response({ isVerified: true, status: "Verified" });
+    }
+    return response({
+      signedCertificate: {
+        payload: {
+          certificateId: "hip-domain-cert-0001",
+          domain: "example.com",
+          level: 1,
+          status: 3,
+          expiresAtUtc: "2026-08-24T00:00:00Z",
+          publicCertificateUrl: "https://hiptrust.com/certificate/hip-domain-cert-0001"
+        }
+      },
+      currentStatus: 3,
+      signatureStatus: 0,
+      validityStatus: 2,
+      isActive: true
+    });
+  };
+
+  try {
+    const client = new HipApiClient({
+      apiBaseUrl: "http://localhost:5099",
+      webBaseUrl: "http://localhost:5123"
+    });
+
+    await assert.rejects(
+      client.verifyDomainCertificate("example.com"),
+      /certificate state is unavailable or inconsistent/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 function response(body) {
   return {
     ok: true,

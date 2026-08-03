@@ -92,24 +92,11 @@ public sealed class LiveTrustBadgeApiTests
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/javascript"));
-        Assert.That(script, Does.Contain("renderHipLiveTrustBadge"));
-        Assert.That(script, Does.Contain("HIP Identity Verified"));
-        Assert.That(script, Does.Contain("certificate.isActive !== true"));
-        Assert.That(script, Does.Contain("certificate.status !== \"Active\""));
-        Assert.That(script, Does.Contain("certificate.signatureStatus !== \"Verified\""));
-        Assert.That(script, Does.Contain("container.remove()"));
-        Assert.That(script, Does.Contain("Not enough evidence yet"));
-        Assert.That(script, Does.Contain("displayScore"));
-        Assert.That(script, Does.Not.Contain("badge.score)}/100"));
-        Assert.That(script, Does.Contain("/api/v1/badge/"));
-        Assert.That(script, Does.Contain("position: fixed"));
-        Assert.That(script, Does.Contain("background: transparent"));
-        Assert.That(script, Does.Contain("shieldMarkup"));
-        Assert.That(script, Does.Contain("/hip-logo.svg"));
-        Assert.That(script, Does.Contain("data-hip-action=\"minimize\""));
-        Assert.That(script, Does.Contain("data-hip-action=\"close\""));
-        Assert.That(script, Does.Contain("data-hip-action=\"show\""));
-        Assert.That(script, Does.Contain("prefers-reduced-motion"));
+        Assert.That(script, Does.Contain("loadHipLiveTrustBadge"));
+        Assert.That(script, Does.Contain("container.dataset.domain = domain"));
+        Assert.That(script, Does.Contain("container.dataset.apiBase = apiBase"));
+        Assert.That(script, Does.Contain("/hip-badge.js?v=2"));
+        Assert.That(script, Does.Contain("runtime.referrerPolicy = \"no-referrer\""));
         Assert.That(script, Does.Not.Contain("localStorage"));
         Assert.That(script, Does.Not.Contain("sessionStorage"));
     }

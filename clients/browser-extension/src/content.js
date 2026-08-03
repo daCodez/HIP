@@ -28,6 +28,7 @@
   const reportedDomains = new Set();
   const pendingScanSubmissions = new Set();
   let activeScanPromise = null;
+  let xraySession = null;
   const privacyGuards = window.HipBrowserPrivacyGuards;
   const scanAssessment = window.HipBrowserScanAssessment;
   const formalScoring = globalThis.HipFormalScoring;
@@ -80,6 +81,20 @@
     }
     message = validation.message;
 
+    if (message?.type === "HIP_XRAY_START") {
+      try {
+        if (!globalThis.HipXrayRules || !globalThis.HipXrayRenderer || !globalThis.HipXrayController) {
+          throw new Error("HIP X-ray dependencies did not load.");
+        }
+        xraySession ??= globalThis.HipXrayController.create();
+        const result = xraySession.start();
+        sendResponse({ ok: true, result: { active: true, alreadyActive: result.alreadyActive, findingCount: result.findingCount } });
+      } catch {
+        sendResponse({ ok: false, error: "X-ray is unavailable on this page." });
+      }
+      return false;
+    }
+
     if (message?.type === "HIP_REFRESH_SCAN") {
       runScan()
         .then(() => sendResponse({ ok: true, result: contentMessageContracts.safeSummary(lastSummary) }))
@@ -102,7 +117,18 @@
     void handleDeviceRegistrationBridgeMessage(event);
   });
 
+  installXrayLauncher();
+
   runScan().catch(handleInitializationError);
+
+  function installXrayLauncher() {
+    if (!globalThis.HipXrayRules || !globalThis.HipXrayRenderer || !globalThis.HipXrayController) {
+      return;
+    }
+    xraySession ??= globalThis.HipXrayController.create();
+    xraySession.installLauncher();
+    window.addEventListener("pagehide", () => xraySession?.destroy(), { once: true });
+  }
 
   /**
    * Reuses the active page scan when popup refresh and document startup overlap.

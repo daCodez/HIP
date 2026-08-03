@@ -25,4 +25,21 @@ public sealed class PublicBadgeCorsTests
             Assert.That(response.Headers.GetValues("Access-Control-Allow-Methods"), Has.Some.Contains("POST"));
         });
     }
+
+    [Test]
+    public async Task Public_certificate_lookup_allows_cross_origin_badge_read()
+    {
+        await using var factory = new HipWebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/public/certificates/missing-certificate");
+        request.Headers.Add("Origin", "https://example.com");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+            Assert.That(response.Headers.GetValues("Access-Control-Allow-Origin"), Does.Contain("*"));
+        });
+    }
 }

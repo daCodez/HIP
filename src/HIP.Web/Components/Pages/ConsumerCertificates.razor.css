@@ -102,6 +102,129 @@
     overflow-wrap: anywhere;
 }
 
+.badge-configurator {
+    display: grid;
+    grid-template-columns: minmax(15.5rem, auto) minmax(18rem, 1fr);
+    align-items: center;
+    gap: 1.25rem;
+    margin: 1rem 0;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: .75rem;
+    background: color-mix(in srgb, var(--panel) 88%, black);
+}
+
+.badge-preview {
+    --badge-preview-alpha: .82;
+    display: grid;
+    grid-template-columns: 2.75rem minmax(5.25rem, 1fr) 1px 2.25rem;
+    align-items: center;
+    gap: .75rem;
+    min-width: 15.5rem;
+    padding: .8rem 1rem;
+    color: #f8fafc;
+    border: 1px solid rgb(148 163 184 / 22%);
+    border-radius: 1rem;
+    background: rgb(10 20 36 / var(--badge-preview-alpha));
+    box-shadow: 0 .75rem 1.8rem rgb(2 8 23 / 24%);
+    backdrop-filter: blur(.9rem) saturate(135%);
+}
+
+.badge-preview-light {
+    color: #111827;
+    border-color: rgb(100 116 139 / 22%);
+    background: rgb(248 250 252 / var(--badge-preview-alpha));
+}
+
+.badge-preview-shield {
+    display: grid;
+    place-items: center;
+}
+
+.badge-preview-shield svg {
+    width: 2.45rem;
+    height: 2.9rem;
+}
+
+.badge-preview span:not(.badge-preview-shield) {
+    display: grid;
+}
+
+.badge-preview small {
+    color: #94a3b8;
+    font-size: .78rem;
+}
+
+.badge-preview strong {
+    font-size: 1.45rem;
+    line-height: 1;
+}
+
+.badge-preview i {
+    width: 1px;
+    height: 2.4rem;
+    background: rgb(148 163 184 / 24%);
+}
+
+.badge-preview b {
+    color: #14b8a6;
+    text-align: center;
+}
+
+.badge-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(8rem, 1fr));
+    gap: .8rem;
+}
+
+.badge-controls label {
+    display: grid;
+    gap: .35rem;
+    color: var(--muted);
+    font-size: .85rem;
+    font-weight: 700;
+}
+
+.badge-controls select,
+.badge-controls input {
+    width: 100%;
+}
+
+.badge-opacity-control {
+    grid-column: 1 / -1;
+}
+
+.badge-opacity-control span {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.badge-opacity-control output {
+    color: #14b8a6;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-color-scheme: light) {
+    .badge-preview-auto {
+        color: #111827;
+        border-color: rgb(100 116 139 / 22%);
+        background: rgb(248 250 252 / var(--badge-preview-alpha));
+    }
+}
+
+@media (max-width: 54rem) {
+    .badge-configurator {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 32rem) {
+    .badge-controls {
+        grid-template-columns: 1fr;
+    }
+}
+
 .badge-installation-notice {
     color: var(--muted);
 }

@@ -50,7 +50,14 @@ public sealed record ConsumerSettings(
     bool EnablePopupAlerts,
     bool EnablePrivateWarnings,
     bool EnableSafetyPageRouting,
-    string ScanMode);
+    string ScanMode,
+    IReadOnlyDictionary<string, ConsumerBadgeConfiguration>? BadgeConfigurations = null);
+
+/// <summary>Owner-selected visual settings only; live trust facts never enter this record.</summary>
+public sealed record ConsumerBadgeConfiguration(
+    string Theme,
+    string Position,
+    int Opacity);
 
 public sealed record ConsumerSettingsSaveResult(
     bool Saved,

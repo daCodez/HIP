@@ -1,7 +1,7 @@
 (function registerHipContentMessageContracts(global) {
   "use strict";
 
-  const allowedTypes = new Set(["HIP_REFRESH_SCAN", "HIP_GET_CONTENT_SUMMARY"]);
+  const allowedTypes = new Set(["HIP_REFRESH_SCAN", "HIP_GET_CONTENT_SUMMARY", "HIP_XRAY_START"]);
 
   /**
    * Accepts only payload-free commands sent by this extension's own pages.

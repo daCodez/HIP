@@ -1,4 +1,5 @@
 using HIP.Application.Devices;
+using HIP.Application.PublicLookup;
 using HIP.Application.Reporting;
 using HIP.Application.Review;
 using HIP.Domain.Devices;
@@ -222,7 +223,7 @@ public sealed class ConsumerPortalService(
     {
         var consumerScopeHash = ConsumerScopeHash(consumerId);
         var stored = await settings.GetAsync(consumerScopeHash, cancellationToken).ConfigureAwait(false);
-        return stored?.Settings ?? DefaultSettings();
+        return NormalizeSettings(stored?.Settings ?? DefaultSettings());
     }
 
     public async Task<ConsumerSettingsSaveResult> SaveSettingsAsync(
@@ -230,12 +231,17 @@ public sealed class ConsumerPortalService(
         ConsumerSettings requestedSettings,
         CancellationToken cancellationToken)
     {
-        if (requestedSettings is null || !SupportedScanModes.Contains(requestedSettings.ScanMode))
+        if (requestedSettings is null || !SupportedScanModes.Contains(requestedSettings.ScanMode) ||
+            !TryNormalizeBadgeConfigurations(requestedSettings.BadgeConfigurations, out var badgeConfigurations))
         {
-            return new ConsumerSettingsSaveResult(false, null, "Scan mode must be Quiet, Normal, Strict, or Paranoid.");
+            return new ConsumerSettingsSaveResult(false, null, "Settings contain an unsupported scan mode or badge configuration.");
         }
 
-        var normalized = requestedSettings with { ScanMode = NormalizeScanMode(requestedSettings.ScanMode) };
+        var normalized = requestedSettings with
+        {
+            ScanMode = NormalizeScanMode(requestedSettings.ScanMode),
+            BadgeConfigurations = badgeConfigurations
+        };
         var consumerScopeHash = ConsumerScopeHash(consumerId);
         for (var attempt = 0; attempt < MaximumSettingsSaveAttempts; attempt++)
         {
@@ -264,6 +270,51 @@ public sealed class ConsumerPortalService(
             EnablePrivateWarnings: true,
             EnableSafetyPageRouting: true,
             ScanMode: "Normal");
+
+    private static ConsumerSettings NormalizeSettings(ConsumerSettings settings) =>
+        TryNormalizeBadgeConfigurations(settings.BadgeConfigurations, out var configurations)
+            ? settings with { BadgeConfigurations = configurations }
+            : settings with { BadgeConfigurations = new Dictionary<string, ConsumerBadgeConfiguration>(StringComparer.Ordinal) };
+
+    private static bool TryNormalizeBadgeConfigurations(
+        IReadOnlyDictionary<string, ConsumerBadgeConfiguration>? requested,
+        out IReadOnlyDictionary<string, ConsumerBadgeConfiguration> normalized)
+    {
+        var result = new Dictionary<string, ConsumerBadgeConfiguration>(StringComparer.Ordinal);
+        normalized = result;
+        if (requested is null)
+        {
+            return true;
+        }
+
+        if (requested.Count > 50)
+        {
+            return false;
+        }
+
+        foreach (var (domain, configuration) in requested)
+        {
+            if (configuration is null ||
+                configuration.Theme is not ("auto" or "dark" or "light") ||
+                configuration.Position is not ("inline" or "top-left" or "top-right" or "bottom-left" or "bottom-right") ||
+                configuration.Opacity is < 60 or > 100)
+            {
+                return false;
+            }
+
+            try
+            {
+                var normalizedDomain = DomainInputValidator.ValidateAndNormalize(domain);
+                result[normalizedDomain] = configuration;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     private static string ActionFor(RiskStatus riskLevel) =>
         riskLevel switch

@@ -35,29 +35,11 @@ public sealed class SignedLiveBadgeApiTests
         var script = await client.GetStringAsync("/api/v1/badge/example.com/script");
         Assert.Multiple(() =>
         {
-            Assert.That(script, Does.Contain("/api/v1/badge/verify"));
-            Assert.That(script, Does.Contain("badge.isAvailable !== true"));
-            Assert.That(script, Does.Contain("payload.score !== badge.score"));
-            Assert.That(script, Does.Contain("payload.displayScore !== badge.displayScore"));
-            Assert.That(script, Does.Contain("payload.evidenceCoverage !== badge.evidenceCoverage"));
-            Assert.That(script, Does.Contain("HIP Identity Verified"));
-            Assert.That(script, Does.Contain("Not enough evidence yet"));
-            Assert.That(script, Does.Contain("payload.certificate"));
-            Assert.That(script, Does.Contain("certificate.domain !== domain"));
-            Assert.That(script, Does.Contain("certificate.isActive !== true"));
-            Assert.That(script, Does.Contain("certificate.status !== \"Active\""));
-            Assert.That(script, Does.Contain("certificate.signatureStatus !== \"Verified\""));
-            Assert.That(script, Does.Contain("container.remove()"));
-            Assert.That(script, Does.Contain("expiresAt <= Date.now()"));
-            Assert.That(script, Does.Contain("HIP Unavailable"));
-            Assert.That(script, Does.Contain("position: fixed"));
-            Assert.That(script, Does.Contain("background: transparent"));
-            Assert.That(script, Does.Contain("shieldMarkup"));
-            Assert.That(script, Does.Contain("/hip-logo.svg"));
-            Assert.That(script, Does.Contain("data-hip-action=\"minimize\""));
-            Assert.That(script, Does.Contain("data-hip-action=\"close\""));
-            Assert.That(script, Does.Contain("data-hip-action=\"show\""));
-            Assert.That(script, Does.Contain("prefers-reduced-motion"));
+            Assert.That(script, Does.Contain("loadHipLiveTrustBadge"));
+            Assert.That(script, Does.Contain("container.dataset.domain = domain"));
+            Assert.That(script, Does.Contain("container.dataset.apiBase = apiBase"));
+            Assert.That(script, Does.Contain("/hip-badge.js?v=2"));
+            Assert.That(script, Does.Contain("runtime.referrerPolicy = \"no-referrer\""));
             Assert.That(script, Does.Not.Contain("localStorage"));
             Assert.That(script, Does.Not.Contain("sessionStorage"));
         });

@@ -22,7 +22,15 @@ public sealed class ConsumerSettingsPersistenceTests
 
         var saved = await first.SaveSettingsAsync(
             "consumer-A",
-            new ConsumerSettings(false, true, true, "Strict"),
+            new ConsumerSettings(
+                false,
+                true,
+                true,
+                "Strict",
+                new Dictionary<string, ConsumerBadgeConfiguration>(StringComparer.Ordinal)
+                {
+                    ["example.com"] = new("dark", "bottom-left", 82)
+                }),
             CancellationToken.None);
         var recreated = Service(repository);
         var owner = await recreated.GetSettingsAsync("consumer-A", CancellationToken.None);
@@ -35,6 +43,10 @@ public sealed class ConsumerSettingsPersistenceTests
             Assert.That(saved.Saved, Is.True);
             Assert.That(owner.ScanMode, Is.EqualTo("Strict"));
             Assert.That(owner.EnablePopupAlerts, Is.False);
+            Assert.That(owner.BadgeConfigurations!["example.com"].Theme, Is.EqualTo("dark"));
+            Assert.That(owner.BadgeConfigurations["example.com"].Position, Is.EqualTo("bottom-left"));
+            Assert.That(owner.BadgeConfigurations["example.com"].Opacity, Is.EqualTo(82));
+            Assert.That(other.BadgeConfigurations, Is.Empty);
             Assert.That(other.ScanMode, Is.EqualTo("Normal"));
             Assert.That(row.Id, Does.StartWith("sha256:"));
             Assert.That(row.Id, Does.Not.Contain("consumer-A"));

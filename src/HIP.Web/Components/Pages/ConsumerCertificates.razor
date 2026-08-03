@@ -10,6 +10,7 @@
 @inject IDomainCertificateApplicationService ApplicationService
 @inject IDomainCertificateProvisioningService ProvisioningService
 @inject IDomainCertificateMonitoringService MonitoringService
+@inject IConsumerPortalService ConsumerPortalService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthorizationService AuthorizationService
 @inject IJSRuntime JavaScript
@@ -119,9 +120,54 @@
                     <section class="badge-installation" aria-labelledby="@BadgeInstallationHeadingId(item)">
                         <h3 id="@BadgeInstallationHeadingId(item)">Install live badge</h3>
                         <p>Copy this exact code into the public page for <strong>@item.Domain</strong>. The badge stays bound to the current signed certificate and live HIP status.</p>
+                        <div class="badge-configurator">
+                            <div class="badge-preview @BadgePreviewTheme(item.Domain)" style="@BadgePreviewStyle(item.Domain)" aria-label="Badge preview">
+                                <span class="badge-preview-shield" aria-hidden="true">
+                                    <svg viewBox="0 0 48 56" focusable="false">
+                                        <defs><linearGradient id="@BadgeShieldGradientId(item)" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#06b6d4" /><stop offset="1" stop-color="#3082f6" /></linearGradient></defs>
+                                        <path d="M24 2 44 10v15c0 14-8 23-20 29C12 48 4 39 4 25V10L24 2Z" fill="none" stroke="url(#@BadgeShieldGradientId(item))" stroke-width="4" />
+                                        <path d="m15 27 6 6 13-15" fill="none" stroke="url(#@BadgeShieldGradientId(item))" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                </span>
+                                <span><small>Protected by</small><strong>HIP</strong></span>
+                                <i aria-hidden="true"></i>
+                                <b>@(item.CurrentScore?.ToString() ?? "—")</b>
+                            </div>
+                            <div class="badge-controls">
+                                <label>
+                                    Theme
+                                    <select value="@BadgeConfigurationFor(item.Domain).Theme" @onchange="eventArgs => UpdateBadgeTheme(item.Domain, eventArgs.Value?.ToString())">
+                                        <option value="auto">Automatic</option>
+                                        <option value="dark">Dark</option>
+                                        <option value="light">Light</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    Position
+                                    <select value="@BadgeConfigurationFor(item.Domain).Position" @onchange="eventArgs => UpdateBadgePosition(item.Domain, eventArgs.Value?.ToString())">
+                                        <option value="bottom-right">Bottom right</option>
+                                        <option value="bottom-left">Bottom left</option>
+                                        <option value="top-right">Top right</option>
+                                        <option value="top-left">Top left</option>
+                                        <option value="inline">Inline</option>
+                                    </select>
+                                </label>
+                                <label class="badge-opacity-control">
+                                    <span>Surface opacity <output for="@BadgeOpacityId(item)">@BadgeConfigurationFor(item.Domain).Opacity%</output></span>
+                                    <input id="@BadgeOpacityId(item)" type="range" min="60" max="100" step="1"
+                                           value="@BadgeConfigurationFor(item.Domain).Opacity"
+                                           @oninput="eventArgs => UpdateBadgeOpacity(item.Domain, eventArgs.Value?.ToString())"
+                                           aria-label="Badge background surface opacity" />
+                                </label>
+                            </div>
+                        </div>
+                        <p class="badge-installation-notice">These presentation settings are saved in the generated embed attributes. They never set the score, certificate state, or organization name.</p>
                         <pre><code>@BadgeEmbedCode(item.Domain)</code></pre>
                         <p class="badge-installation-notice">@BadgeInstallationNotice()</p>
                         <div class="badge-installation-actions">
+                            <button class="btn" type="button" disabled="@(_savingBadgeDomain is not null)" @onclick="() => SaveBadgeConfigurationAsync(item.Domain)">
+                                @(_savingBadgeDomain == item.Domain ? "Saving settings…" : "Save badge settings")
+                            </button>
                             <button class="btn btn-primary" type="button" @onclick="() => CopyBadgeEmbedAsync(item.Domain)">Copy badge code</button>
                             <a class="btn" href="@BadgeApiUrl(item.Domain)" target="_blank" rel="noopener noreferrer">Check live badge data</a>
                         </div>
@@ -317,6 +363,8 @@
     private bool _submittingApplication;
     private bool _authorityConfirmed;
     private bool _accuracyConfirmed;
+    private string? _savingBadgeDomain;
+    private readonly Dictionary<string, BadgeConfiguration> _badgeConfigurations = new(StringComparer.Ordinal);
     protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
@@ -338,6 +386,7 @@
         else
         {
             _items = access.Value ?? [];
+            await LoadBadgeConfigurationsAsync(authenticationState.User);
             await LoadDnsChallengesAsync(authenticationState.User);
             await LoadWebsiteChallengesAsync(authenticationState.User);
         }
@@ -937,9 +986,111 @@
         _certificateActionMessage = "Badge code copied. Publish it on the exact verified hostname.";
     }
 
-    private string BadgeEmbedCode(string domain) =>
-        $"<div data-hip-badge=\"{domain}\"></div>{Environment.NewLine}" +
+    private async Task LoadBadgeConfigurationsAsync(ClaimsPrincipal principal)
+    {
+        var access = await HipConsumerPageAccess.ExecuteAsync(
+            principal,
+            consumerId => ConsumerPortalService.GetSettingsAsync(consumerId, CancellationToken.None));
+        if (!access.Succeeded || access.Value?.BadgeConfigurations is null)
+        {
+            return;
+        }
+
+        foreach (var (domain, configuration) in access.Value.BadgeConfigurations)
+        {
+            _badgeConfigurations[domain] = new BadgeConfiguration
+            {
+                Theme = configuration.Theme,
+                Position = configuration.Position,
+                Opacity = configuration.Opacity
+            };
+        }
+    }
+
+    private async Task SaveBadgeConfigurationAsync(string domain)
+    {
+        _savingBadgeDomain = domain;
+        _certificateActionMessage = null;
+        _certificateActionError = null;
+        try
+        {
+            var snapshot = _badgeConfigurations.ToDictionary(
+                pair => pair.Key,
+                pair => new ConsumerBadgeConfiguration(pair.Value.Theme, pair.Value.Position, pair.Value.Opacity),
+                StringComparer.Ordinal);
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipConsumerPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                ConsumerPolicies.CanUseConsumerPortal,
+                async consumerId =>
+                {
+                    var current = await ConsumerPortalService.GetSettingsAsync(consumerId, CancellationToken.None);
+                    return await ConsumerPortalService.SaveSettingsAsync(
+                        consumerId,
+                        current with { BadgeConfigurations = snapshot },
+                        CancellationToken.None);
+                });
+            if (!access.Succeeded || access.Value is not { Saved: true })
+            {
+                _certificateActionError = access.Value?.Message ?? HipConsumerPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            _certificateActionMessage = $"Badge settings saved for {domain}. The generated embed code now includes them.";
+        }
+        finally
+        {
+            _savingBadgeDomain = null;
+        }
+    }
+
+    private string BadgeEmbedCode(string domain)
+    {
+        var configuration = BadgeConfigurationFor(domain);
+        return $"<div data-hip-badge=\"{domain}\" data-theme=\"{configuration.Theme}\" data-opacity=\"{configuration.Opacity}\" data-position=\"{configuration.Position}\"></div>{Environment.NewLine}" +
         $"<script src=\"{BadgeScriptUrl(domain)}\" async></script>";
+    }
+
+    private BadgeConfiguration BadgeConfigurationFor(string domain)
+    {
+        if (!_badgeConfigurations.TryGetValue(domain, out var configuration))
+        {
+            configuration = new BadgeConfiguration();
+            _badgeConfigurations[domain] = configuration;
+        }
+
+        return configuration;
+    }
+
+    private void UpdateBadgeTheme(string domain, string? value)
+    {
+        if (value is "auto" or "dark" or "light")
+        {
+            BadgeConfigurationFor(domain).Theme = value;
+        }
+    }
+
+    private void UpdateBadgePosition(string domain, string? value)
+    {
+        if (value is "inline" or "top-left" or "top-right" or "bottom-left" or "bottom-right")
+        {
+            BadgeConfigurationFor(domain).Position = value;
+        }
+    }
+
+    private void UpdateBadgeOpacity(string domain, string? value)
+    {
+        if (int.TryParse(value, out var opacity) && opacity is >= 60 and <= 100)
+        {
+            BadgeConfigurationFor(domain).Opacity = opacity;
+        }
+    }
+
+    private string BadgePreviewTheme(string domain) => $"badge-preview-{BadgeConfigurationFor(domain).Theme}";
+
+    private string BadgePreviewStyle(string domain) =>
+        FormattableString.Invariant($"--badge-preview-alpha: {BadgeConfigurationFor(domain).Opacity / 100d:0.00}");
 
     private string BadgeApiUrl(string domain) =>
         $"{HipWebOrigin()}/api/v1/badge/{Uri.EscapeDataString(domain)}";
@@ -1059,5 +1210,14 @@
     private static string HeadingId(OwnerDomainCertificateSummary item) => $"certificate-{SafeId(item.EnrollmentId)}";
     private static string ProgressHeadingId(OwnerDomainCertificateSummary item) => $"progress-{SafeId(item.EnrollmentId)}";
     private static string BadgeInstallationHeadingId(OwnerDomainCertificateSummary item) => $"badge-installation-{SafeId(item.EnrollmentId)}";
+    private static string BadgeOpacityId(OwnerDomainCertificateSummary item) => $"badge-opacity-{SafeId(item.EnrollmentId)}";
+    private static string BadgeShieldGradientId(OwnerDomainCertificateSummary item) => $"badge-shield-gradient-{SafeId(item.EnrollmentId)}";
+
+    private sealed class BadgeConfiguration
+    {
+        public string Theme { get; set; } = "auto";
+        public string Position { get; set; } = "bottom-right";
+        public int Opacity { get; set; } = 82;
+    }
     private static string SafeId(string value) => string.Concat(value.Select(character => char.IsLetterOrDigit(character) ? character : '-'));
 }

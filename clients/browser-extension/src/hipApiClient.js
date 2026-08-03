@@ -157,15 +157,19 @@ export class HipApiClient {
     const validityStatus = certificateEnumName(
       certificate?.validityStatus,
       ["Current", "NotYetValid", "Expired"]);
+    const expectedIsActive = signatureStatus === "Verified" &&
+      validityStatus === "Current" &&
+      currentStatus === "Active";
     if (!payload ||
         payload.certificateId !== certificateId ||
         normalizeCertificateDomain(payload.domain) !== normalizedDomain ||
         payloadLevel !== badgeCertificate.level ||
-        payloadStatus !== badgeCertificate.status ||
+        payloadStatus !== "Active" ||
         currentStatus !== badgeCertificate.status ||
         signatureStatus !== "Verified" ||
         badgeCertificate.signatureStatus !== "Verified" ||
         certificate.isActive !== badgeCertificate.isActive ||
+        certificate.isActive !== expectedIsActive ||
         !sameCertificateInstant(payload.expiresAtUtc, badgeCertificate.expiresAtUtc) ||
         (certificate.publicCertificateUrl || payload.publicCertificateUrl) !==
           badgeCertificate.publicCertificateUrl) {
