@@ -1,5 +1,3 @@
-@implements IDisposable
-@inject MarketingRegisterState Register
 
 <section data-rise style="position:relative;overflow:hidden;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
   <div data-px="0.16" style="position:absolute;inset:-16% -3%;background:radial-gradient(700px 440px at 25% 30%,var(--tint),transparent 70%);pointer-events:none;will-change:transform"></div>
@@ -45,7 +43,7 @@
           <div style="border-left:2px solid @e.Color;padding-left:14px">
             <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);margin-bottom:6px">@e.When</div>
             <div style="font-size:14.5px;font-weight:700;color:var(--text);margin-bottom:4px">@e.Title</div>
-            <div style="font-size:13px;line-height:1.5;color:var(--muted)">@(Register.Technical ? e.Technical : e.Plain)</div>
+            <div data-register-copy data-plain="@e.Plain" data-technical="@e.Technical" style="font-size:13px;line-height:1.5;color:var(--muted)">@e.Plain</div>
           </div>
         }
       </div>
@@ -129,9 +127,4 @@
             "hip.last_scan \u00b7 illustrative rule set", "var(--action)", 100)
     };
 
-    protected override void OnInitialized() => Register.Changed += OnRegisterChanged;
-
-    private void OnRegisterChanged() => InvokeAsync(StateHasChanged);
-
-    public void Dispose() => Register.Changed -= OnRegisterChanged;
 }

@@ -1,13 +1,41 @@
 /*  HIP — motion engine
  *  Parallax, scroll reveals, count-ups, card spotlight, magnetic buttons,
  *  the hero trust-network globe, and the "X-ray this page" scanner.
- *  Called from MainLayout via IJSRuntime: hip.init() / hip.xray().
+ *  Boots itself for the static marketing shell; interactive page components can also call hip.xray().
  */
 (function () {
   "use strict";
 
   var booted = false;
   var teardown = [];
+
+  function initChrome() {
+    document.querySelectorAll(".hip-marketing-site").forEach(function (root) {
+      if (root.dataset.hipChromeBound === "true") return;
+      root.dataset.hipChromeBound = "true";
+
+      var themeToggle = root.querySelector("[data-theme-toggle]");
+      if (themeToggle) themeToggle.addEventListener("click", function () {
+        root.dataset.theme = root.dataset.theme === "light" ? "dark" : "light";
+      });
+
+      var registerToggle = root.querySelector("[data-register-toggle]");
+      if (registerToggle) registerToggle.addEventListener("click", function () {
+        var technical = root.dataset.register !== "technical";
+        root.dataset.register = technical ? "technical" : "plain";
+        var label = registerToggle.querySelector("[data-register-label]");
+        if (label) label.textContent = technical ? "Technical" : "Plain language";
+        root.querySelectorAll("[data-register-copy]").forEach(function (copy) {
+          copy.textContent = copy.getAttribute(technical ? "data-technical" : "data-plain") || "";
+        });
+      });
+
+      var nav = root.querySelector("[data-nav-compact]");
+      if (nav) nav.addEventListener("change", function () {
+        if (nav.value && nav.value.charAt(0) === "/") window.location.assign(nav.value);
+      });
+    });
+  }
 
   function css(name, fallback) {
     var themeRoot = document.querySelector(".hip-marketing-site") || document.documentElement;
@@ -506,6 +534,7 @@
 
   window.hip = {
     init: function () {
+      initChrome();
       wireCards();
       if (booted) { armEntrances(); return; }
       booted = true;
@@ -524,4 +553,10 @@
     },
     closeXray: closeXray
   };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", window.hip.init, { once: true });
+  } else {
+    window.hip.init();
+  }
 })();

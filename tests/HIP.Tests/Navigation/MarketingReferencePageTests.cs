@@ -62,21 +62,26 @@ public sealed class MarketingReferencePageTests
         });
     }
 
-    /// <summary>Confirms the server integration keeps visitor state isolated and does not present examples as live HIP evidence.</summary>
+    /// <summary>Confirms the static layout controls remain operable and examples are not presented as live HIP evidence.</summary>
     [Test]
     public void Marketing_interactions_use_real_lookup_and_label_illustrative_evidence()
     {
         var root = RepositoryRoot();
         var webRoot = Path.Combine(root, "src", "HIP.Web");
-        var program = File.ReadAllText(Path.Combine(webRoot, "Program.cs"));
+        var script = File.ReadAllText(Path.Combine(webRoot, "wwwroot", "marketing-site.js"));
+        var layout = File.ReadAllText(Path.Combine(webRoot, "Components", "Layout", "MarketingLayout.razor"));
         var home = File.ReadAllText(Path.Combine(webRoot, "Components", "Pages", "PublicHome.razor"));
         var simulator = File.ReadAllText(Path.Combine(webRoot, "Components", "Marketing", "ScoreSimulator.razor"));
         var receipt = File.ReadAllText(Path.Combine(webRoot, "Components", "Marketing", "TrustReceipt.razor"));
 
         Assert.Multiple(() =>
         {
-            Assert.That(program, Does.Contain("AddScoped<MarketingRegisterState>()"));
-            Assert.That(program, Does.Not.Contain("AddSingleton<MarketingRegisterState>()"));
+            Assert.That(layout, Does.Contain("data-theme-toggle"));
+            Assert.That(layout, Does.Contain("data-register-toggle"));
+            Assert.That(layout, Does.Not.Contain("@onclick"));
+            Assert.That(script, Does.Contain("initChrome()"));
+            Assert.That(script, Does.Contain("window.location.assign(nav.value)"));
+            Assert.That(script, Does.Contain("data-register-copy"));
             Assert.That(home, Does.Contain("/lookup/{Uri.EscapeDataString(domain)}"));
             Assert.That(home, Does.Contain("ILLUSTRATIVE EXAMPLE"));
             Assert.That(simulator, Does.Contain("values are illustrative"));

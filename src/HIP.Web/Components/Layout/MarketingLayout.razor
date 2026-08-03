@@ -1,12 +1,9 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Nav
-@inject IJSRuntime JS
-@inject MarketingRegisterState Register
-@implements IDisposable
 
 <BrandDefs />
 
-<div class="hip-marketing-site" data-theme="@Theme" data-motion="full" style="background:var(--bg);color:var(--text);min-height:100vh;font-family:Satoshi,sans-serif">
+<div class="hip-marketing-site" data-theme="dark" data-register="plain" data-motion="full" style="background:var(--bg);color:var(--text);min-height:100vh;font-family:Satoshi,sans-serif">
 
   <div aria-hidden="true" class="grain"></div>
   <div class="progress-track"><div data-progress class="progress-bar"></div></div>
@@ -22,7 +19,7 @@
         </span>
       </a>
 
-      <select data-nav-compact @onchange="OnNavSelect" style="display:none;flex-shrink:0;padding:8px 10px;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:9px;font-size:14px;font-weight:600;cursor:pointer">
+      <select data-nav-compact aria-label="Marketing page" style="display:none;flex-shrink:0;padding:8px 10px;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:9px;font-size:14px;font-weight:600;cursor:pointer">
         @foreach (var (href, label) in NavItems)
         {
           <option value="@href" selected="@(Current == href)">@label</option>
@@ -38,13 +35,13 @@
 
       <div style="flex:1"></div>
 
-      <button data-register-toggle @onclick="Register.Toggle" title="Switch between plain language and technical wording" data-h="h-bd-fg"
+      <button data-register-toggle type="button" title="Switch between plain language and technical wording" data-h="h-bd-fg"
               style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);background:var(--surface);border-radius:9px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;flex-shrink:0;white-space:nowrap;font-family:inherit">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h13"></path></svg>
-        <span data-register-label>@Register.Label</span>
+        <span data-register-label>Plain language</span>
       </button>
 
-      <button @onclick="ToggleTheme" title="Toggle theme" data-h="h-bd-fg" style="width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--border);background:var(--surface);border-radius:9px;cursor:pointer;color:var(--muted);flex-shrink:0">
+      <button data-theme-toggle type="button" title="Toggle theme" data-h="h-bd-fg" style="width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--border);background:var(--surface);border-radius:9px;cursor:pointer;color:var(--muted);flex-shrink:0">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3L4.9 4.9M19.1 19.1l-1.4-1.4M17.7 6.3l1.4-1.4M4.9 19.1l1.4-1.4"></path><circle cx="12" cy="12" r="4.2"></circle></svg>
       </button>
 
@@ -71,8 +68,6 @@
 }
 
 @code {
-    private string Theme = "dark";
-
     private static readonly (string Href, string Label)[] NavItems =
     {
         ("/", "Home"),
@@ -84,37 +79,6 @@
     };
 
     private string Current => "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('#')[0].Split('?')[0].TrimEnd('/');
-
-    private void ToggleTheme() => Theme = Theme == "dark" ? "light" : "dark";
-
-    private void OnNavSelect(ChangeEventArgs e)
-    {
-        var v = e.Value?.ToString();
-        if (!string.IsNullOrEmpty(v)) Nav.NavigateTo(v);
-    }
-
-    protected override void OnInitialized()
-    {
-        Nav.LocationChanged += OnLocationChanged;
-        Register.Changed += OnRegisterChanged;
-    }
-
-    private void OnLocationChanged(object? _, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs __) =>
-        InvokeAsync(StateHasChanged);
-
-    private void OnRegisterChanged() => InvokeAsync(StateHasChanged);
-
-    public void Dispose()
-    {
-        Nav.LocationChanged -= OnLocationChanged;
-        Register.Changed -= OnRegisterChanged;
-    }
-
-    protected override async Task OnAfterRenderAsync(bool first)
-    {
-        // Motion engine: parallax, scroll reveals, count-ups, globe, X-ray.
-        await JS.InvokeVoidAsync("hip.init");
-    }
 
     private bool IsCanonicalPublicHost =>
         Uri.TryCreate(Nav.Uri, UriKind.Absolute, out var uri) &&
