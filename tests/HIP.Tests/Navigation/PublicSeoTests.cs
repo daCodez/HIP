@@ -32,6 +32,7 @@ public sealed class PublicSeoTests
             Assert.That(html, Does.Contain("href=\"/signals\""));
             Assert.That(html, Does.Contain("href=\"/score-interpretation\""));
             Assert.That(html, Does.Contain("href=\"/evidence-providers\""));
+            Assert.That(html, Does.Contain("src=\"/images/public/marketing/hip-logo.png\""));
             Assert.That(html, Does.Not.Contain(">Platform</button>"));
             Assert.That(html, Does.Not.Contain(">How it works</button>"));
             Assert.That(html, Does.Not.Contain("data-hip-badge=\"guardwithhip.com\""));
