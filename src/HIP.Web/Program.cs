@@ -4334,7 +4334,7 @@ public partial class Program
   container.dataset.domain = domain;
   container.dataset.apiBase = apiBase;
   const runtime = document.createElement("script");
-  runtime.src = `${apiBase}/hip-badge.js?v=2`;
+  runtime.src = `${apiBase}/hip-badge.js?v=3`;
   runtime.async = true;
   runtime.referrerPolicy = "no-referrer";
   runtime.onerror = () => {

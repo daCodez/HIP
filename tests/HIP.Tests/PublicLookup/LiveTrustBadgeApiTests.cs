@@ -95,7 +95,7 @@ public sealed class LiveTrustBadgeApiTests
         Assert.That(script, Does.Contain("loadHipLiveTrustBadge"));
         Assert.That(script, Does.Contain("container.dataset.domain = domain"));
         Assert.That(script, Does.Contain("container.dataset.apiBase = apiBase"));
-        Assert.That(script, Does.Contain("/hip-badge.js?v=2"));
+        Assert.That(script, Does.Contain("/hip-badge.js?v=3"));
         Assert.That(script, Does.Contain("runtime.referrerPolicy = \"no-referrer\""));
         Assert.That(script, Does.Not.Contain("localStorage"));
         Assert.That(script, Does.Not.Contain("sessionStorage"));

@@ -31,6 +31,8 @@ public sealed class BadgeEmbedDocumentationTests
         Assert.That(script, Does.Contain("position:fixed"));
         Assert.That(script, Does.Contain("background:transparent"));
         Assert.That(script, Does.Contain("shieldMarkup"));
+        Assert.That(script, Does.Contain("/images/public/marketing/hip-logo.png?v=3"));
+        Assert.That(script, Does.Not.Contain("m15 27 6 6 13-15"));
         Assert.That(script, Does.Contain("/api/v1/public/certificates/"));
         Assert.That(script, Does.Contain("payload.certificateId !== badge.certificate.certificateId"));
         Assert.That(script, Does.Contain("HIP does not replace TLS"));
@@ -44,6 +46,8 @@ public sealed class BadgeEmbedDocumentationTests
         Assert.That(script, Does.Contain("#EF4444"));
         Assert.That(script, Does.Contain("#B91C1C"));
         Assert.That(script, Does.Contain("prefers-reduced-motion"));
+        Assert.That(script, Does.Contain("The signed badge summary above remains unchanged."));
+        Assert.That(script, Does.Not.Contain("container.querySelector(\".hip-badge-score\").textContent = \"—\""));
         Assert.That(script, Does.Not.Contain("localStorage"));
         Assert.That(script, Does.Not.Contain("sessionStorage"));
     }
