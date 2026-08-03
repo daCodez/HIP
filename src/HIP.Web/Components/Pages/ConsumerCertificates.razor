@@ -216,12 +216,12 @@
                             <div class="website-verification-instructions">
                                 <p>Download this public challenge file and publish it at <code>https://@item.Domain/.well-known/hip.json</code>.</p>
                                 <a class="btn" href="@WebsiteDocumentDownloadUrl()" download="hip.json">Download hip.json</a>
-                                <button class="btn btn-primary" type="button" disabled="@(_checkingWebsiteEnrollmentId is not null)"
-                                        @onclick="() => CheckWebsiteAsync(item)">
-                                    @(_checkingWebsiteEnrollmentId == item.EnrollmentId ? "Checking…" : "Check website")
-                                </button>
                             </div>
                         }
+                        <button class="btn btn-primary" type="button" disabled="@(_checkingWebsiteEnrollmentId is not null)"
+                                @onclick="() => CheckWebsiteAsync(item)">
+                            @(_checkingWebsiteEnrollmentId == item.EnrollmentId ? "Verifying…" : "Verify website")
+                        </button>
                     }
                     @if (item.IdentityCompletedAtUtc is not null && item.CertificateId is null &&
                          item.ApplicationStatus is DomainCertificateApplicationStatus.Draft or DomainCertificateApplicationStatus.ChangesRequested)
