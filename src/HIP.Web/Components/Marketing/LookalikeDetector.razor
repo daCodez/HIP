@@ -1,0 +1,164 @@
+@using System.Globalization
+
+<section data-rise style="position:relative;overflow:hidden;border-bottom:1px solid var(--border)">
+  <div data-px="0.14" style="position:absolute;inset:-14% -3%;background:radial-gradient(660px 420px at 78% 25%,rgba(239,68,68,.11),transparent 70%),radial-gradient(620px 420px at 15% 80%,var(--tint),transparent 70%);pointer-events:none;will-change:transform"></div>
+
+  <div style="position:relative;max-width:1240px;margin:0 auto;padding:clamp(64px,7vw,100px) clamp(16px,3vw,32px)">
+    <div style="max-width:680px;margin-bottom:40px">
+      <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">LOOKALIKE DETECTOR</div>
+      <h2 data-words style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">Type a domain. Watch it get impersonated.</h2>
+      <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">These are the substitutions attackers actually use. Every variant below is generated in your browser from what you type — none of them are registered, and HIP does not create them.</p>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;max-width:560px;margin-bottom:32px">
+      <div style="flex:1 1 0;min-width:0;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:0 14px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.6 3 2.6 15 0 18M12 3c-2.6 3-2.6 15 0 18"></path></svg>
+        <input @bind="Input" @bind:event="oninput" placeholder="yourbrand.com" aria-label="Domain to test"
+               style="flex:1 1 0;min-width:0;border:0;outline:0;background:transparent;color:var(--text);font-size:15.5px;padding:14px 0;font-family:'JetBrains Mono',monospace" />
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px">
+      @foreach (var v in Variants)
+      {
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--text);word-break:break-all;line-height:1.4">@v.Domain</span>
+            <span style="padding:4px 10px;border-radius:999px;font-size:10.5px;font-weight:700;white-space:nowrap;background:@v.Bg;color:@v.Fg">@v.Severity</span>
+          </div>
+          <div style="font-size:13.5px;font-weight:600;color:var(--text);margin-bottom:5px">@v.Technique</div>
+          <div style="font-size:13px;line-height:1.55;color:var(--muted)">@v.Why</div>
+          @if (v.Punycode is not null)
+          {
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--hairline);font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);word-break:break-all">
+              browser sees: @v.Punycode
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <p style="font-size:13.5px;line-height:1.6;color:var(--muted);margin:28px 0 0;max-width:640px">
+      HIP checks every one of these patterns against the domain you are actually on, and flags a mismatch between the brand a page claims and the domain serving it.
+    </p>
+  </div>
+</section>
+
+@code {
+    private string _input = "northgate-bank.com";
+
+    private string Input
+    {
+        get => _input;
+        set => _input = value;
+    }
+
+    private record Variant(string Domain, string Technique, string Why, string Severity, Tone Tone, string? Punycode)
+    {
+        public string Fg => ToneColors.Fg(Tone);
+        public string Bg => ToneColors.Bg(Tone);
+    }
+
+    /// <summary>Cyrillic characters that render identically to Latin in most fonts.</summary>
+    private static readonly Dictionary<char, char> Homoglyphs = new()
+    {
+        ['a'] = '\u0430', ['c'] = '\u0441', ['e'] = '\u0435', ['o'] = '\u043E',
+        ['p'] = '\u0440', ['x'] = '\u0445', ['y'] = '\u0443', ['s'] = '\u0455'
+    };
+
+    private (string Name, string Tld) Split()
+    {
+        var raw = (_input ?? "").Trim().ToLowerInvariant();
+        raw = raw.Replace("https://", "").Replace("http://", "").TrimStart('/');
+        var slash = raw.IndexOf('/');
+        if (slash > 0) raw = raw[..slash];
+        if (string.IsNullOrWhiteSpace(raw)) raw = "yourbrand.com";
+
+        var dot = raw.LastIndexOf('.');
+        return dot > 0 ? (raw[..dot], raw[(dot + 1)..]) : (raw, "com");
+    }
+
+    private static string? ToPunycode(string domain)
+    {
+        try
+        {
+            var ascii = new IdnMapping().GetAscii(domain);
+            return ascii != domain ? ascii : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private List<Variant> Variants
+    {
+        get
+        {
+            var (name, tld) = Split();
+            var list = new List<Variant>();
+
+            // 1 — Cyrillic homoglyph
+            var swapped = new string(name.Select(c => Homoglyphs.TryGetValue(c, out var h) ? h : c).ToArray());
+            if (swapped != name)
+            {
+                var full = swapped + "." + tld;
+                list.Add(new Variant(full, "Cyrillic homoglyph",
+                    "One or more letters replaced with identical-looking Cyrillic characters. Visually indistinguishable in almost every font.",
+                    "CRITICAL", Tone.Risk, ToPunycode(full)));
+            }
+
+            // 2 — rn / vv ligature illusion
+            if (name.Contains('m') || name.Contains('w'))
+            {
+                var lig = name.Replace("m", "rn").Replace("w", "vv");
+                list.Add(new Variant(lig + "." + tld, "Ligature illusion",
+                    "\u2018rn\u2019 reads as \u2018m\u2019 and \u2018vv\u2019 reads as \u2018w\u2019 at normal text size. Pure ASCII, so no punycode warning appears.",
+                    "HIGH", Tone.Risk, null));
+            }
+
+            // 3 — hyphen manipulation
+            var hyphen = name.Contains('-') ? name.Replace("-", "") : InsertHyphen(name);
+            list.Add(new Variant(hyphen + "." + tld, "Hyphen manipulation",
+                name.Contains('-')
+                    ? "The hyphen is simply dropped. Most people never notice its absence."
+                    : "A hyphen is inserted at a word boundary, which reads as a legitimate sub-brand.",
+                "HIGH", Tone.Risk, null));
+
+            // 4 — subdomain deception
+            list.Add(new Variant($"{name}.{tld}.secure-login.net", "Subdomain deception",
+                $"The real domain here is secure-login.net. Everything before it is decoration \u2014 but a phone shows only the left-hand side.",
+                "CRITICAL", Tone.Risk, null));
+
+            // 5 — TLD swap
+            var altTld = tld switch { "com" => "co", "org" => "org.co", "net" => "net.co", _ => "com" };
+            list.Add(new Variant($"{name}.{altTld}", "Top-level domain swap",
+                "A single missing character. Typing it is a common slip, and the page can be a pixel-perfect copy.",
+                "MEDIUM", Tone.Warn, null));
+
+            // 6 — doubled character
+            var doubled = DoubleFirstVowel(name);
+            if (doubled != name)
+            {
+                list.Add(new Variant(doubled + "." + tld, "Doubled character",
+                    "A repeated letter survives a quick glance and matches a very common typing error.",
+                    "MEDIUM", Tone.Warn, null));
+            }
+
+            return list;
+        }
+    }
+
+    private static string InsertHyphen(string name)
+    {
+        if (name.Length < 6) return name + "-secure";
+        var mid = name.Length / 2;
+        return name[..mid] + "-" + name[mid..];
+    }
+
+    private static string DoubleFirstVowel(string name)
+    {
+        var i = name.IndexOfAny(new[] { 'a', 'e', 'i', 'o', 'u' });
+        return i >= 0 ? name[..(i + 1)] + name[i] + name[(i + 1)..] : name;
+    }
+}

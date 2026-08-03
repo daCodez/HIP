@@ -1,0 +1,92 @@
+@using HIP.Web.Marketing.Models
+@implements IDisposable
+@inject MarketingRegisterState Register
+
+@if (Scanning)
+{
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px;box-shadow:0 20px 60px rgba(0,0,0,.22);position:relative;overflow:hidden">
+    <div class="sweep"></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
+      <div class="spinner"></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--text)">scanning @Domain</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      @foreach (var (label, done) in Steps)
+      {
+        <div style="display:flex;justify-content:space-between;font-size:14px;color:@(done ? "var(--text)" : "var(--muted)")">
+          <span>@label</span>
+          <span style="font-family:'JetBrains Mono',monospace;color:@(done ? "var(--ok)" : "var(--muted)")">@(done ? "done" : "…")</span>
+        </div>
+      }
+    </div>
+  </div>
+}
+else
+{
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.22);overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:13px 18px;border-bottom:1px solid var(--border);background:var(--elev)">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span style="margin-left:10px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">hip · trust result</span>
+    </div>
+    <div style="padding:26px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:24px">
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);margin-bottom:7px">@Domain</div>
+          <div style="display:flex;align-items:baseline;gap:10px">
+            <span data-count="@Score" style="font-family:'JetBrains Mono',monospace;font-size:48px;font-weight:800;letter-spacing:-.03em;color:var(--action)">@Score</span>
+            <span style="font-size:15px;color:var(--muted)">/ 100 · checked today</span>
+          </div>
+        </div>
+        <span style="padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;background:rgba(34,197,94,.14);color:var(--ok)">@Status</span>
+      </div>
+
+      <div style="height:6px;border-radius:4px;background:var(--elev);overflow:hidden;margin-bottom:26px">
+        <div style="width:@(Score)%;height:100%;background:linear-gradient(90deg, var(--blue), var(--action))"></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        @foreach (var f in Findings)
+        {
+          <div style="display:flex;align-items:flex-start;gap:13px;padding:13px 14px;background:var(--bg);border:1px solid var(--border);border-radius:11px">
+            <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px;background:@f.Dot"></span>
+            <span style="flex:1;min-width:0">
+              <span style="display:block;font-size:14px;font-weight:600;color:var(--text);line-height:1.35">@f.Label</span>
+              <span style="display:block;font-size:12.5px;color:var(--muted);line-height:1.45;margin-top:2px">@f.Explain(Register.Technical)</span>
+            </span>
+            <span style="font-size:11.5px;font-weight:700;white-space:nowrap;margin-top:2px;color:@f.StatusFg">@f.Status</span>
+          </div>
+        }
+      </div>
+
+      <div style="margin-top:20px;padding-top:18px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+        <span style="font-size:12.5px;color:var(--muted)">Every score comes with its reasons. Nothing is hidden.</span>
+        @if (OnReset.HasDelegate)
+        {
+          <button @onclick="OnReset" data-h="h-bd" style="background:none;border:1px solid var(--border);border-radius:8px;padding:7px 13px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit">Scan another</button>
+        }
+      </div>
+    </div>
+  </div>
+}
+
+@code {
+    protected override void OnInitialized() => Register.Changed += Refresh;
+    private void Refresh() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Register.Changed -= Refresh;
+
+    [Parameter] public int Score { get; set; } = 82;
+    [Parameter] public string Status { get; set; } = "Mostly Trusted";
+    [Parameter] public string Domain { get; set; } = "example.com";
+    [Parameter] public bool Scanning { get; set; }
+    [Parameter] public List<Finding> Findings { get; set; } = new();
+    [Parameter] public EventCallback OnReset { get; set; }
+
+    private static readonly (string, bool)[] Steps =
+    {
+        ("Resolving DNS", true),
+        ("Negotiating TLS", true),
+        ("Reading certificate", true),
+        ("Fetching page", false),
+        ("Querying providers", false)
+    };
+}

@@ -1,0 +1,122 @@
+@implements IDisposable
+
+@* Demonstration feed. Point Source at a real SSE/SignalR endpoint to make it live —
+   the rendering below does not care where the events come from. *@
+
+<section data-rise style="position:relative;overflow:hidden;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+  <canvas data-globe style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.55"></canvas>
+  <div data-px="0.1" style="position:absolute;inset:-14% -3%;background:radial-gradient(700px 460px at 20% 40%,var(--tint),transparent 72%);pointer-events:none;will-change:transform"></div>
+
+  <div style="position:relative;max-width:1240px;margin:0 auto;padding:clamp(64px,7vw,100px) clamp(16px,3vw,32px)">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:clamp(36px,4vw,64px);align-items:center">
+
+      <div>
+        <div style="display:inline-flex;align-items:center;gap:9px;padding:6px 13px 6px 9px;border:1px solid var(--border);background:var(--surface);border-radius:999px;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:22px">
+          <span class="pulse-dot"></span>
+          Demonstration feed
+        </div>
+
+        <h2 data-words style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">The network, while you read this.</h2>
+        <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0 0 30px;max-width:520px;text-wrap:pretty">Each pulse is a scan completing: a domain checked, signals weighed, a score written with its reasons attached. The globe above the fold draws from the same feed.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px">
+            <div style="font-size:10.5px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:12px">SCANS THIS SESSION</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:800;letter-spacing:-.03em;color:var(--text)">@Completed</div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px">
+            <div style="font-size:10.5px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:12px">FLAGGED</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:800;letter-spacing:-.03em;color:@ToneColors.Fg(Tone.Warn)">@Flagged</div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px">
+            <div style="font-size:10.5px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:12px">MEDIAN SCORE</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:800;letter-spacing:-.03em;color:var(--action)">@Median</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 20px 56px rgba(0,0,0,.26)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 20px;border-bottom:1px solid var(--border);background:var(--elev)">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--muted)">scan feed</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)"><span class="pulse-dot"></span>streaming</span>
+        </div>
+
+        <div style="height:340px;overflow:hidden;position:relative">
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column">
+            @foreach (var e in Events)
+            {
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 20px;border-bottom:1px solid var(--hairline)">
+                <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:@ToneColors.Fg(e.Tone)"></span>
+                <span style="flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@e.Domain</span>
+                <span style="font-size:12px;color:var(--muted);white-space:nowrap">@e.Region</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;white-space:nowrap;color:@ToneColors.Fg(e.Tone)">@e.Score</span>
+              </div>
+            }
+          </div>
+          <div style="position:absolute;left:0;right:0;bottom:0;height:70px;pointer-events:none;background:linear-gradient(180deg,transparent,var(--surface))"></div>
+        </div>
+      </div>
+    </div>
+
+    <p style="position:relative;font-size:13px;line-height:1.6;color:var(--muted);margin:26px 0 0;max-width:700px">
+      Domains shown are illustrative. A production feed publishes only what is already public in a scan result — never who requested it.
+    </p>
+  </div>
+</section>
+
+@code {
+    private record Ev(string Domain, string Region, int Score, Tone Tone);
+
+    private static readonly string[] Names =
+    {
+        "ashgrove-library.org", "parcelo.com", "meridian-utilities.co", "brightfern.io", "harbourside-clinic.uk",
+        "quietriver.dev", "northgate-bank.com", "tallowfield.shop", "orbital-supply.net", "cedarpoint.school",
+        "verdant-labs.eu", "kestrel-analytics.com", "morningtide.app", "fenwick-press.org", "silverbrook.travel"
+    };
+
+    private static readonly string[] Regions = { "EU-West", "US-East", "AP-South", "EU-North", "US-West", "AP-East", "SA-East" };
+
+    private readonly Random _rng = new();
+    private List<Ev> Events = new();
+    private int Completed = 1284;
+    private int Flagged = 37;
+    private int Median = 84;
+    private Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        for (var i = 0; i < 9; i++) Events.Add(Next());
+
+        _timer = new Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                Events.Insert(0, Next());
+                if (Events.Count > 9) Events.RemoveAt(Events.Count - 1);
+
+                Completed++;
+                if (Events[0].Tone != Tone.Ok) Flagged++;
+                Median = Math.Clamp(Median + _rng.Next(-1, 2), 78, 90);
+
+                StateHasChanged();
+            });
+        }, null, 1400, 1400);
+    }
+
+    private Ev Next()
+    {
+        var roll = _rng.Next(100);
+        var score = roll < 8
+            ? _rng.Next(12, 45)
+            : roll < 24
+                ? _rng.Next(45, 70)
+                : roll < 55
+                    ? _rng.Next(70, 85)
+                    : _rng.Next(85, 99);
+
+        var tone = score >= 70 ? Tone.Ok : score >= 45 ? Tone.Warn : Tone.Risk;
+        return new Ev(Names[_rng.Next(Names.Length)], Regions[_rng.Next(Regions.Length)], score, tone);
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

@@ -1,146 +1,73 @@
 @page "/how-it-works"
 @page "/how"
 @attribute [AllowAnonymous]
-@layout PublicLayout
+@layout MarketingLayout
+@rendermode InteractiveServer
+@inject NavigationManager Nav
 
-<PageTitle>How it works | HIP</PageTitle>
+<PageTitle>How HIP Works — Scan, Score, Review | HIP</PageTitle>
+<HeadContent>
+  <meta name="description" content="From a web address to a score you can explain: collection, detection, scoring, review and appeal, and publication. Nothing is a black box." />
+  <meta property="og:title" content="How HIP Works — Scan, Score, Review | HIP" />
+  <meta property="og:description" content="From a web address to a score you can explain: collection, detection, scoring, review and appeal, and publication. Nothing is a black box." />
+</HeadContent>
 
-<div class="sc-host" data-sc-name="how"><svg data-dc-tpl="7" width="0" height="0" aria-hidden="true" focusable="false" style="position: absolute;">
-  <defs data-dc-tpl="8">
-    <linearGradient data-dc-tpl="9" id="hipTealBlue" x1="0" y1="0" x2="1" y2="1">
-      <stop data-dc-tpl="10" offset="0" stop-color="#22D3EE"></stop><stop data-dc-tpl="11" offset="0.55" stop-color="#14B8A6"></stop><stop data-dc-tpl="12" offset="1" stop-color="#1F6FEB"></stop>
-    </linearGradient>
-  </defs></svg><div data-dc-tpl="13" data-theme="dark" data-motion="full" style="background: var(--bg); color: var(--text); min-height: 100vh; font-family: Satoshi, sans-serif;"><div data-dc-tpl="14" aria-hidden="true" style="position: fixed; inset: 0px; z-index: 70; pointer-events: none; opacity: 0.05; mix-blend-mode: overlay; background-image: none;"></div><div data-dc-tpl="15" style="position: fixed; top: 0px; left: 0px; right: 0px; height: 2px; z-index: 80; pointer-events: none;"><div data-dc-tpl="16" data-progress="" style="height: 100%; width: 0%; background: linear-gradient(90deg,var(--blue),var(--action)); transform-origin: left center;"></div></div><header data-dc-tpl="17" style="position: sticky; top: 0px; z-index: 50; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border);">
-  <div data-dc-tpl="18" style="max-width: 1240px; margin: 0px auto; padding: 14px clamp(16px, 3vw, 32px); display: flex; align-items: center; gap: clamp(10px, 1.4vw, 22px);">
-    <a data-dc-tpl="19" href="/" aria-label="HIP home" style="display: flex; align-items: center; gap: 11px; cursor: pointer; flex-shrink: 0; text-decoration: none;">
-      <img data-dc-tpl="20" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 40px; width: auto; display: block; flex-shrink: 0;">
-      <div data-dc-tpl="21" style="display: flex; flex-direction: column; line-height: 1;">
-        <span data-dc-tpl="22" style="font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); white-space: nowrap;">HIP</span>
-        <span data-dc-tpl="23" style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-top: 5px; white-space: nowrap;">Human-Interactive Protocol</span>
-      </div>
-    </a>
-
-    <select data-dc-tpl="24" data-nav-compact="" style="display: none; flex-shrink: 0; padding: 8px 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer;">
-      <option data-dc-tpl="25" value="home">Home</option>
-      <option data-dc-tpl="26" value="platform">Platform</option>
-      <option data-dc-tpl="27" value="how" selected>How it works</option>
-      <option data-dc-tpl="28" value="verify">Verification</option>
-      <option data-dc-tpl="29" value="dev">Developers</option>
-    </select>
-    <nav data-dc-tpl="30" data-nav-full="" style="display: flex; align-items: center; gap: 2px; margin-left: 4px; flex-shrink: 0;">
-
-        <a data-dc-tpl="32" href="/platform" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Platform</span></a>
-
-        <a data-dc-tpl="32" href="/how-it-works" aria-current="page" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--text);"><span class="sc-interp">How it works</span></a>
-
-        <a data-dc-tpl="32" href="/verification" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Verification</span></a>
-
-        <a data-dc-tpl="32" href="/developers" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Developers</span></a>
-
-    </nav>
-
-    <div data-dc-tpl="33" style="flex: 1 1 0%;"></div>
-
-
-    <button data-dc-tpl="36" title="Toggle theme" class="scp2" style="width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 9px; cursor: pointer; color: var(--muted); flex-shrink: 0;">
-      <svg data-dc-tpl="37" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path data-dc-tpl="38" d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3L4.9 4.9M19.1 19.1l-1.4-1.4M17.7 6.3l1.4-1.4M4.9 19.1l1.4-1.4"></path><circle data-dc-tpl="39" cx="12" cy="12" r="4.2"></circle></svg>
-    </button>
-    <a data-dc-tpl="40" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp3" style="display: flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid var(--border); background: var(--surface); border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--text); flex-shrink: 0;">
-      <svg data-dc-tpl="41" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path data-dc-tpl="42" d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 014 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.19c0 .21.14.46.55.38A8 8 0 008 0z"></path></svg>
-      <span data-dc-tpl="43" data-gh-label="">GitHub</span>
-    </a>
-    <a data-dc-tpl="44" href="/website-trust-scanner" class="scp4" style="padding: 10px 16px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; flex-shrink: 0; white-space: nowrap;">Check my domain</a>
-  </div></header><main data-dc-tpl="476" style="max-width: 1240px; margin: 0px auto; padding: clamp(56px, 6vw, 80px) clamp(16px, 3vw, 32px) 110px;">
-  <div data-dc-tpl="477" style="max-width: 680px; margin-bottom: 64px;">
-    <div data-dc-tpl="478" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 16px;">HOW IT WORKS</div>
-    <h1 data-dc-tpl="479" style="font-size: clamp(36px, 4.6vw, 52px); line-height: 1.06; letter-spacing: -0.03em; font-weight: 800; margin: 0px 0px 18px; text-wrap: balance;">Nothing here is a black box.</h1>
-    <p data-dc-tpl="480" style="font-size: 19px; line-height: 1.6; color: var(--muted); margin: 0px; text-wrap: pretty;">A HIP score is a sum of named findings. Here is the whole path, from a URL to a badge — and where a human can step in.</p>
+<main style="max-width:1240px;margin:0 auto;padding:clamp(56px,6vw,80px) clamp(16px,3vw,32px) 110px">
+  <div style="max-width:680px;margin-bottom:64px">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:16px">HOW IT WORKS</div>
+    <h1 style="font-size:clamp(36px,4.6vw,52px);line-height:1.06;letter-spacing:-.03em;font-weight:800;margin:0 0 18px;text-wrap:balance">Nothing here is a black box.</h1>
+    <p style="font-size:19px;line-height:1.6;color:var(--muted);margin:0;text-wrap:pretty">A HIP score is a sum of named findings. Here is the whole path, from a URL to a badge — and where a human can step in.</p>
   </div>
 
-  <div data-dc-tpl="481" style="display: grid; grid-template-columns: minmax(180px, 220px) minmax(0px, 1fr); gap: 0px; margin-bottom: 80px;">
-    <div data-dc-tpl="482" style="border-right: 1px solid var(--border); padding: 0px 32px 0px 0px;">
-      <div data-dc-tpl="483" style="position: sticky; top: 120px; font-size: 13.5px; line-height: 1.8; color: var(--muted);">
-        <div data-dc-tpl="484" style="font-weight: 700; color: var(--text); margin-bottom: 10px;">On this page</div>
-        <div data-dc-tpl="485">1 — Collection</div>
-        <div data-dc-tpl="486">2 — Detection</div>
-        <div data-dc-tpl="487">3 — Scoring</div>
-        <div data-dc-tpl="488">4 — Review &amp; appeal</div>
-        <div data-dc-tpl="489">5 — Publication</div>
+  <div style="display:grid;grid-template-columns:minmax(180px,220px) minmax(0,1fr);gap:0;margin-bottom:80px">
+    <div style="border-right:1px solid var(--border);padding:0 32px 0 0">
+      <div style="position:sticky;top:120px;font-size:13.5px;line-height:1.8;color:var(--muted)">
+        <div style="font-weight:700;color:var(--text);margin-bottom:10px">On this page</div>
+        <div>1 — Collection</div>
+        <div>2 — Detection</div>
+        <div>3 — Scoring</div>
+        <div>4 — Review &amp; appeal</div>
+        <div>5 — Publication</div>
       </div>
     </div>
-    <div data-dc-tpl="490" style="padding-left: clamp(0px, 3vw, 48px); display: flex; flex-direction: column; gap: 44px;">
-      <div data-dc-tpl="491">
-        <div data-dc-tpl="492" style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px;"><span data-dc-tpl="493" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 700; color: var(--action);">01</span><h2 data-dc-tpl="494" style="font-size: 26px; font-weight: 700; margin: 0px; letter-spacing: -0.02em;">Collection</h2></div>
-        <p data-dc-tpl="495" style="font-size: 16.5px; line-height: 1.7; color: var(--muted); margin: 0px; max-width: 640px; text-wrap: pretty;">HIP resolves the domain, follows redirects, negotiates TLS, reads DNS records and fetches the page as an ordinary visitor would. It records what it observed and when — not who asked. Provider lookups run in parallel and are attributed individually.</p>
+    <div style="padding-left:clamp(0px,3vw,48px);display:flex;flex-direction:column;gap:44px">
+      <div>
+        <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--action)">01</span><h2 style="font-size:26px;font-weight:700;margin:0;letter-spacing:-.02em">Collection</h2></div>
+        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0;max-width:640px;text-wrap:pretty">HIP resolves the domain, follows redirects, negotiates TLS, reads DNS records and fetches the page as an ordinary visitor would. It records what it observed and when — not who asked. Provider lookups run in parallel and are attributed individually.</p>
       </div>
-      <div data-dc-tpl="496">
-        <div data-dc-tpl="497" style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px;"><span data-dc-tpl="498" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 700; color: var(--action);">02</span><h2 data-dc-tpl="499" style="font-size: 26px; font-weight: 700; margin: 0px; letter-spacing: -0.02em;">Detection</h2></div>
-        <p data-dc-tpl="500" style="font-size: 16.5px; line-height: 1.7; color: var(--muted); margin: 0px; max-width: 640px; text-wrap: pretty;">Each detection rule looks at the collected evidence and either fires or does not. A rule that fires produces a finding with an id, a severity, a plain-language reason, and — where one exists — a suggested fix.</p>
+      <div>
+        <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--action)">02</span><h2 style="font-size:26px;font-weight:700;margin:0;letter-spacing:-.02em">Detection</h2></div>
+        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0;max-width:640px;text-wrap:pretty">Each detection rule looks at the collected evidence and either fires or does not. A rule that fires produces a finding with an id, a severity, a plain-language reason, and — where one exists — a suggested fix.</p>
       </div>
-      <div data-dc-tpl="501">
-        <div data-dc-tpl="502" style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px;"><span data-dc-tpl="503" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 700; color: var(--action);">03</span><h2 data-dc-tpl="504" style="font-size: 26px; font-weight: 700; margin: 0px; letter-spacing: -0.02em;">Scoring</h2></div>
-        <p data-dc-tpl="505" style="font-size: 16.5px; line-height: 1.7; color: var(--muted); margin: 0px 0px 22px; max-width: 640px; text-wrap: pretty;">Findings carry weights. The score starts from a neutral baseline and moves as findings apply. The breakdown is always shown alongside the number, so the number never has to be taken on faith.</p>
-        <div data-dc-tpl="506" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; max-width: 640px;">
-          <div data-dc-tpl="507" style="display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 18px;"><span data-dc-tpl="508">EXAMPLE BREAKDOWN</span><span data-dc-tpl="509">SCORE 94</span></div>
-          <div data-dc-tpl="510" style="display: flex; flex-direction: column; gap: 13px; font-size: 14.5px;">
-            <div data-dc-tpl="511" style="display: flex; justify-content: space-between; gap: 16px;"><span data-dc-tpl="512" style="color: var(--text);">Baseline</span><span data-dc-tpl="513" style="font-family: &quot;JetBrains Mono&quot;, monospace; color: var(--muted);">70</span></div>
-            <div data-dc-tpl="514" style="display: flex; justify-content: space-between; gap: 16px;"><span data-dc-tpl="515" style="color: var(--text);">HTTPS enforced, HSTS present</span><span data-dc-tpl="516" style="font-family: &quot;JetBrains Mono&quot;, monospace; color: var(--ok);">+12</span></div>
-            <div data-dc-tpl="517" style="display: flex; justify-content: space-between; gap: 16px;"><span data-dc-tpl="518" style="color: var(--text);">Certificate valid, trusted issuer</span><span data-dc-tpl="519" style="font-family: &quot;JetBrains Mono&quot;, monospace; color: var(--ok);">+8</span></div>
-            <div data-dc-tpl="520" style="display: flex; justify-content: space-between; gap: 16px;"><span data-dc-tpl="521" style="color: var(--text);">Ownership verified via DNS</span><span data-dc-tpl="522" style="font-family: &quot;JetBrains Mono&quot;, monospace; color: var(--ok);">+6</span></div>
-            <div data-dc-tpl="523" style="display: flex; justify-content: space-between; gap: 16px;"><span data-dc-tpl="524" style="color: var(--text);">No provider listings</span><span data-dc-tpl="525" style="font-family: &quot;JetBrains Mono&quot;, monospace; color: var(--ok);">+4</span></div>
-            <div data-dc-tpl="526" style="display: flex; justify-content: space-between; gap: 16px;"><span data-dc-tpl="527" style="color: var(--text);">Mail authentication incomplete</span><span data-dc-tpl="528" style="font-family: &quot;JetBrains Mono&quot;, monospace; color: var(--warn);">−6</span></div>
-            <div data-dc-tpl="529" style="height: 1px; background: var(--border); margin: 3px 0px;"></div>
-            <div data-dc-tpl="530" style="display: flex; justify-content: space-between; gap: 16px; font-weight: 700;"><span data-dc-tpl="531">Trust score</span><span data-dc-tpl="532" style="font-family: &quot;JetBrains Mono&quot;, monospace; color: var(--action);">94 / 100</span></div>
+      <div>
+        <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--action)">03</span><h2 style="font-size:26px;font-weight:700;margin:0;letter-spacing:-.02em">Scoring</h2></div>
+        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0 0 22px;max-width:640px;text-wrap:pretty">Findings carry weights. The score starts from a configurable baseline and moves as findings apply — HIP does not treat 50 as automatically neutral, and the baseline itself is part of the published rule set. The breakdown is always shown alongside the number, so the number never has to be taken on faith.</p>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;max-width:640px">
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:18px"><span>EXAMPLE BREAKDOWN</span><span>SCORE 94</span></div>
+          <div style="display:flex;flex-direction:column;gap:13px;font-size:14.5px">
+            <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--text)">Illustrative baseline</span><span style="font-family:'JetBrains Mono',monospace;color:var(--muted)">70</span></div>
+            <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--text)">HTTPS enforced, HSTS present</span><span style="font-family:'JetBrains Mono',monospace;color:var(--ok)">+12</span></div>
+            <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--text)">Certificate valid, trusted issuer</span><span style="font-family:'JetBrains Mono',monospace;color:var(--ok)">+8</span></div>
+            <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--text)">Ownership verified via DNS</span><span style="font-family:'JetBrains Mono',monospace;color:var(--ok)">+6</span></div>
+            <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--text)">No provider listings</span><span style="font-family:'JetBrains Mono',monospace;color:var(--ok)">+4</span></div>
+            <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--text)">Mail authentication incomplete</span><span style="font-family:'JetBrains Mono',monospace;color:var(--warn)">−6</span></div>
+            <div style="height:1px;background:var(--border);margin:3px 0"></div>
+            <div style="display:flex;justify-content:space-between;gap:16px;font-weight:700"><span>Trust score</span><span style="font-family:'JetBrains Mono',monospace;color:var(--action)">94 / 100</span></div>
           </div>
         </div>
       </div>
-      <div data-dc-tpl="533">
-        <div data-dc-tpl="534" style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px;"><span data-dc-tpl="535" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 700; color: var(--action);">04</span><h2 data-dc-tpl="536" style="font-size: 26px; font-weight: 700; margin: 0px; letter-spacing: -0.02em;">Review &amp; appeal</h2></div>
-        <p data-dc-tpl="537" style="font-size: 16.5px; line-height: 1.7; color: var(--muted); margin: 0px; max-width: 640px; text-wrap: pretty;">Automated checks get things wrong. Any finding marked appealable can be contested with context; a reviewer looks at the evidence and either upholds it, adjusts it, or fixes the rule for everyone. Feedback and outcomes are logged.</p>
+      <div>
+        <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--action)">04</span><h2 style="font-size:26px;font-weight:700;margin:0;letter-spacing:-.02em">Review &amp; appeal</h2></div>
+        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0;max-width:640px;text-wrap:pretty">Automated checks get things wrong. Any finding marked appealable can be contested with context; a reviewer looks at the evidence and either upholds it, adjusts it, or fixes the rule for everyone. Feedback and outcomes are logged.</p>
       </div>
-      <div data-dc-tpl="538">
-        <div data-dc-tpl="539" style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px;"><span data-dc-tpl="540" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 700; color: var(--action);">05</span><h2 data-dc-tpl="541" style="font-size: 26px; font-weight: 700; margin: 0px; letter-spacing: -0.02em;">Publication</h2></div>
-        <p data-dc-tpl="542" style="font-size: 16.5px; line-height: 1.7; color: var(--muted); margin: 0px; max-width: 640px; text-wrap: pretty;">Results surface in the web portal, through the browser extension, and — for verified domains — as a domain verification record and an earned trust badge. A HIP-aware DNS service is planned so results can travel with a lookup rather than a page load.</p>
+      <div>
+        <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--action)">05</span><h2 style="font-size:26px;font-weight:700;margin:0;letter-spacing:-.02em">Publication</h2></div>
+        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0;max-width:640px;text-wrap:pretty">Results surface in the web portal, through the browser extension, and — for verified domains — as a domain verification record and an earned trust badge. A HIP-aware DNS service is planned so results can travel with a lookup rather than a page load.</p>
       </div>
-    </div>
-  </div></main><footer data-dc-tpl="667" style="border-top: 1px solid var(--border); background: var(--surface);">
-  <div data-dc-tpl="668" style="max-width: 1240px; margin: 0px auto; padding: 56px 32px 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 40px;">
-    <div data-dc-tpl="669">
-      <div data-dc-tpl="670" style="display: flex; align-items: center; gap: 11px; margin-bottom: 16px;">
-        <img data-dc-tpl="671" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 42px; width: auto; display: block; flex-shrink: 0;">
-        <div data-dc-tpl="672" style="display: flex; flex-direction: column; line-height: 1;">
-          <span data-dc-tpl="673" style="font-size: 21px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); white-space: nowrap;">HIP</span>
-          <span data-dc-tpl="674" style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-top: 5px; white-space: nowrap;">Human-Interactive Protocol</span>
-        </div>
-      </div>
-      <p data-dc-tpl="675" style="font-size: 14.5px; line-height: 1.65; color: var(--muted); margin: 0px; max-width: 280px;">An open trust and risk layer for websites and online content. Community-built, evidence-first.</p>
-    </div>
-    <div data-dc-tpl="676" style="display: flex; flex-direction: column; gap: 11px;">
-      <div data-dc-tpl="677" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PRODUCT</div>
-      <a data-dc-tpl="678" href="/platform" class="scp7" style="font-size: 14.5px; color: var(--text);">Platform</a>
-      <a data-dc-tpl="679" href="/how-it-works" class="scp7" style="font-size: 14.5px; color: var(--text);">How it works</a>
-      <a data-dc-tpl="680" href="/verification" class="scp7" style="font-size: 14.5px; color: var(--text);">Verification</a>
-      <a data-dc-tpl="681" href="/developers" class="scp7" style="font-size: 14.5px; color: var(--text);">Developers</a>
-      <a href="/methodology" class="scp7" style="font-size: 14.5px; color: var(--text);">Methodology</a>
-      <a href="/signals" class="scp7" style="font-size: 14.5px; color: var(--text);">Signals</a>
-      <a href="/score-interpretation" class="scp7" style="font-size: 14.5px; color: var(--text);">Score guide</a>
-      <a href="/evidence-providers" class="scp7" style="font-size: 14.5px; color: var(--text);">Evidence providers</a>
-    </div>
-    <div data-dc-tpl="682" style="display: flex; flex-direction: column; gap: 11px;">
-      <div data-dc-tpl="683" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">OPEN SOURCE</div>
-      <a data-dc-tpl="684" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Repository</a>
-      <a data-dc-tpl="685" href="https://github.com/daCodez/HIP/blob/master/docs/rules-engine.md" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Detection rules</a>
-      <a data-dc-tpl="686" href="https://github.com/daCodez/HIP/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Contributing</a>
-      <a data-dc-tpl="687" href="https://github.com/daCodez/HIP/issues" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Issues</a>
-    </div>
-    <div data-dc-tpl="688" style="display: flex; flex-direction: column; gap: 11px;">
-      <div data-dc-tpl="689" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PROJECT</div>
-      <a data-dc-tpl="690" href="https://github.com/daCodez/HIP/blob/master/docs/project-reference/HIP_Implementation_Backlog.md" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Roadmap</a>
-      <a data-dc-tpl="691" href="/privacy" class="scp7" style="font-size: 14.5px; color: var(--text);">Privacy approach</a>
-      <a data-dc-tpl="692" href="/appeals" class="scp7" style="font-size: 14.5px; color: var(--text);">Appeals policy</a>
     </div>
   </div>
-  <div data-dc-tpl="693" style="max-width: 1240px; margin: 0px auto; padding: 22px 32px 40px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; font-size: 13px; color: var(--muted);">
-    <span data-dc-tpl="694">HIP is an open-source project. A trust score reflects the checks HIP ran on a given date — not a guarantee of safety.</span>
-    <span data-dc-tpl="695" style="font-family: &quot;JetBrains Mono&quot;, monospace;">HIP · Human-Interactive Protocol</span>
-  </div></footer></div></div>
+</main>
+
+@code {
+    private void GoScan() => Nav.NavigateTo("/#scan");
+}

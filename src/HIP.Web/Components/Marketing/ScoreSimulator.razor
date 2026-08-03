@@ -1,0 +1,153 @@
+@using HIP.Web.Marketing.Data
+
+<section data-rise style="max-width:1240px;margin:0 auto;padding:clamp(64px,7vw,100px) clamp(16px,3vw,32px)">
+  <div style="max-width:680px;margin-bottom:44px">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">SCORE SIMULATOR</div>
+    <h2 data-words style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">Change a signal. Watch the score move.</h2>
+    <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">This interactive example demonstrates how named findings can move an explainable score. The values are illustrative, not the current production rule set.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;align-items:start">
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:18px">SIGNALS</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        @foreach (var r in Rules)
+        {
+          <button @onclick="() => Toggle(r.Key)" data-h="h-elev"
+                  style="display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:none;border:0;border-radius:10px;padding:13px 12px;cursor:pointer;font-family:inherit">
+            <span style="width:38px;height:22px;flex-shrink:0;border-radius:999px;position:relative;transition:background .18s;background:@(State[r.Key] ? "var(--action)" : "var(--elev)");border:1px solid @(State[r.Key] ? "var(--action)" : "var(--border)")">
+              <span style="position:absolute;top:2px;left:@(State[r.Key] ? "18px" : "2px");width:16px;height:16px;border-radius:50%;background:@(State[r.Key] ? "var(--action-ink)" : "var(--muted)");transition:left .18s"></span>
+            </span>
+            <span style="flex:1;min-width:0">
+              <span style="display:block;font-size:14.5px;font-weight:600;color:var(--text);line-height:1.35">@r.Label</span>
+              <span style="display:block;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);margin-top:3px">@r.Id</span>
+            </span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;white-space:nowrap;color:@(State[r.Key] ? ToneColors.Fg(Tone.Ok) : ToneColors.Fg(Tone.Warn))">
+              @(State[r.Key] ? Signed(r.OnWeight) : Signed(r.OffWeight))
+            </span>
+          </button>
+        }
+      </div>
+      <button @onclick="Reset" data-h="h-bd" style="margin-top:18px;width:100%;padding:10px;border:1px solid var(--border);background:transparent;border-radius:9px;font-size:13.5px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit">Reset to a healthy site</button>
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px;position:sticky;top:96px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:18px">RESULTING SCORE</div>
+
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px">
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:56px;font-weight:800;letter-spacing:-.035em;line-height:1;color:@BandFg">@Score</span>
+          <span style="font-size:15px;color:var(--muted)">/ 100</span>
+        </div>
+        <span style="padding:6px 13px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;background:@BandBg;color:@BandFg">@Band</span>
+      </div>
+
+      <div style="height:8px;border-radius:5px;background:var(--elev);overflow:hidden;margin-bottom:8px">
+        <div style="width:@(Score)%;height:100%;background:@BandFg;transition:width .35s cubic-bezier(.2,.7,.2,1)"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);margin-bottom:22px">
+        <span>0</span><span>45</span><span>70</span><span>85</span><span>100</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:11px;font-size:14px">
+        <div style="display:flex;justify-content:space-between;gap:16px">
+          <span style="color:var(--text)">Illustrative baseline</span>
+          <span style="font-family:'JetBrains Mono',monospace;color:var(--muted)">70</span>
+        </div>
+        @foreach (var r in Rules)
+        {
+          var w = State[r.Key] ? r.OnWeight : r.OffWeight;
+          if (w != 0)
+          {
+            <div style="display:flex;justify-content:space-between;gap:16px">
+              <span style="color:var(--text);flex:1;min-width:0">@(State[r.Key] ? r.OnReason : r.OffReason)</span>
+              <span style="font-family:'JetBrains Mono',monospace;white-space:nowrap;color:@(w > 0 ? ToneColors.Fg(Tone.Ok) : ToneColors.Fg(Tone.Warn))">@Signed(w)</span>
+            </div>
+          }
+        }
+        <div style="height:1px;background:var(--border);margin:3px 0"></div>
+        <div style="display:flex;justify-content:space-between;gap:16px;font-weight:700">
+          <span>Trust score</span>
+          <span style="font-family:'JetBrains Mono',monospace;color:@BandFg">@Score / 100</span>
+        </div>
+      </div>
+
+      @if (BadgeEligible)
+      {
+        <div style="margin-top:20px;padding:14px 16px;border-radius:11px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.28);font-size:13.5px;line-height:1.55;color:var(--text)">
+          Meets the current badge standard, assuming ownership is proven and a reviewer agrees.
+        </div>
+      }
+      else
+      {
+        <div style="margin-top:20px;padding:14px 16px;border-radius:11px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.28);font-size:13.5px;line-height:1.55;color:var(--text)">
+          @BadgeBlocker
+        </div>
+      }
+    </div>
+  </div>
+</section>
+
+@code {
+    private record Rule(string Key, string Id, string Label, int OnWeight, int OffWeight, string OnReason, string OffReason, bool Required = false);
+
+    private static readonly Rule[] Rules =
+    {
+        new("https", "https.enforced", "HTTPS enforced with HSTS", 12, -18,
+            "HTTPS enforced, HSTS present", "Site does not force a secure connection", Required: true),
+        new("cert", "cert.valid", "Certificate valid and trusted", 8, -14,
+            "Certificate valid, trusted issuer", "Certificate expired or untrusted", Required: true),
+        new("owner", "owner.txt", "Domain ownership verified", 6, 0,
+            "Ownership verified via DNS", "", Required: true),
+        new("mail", "mail.auth", "Mail authentication complete", 6, -6,
+            "SPF, DKIM and DMARC enforced", "Mail authentication incomplete"),
+        new("providers", "provider.clean", "No provider listings", 4, -25,
+            "No listings across providers", "Listed by an external security provider"),
+        new("scripts", "third.party_known", "All third-party scripts known", 2, -2,
+            "No unexpected third-party scripts", "A new third-party script appeared"),
+        new("form", "form.credentials_secure", "Credentials submitted securely", 0, -35,
+            "", "A password field submits over an unencrypted connection", Required: true),
+        new("age", "domain.established", "Domain established over a year", 4, -8,
+            "Established domain history", "Domain registered very recently")
+    };
+
+    private Dictionary<string, bool> State = Rules.ToDictionary(r => r.Key, _ => true);
+
+    private void Toggle(string key)
+    {
+        State[key] = !State[key];
+    }
+
+    private void Reset() => State = Rules.ToDictionary(r => r.Key, _ => true);
+
+    private int Score
+    {
+        get
+        {
+            var s = 70 + Rules.Sum(r => State[r.Key] ? r.OnWeight : r.OffWeight);
+            return Math.Clamp(s, 0, 100);
+        }
+    }
+
+    private static string Signed(int w) => w > 0 ? "+" + w : w < 0 ? "\u2212" + Math.Abs(w) : "0";
+
+    private string Band => Score >= 85 ? "Trusted" : Score >= 70 ? "Mostly Trusted" : Score >= 45 ? "Needs Review" : "High Risk";
+
+    private Tone BandTone => Score >= 70 ? Tone.Ok : Score >= 45 ? Tone.Warn : Tone.Risk;
+    private string BandFg => ToneColors.Fg(BandTone);
+    private string BandBg => ToneColors.Bg(BandTone);
+
+    private bool BadgeEligible => Score >= 85 && Rules.Where(r => r.Required).All(r => State[r.Key]);
+
+    private string BadgeBlocker
+    {
+        get
+        {
+            var failed = Rules.Where(r => r.Required && !State[r.Key]).ToList();
+            if (failed.Count > 0)
+                return "A required check is failing (" + string.Join(", ", failed.Select(f => f.Id)) + "), so a badge would be paused regardless of the score.";
+            return "Below the current badge standard of 85. The badge would be paused until the score recovers.";
+        }
+    }
+}

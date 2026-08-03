@@ -1,0 +1,95 @@
+.hip-marketing-site[data-theme="dark"]{
+  --bg:#0B1220; --surface:#111827; --elev:#161E2E; --border:#1F2937;
+  --text:#F8FAFB; --secondary:#D1D5DB; --muted:#9CA3AF; --action:#14B8A6; --action-ink:#04121B;
+  --blue:#1F6FEB; --info:#3B82F6; --violet:#7C3AED; --ok:#22C55E; --warn:#F59E0B; --danger:#EF4444; --critical:#B91C1C;
+  --hairline:rgba(255,255,255,.06); --tint:rgba(20,184,166,.10); --grid:rgba(255,255,255,.04);
+}
+.hip-marketing-site[data-theme="light"]{
+  --bg:#FFFFFF; --surface:#F8FAFC; --elev:#F1F5F9; --border:#E5E7EB;
+  --text:#0F172A; --secondary:#334155; --muted:#64748B; --action:#14B8A6; --action-ink:#04121B;
+  --blue:#1F6FEB; --info:#3B82F6; --violet:#7C3AED; --ok:#22C55E; --warn:#F59E0B; --danger:#EF4444; --critical:#B91C1C;
+  --hairline:rgba(15,23,42,.06); --tint:rgba(20,184,166,.09); --grid:rgba(15,23,42,.045);
+}
+.hip-marketing-site,.hip-marketing-site *{box-sizing:border-box}
+.hip-marketing-site{margin:0;overflow-x:hidden;max-width:100%;-webkit-font-smoothing:antialiased;font-family:Satoshi,ui-sans-serif,system-ui,sans-serif}
+.hip-marketing-site a{color:var(--action);text-decoration:none}
+.hip-marketing-site a:hover{color:var(--text);text-decoration:underline;text-underline-offset:3px}
+.hip-marketing-site :is(input,button,textarea){font-family:inherit}
+@keyframes hipPulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:1;transform:scale(1.35)}}
+@keyframes hipSweep{0%{transform:translateY(-100%)}100%{transform:translateY(320%)}}
+@keyframes hipSpin{to{transform:rotate(360deg)}}
+@keyframes hipMarquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes hipFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+@keyframes hipAurora{0%{transform:translate3d(-6%,-4%,0) scale(1.05)}33%{transform:translate3d(6%,3%,0) scale(1.18)}66%{transform:translate3d(-3%,6%,0) scale(1.1)}100%{transform:translate3d(-6%,-4%,0) scale(1.05)}}
+@keyframes hipSheen{0%{transform:translateX(-120%) skewX(-18deg)}100%{transform:translateX(320%) skewX(-18deg)}}
+@keyframes hipRing{0%{transform:scale(.6);opacity:.55}100%{transform:scale(2.4);opacity:0}}
+@keyframes hipDash{to{stroke-dashoffset:-1000}}
+.hip-marketing-site[data-motion="reduced"] [style*="animation:"]{animation:none !important}
+@media (max-width:1120px){.hip-marketing-site [data-nav-full]{display:none !important}.hip-marketing-site [data-nav-compact]{display:block !important}.hip-marketing-site [data-gh-label]{display:none !important}}
+
+/* ---- hover states (were inline style-hover in the design source) ---- */
+.hip-marketing-site [data-h~="h-elev"]:hover{background:var(--elev)}
+.hip-marketing-site [data-h~="h-bd"]:hover{border-color:var(--action)}
+.hip-marketing-site [data-h~="h-bd-fg"]:hover{border-color:var(--action);color:var(--action)}
+.hip-marketing-site [data-h~="h-bd-nu"]:hover{border-color:var(--action);text-decoration:none}
+.hip-marketing-site [data-h~="h-bright"]:hover{filter:brightness(1.08);text-decoration:none}
+.hip-marketing-site [data-h~="h-tint"]:hover{background:var(--tint)}
+.hip-marketing-site [data-h~="h-ul"]:hover{text-decoration:underline;text-underline-offset:3px}
+.hip-marketing-site [data-h~="h-fg"]:hover{color:var(--action)}
+
+/* ---- chrome ---- */
+.hip-marketing-site .grain{position:fixed;inset:0;z-index:70;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>")}
+.hip-marketing-site .progress-track{position:fixed;top:0;left:0;right:0;height:2px;z-index:80;pointer-events:none}
+.hip-marketing-site .progress-bar{height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--action));transform-origin:left}
+.hip-marketing-site .dot{width:9px;height:9px;border-radius:50%;background:var(--border);display:inline-block}
+.hip-marketing-site .pulse-dot{width:6px;height:6px;border-radius:50%;background:var(--action);display:inline-block;animation:hipPulse 2.4s ease-in-out infinite}
+.hip-marketing-site .spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--action);border-radius:50%;animation:hipSpin .8s linear infinite}
+.hip-marketing-site .sweep{position:absolute;left:0;right:0;top:0;height:90px;pointer-events:none;
+  background:linear-gradient(180deg,transparent,var(--tint),transparent);animation:hipSweep 1.5s linear infinite}
+
+/* Drop-in slot for real photography. Replace with <img> when assets land. */
+.hip-marketing-site .img-slot{display:grid;place-items:center;background:var(--elev);border-bottom:1px solid var(--border);
+  color:var(--muted);font-size:12.5px;text-align:center;padding:16px}
+.hip-marketing-site .img-slot span{max-width:80%}
+
+/* ---- responsive header collapse ---- */
+@media (max-width:1120px){
+  .hip-marketing-site [data-nav-full]{display:none !important}
+  .hip-marketing-site [data-nav-compact]{display:block !important}
+  .hip-marketing-site [data-gh-label]{display:none !important}
+}
+
+@media (max-width:760px){
+  .hip-marketing-site [data-register-toggle],
+  .hip-marketing-site [data-github-link]{display:none !important}
+  .hip-marketing-site [style*="minmax(330px,1fr)"],
+  .hip-marketing-site [style*="minmax(320px,1fr)"],
+  .hip-marketing-site [style*="minmax(300px,1fr)"]{grid-template-columns:minmax(0,1fr) !important}
+}
+
+@media (max-width:520px){
+  .hip-marketing-site [data-brand-copy]{display:none !important}
+  .hip-marketing-site [data-domain-cta]{display:none !important}
+  .hip-marketing-site header [data-nav-compact]{min-width:0;max-width:190px}
+  .hip-marketing-site footer > div{padding-left:20px !important;padding-right:20px !important}
+}
+
+
+/* ---- fixed link-check bar needs breathing room at the page end ---- */
+.hip-marketing-site footer{padding-bottom:96px}
+
+/* ---- printing: the trust receipt is the only thing that goes on paper ---- */
+@media print{
+  @page{margin:14mm}
+  body{background:#fff}
+  body.printing-receipt > *{visibility:hidden}
+  body.printing-receipt #hip-receipt,
+  body.printing-receipt #hip-receipt *{visibility:visible}
+  body.printing-receipt #hip-receipt{
+    position:absolute;left:0;top:0;width:100%;
+    border:0;border-radius:0;padding:0;background:#fff;color:#0F172A;box-shadow:none}
+  body.printing-receipt #hip-receipt span,
+  body.printing-receipt #hip-receipt div,
+  body.printing-receipt #hip-receipt p{color:inherit}
+}

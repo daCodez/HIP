@@ -42,7 +42,8 @@ public sealed class HipPortalNavigationTests
             ["admin roles"] = Read(root, "Components", "Pages", "AdminRoles.razor"),
             ["admin dashboard"] = Read(root, "Components", "Pages", "AdminDashboard.razor"),
             ["public home"] = Read(root, "Components", "Pages", "PublicHome.razor"),
-            ["public layout"] = Read(root, "Components", "Layout", "PublicLayout.razor")
+            ["public layout"] = Read(root, "Components", "Layout", "PublicLayout.razor"),
+            ["marketing layout"] = Read(root, "Components", "Layout", "MarketingLayout.razor")
         };
 
         Assert.Multiple(() =>
@@ -59,11 +60,12 @@ public sealed class HipPortalNavigationTests
             Assert.That(sources["admin dashboard"], Does.Not.Contain("@page \"/\""));
             Assert.That(sources["public home"], Does.Contain("@page \"/\""));
             Assert.That(sources["public home"], Does.Contain("@attribute [AllowAnonymous]"));
-            Assert.That(sources["public home"], Does.Contain("@layout PublicLayout"));
+            Assert.That(sources["public home"], Does.Contain("@layout MarketingLayout"));
             Assert.That(sources["public home"], Does.Contain("PortalLinks.Consumer(\"/\")"));
             Assert.That(sources["public home"], Does.Contain("PortalLinks.Admin(\"/\")"));
             Assert.That(sources["public layout"], Does.Contain("PortalLinks.Consumer(\"/\")"));
             Assert.That(sources["public layout"], Does.Contain("PortalLinks.Admin(\"/\")"));
+            Assert.That(sources["marketing layout"], Does.Contain("<SiteFooter />"));
         });
     }
 
@@ -71,13 +73,17 @@ public sealed class HipPortalNavigationTests
     public void Public_experiences_use_the_public_layout_and_do_not_inherit_the_portal_shell()
     {
         var root = RepositoryRoot();
-        var publicPages = new[]
+        var marketingPages = new[]
         {
             "PublicHome.razor",
             "PublicPlatform.razor",
             "PublicHowItWorks.razor",
             "PublicVerification.razor",
             "PublicDevelopers.razor",
+            "PublicMethodology.razor"
+        };
+        var operationalPublicPages = new[]
+        {
             "Lookup.razor",
             "LookupDomain.razor",
             "PublicDomainCertificate.razor",
@@ -87,7 +93,14 @@ public sealed class HipPortalNavigationTests
 
         Assert.Multiple(() =>
         {
-            foreach (var page in publicPages)
+            foreach (var page in marketingPages)
+            {
+                var source = Read(root, "Components", "Pages", page);
+                Assert.That(source, Does.Contain("@layout MarketingLayout"), page);
+                Assert.That(source, Does.Not.Contain("@layout ControlCenterLayout"), page);
+            }
+
+            foreach (var page in operationalPublicPages)
             {
                 var source = Read(root, "Components", "Pages", page);
                 Assert.That(source, Does.Contain("@layout PublicLayout"), page);
@@ -97,7 +110,7 @@ public sealed class HipPortalNavigationTests
     }
 
     [Test]
-    public void Public_marketing_routes_preserve_the_supplied_five_page_information_architecture()
+    public void Public_marketing_routes_preserve_the_supplied_information_architecture()
     {
         var root = RepositoryRoot();
         var expectedRoutes = new Dictionary<string, string[]>
@@ -106,9 +119,10 @@ public sealed class HipPortalNavigationTests
             ["PublicPlatform.razor"] = ["@page \"/platform\""],
             ["PublicHowItWorks.razor"] = ["@page \"/how-it-works\"", "@page \"/how\""],
             ["PublicVerification.razor"] = ["@page \"/verification\"", "@page \"/verify\""],
-            ["PublicDevelopers.razor"] = ["@page \"/developers\"", "@page \"/dev\""]
+            ["PublicDevelopers.razor"] = ["@page \"/developers\"", "@page \"/dev\""],
+            ["PublicMethodology.razor"] = ["@page \"/methodology\""]
         };
-        var layout = Read(root, "Components", "Layout", "PublicLayout.razor");
+        var layout = Read(root, "Components", "Layout", "MarketingLayout.razor");
 
         Assert.Multiple(() =>
         {
@@ -121,10 +135,10 @@ public sealed class HipPortalNavigationTests
                 }
             }
 
-            Assert.That(layout, Does.Contain("href=\"/platform\""));
-            Assert.That(layout, Does.Contain("href=\"/how-it-works\""));
-            Assert.That(layout, Does.Contain("href=\"/verification\""));
-            Assert.That(layout, Does.Contain("href=\"/developers\""));
+            Assert.That(layout, Does.Contain("(\"/platform\", \"Platform\")"));
+            Assert.That(layout, Does.Contain("(\"/how-it-works\", \"How it works\")"));
+            Assert.That(layout, Does.Contain("(\"/verification\", \"Verification\")"));
+            Assert.That(layout, Does.Contain("(\"/developers\", \"Developers\")"));
             Assert.That(layout, Does.Not.Contain("drop-shadow"));
             Assert.That(File.Exists(Path.Combine(root, "src", "HIP.Web", "wwwroot", "images", "public", "extension-popup-example.png")), Is.True);
         });

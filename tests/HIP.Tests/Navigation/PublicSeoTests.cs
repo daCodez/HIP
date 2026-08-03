@@ -61,7 +61,7 @@ public sealed class PublicSeoTests
 
     /// <summary>Confirms each new search landing page is directly renderable and self-describing.</summary>
     [TestCase("/website-trust-scanner", "Website Trust Scanner", "Check a website before you")]
-    [TestCase("/methodology", "Trust Score Methodology", "Every score keeps its")]
+    [TestCase("/methodology", "Trust Methodology", "How a HIP score is produced")]
     [TestCase("/privacy", "Privacy Approach", "Collect less. Explain")]
     [TestCase("/appeals", "Appeals Policy", "A finding can be")]
     [TestCase("/signals", "Website Trust Signals", "One score. Named, inspectable")]
@@ -117,30 +117,18 @@ public sealed class PublicSeoTests
     public void Marketing_footers_use_specific_product_project_and_policy_links()
     {
         var root = RepositoryRoot();
-        var pages = new[]
-        {
-            "PublicHome.razor",
-            "PublicPlatform.razor",
-            "PublicHowItWorks.razor",
-            "PublicVerification.razor",
-            "PublicDevelopers.razor"
-        };
+        var footer = File.ReadAllText(Path.Combine(root, "src", "HIP.Web", "Components", "Marketing", "SiteFooter.razor"));
 
         Assert.Multiple(() =>
         {
-            foreach (var page in pages)
-            {
-                var source = File.ReadAllText(Path.Combine(root, "src", "HIP.Web", "Components", "Pages", page));
-                Assert.That(source, Does.Contain("href=\"/privacy\""), page);
-                Assert.That(source, Does.Contain("href=\"/appeals\""), page);
-                Assert.That(source, Does.Contain("href=\"/signals\""), page);
-                Assert.That(source, Does.Contain("href=\"/score-interpretation\""), page);
-                Assert.That(source, Does.Contain("href=\"/evidence-providers\""), page);
-                Assert.That(source, Does.Contain("/blob/master/docs/rules-engine.md"), page);
-                Assert.That(source, Does.Contain("/blob/master/docs/project-reference/HIP_Implementation_Backlog.md"), page);
-                Assert.That(source, Does.Contain("https://github.com/daCodez/HIP/issues"), page);
-                Assert.That(source, Does.Not.Contain("href=\"https://github.com/daCodez/HIP\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"scp7\" style=\"font-size: 14.5px; color: var(--text);\">Detection rules</a>"), page);
-            }
+            Assert.That(footer, Does.Contain("href=\"/privacy\""));
+            Assert.That(footer, Does.Contain("href=\"/appeals\""));
+            Assert.That(footer, Does.Contain("href=\"/signals\""));
+            Assert.That(footer, Does.Contain("href=\"/score-interpretation\""));
+            Assert.That(footer, Does.Contain("href=\"/evidence-providers\""));
+            Assert.That(footer, Does.Contain("/blob/master/docs/rules-engine.md"));
+            Assert.That(footer, Does.Contain("/blob/master/docs/project-reference/HIP_Implementation_Backlog.md"));
+            Assert.That(footer, Does.Contain("https://github.com/daCodez/HIP/issues"));
         });
     }
 

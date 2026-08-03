@@ -1,0 +1,46 @@
+@inject HipPortalLinks PortalLinks
+
+<footer style="border-top:1px solid var(--border);background:var(--surface)">
+  <div style="max-width:1240px;margin:0 auto;padding:56px 32px 40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:40px">
+    <div>
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px">
+        <img src="/images/public/marketing/hip-logo.png" alt="HIP" style="height:42px;width:auto;display:block;flex-shrink:0" />
+        <div style="display:flex;flex-direction:column;line-height:1">
+          <span style="font-size:21px;font-weight:800;letter-spacing:-.01em;color:var(--text);white-space:nowrap">HIP</span>
+          <span style="font-size:9.5px;font-weight:600;letter-spacing:.06em;color:var(--muted);margin-top:5px;white-space:nowrap">Human-Interactive Protocol</span>
+        </div>
+      </div>
+      <p style="font-size:14.5px;line-height:1.65;color:var(--muted);margin:0;max-width:280px">An open trust and risk layer for websites and online content. Independently developed, open source, and open to community contributions.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:11px">
+      <div style="font-size:11.5px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:3px">PRODUCT</div>
+      <a href="/platform" style="font-size:14.5px;color:var(--text);text-decoration:none" data-h="h-fg">Platform</a>
+      <a href="/how-it-works" style="font-size:14.5px;color:var(--text);text-decoration:none" data-h="h-fg">How it works</a>
+      <a href="/verification" style="font-size:14.5px;color:var(--text);text-decoration:none" data-h="h-fg">Verification</a>
+      <a href="/developers" style="font-size:14.5px;color:var(--text);text-decoration:none" data-h="h-fg">Developers</a>
+      <a href="/methodology" style="font-size:14.5px;color:var(--text);text-decoration:none" data-h="h-fg">Trust methodology</a>
+      <a href="/signals" style="font-size:14.5px;color:var(--text);text-decoration:none" data-h="h-fg">Signals</a>
+      <a href="/score-interpretation" style="font-size:14.5px;color:var(--text);text-decoration:none" data-h="h-fg">Score guide</a>
+      <a href="/evidence-providers" style="font-size:14.5px;color:var(--text);text-decoration:none" data-h="h-fg">Evidence providers</a>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:11px">
+      <div style="font-size:11.5px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:3px">OPEN SOURCE</div>
+      <a href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" style="font-size:14.5px;color:var(--text)" data-h="h-fg">Repository</a>
+      <a href="https://github.com/daCodez/HIP/blob/master/docs/rules-engine.md" target="_blank" rel="noopener noreferrer" style="font-size:14.5px;color:var(--text)" data-h="h-fg">Detection rules</a>
+      <a href="https://github.com/daCodez/HIP/blob/master/README.md" target="_blank" rel="noopener noreferrer" style="font-size:14.5px;color:var(--text)" data-h="h-fg">Contributing</a>
+      <a href="https://github.com/daCodez/HIP/issues" target="_blank" rel="noopener noreferrer" style="font-size:14.5px;color:var(--text)" data-h="h-fg">Issues</a>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:11px">
+      <div style="font-size:11.5px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:3px">PROJECT</div>
+      <a href="https://github.com/daCodez/HIP/blob/master/docs/project-reference/HIP_Implementation_Backlog.md" target="_blank" rel="noopener noreferrer" style="font-size:14.5px;color:var(--text)" data-h="h-fg">Roadmap</a>
+      <a href="/privacy" style="font-size:14.5px;color:var(--text)" data-h="h-fg">Privacy approach</a>
+      <a href="/appeals" style="font-size:14.5px;color:var(--text)" data-h="h-fg">Appeals policy</a>
+      <a href="@PortalLinks.Consumer("/")" style="font-size:14.5px;color:var(--text)" data-h="h-fg">Consumer app</a>
+      <a href="@PortalLinks.Admin("/")" style="font-size:14.5px;color:var(--text)" data-h="h-fg">Admin portal</a>
+    </div>
+  </div>
+  <div style="max-width:1240px;margin:0 auto;padding:22px 32px 40px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;font-size:13px;color:var(--muted)">
+    <span>HIP is an open-source project. A trust score reflects the checks HIP ran on a given date — not a guarantee of safety.</span>
+    <span style="font-family:'JetBrains Mono',monospace">HIP · Human-Interactive Protocol</span>
+  </div>
+</footer>

@@ -1,161 +1,88 @@
 @page "/developers"
 @page "/dev"
 @attribute [AllowAnonymous]
-@layout PublicLayout
+@layout MarketingLayout
+@rendermode InteractiveServer
+@inject NavigationManager Nav
 
-<PageTitle>Developers | HIP</PageTitle>
+<PageTitle>Developers — Open Source Trust Scoring | HIP</PageTitle>
+<HeadContent>
+  <meta name="description" content="Read every detection rule, query scores from your own product, self-host the scanner, or propose a rule. HIP is open source because trust cannot be proprietary." />
+  <meta property="og:title" content="Developers — Open Source Trust Scoring | HIP" />
+  <meta property="og:description" content="Read every detection rule, query scores from your own product, self-host the scanner, or propose a rule. HIP is open source because trust cannot be proprietary." />
+</HeadContent>
 
-<div class="sc-host" data-sc-name="dev"><svg data-dc-tpl="7" width="0" height="0" aria-hidden="true" focusable="false" style="position: absolute;">
-  <defs data-dc-tpl="8">
-    <linearGradient data-dc-tpl="9" id="hipTealBlue" x1="0" y1="0" x2="1" y2="1">
-      <stop data-dc-tpl="10" offset="0" stop-color="#22D3EE"></stop><stop data-dc-tpl="11" offset="0.55" stop-color="#14B8A6"></stop><stop data-dc-tpl="12" offset="1" stop-color="#1F6FEB"></stop>
-    </linearGradient>
-  </defs></svg><div data-dc-tpl="13" data-theme="dark" data-motion="full" style="background: var(--bg); color: var(--text); min-height: 100vh; font-family: Satoshi, sans-serif;"><div data-dc-tpl="14" aria-hidden="true" style="position: fixed; inset: 0px; z-index: 70; pointer-events: none; opacity: 0.05; mix-blend-mode: overlay; background-image: none;"></div><div data-dc-tpl="15" style="position: fixed; top: 0px; left: 0px; right: 0px; height: 2px; z-index: 80; pointer-events: none;"><div data-dc-tpl="16" data-progress="" style="height: 100%; width: 0%; background: linear-gradient(90deg,var(--blue),var(--action)); transform-origin: left center;"></div></div><header data-dc-tpl="17" style="position: sticky; top: 0px; z-index: 50; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border);">
-  <div data-dc-tpl="18" style="max-width: 1240px; margin: 0px auto; padding: 14px clamp(16px, 3vw, 32px); display: flex; align-items: center; gap: clamp(10px, 1.4vw, 22px);">
-    <a data-dc-tpl="19" href="/" aria-label="HIP home" style="display: flex; align-items: center; gap: 11px; cursor: pointer; flex-shrink: 0; text-decoration: none;">
-      <img data-dc-tpl="20" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 40px; width: auto; display: block; flex-shrink: 0;">
-      <div data-dc-tpl="21" style="display: flex; flex-direction: column; line-height: 1;">
-        <span data-dc-tpl="22" style="font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); white-space: nowrap;">HIP</span>
-        <span data-dc-tpl="23" style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-top: 5px; white-space: nowrap;">Human-Interactive Protocol</span>
-      </div>
-    </a>
-
-    <select data-dc-tpl="24" data-nav-compact="" style="display: none; flex-shrink: 0; padding: 8px 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer;">
-      <option data-dc-tpl="25" value="home">Home</option>
-      <option data-dc-tpl="26" value="platform">Platform</option>
-      <option data-dc-tpl="27" value="how">How it works</option>
-      <option data-dc-tpl="28" value="verify">Verification</option>
-      <option data-dc-tpl="29" value="dev" selected>Developers</option>
-    </select>
-    <nav data-dc-tpl="30" data-nav-full="" style="display: flex; align-items: center; gap: 2px; margin-left: 4px; flex-shrink: 0;">
-
-        <a data-dc-tpl="32" href="/platform" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Platform</span></a>
-
-        <a data-dc-tpl="32" href="/how-it-works" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">How it works</span></a>
-
-        <a data-dc-tpl="32" href="/verification" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Verification</span></a>
-
-        <a data-dc-tpl="32" href="/developers" aria-current="page" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--text);"><span class="sc-interp">Developers</span></a>
-
-    </nav>
-
-    <div data-dc-tpl="33" style="flex: 1 1 0%;"></div>
-
-
-    <button data-dc-tpl="36" title="Toggle theme" class="scp2" style="width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 9px; cursor: pointer; color: var(--muted); flex-shrink: 0;">
-      <svg data-dc-tpl="37" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path data-dc-tpl="38" d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3L4.9 4.9M19.1 19.1l-1.4-1.4M17.7 6.3l1.4-1.4M4.9 19.1l1.4-1.4"></path><circle data-dc-tpl="39" cx="12" cy="12" r="4.2"></circle></svg>
-    </button>
-    <a data-dc-tpl="40" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp3" style="display: flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid var(--border); background: var(--surface); border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--text); flex-shrink: 0;">
-      <svg data-dc-tpl="41" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path data-dc-tpl="42" d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 014 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.19c0 .21.14.46.55.38A8 8 0 008 0z"></path></svg>
-      <span data-dc-tpl="43" data-gh-label="">GitHub</span>
-    </a>
-    <a data-dc-tpl="44" href="/website-trust-scanner" class="scp4" style="padding: 10px 16px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; flex-shrink: 0; white-space: nowrap;">Check my domain</a>
-  </div></header><main data-dc-tpl="599" style="max-width: 1240px; margin: 0px auto; padding: clamp(56px, 6vw, 80px) clamp(16px, 3vw, 32px) 110px;">
-  <div data-dc-tpl="600" style="max-width: 680px; margin-bottom: 60px;">
-    <div data-dc-tpl="601" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 16px;">DEVELOPERS</div>
-    <h1 data-dc-tpl="602" style="font-size: clamp(36px, 4.6vw, 52px); line-height: 1.06; letter-spacing: -0.03em; font-weight: 800; margin: 0px 0px 18px; text-wrap: balance;">Open source, because trust cannot be proprietary.</h1>
-    <p data-dc-tpl="603" style="font-size: 19px; line-height: 1.6; color: var(--muted); margin: 0px 0px 30px; text-wrap: pretty;">Run your own instance, read every rule, integrate scores into your product, or propose a detection that catches something we missed.</p>
-    <div data-dc-tpl="604" style="display: flex; gap: 12px; flex-wrap: wrap;">
-      <a data-dc-tpl="605" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp6" style="padding: 12px 20px; background: var(--action); color: var(--action-ink); border-radius: 10px; font-size: 15px; font-weight: 700;">View on GitHub</a>
-<a data-dc-tpl="606" href="https://github.com/daCodez/HIP/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22" target="_blank" rel="noopener noreferrer" class="scp3" style="padding: 12px 20px; border: 1px solid var(--border); background: var(--surface); border-radius: 10px; font-size: 15px; font-weight: 600; color: var(--text);">Contributing guide</a>
+<main style="max-width:1240px;margin:0 auto;padding:clamp(56px,6vw,80px) clamp(16px,3vw,32px) 110px">
+  <div style="max-width:680px;margin-bottom:60px">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:16px">DEVELOPERS</div>
+    <h1 style="font-size:clamp(36px,4.6vw,52px);line-height:1.06;letter-spacing:-.03em;font-weight:800;margin:0 0 18px;text-wrap:balance">Open source, because trust cannot be proprietary.</h1>
+    <p style="font-size:19px;line-height:1.6;color:var(--muted);margin:0 0 30px;text-wrap:pretty">Run your own instance, read every rule, integrate scores into your product, or propose a detection that catches something we missed.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <a href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" style="padding:12px 20px;background:var(--action);color:var(--action-ink);border-radius:10px;font-size:15px;font-weight:700" data-h="h-bright">View on GitHub</a>
+      <a href="https://github.com/daCodez/HIP/blob/master/README.md" target="_blank" rel="noopener noreferrer" style="padding:12px 20px;border:1px solid var(--border);background:var(--surface);border-radius:10px;font-size:15px;font-weight:600;color:var(--text)" data-h="h-bd-nu">Contributing guide</a>
     </div>
   </div>
 
-  <div data-dc-tpl="607" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px; margin-bottom: 24px;">
-    <div data-dc-tpl="608" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 34px;">
-      <h2 data-dc-tpl="609" style="font-size: 22px; font-weight: 700; margin: 0px 0px 8px; letter-spacing: -0.02em;">Query a score</h2>
-      <p data-dc-tpl="610" style="font-size: 15px; line-height: 1.6; color: var(--muted); margin: 0px 0px 20px;">Read-only results, with the full finding list. Rate-limited and cacheable.</p>
-      <div data-dc-tpl="611" style="background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px; font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12.5px; line-height: 1.85; overflow: auto;">
-        <div data-dc-tpl="612"><span data-dc-tpl="613" style="color: var(--action);">GET</span> /v1/scan?domain=example.com</div>
-        <div data-dc-tpl="614" style="height: 10px;"></div>
-        <div data-dc-tpl="615" style="color: var(--muted);">{</div>
-        <div data-dc-tpl="616">&nbsp;&nbsp;"domain": "example.com",</div>
-        <div data-dc-tpl="617">&nbsp;&nbsp;"score": <span data-dc-tpl="618" style="color: var(--action);">94</span>,</div>
-        <div data-dc-tpl="619">&nbsp;&nbsp;"status": <span data-dc-tpl="620" style="color: var(--ok);">"verified"</span>,</div>
-        <div data-dc-tpl="621">&nbsp;&nbsp;"scanned_at": "2026-07-30T09:12Z",</div>
-        <div data-dc-tpl="622">&nbsp;&nbsp;"findings": [</div>
-        <div data-dc-tpl="623">&nbsp;&nbsp;&nbsp;&nbsp;{ "id": "mail.auth_partial",</div>
-        <div data-dc-tpl="624">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"severity": <span data-dc-tpl="625" style="color: var(--warn);">"medium"</span>, "weight": -6 }</div>
-        <div data-dc-tpl="626">&nbsp;&nbsp;]</div>
-        <div data-dc-tpl="627" style="color: var(--muted);">}</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:24px;margin-bottom:24px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:34px">
+      <h2 style="font-size:22px;font-weight:700;margin:0 0 8px;letter-spacing:-.02em">Query a score</h2>
+      <p style="font-size:15px;line-height:1.6;color:var(--muted);margin:0 0 20px">Read-only results, with the full finding list. Rate-limited and cacheable.</p>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.85;overflow:auto">
+        <div><span style="color:var(--action)">GET</span> /api/v1/public/lookup/domain/example.com</div>
+        <div style="height:10px"></div>
+        <div style="color:var(--muted)">{</div>
+        <div>&nbsp;&nbsp;"domain": "example.com",</div>
+        <div>&nbsp;&nbsp;"score": <span style="color:var(--action)">94</span>,</div>
+        <div>&nbsp;&nbsp;"status": <span style="color:var(--ok)">"verified"</span>,</div>
+        <div>&nbsp;&nbsp;"scanned_at": "2026-07-30T09:12Z",</div>
+        <div>&nbsp;&nbsp;"findings": [</div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;{ "id": "mail.auth_partial",</div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"severity": <span style="color:var(--warn)">"medium"</span>, "weight": -6 }</div>
+        <div>&nbsp;&nbsp;]</div>
+        <div style="color:var(--muted)">}</div>
       </div>
     </div>
-    <div data-dc-tpl="628" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 34px;">
-      <h2 data-dc-tpl="629" style="font-size: 22px; font-weight: 700; margin: 0px 0px 8px; letter-spacing: -0.02em;">Write a detection rule</h2>
-      <p data-dc-tpl="630" style="font-size: 15px; line-height: 1.6; color: var(--muted); margin: 0px 0px 20px;">Rules are declarative and reviewed in the open. Every rule needs a human-readable reason.</p>
-      <div data-dc-tpl="631" style="background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px; font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12.5px; line-height: 1.85; overflow: auto;">
-        <div data-dc-tpl="632" style="color: var(--muted);"># rules/page/credential_form.yml</div>
-        <div data-dc-tpl="633"><span data-dc-tpl="634" style="color: var(--violet);">id</span>: form.credentials_insecure</div>
-        <div data-dc-tpl="635"><span data-dc-tpl="636" style="color: var(--violet);">when</span>:</div>
-        <div data-dc-tpl="637">&nbsp;&nbsp;- form.has_password_field: <span data-dc-tpl="638" style="color: var(--ok);">true</span></div>
-        <div data-dc-tpl="639">&nbsp;&nbsp;- form.action_scheme: <span data-dc-tpl="640" style="color: var(--danger);">http</span></div>
-        <div data-dc-tpl="641"><span data-dc-tpl="642" style="color: var(--violet);">severity</span>: <span data-dc-tpl="643" style="color: var(--danger);">critical</span></div>
-        <div data-dc-tpl="644"><span data-dc-tpl="645" style="color: var(--violet);">weight</span>: <span data-dc-tpl="646" style="color: var(--action);">-35</span></div>
-        <div data-dc-tpl="647"><span data-dc-tpl="648" style="color: var(--violet);">reason</span>: "A password field submits over</div>
-        <div data-dc-tpl="649">&nbsp;&nbsp;an unencrypted connection."</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:34px">
+      <h2 style="font-size:22px;font-weight:700;margin:0 0 8px;letter-spacing:-.02em">Write a detection rule</h2>
+      <p style="font-size:15px;line-height:1.6;color:var(--muted);margin:0 0 20px">Rules are declarative and reviewed in the open. Every rule needs a human-readable reason.</p>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.85;overflow:auto">
+        <div style="color:var(--muted)"># rules/page/credential_form.yml</div>
+        <div><span style="color:var(--violet)">id</span>: form.credentials_insecure</div>
+        <div><span style="color:var(--violet)">when</span>:</div>
+        <div>&nbsp;&nbsp;- form.has_password_field: <span style="color:var(--ok)">true</span></div>
+        <div>&nbsp;&nbsp;- form.action_scheme: <span style="color:var(--danger)">http</span></div>
+        <div><span style="color:var(--violet)">severity</span>: <span style="color:var(--danger)">critical</span></div>
+        <div><span style="color:var(--violet)">weight</span>: <span style="color:var(--action)">-35</span></div>
+        <div><span style="color:var(--violet)">reason</span>: "A password field submits over</div>
+        <div>&nbsp;&nbsp;an unencrypted connection."</div>
       </div>
     </div>
   </div>
 
-  <div data-dc-tpl="650" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; margin-bottom: 24px;">
-    <div data-dc-tpl="651" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px;">
-      <h3 data-dc-tpl="652" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 9px;">Self-host</h3>
-      <p data-dc-tpl="653" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px;">Run the scanner and portal on your own infrastructure with your own rule set and provider keys.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-bottom:24px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px">
+      <h3 style="font-size:17.5px;font-weight:700;margin:0 0 9px">Self-host</h3>
+      <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">Run the scanner and portal on your own infrastructure with your own rule set and provider keys.</p>
     </div>
-    <div data-dc-tpl="654" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px;">
-      <h3 data-dc-tpl="655" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 9px;">Extension source</h3>
-      <p data-dc-tpl="656" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px;">The browser extension is in the same repository — including exactly what it sends and when.</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px">
+      <h3 style="font-size:17.5px;font-weight:700;margin:0 0 9px">Extension source</h3>
+      <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">The browser extension is in the same repository — including exactly what it sends and when.</p>
     </div>
-    <div data-dc-tpl="657" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px;">
-      <h3 data-dc-tpl="658" style="font-size: 17.5px; font-weight: 700; margin: 0px 0px 9px;">Data minimisation</h3>
-      <p data-dc-tpl="659" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px;">HIP is designed to check content without storing private conversations or unnecessary personal data.</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px">
+      <h3 style="font-size:17.5px;font-weight:700;margin:0 0 9px">Data minimisation</h3>
+      <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">HIP is designed to check content without storing private conversations or unnecessary personal data.</p>
     </div>
   </div>
 
-  <div data-dc-tpl="660" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 34px; display: flex; gap: 20px; align-items: flex-start;">
-    <svg data-dc-tpl="661" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="1.9" stroke-linecap="round" style="flex-shrink: 0; margin-top: 2px;"><circle data-dc-tpl="662" cx="12" cy="12" r="9"></circle><path data-dc-tpl="663" d="M12 8v5M12 16.2h.01"></path></svg>
-    <div data-dc-tpl="664">
-      <h3 data-dc-tpl="665" style="font-size: 18px; font-weight: 700; margin: 0px 0px 8px;">What HIP does not claim</h3>
-      <p data-dc-tpl="666" style="font-size: 15.5px; line-height: 1.65; color: var(--muted); margin: 0px; max-width: 720px; text-wrap: pretty;">HIP does not prevent every threat, and a high score is not a guarantee of safety — it means the checks HIP ran, on the date it ran them, found no significant problems. Scores are evidence to reason with, not a verdict to outsource judgement to.</p>
-    </div>
-  </div></main><footer data-dc-tpl="667" style="border-top: 1px solid var(--border); background: var(--surface);">
-  <div data-dc-tpl="668" style="max-width: 1240px; margin: 0px auto; padding: 56px 32px 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 40px;">
-    <div data-dc-tpl="669">
-      <div data-dc-tpl="670" style="display: flex; align-items: center; gap: 11px; margin-bottom: 16px;">
-        <img data-dc-tpl="671" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 42px; width: auto; display: block; flex-shrink: 0;">
-        <div data-dc-tpl="672" style="display: flex; flex-direction: column; line-height: 1;">
-          <span data-dc-tpl="673" style="font-size: 21px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); white-space: nowrap;">HIP</span>
-          <span data-dc-tpl="674" style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-top: 5px; white-space: nowrap;">Human-Interactive Protocol</span>
-        </div>
-      </div>
-      <p data-dc-tpl="675" style="font-size: 14.5px; line-height: 1.65; color: var(--muted); margin: 0px; max-width: 280px;">An open trust and risk layer for websites and online content. Community-built, evidence-first.</p>
-    </div>
-    <div data-dc-tpl="676" style="display: flex; flex-direction: column; gap: 11px;">
-      <div data-dc-tpl="677" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PRODUCT</div>
-      <a data-dc-tpl="678" href="/platform" class="scp7" style="font-size: 14.5px; color: var(--text);">Platform</a>
-      <a data-dc-tpl="679" href="/how-it-works" class="scp7" style="font-size: 14.5px; color: var(--text);">How it works</a>
-      <a data-dc-tpl="680" href="/verification" class="scp7" style="font-size: 14.5px; color: var(--text);">Verification</a>
-      <a data-dc-tpl="681" href="/developers" class="scp7" style="font-size: 14.5px; color: var(--text);">Developers</a>
-      <a href="/methodology" class="scp7" style="font-size: 14.5px; color: var(--text);">Methodology</a>
-      <a href="/signals" class="scp7" style="font-size: 14.5px; color: var(--text);">Signals</a>
-      <a href="/score-interpretation" class="scp7" style="font-size: 14.5px; color: var(--text);">Score guide</a>
-      <a href="/evidence-providers" class="scp7" style="font-size: 14.5px; color: var(--text);">Evidence providers</a>
-    </div>
-    <div data-dc-tpl="682" style="display: flex; flex-direction: column; gap: 11px;">
-      <div data-dc-tpl="683" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">OPEN SOURCE</div>
-      <a data-dc-tpl="684" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Repository</a>
-      <a data-dc-tpl="685" href="https://github.com/daCodez/HIP/blob/master/docs/rules-engine.md" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Detection rules</a>
-      <a data-dc-tpl="686" href="https://github.com/daCodez/HIP/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Contributing</a>
-      <a data-dc-tpl="687" href="https://github.com/daCodez/HIP/issues" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Issues</a>
-    </div>
-    <div data-dc-tpl="688" style="display: flex; flex-direction: column; gap: 11px;">
-      <div data-dc-tpl="689" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PROJECT</div>
-      <a data-dc-tpl="690" href="https://github.com/daCodez/HIP/blob/master/docs/project-reference/HIP_Implementation_Backlog.md" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Roadmap</a>
-      <a data-dc-tpl="691" href="/privacy" class="scp7" style="font-size: 14.5px; color: var(--text);">Privacy approach</a>
-      <a data-dc-tpl="692" href="/appeals" class="scp7" style="font-size: 14.5px; color: var(--text);">Appeals policy</a>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:34px;display:flex;gap:20px;align-items:flex-start">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="1.9" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16.2h.01"></path></svg>
+    <div>
+      <h3 style="font-size:18px;font-weight:700;margin:0 0 8px">What HIP does not claim</h3>
+      <p style="font-size:15.5px;line-height:1.65;color:var(--muted);margin:0;max-width:720px;text-wrap:pretty">HIP does not prevent every threat, and a high score is not a guarantee of safety — it means the checks HIP ran, on the date it ran them, found no significant problems. Scores are evidence to reason with, not a verdict to outsource judgement to.</p>
     </div>
   </div>
-  <div data-dc-tpl="693" style="max-width: 1240px; margin: 0px auto; padding: 22px 32px 40px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; font-size: 13px; color: var(--muted);">
-    <span data-dc-tpl="694">HIP is an open-source project. A trust score reflects the checks HIP ran on a given date — not a guarantee of safety.</span>
-    <span data-dc-tpl="695" style="font-family: &quot;JetBrains Mono&quot;, monospace;">HIP · Human-Interactive Protocol</span>
-  </div></footer></div></div>
+</main>
+
+@code {
+    private void GoScan() => Nav.NavigateTo("/#scan");
+}

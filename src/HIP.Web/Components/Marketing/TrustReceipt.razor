@@ -1,0 +1,110 @@
+@inject IJSRuntime JS
+
+@* People screenshot scores. Give them a real artifact instead. *@
+
+<section data-rise style="max-width:1240px;margin:0 auto;padding:clamp(64px,7vw,100px) clamp(16px,3vw,32px)">
+  <div style="max-width:680px;margin-bottom:40px">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">ILLUSTRATIVE TRUST RECEIPT</div>
+    <h2 data-words style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">See what a scan receipt contains.</h2>
+    <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">This printable example shows the intended format: score, findings, date and rule version. It is not a live scan or an issued HIP receipt.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:26px;align-items:start">
+
+    <div id="hip-receipt" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:clamp(24px,3vw,34px)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding-bottom:20px;border-bottom:1px solid var(--border);margin-bottom:22px">
+        <div style="display:flex;align-items:center;gap:11px">
+          <img src="/images/public/marketing/hip-logo.png" alt="HIP" style="height:34px;width:auto;display:block" />
+          <span style="display:flex;flex-direction:column;line-height:1">
+            <span style="font-size:18px;font-weight:800;letter-spacing:-.01em;color:var(--text)">HIP</span>
+            <span style="font-size:8px;font-weight:600;letter-spacing:.06em;color:var(--muted);margin-top:4px">Human-Interactive Protocol</span>
+          </span>
+        </div>
+        <div style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7;color:var(--muted)">
+          <div>@Reference</div>
+          <div>@DateTime.Now.ToString("d MMM yyyy HH:mm")</div>
+        </div>
+      </div>
+
+      <div style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--muted);margin-bottom:10px">@Domain</div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:22px">
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:52px;font-weight:800;letter-spacing:-.035em;line-height:1;color:var(--action)">82</span>
+          <span style="font-size:15px;color:var(--muted)">/ 100</span>
+        </div>
+        <span style="padding:6px 13px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;background:rgba(34,197,94,.14);color:var(--ok)">Mostly Trusted</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px">
+        @foreach (var f in SiteData.Findings)
+        {
+          <div style="display:flex;align-items:flex-start;gap:11px">
+            <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:6px;background:@f.Dot"></span>
+            <span style="flex:1;min-width:0">
+              <span style="display:block;font-size:13.5px;font-weight:600;color:var(--text);line-height:1.35">@f.Label</span>
+              <span style="display:block;font-size:12.5px;color:var(--muted);line-height:1.45;margin-top:2px">@f.Plain</span>
+            </span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;white-space:nowrap;margin-top:2px;color:@f.StatusFg">@f.Delta</span>
+          </div>
+        }
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;padding-top:20px;border-top:1px solid var(--border);font-size:12px;line-height:1.6;color:var(--muted)">
+        <div><strong style="display:block;color:var(--text);font-weight:600">Rule set</strong>Illustrative example</div>
+        <div><strong style="display:block;color:var(--text);font-weight:600">Baseline</strong>70 (configurable)</div>
+        <div><strong style="display:block;color:var(--text);font-weight:600">Signals checked</strong>38 across 6 families</div>
+        <div><strong style="display:block;color:var(--text);font-weight:600">Verify at</strong>hip.example/r/@Domain</div>
+      </div>
+
+      <p style="font-size:11.5px;line-height:1.6;color:var(--muted);margin:20px 0 0">
+        A score describes what HIP checked on this date and what it found. It is not a guarantee of safety, and it does not describe how the site may behave later.
+      </p>
+    </div>
+
+    <div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:16px">RECEIPT FOR</div>
+        <div style="display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:0 14px;margin-bottom:18px">
+          <input @bind="Domain" @bind:event="oninput" placeholder="yourdomain.com" aria-label="Domain for the receipt"
+                 style="flex:1 1 0;min-width:0;border:0;outline:0;background:transparent;color:var(--text);font-size:15px;padding:13px 0;font-family:'JetBrains Mono',monospace" />
+        </div>
+        <button @onclick="Print" data-magnet data-h="h-bright"
+                style="width:100%;padding:13px;border:0;border-radius:10px;background:var(--action);color:var(--action-ink);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+          Print or save as PDF
+        </button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:11px">
+        @foreach (var p in Points)
+        {
+          <div style="display:flex;gap:11px;font-size:14px;line-height:1.55;color:var(--muted)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.4" stroke-linecap="round" style="flex-shrink:0;margin-top:3px"><path d="M20 6.5L9.5 17 4 11.5"></path></svg>
+            <span>@p</span>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</section>
+
+@code {
+    private string _domain = "example.com";
+
+    private string Domain
+    {
+        get => string.IsNullOrWhiteSpace(_domain) ? "example.com" : _domain.Trim().ToLowerInvariant();
+        set => _domain = value;
+    }
+
+    private string Reference => "HIP-" + Math.Abs(Domain.GetHashCode()).ToString().PadLeft(8, '0')[..8];
+
+    private static readonly string[] Points =
+    {
+        "Carries the rule version, so the score can always be reproduced.",
+        "States its own limits — no implied guarantee of safety.",
+        "Links back to a live result page that anyone can check.",
+        "Prints clean on one page, in dark or light theme."
+    };
+
+    private async Task Print() => await JS.InvokeVoidAsync("hip.printReceipt");
+}

@@ -1,148 +1,75 @@
 @page "/verification"
 @page "/verify"
 @attribute [AllowAnonymous]
-@layout PublicLayout
+@layout MarketingLayout
+@rendermode InteractiveServer
+@inject NavigationManager Nav
 
-<PageTitle>Verification | HIP</PageTitle>
+<PageTitle>Domain Verification and Trust Badges | HIP</PageTitle>
+<HeadContent>
+  <meta name="description" content="Prove you control your domain, resolve what HIP found, and earn a trust badge through verification and human review — not by registering." />
+  <meta property="og:title" content="Domain Verification and Trust Badges | HIP" />
+  <meta property="og:description" content="Prove you control your domain, resolve what HIP found, and earn a trust badge through verification and human review — not by registering." />
+</HeadContent>
 
-<div class="sc-host" data-sc-name="verify"><svg data-dc-tpl="7" width="0" height="0" aria-hidden="true" focusable="false" style="position: absolute;">
-  <defs data-dc-tpl="8">
-    <linearGradient data-dc-tpl="9" id="hipTealBlue" x1="0" y1="0" x2="1" y2="1">
-      <stop data-dc-tpl="10" offset="0" stop-color="#22D3EE"></stop><stop data-dc-tpl="11" offset="0.55" stop-color="#14B8A6"></stop><stop data-dc-tpl="12" offset="1" stop-color="#1F6FEB"></stop>
-    </linearGradient>
-  </defs></svg><div data-dc-tpl="13" data-theme="dark" data-motion="full" style="background: var(--bg); color: var(--text); min-height: 100vh; font-family: Satoshi, sans-serif;"><div data-dc-tpl="14" aria-hidden="true" style="position: fixed; inset: 0px; z-index: 70; pointer-events: none; opacity: 0.05; mix-blend-mode: overlay; background-image: none;"></div><div data-dc-tpl="15" style="position: fixed; top: 0px; left: 0px; right: 0px; height: 2px; z-index: 80; pointer-events: none;"><div data-dc-tpl="16" data-progress="" style="height: 100%; width: 0%; background: linear-gradient(90deg,var(--blue),var(--action)); transform-origin: left center;"></div></div><header data-dc-tpl="17" style="position: sticky; top: 0px; z-index: 50; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border);">
-  <div data-dc-tpl="18" style="max-width: 1240px; margin: 0px auto; padding: 14px clamp(16px, 3vw, 32px); display: flex; align-items: center; gap: clamp(10px, 1.4vw, 22px);">
-    <a data-dc-tpl="19" href="/" aria-label="HIP home" style="display: flex; align-items: center; gap: 11px; cursor: pointer; flex-shrink: 0; text-decoration: none;">
-      <img data-dc-tpl="20" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 40px; width: auto; display: block; flex-shrink: 0;">
-      <div data-dc-tpl="21" style="display: flex; flex-direction: column; line-height: 1;">
-        <span data-dc-tpl="22" style="font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); white-space: nowrap;">HIP</span>
-        <span data-dc-tpl="23" style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-top: 5px; white-space: nowrap;">Human-Interactive Protocol</span>
-      </div>
-    </a>
-
-    <select data-dc-tpl="24" data-nav-compact="" style="display: none; flex-shrink: 0; padding: 8px 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer;">
-      <option data-dc-tpl="25" value="home">Home</option>
-      <option data-dc-tpl="26" value="platform">Platform</option>
-      <option data-dc-tpl="27" value="how">How it works</option>
-      <option data-dc-tpl="28" value="verify" selected>Verification</option>
-      <option data-dc-tpl="29" value="dev">Developers</option>
-    </select>
-    <nav data-dc-tpl="30" data-nav-full="" style="display: flex; align-items: center; gap: 2px; margin-left: 4px; flex-shrink: 0;">
-
-        <a data-dc-tpl="32" href="/platform" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Platform</span></a>
-
-        <a data-dc-tpl="32" href="/how-it-works" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">How it works</span></a>
-
-        <a data-dc-tpl="32" href="/verification" aria-current="page" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--text);"><span class="sc-interp">Verification</span></a>
-
-        <a data-dc-tpl="32" href="/developers" class="scp0" style="background: none; border: 0px; padding: 8px 10px; border-radius: 8px; font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted);"><span class="sc-interp">Developers</span></a>
-
-    </nav>
-
-    <div data-dc-tpl="33" style="flex: 1 1 0%;"></div>
-
-
-    <button data-dc-tpl="36" title="Toggle theme" class="scp2" style="width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 9px; cursor: pointer; color: var(--muted); flex-shrink: 0;">
-      <svg data-dc-tpl="37" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path data-dc-tpl="38" d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3L4.9 4.9M19.1 19.1l-1.4-1.4M17.7 6.3l1.4-1.4M4.9 19.1l1.4-1.4"></path><circle data-dc-tpl="39" cx="12" cy="12" r="4.2"></circle></svg>
-    </button>
-    <a data-dc-tpl="40" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp3" style="display: flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid var(--border); background: var(--surface); border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--text); flex-shrink: 0;">
-      <svg data-dc-tpl="41" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path data-dc-tpl="42" d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 014 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.19c0 .21.14.46.55.38A8 8 0 008 0z"></path></svg>
-      <span data-dc-tpl="43" data-gh-label="">GitHub</span>
-    </a>
-    <a data-dc-tpl="44" href="/website-trust-scanner" class="scp4" style="padding: 10px 16px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; flex-shrink: 0; white-space: nowrap;">Check my domain</a>
-  </div></header><main data-dc-tpl="544" style="max-width: 1240px; margin: 0px auto; padding: clamp(56px, 6vw, 80px) clamp(16px, 3vw, 32px) 110px;">
-  <div data-dc-tpl="545" style="max-width: 680px; margin-bottom: 60px;">
-    <div data-dc-tpl="546" style="font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--action); margin-bottom: 16px;">FOR WEBSITE OWNERS</div>
-    <h1 data-dc-tpl="547" style="font-size: clamp(36px, 4.6vw, 52px); line-height: 1.06; letter-spacing: -0.03em; font-weight: 800; margin: 0px 0px 18px; text-wrap: balance;">Prove it once, then keep it honest.</h1>
-    <p data-dc-tpl="548" style="font-size: 19px; line-height: 1.6; color: var(--muted); margin: 0px; text-wrap: pretty;">Verification connects a domain to the people who run it. A verification record says the findings were resolved on a specific date — and expires so it cannot go stale.</p>
+<main style="max-width:1240px;margin:0 auto;padding:clamp(56px,6vw,80px) clamp(16px,3vw,32px) 110px">
+  <div style="max-width:680px;margin-bottom:60px">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:16px">FOR WEBSITE OWNERS</div>
+    <h1 style="font-size:clamp(36px,4.6vw,52px);line-height:1.06;letter-spacing:-.03em;font-weight:800;margin:0 0 18px;text-wrap:balance">Prove it once, then keep it honest.</h1>
+    <p style="font-size:19px;line-height:1.6;color:var(--muted);margin:0;text-wrap:pretty">Verification connects a domain to the people who run it. A verification record says the findings were resolved on a specific date — and expires so it cannot go stale.</p>
   </div>
 
-  <div data-dc-tpl="549" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; margin-bottom: 72px;">
-    <div data-dc-tpl="550" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px;">
-      <div data-dc-tpl="551" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12px; font-weight: 700; color: var(--action); margin-bottom: 14px;">STEP 01</div>
-      <h3 data-dc-tpl="552" style="font-size: 17px; font-weight: 700; margin: 0px 0px 9px;">Register the domain</h3>
-      <p data-dc-tpl="553" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px;">Create an account and add the domain you manage. A first scan runs immediately.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px;margin-bottom:72px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--action);margin-bottom:14px">STEP 01</div>
+      <h3 style="font-size:17px;font-weight:700;margin:0 0 9px">Register the domain</h3>
+      <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">Create an account and add the domain you manage. A first scan runs immediately.</p>
     </div>
-    <div data-dc-tpl="554" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px;">
-      <div data-dc-tpl="555" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12px; font-weight: 700; color: var(--action); margin-bottom: 14px;">STEP 02</div>
-      <h3 data-dc-tpl="556" style="font-size: 17px; font-weight: 700; margin: 0px 0px 9px;">Prove control</h3>
-      <p data-dc-tpl="557" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px;">Publish the TXT record HIP gives you. Nothing else is installed on your site.</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--action);margin-bottom:14px">STEP 02</div>
+      <h3 style="font-size:17px;font-weight:700;margin:0 0 9px">Prove control</h3>
+      <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">Publish the TXT record HIP gives you. Nothing else is installed on your site.</p>
     </div>
-    <div data-dc-tpl="558" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px;">
-      <div data-dc-tpl="559" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12px; font-weight: 700; color: var(--action); margin-bottom: 14px;">STEP 03</div>
-      <h3 data-dc-tpl="560" style="font-size: 17px; font-weight: 700; margin: 0px 0px 9px;">Resolve findings</h3>
-      <p data-dc-tpl="561" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px;">Work the list, re-scan, and appeal anything you believe is wrong.</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--action);margin-bottom:14px">STEP 03</div>
+      <h3 style="font-size:17px;font-weight:700;margin:0 0 9px">Resolve findings</h3>
+      <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">Work the list, re-scan, and appeal anything you believe is wrong.</p>
     </div>
-    <div data-dc-tpl="562" style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px;">
-      <div data-dc-tpl="563" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12px; font-weight: 700; color: var(--action); margin-bottom: 14px;">STEP 04</div>
-      <h3 data-dc-tpl="564" style="font-size: 17px; font-weight: 700; margin: 0px 0px 9px;">Earn the trust badge</h3>
-      <p data-dc-tpl="565" style="font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0px;">A reviewer checks the evidence. If it is granted, you can embed the badge.</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--action);margin-bottom:14px">STEP 04</div>
+      <h3 style="font-size:17px;font-weight:700;margin:0 0 9px">Earn the trust badge</h3>
+      <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">A reviewer checks the evidence. If it is granted, you can embed the badge.</p>
     </div>
   </div>
 
-  <div data-dc-tpl="566" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px; margin-bottom: 72px;">
-    <div data-dc-tpl="567" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 34px;">
-      <h2 data-dc-tpl="568" style="font-size: 24px; font-weight: 700; margin: 0px 0px 14px; letter-spacing: -0.02em;">The DNS proof</h2>
-      <p data-dc-tpl="569" style="font-size: 15.5px; line-height: 1.65; color: var(--muted); margin: 0px 0px 20px;">One TXT record, unique to your domain and account. Remove it and verification lapses.</p>
-      <div data-dc-tpl="570" style="background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px; font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12.5px; line-height: 1.9; overflow: auto;">
-        <div data-dc-tpl="571"><span data-dc-tpl="572" style="color: var(--muted);">host&nbsp;&nbsp;</span>_hip.yourdomain.com</div>
-        <div data-dc-tpl="573"><span data-dc-tpl="574" style="color: var(--muted);">type&nbsp;&nbsp;</span>TXT</div>
-        <div data-dc-tpl="575"><span data-dc-tpl="576" style="color: var(--muted);">value&nbsp;</span><span data-dc-tpl="577" style="color: var(--action);">hip-verify=8f2c41d9e0b7a6</span></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:24px;margin-bottom:72px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:34px">
+      <h2 style="font-size:24px;font-weight:700;margin:0 0 14px;letter-spacing:-.02em">The DNS proof</h2>
+      <p style="font-size:15.5px;line-height:1.65;color:var(--muted);margin:0 0 20px">One TXT record, unique to your domain and account. Remove it and verification lapses.</p>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.9;overflow:auto">
+        <div><span style="color:var(--muted)">host&nbsp;&nbsp;</span>_hip.yourdomain.com</div>
+        <div><span style="color:var(--muted)">type&nbsp;&nbsp;</span>TXT</div>
+        <div><span style="color:var(--muted)">value&nbsp;</span><span style="color:var(--action)">hip-verify=8f2c41d9e0b7a6</span></div>
       </div>
     </div>
-    <div data-dc-tpl="578" style="background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 34px;">
-      <h2 data-dc-tpl="579" style="font-size: 24px; font-weight: 700; margin: 0px 0px 14px; letter-spacing: -0.02em;">Appeals &amp; manual review</h2>
-      <p data-dc-tpl="580" style="font-size: 15.5px; line-height: 1.65; color: var(--muted); margin: 0px 0px 20px;">If a rule misreads your site, contest it. Reviewers see the same evidence you do.</p>
-      <div data-dc-tpl="581" style="display: flex; flex-direction: column; gap: 12px;">
-        <div data-dc-tpl="582" style="display: flex; align-items: center; gap: 12px; padding: 13px 15px; background: var(--bg); border: 1px solid var(--border); border-radius: 11px;"><span data-dc-tpl="583" style="padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(245, 158, 11, 0.14); color: var(--warn);">OPEN</span><span data-dc-tpl="584" style="font-size: 14.5px; color: var(--text); flex: 1 1 0%;">Urgency wording — checkout page</span><span data-dc-tpl="585" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12px; color: var(--muted);">2d</span></div>
-        <div data-dc-tpl="586" style="display: flex; align-items: center; gap: 12px; padding: 13px 15px; background: var(--bg); border: 1px solid var(--border); border-radius: 11px;"><span data-dc-tpl="587" style="padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(31, 111, 235, 0.14); color: var(--blue);">IN REVIEW</span><span data-dc-tpl="588" style="font-size: 14.5px; color: var(--text); flex: 1 1 0%;">Third-party script attribution</span><span data-dc-tpl="589" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12px; color: var(--muted);">6h</span></div>
-        <div data-dc-tpl="590" style="display: flex; align-items: center; gap: 12px; padding: 13px 15px; background: var(--bg); border: 1px solid var(--border); border-radius: 11px;"><span data-dc-tpl="591" style="padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(34, 197, 94, 0.14); color: var(--ok);">UPHELD</span><span data-dc-tpl="592" style="font-size: 14.5px; color: var(--text); flex: 1 1 0%;">Rule updated for all domains</span><span data-dc-tpl="593" style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 12px; color: var(--muted);">3w</span></div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:34px">
+      <h2 style="font-size:24px;font-weight:700;margin:0 0 14px;letter-spacing:-.02em">Appeals &amp; manual review</h2>
+      <p style="font-size:15.5px;line-height:1.65;color:var(--muted);margin:0 0 20px">If a rule misreads your site, contest it. Reviewers see the same evidence you do.</p>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px;padding:13px 15px;background:var(--bg);border:1px solid var(--border);border-radius:11px"><span style="padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(245,158,11,.14);color:var(--warn)">OPEN</span><span style="font-size:14.5px;color:var(--text);flex:1">Urgency wording — checkout page</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">2d</span></div>
+        <div style="display:flex;align-items:center;gap:12px;padding:13px 15px;background:var(--bg);border:1px solid var(--border);border-radius:11px"><span style="padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(31,111,235,.14);color:var(--blue)">IN REVIEW</span><span style="font-size:14.5px;color:var(--text);flex:1">Third-party script attribution</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">6h</span></div>
+        <div style="display:flex;align-items:center;gap:12px;padding:13px 15px;background:var(--bg);border:1px solid var(--border);border-radius:11px"><span style="padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(34,197,94,.14);color:var(--ok)">UPHELD</span><span style="font-size:14.5px;color:var(--text);flex:1">Rule updated for all domains</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">3w</span></div>
       </div>
     </div>
   </div>
 
-  <div data-dc-tpl="594" style="text-align: center; padding: clamp(38px, 5vw, 56px) clamp(20px, 3vw, 32px); background: var(--surface); border: 1px solid var(--border); border-radius: 22px;">
-    <h2 data-dc-tpl="595" style="font-size: clamp(26px, 3vw, 34px); line-height: 1.12; letter-spacing: -0.025em; font-weight: 800; margin: 0px 0px 14px;">Start with a scan.</h2>
-    <p data-dc-tpl="596" style="font-size: 17px; color: var(--muted); margin: 0px auto 28px; max-width: 460px;">Verification only makes sense once you know what is there.</p>
-<a data-dc-tpl="597" href="/website-trust-scanner" class="scp4" style="padding: 13px 24px; background: var(--action); color: var(--action-ink); border: 0px; border-radius: 10px; font-size: 15.5px; font-weight: 700; cursor: pointer;">Check my domain</a>
-  </div></main><footer data-dc-tpl="667" style="border-top: 1px solid var(--border); background: var(--surface);">
-  <div data-dc-tpl="668" style="max-width: 1240px; margin: 0px auto; padding: 56px 32px 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 40px;">
-    <div data-dc-tpl="669">
-      <div data-dc-tpl="670" style="display: flex; align-items: center; gap: 11px; margin-bottom: 16px;">
-        <img data-dc-tpl="671" src="/images/public/reference/hip-shield.png" alt="HIP" style="height: 42px; width: auto; display: block; flex-shrink: 0;">
-        <div data-dc-tpl="672" style="display: flex; flex-direction: column; line-height: 1;">
-          <span data-dc-tpl="673" style="font-size: 21px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); white-space: nowrap;">HIP</span>
-          <span data-dc-tpl="674" style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-top: 5px; white-space: nowrap;">Human-Interactive Protocol</span>
-        </div>
-      </div>
-      <p data-dc-tpl="675" style="font-size: 14.5px; line-height: 1.65; color: var(--muted); margin: 0px; max-width: 280px;">An open trust and risk layer for websites and online content. Community-built, evidence-first.</p>
-    </div>
-    <div data-dc-tpl="676" style="display: flex; flex-direction: column; gap: 11px;">
-      <div data-dc-tpl="677" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PRODUCT</div>
-      <a data-dc-tpl="678" href="/platform" class="scp7" style="font-size: 14.5px; color: var(--text);">Platform</a>
-      <a data-dc-tpl="679" href="/how-it-works" class="scp7" style="font-size: 14.5px; color: var(--text);">How it works</a>
-      <a data-dc-tpl="680" href="/verification" class="scp7" style="font-size: 14.5px; color: var(--text);">Verification</a>
-      <a data-dc-tpl="681" href="/developers" class="scp7" style="font-size: 14.5px; color: var(--text);">Developers</a>
-      <a href="/methodology" class="scp7" style="font-size: 14.5px; color: var(--text);">Methodology</a>
-      <a href="/signals" class="scp7" style="font-size: 14.5px; color: var(--text);">Signals</a>
-      <a href="/score-interpretation" class="scp7" style="font-size: 14.5px; color: var(--text);">Score guide</a>
-      <a href="/evidence-providers" class="scp7" style="font-size: 14.5px; color: var(--text);">Evidence providers</a>
-    </div>
-    <div data-dc-tpl="682" style="display: flex; flex-direction: column; gap: 11px;">
-      <div data-dc-tpl="683" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">OPEN SOURCE</div>
-      <a data-dc-tpl="684" href="https://github.com/daCodez/HIP" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Repository</a>
-      <a data-dc-tpl="685" href="https://github.com/daCodez/HIP/blob/master/docs/rules-engine.md" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Detection rules</a>
-      <a data-dc-tpl="686" href="https://github.com/daCodez/HIP/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Contributing</a>
-      <a data-dc-tpl="687" href="https://github.com/daCodez/HIP/issues" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Issues</a>
-    </div>
-    <div data-dc-tpl="688" style="display: flex; flex-direction: column; gap: 11px;">
-      <div data-dc-tpl="689" style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px;">PROJECT</div>
-      <a data-dc-tpl="690" href="https://github.com/daCodez/HIP/blob/master/docs/project-reference/HIP_Implementation_Backlog.md" target="_blank" rel="noopener noreferrer" class="scp7" style="font-size: 14.5px; color: var(--text);">Roadmap</a>
-      <a data-dc-tpl="691" href="/privacy" class="scp7" style="font-size: 14.5px; color: var(--text);">Privacy approach</a>
-      <a data-dc-tpl="692" href="/appeals" class="scp7" style="font-size: 14.5px; color: var(--text);">Appeals policy</a>
-    </div>
+  <div style="text-align:center;padding:clamp(38px,5vw,56px) clamp(20px,3vw,32px);background:var(--surface);border:1px solid var(--border);border-radius:22px">
+    <h2 style="font-size:clamp(26px,3vw,34px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 14px">Start with a scan.</h2>
+    <p style="font-size:17px;color:var(--muted);margin:0 auto 28px;max-width:460px">Verification only makes sense once you know what is there.</p>
+    <button @onclick="GoScan" style="padding:13px 24px;background:var(--action);color:var(--action-ink);border:0;border-radius:10px;font-size:15.5px;font-weight:700;cursor:pointer" data-h="h-bright">Check my domain</button>
   </div>
-  <div data-dc-tpl="693" style="max-width: 1240px; margin: 0px auto; padding: 22px 32px 40px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; font-size: 13px; color: var(--muted);">
-    <span data-dc-tpl="694">HIP is an open-source project. A trust score reflects the checks HIP ran on a given date — not a guarantee of safety.</span>
-    <span data-dc-tpl="695" style="font-family: &quot;JetBrains Mono&quot;, monospace;">HIP · Human-Interactive Protocol</span>
-  </div></footer></div></div>
+</main>
+
+@code {
+    private void GoScan() => Nav.NavigateTo("/#scan");
+}

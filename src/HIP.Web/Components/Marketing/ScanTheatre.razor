@@ -1,0 +1,113 @@
+@implements IDisposable
+
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px;box-shadow:0 20px 60px rgba(0,0,0,.22);position:relative;overflow:hidden">
+  <div class="sweep"></div>
+
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+    <div class="spinner"></div>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">scanning @Domain</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--muted);white-space:nowrap">@Elapsed ms</span>
+  </div>
+
+  <div style="height:3px;border-radius:2px;background:var(--elev);overflow:hidden;margin-bottom:22px">
+    <div style="height:100%;width:@(Percent)%;background:linear-gradient(90deg,var(--blue),var(--action));transition:width .3s linear"></div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    @for (var i = 0; i < Stages.Length; i++)
+    {
+      var s = Stages[i];
+      var state = i < Index ? 2 : i == Index ? 1 : 0;
+      <div style="display:flex;align-items:flex-start;gap:12px;opacity:@(state == 0 ? "0.45" : "1");transition:opacity .3s">
+        <span style="width:16px;height:16px;flex-shrink:0;margin-top:2px;display:grid;place-items:center">
+          @if (state == 2)
+          {
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="3" stroke-linecap="round"><path d="M20 6.5L9.5 17 4 11.5"></path></svg>
+          }
+          else if (state == 1)
+          {
+            <span class="pulse-dot"></span>
+          }
+          else
+          {
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--border)"></span>
+          }
+        </span>
+
+        <span style="flex:1;min-width:0">
+          <span style="display:block;font-size:14px;font-weight:600;color:var(--text);line-height:1.35">@s.Label</span>
+          @if (state >= 1)
+          {
+            <span style="display:block;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:3px">@s.Detail</span>
+          }
+        </span>
+
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:nowrap;margin-top:2px;color:@(state == 2 ? "var(--ok)" : "var(--muted)")">
+          @(state == 2 ? s.Ms + "ms" : state == 1 ? "…" : "")
+        </span>
+      </div>
+    }
+  </div>
+</div>
+
+@code {
+    [Parameter] public string Domain { get; set; } = "example.com";
+    [Parameter] public EventCallback OnDone { get; set; }
+
+    private record Stage(string Label, string Detail, int Ms);
+
+    private static readonly Stage[] Stages =
+    {
+        new("Resolving DNS", "A, AAAA, MX, TXT \u00b7 authoritative answer", 180),
+        new("Opening connection", "TLS 1.3 \u00b7 handshake complete", 240),
+        new("Reading certificate", "chain validated \u00b7 74 days to expiry", 160),
+        new("Fetching the page", "200 OK \u00b7 following 1 redirect", 420),
+        new("Reading page behaviour", "forms, scripts, outbound destinations", 310),
+        new("Querying providers", "3 independent services \u00b7 attributed", 520),
+        new("Applying the example rule set", "Illustrative signals scored", 140)
+    };
+
+    private int Index;
+    private int Elapsed;
+    private CancellationTokenSource? _cts;
+
+    private int Percent => (int)((double)Index / Stages.Length * 100);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
+        try
+        {
+            for (var i = 0; i < Stages.Length; i++)
+            {
+                Index = i;
+                var ms = Stages[i].Ms;
+                var ticks = Math.Max(1, ms / 40);
+
+                for (var t = 0; t < ticks; t++)
+                {
+                    await Task.Delay(40, token);
+                    Elapsed += 40;
+                    StateHasChanged();
+                }
+            }
+
+            Index = Stages.Length;
+            StateHasChanged();
+            await Task.Delay(220, token);
+            await OnDone.InvokeAsync();
+        }
+        catch (TaskCanceledException)
+        {
+            // Component was torn down mid-scan.
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}

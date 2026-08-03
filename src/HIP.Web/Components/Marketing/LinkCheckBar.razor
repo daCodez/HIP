@@ -1,0 +1,172 @@
+@using System.Globalization
+
+@* Structural URL analysis. Everything here is computed from the text itself —
+   no request is made, so it works offline and reveals nothing about the visitor. *@
+
+<div style="position:fixed;left:0;right:0;bottom:0;z-index:60;background:color-mix(in srgb, var(--surface) 94%, transparent);backdrop-filter:blur(14px);border-top:1px solid var(--border)">
+  <div style="max-width:1240px;margin:0 auto;padding:12px clamp(16px,3vw,32px);display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+
+    <span style="display:flex;align-items:center;gap:9px;flex-shrink:0">
+      <img src="/images/public/marketing/hip-logo.png" alt="" style="height:24px;width:auto;display:block" />
+      <span style="font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--muted);white-space:nowrap">CHECK A LINK</span>
+    </span>
+
+    <div style="flex:1 1 260px;min-width:0;display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid @(Verdict is null ? "var(--border)" : Verdict.Fg);border-radius:10px;padding:0 13px;transition:border-color .25s">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><path d="M9.5 13.5a4 4 0 015.7 0l3-3a4 4 0 10-5.7-5.7l-1.6 1.6"></path><path d="M14.5 10.5a4 4 0 01-5.7 0l-3 3a4 4 0 105.7 5.7l1.6-1.6"></path></svg>
+      <input @bind="Url" @bind:event="oninput" placeholder="Paste any link — checked instantly, nothing is sent"
+             aria-label="Paste a link to check"
+             style="flex:1 1 0;min-width:0;border:0;outline:0;background:transparent;color:var(--text);font-size:14px;padding:11px 0;font-family:'JetBrains Mono',monospace" />
+      @if (!string.IsNullOrWhiteSpace(Url))
+      {
+        <button @onclick="() => Url = string.Empty" aria-label="Clear" data-h="h-fg"
+                style="flex-shrink:0;background:none;border:0;color:var(--muted);font-size:16px;line-height:1;cursor:pointer;padding:4px">&times;</button>
+      }
+    </div>
+
+    @if (Verdict is not null)
+    {
+      <span style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;letter-spacing:-.02em;color:@Verdict.Fg">@Verdict.Score</span>
+        <span style="padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;background:@Verdict.Bg;color:@Verdict.Fg">@Verdict.Band</span>
+      </span>
+    }
+  </div>
+
+  @if (Verdict is not null && Verdict.Notes.Count > 0)
+  {
+    <div style="max-width:1240px;margin:0 auto;padding:0 clamp(16px,3vw,32px) 14px;display:flex;gap:8px;flex-wrap:wrap">
+      @foreach (var n in Verdict.Notes)
+      {
+        <span style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;font-size:12.5px;background:var(--bg);border:1px solid var(--border);color:var(--text)">
+          <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:@ToneColors.Fg(n.Tone)"></span>
+          @n.Text
+        </span>
+      }
+      <span style="font-size:12px;color:var(--muted);align-self:center">Structure only — a full scan also reads the page.</span>
+    </div>
+  }
+</div>
+
+@code {
+    private string Url = "";
+
+    private record Note(Tone Tone, string Text);
+
+    private class Result
+    {
+        public int Score { get; init; }
+        public string Band { get; init; } = "";
+        public Tone Tone { get; init; }
+        public List<Note> Notes { get; init; } = new();
+        public string Fg => ToneColors.Fg(Tone);
+        public string Bg => ToneColors.Bg(Tone);
+    }
+
+    private static readonly char[] Cyrillic = { '\u0430', '\u0441', '\u0435', '\u043E', '\u0440', '\u0445', '\u0443', '\u0455' };
+
+    private Result? Verdict
+    {
+        get
+        {
+            var raw = (Url ?? "").Trim();
+            if (raw.Length < 4) return null;
+
+            var notes = new List<Note>();
+            var score = 70;
+
+            var scheme = raw.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? "https"
+                : raw.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? "http"
+                : "";
+
+            var rest = raw;
+            if (scheme != "") rest = raw[(raw.IndexOf("://", StringComparison.Ordinal) + 3)..];
+
+            var atIndex = rest.IndexOf('@');
+            var slash = rest.IndexOf('/');
+            var host = (slash > 0 ? rest[..slash] : rest);
+            if (atIndex > 0 && (slash < 0 || atIndex < slash))
+            {
+                notes.Add(new(Tone.Risk, "Credentials before an @ — the real host is after it"));
+                score -= 30;
+                host = host[(host.IndexOf('@') + 1)..];
+            }
+
+            host = host.Split(':')[0].ToLowerInvariant();
+            if (host.Length == 0) return null;
+
+            if (scheme == "http")
+            {
+                notes.Add(new(Tone.Risk, "Not encrypted (http)"));
+                score -= 18;
+            }
+            else if (scheme == "https")
+            {
+                notes.Add(new(Tone.Ok, "Encrypted (https)"));
+                score += 12;
+            }
+
+            if (host.Any(c => Cyrillic.Contains(c)))
+            {
+                notes.Add(new(Tone.Risk, "Contains look-alike non-Latin characters"));
+                score -= 35;
+            }
+            else if (host.StartsWith("xn--") || host.Contains(".xn--"))
+            {
+                notes.Add(new(Tone.Warn, "Internationalised domain — verify it reads as expected"));
+                score -= 8;
+            }
+
+            if (System.Net.IPAddress.TryParse(host, out _))
+            {
+                notes.Add(new(Tone.Risk, "A raw IP address, not a domain name"));
+                score -= 25;
+            }
+
+            var labels = host.Split('.');
+            if (labels.Length >= 4)
+            {
+                notes.Add(new(Tone.Warn, $"Deep subdomain — the real domain is {RegistrableDomain(labels)}"));
+                score -= 10;
+            }
+
+            var hyphens = host.Count(c => c == '-');
+            if (hyphens >= 3)
+            {
+                notes.Add(new(Tone.Warn, $"{hyphens} hyphens — a common padding pattern"));
+                score -= 8;
+            }
+
+            if (host.Contains("rn") && !host.Contains("rna") && !host.Contains("rne"))
+            {
+                notes.Add(new(Tone.Warn, "Contains \u2018rn\u2019, which reads as \u2018m\u2019 at a glance"));
+                score -= 6;
+            }
+
+            if (host.Length > 40)
+            {
+                notes.Add(new(Tone.Warn, "Unusually long host name"));
+                score -= 5;
+            }
+
+            if (notes.Count == 0 || notes.All(n => n.Tone == Tone.Ok))
+            {
+                notes.Add(new(Tone.Ok, "No structural warning signs"));
+                score += 6;
+            }
+
+            score = Math.Clamp(score, 0, 100);
+            var tone = score >= 70 ? Tone.Ok : score >= 45 ? Tone.Warn : Tone.Risk;
+
+            return new Result
+            {
+                Score = score,
+                Tone = tone,
+                Band = score >= 85 ? "Trusted" : score >= 70 ? "Mostly Trusted" : score >= 45 ? "Needs Review" : "High Risk",
+                Notes = notes
+            };
+        }
+    }
+
+    private static string RegistrableDomain(string[] labels) =>
+        labels.Length >= 2 ? string.Join('.', labels[^2..]) : string.Join('.', labels);
+}

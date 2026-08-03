@@ -1,0 +1,150 @@
+@* Try-before-you-install: a fake browser you can actually click around in. *@
+
+<section data-rise style="max-width:1240px;margin:0 auto;padding:clamp(64px,7vw,100px) clamp(16px,3vw,32px)">
+  <div style="max-width:680px;margin-bottom:40px">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">EXTENSION SIMULATOR</div>
+    <h2 data-words style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">Click around. See when it speaks up.</h2>
+    <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">A working model of the browser extension. Open the sites in the sidebar and watch the toolbar badge — it stays quiet until something is genuinely wrong.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start">
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:16px">OPEN A SITE</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        @foreach (var s in Sites)
+        {
+          <button @onclick="() => Visit(s)" data-h="h-elev"
+                  style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid @(Current.Url == s.Url ? "var(--action)" : "var(--border)");background:@(Current.Url == s.Url ? "var(--tint)" : "var(--bg)");border-radius:11px;padding:12px 14px;cursor:pointer;font-family:inherit">
+            <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:@ToneColors.Fg(s.Tone)"></span>
+            <span style="flex:1;min-width:0">
+              <span style="display:block;font-size:14px;font-weight:600;color:var(--text);line-height:1.35">@s.Title</span>
+              <span style="display:block;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@s.Url</span>
+            </span>
+          </button>
+        }
+      </div>
+      <p style="font-size:12.5px;line-height:1.55;color:var(--muted);margin:16px 0 0">All four are fictional. Nothing loads from the network.</p>
+    </div>
+
+    <div style="grid-column:span 1;min-width:0">
+      <div style="border:1px solid var(--border);border-radius:16px;overflow:hidden;background:var(--surface);box-shadow:0 20px 56px rgba(0,0,0,.28)">
+
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--elev)">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;margin-left:6px;padding:6px 11px;background:var(--bg);border:1px solid var(--border);border-radius:999px">
+            @if (Current.Https)
+            {
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.4" stroke-linecap="round" style="flex-shrink:0"><rect x="4" y="10.5" width="16" height="10" rx="2.5"></rect><path d="M8 10.5V7.5a4 4 0 018 0v3"></path></svg>
+            }
+            else
+            {
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2.4" stroke-linecap="round" style="flex-shrink:0"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 8v4.5M12 16h.01"></path></svg>
+            }
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@Current.Url</span>
+          </div>
+
+          @* the extension's toolbar badge *@
+          <button @onclick="TogglePopup" title="HIP" data-h="h-bd"
+                  style="position:relative;display:grid;place-items:center;width:30px;height:30px;flex-shrink:0;border:1px solid var(--border);background:var(--bg);border-radius:8px;cursor:pointer">
+            <img src="/images/public/marketing/hip-logo.png" alt="HIP" style="height:17px;width:auto;display:block" />
+            <span style="position:absolute;bottom:-5px;right:-5px;min-width:19px;height:17px;padding:0 4px;display:grid;place-items:center;border-radius:999px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;background:@ToneColors.Fg(Current.Tone);color:@(Current.Tone == Tone.Warn ? "#1B1204" : "#04121B")">@Current.Score</span>
+          </button>
+        </div>
+
+        <div style="position:relative;min-height:290px">
+          <div style="padding:30px 26px;display:flex;flex-direction:column;gap:14px;filter:@(Blocked ? "blur(3px)" : "none");transition:filter .3s">
+            <div style="font-size:17px;font-weight:800;letter-spacing:-.01em;color:var(--text)">@Current.Title</div>
+            <div style="font-size:13.5px;color:var(--muted)">@Current.Tagline</div>
+            @if (Current.Urgency is not null)
+            {
+              <div style="font-size:12.5px;line-height:1.5;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 12px">@Current.Urgency</div>
+            }
+            <div style="height:36px;border:1px solid var(--border);border-radius:9px;background:var(--bg);display:flex;align-items:center;padding:0 12px;font-size:13px;color:var(--muted)">Email address</div>
+            <div style="height:36px;border:1px solid var(--border);border-radius:9px;background:var(--bg);display:flex;align-items:center;padding:0 12px;font-size:13px;color:var(--muted)">Password</div>
+            <div style="height:36px;border-radius:9px;background:var(--action);display:grid;place-items:center;font-size:13px;font-weight:700;color:var(--action-ink)">Sign in</div>
+          </div>
+
+          @if (Blocked)
+          {
+            <div style="position:absolute;inset:0;display:grid;place-items:center;padding:26px;background:color-mix(in srgb, var(--bg) 82%, transparent)">
+              <div style="max-width:380px;text-align:center;background:var(--surface);border:1px solid var(--danger);border-radius:16px;padding:26px;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" style="margin-bottom:14px"><path d="M12 3l9.5 17H2.5L12 3z"></path><path d="M12 10v4M12 17h.01"></path></svg>
+                <div style="font-size:19px;font-weight:800;letter-spacing:-.015em;color:var(--text);margin-bottom:10px">HIP stopped this page</div>
+                <div style="font-size:14px;line-height:1.6;color:var(--muted);margin-bottom:18px">@Current.BlockReason</div>
+                <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+                  <button @onclick="() => Visit(Sites[0])" data-h="h-bright" style="padding:10px 16px;border:0;border-radius:9px;background:var(--action);color:var(--action-ink);font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit">Take me somewhere safe</button>
+                  <button @onclick="Dismiss" data-h="h-bd" style="padding:10px 16px;border:1px solid var(--border);border-radius:9px;background:transparent;color:var(--muted);font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit">Continue anyway</button>
+                </div>
+              </div>
+            </div>
+          }
+
+          @if (PopupOpen)
+          {
+            <div style="position:absolute;top:10px;right:12px;width:270px;max-width:calc(100% - 24px);background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.45)">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:800;letter-spacing:-.03em;color:@ToneColors.Fg(Current.Tone)">@Current.Score</span>
+                <span style="padding:4px 11px;border-radius:999px;font-size:11px;font-weight:700;background:@ToneColors.Bg(Current.Tone);color:@ToneColors.Fg(Current.Tone)">@Current.Band</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:9px">
+                @foreach (var r in Current.Reasons)
+                {
+                  <div style="display:flex;align-items:flex-start;gap:9px">
+                    <span style="width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:6px;background:@ToneColors.Fg(Current.Tone)"></span>
+                    <span style="font-size:12.5px;line-height:1.45;color:var(--muted)">@r</span>
+                  </div>
+                }
+              </div>
+              <button @onclick="TogglePopup" data-h="h-bd" style="margin-top:14px;width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">Close</button>
+            </div>
+          }
+        </div>
+      </div>
+
+      <p style="font-size:13px;line-height:1.6;color:var(--muted);margin:16px 0 0">
+        Three of these four sites never interrupt you. That restraint is the design goal — a warning only means something if it is rare.
+      </p>
+    </div>
+  </div>
+</section>
+
+@code {
+    private record Site(string Title, string Url, string Tagline, bool Https, int Score, string Band, Tone Tone,
+                        string[] Reasons, string? Urgency = null, string? BlockReason = null);
+
+    private static readonly Site[] Sites =
+    {
+        new("Ashgrove Library", "ashgrove-library.org/account", "Sign in to reserve a book", true, 93, "Trusted", Tone.Ok,
+            new[] { "Connection is encrypted", "Domain registered 11 years ago", "No harmful behaviour found" }),
+
+        new("Parcelo Delivery", "parcelo.com/track", "Track your delivery", true, 88, "Trusted", Tone.Ok,
+            new[] { "Connection is encrypted", "Domain ownership verified", "One minor finding: weak email protection" }),
+
+        new("Meridian Utilities", "meridian-utilities.co/billing", "View your latest bill", true, 61, "Needs Review", Tone.Warn,
+            new[] { "Certificate expires in 4 days", "A new third-party script appeared", "No listings across providers" }),
+
+        new("Northgate Bank", "northgate-bank.secure-verify-login.com", "Verify your account", false, 19, "High Risk", Tone.Risk,
+            new[] { "Password field submits over plain HTTP", "The real domain is secure-verify-login.com", "Pressure wording detected" },
+            Urgency: "Your account will be locked in 24 hours. Verify now to avoid suspension.",
+            BlockReason: "This page asks for a password over an unencrypted connection, and the domain does not belong to the brand it displays.")
+    };
+
+    private Site Current = Sites[0];
+    private bool PopupOpen;
+    private bool Dismissed;
+
+    private bool Blocked => Current.Tone == Tone.Risk && !Dismissed;
+
+    private void Visit(Site s)
+    {
+        Current = s;
+        Dismissed = false;
+        PopupOpen = false;
+    }
+
+    private void TogglePopup() => PopupOpen = !PopupOpen;
+
+    private void Dismiss() => Dismissed = true;
+}
