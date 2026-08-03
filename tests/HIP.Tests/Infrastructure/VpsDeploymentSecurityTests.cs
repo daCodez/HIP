@@ -178,6 +178,7 @@ public sealed class VpsDeploymentSecurityTests
                 Assert.That(dockerfile, Does.Match(@"ARG OPENSSL_REVISION=[a-f0-9]{40}"), dockerfilePath);
                 Assert.That(dockerfile, Does.Match(@"ARG SOFTHSM_REVISION=[a-f0-9]{40}"), dockerfilePath);
                 Assert.That(dockerfile, Does.Contain("grep -q '^#define WITH_ML_DSA' config.h"), dockerfilePath);
+                Assert.That(dockerfile, Does.Contain("/usr/local/lib/libdl.so"), dockerfilePath);
             }
         });
     }

@@ -35,12 +35,15 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl libltdl7 libsqlite3-0 \
     && rm -rf /var/lib/apt/lists/* \
+    && libdl_path="$(find /lib /usr/lib -name libdl.so.2 -print -quit)" \
+    && test -n "$libdl_path" \
+    && ln -s "$libdl_path" /usr/local/lib/libdl.so \
     && install -d -o 1654 -g 1654 /var/lib/softhsm/tokens
 COPY --from=softhsm-build /opt/softhsm-root/usr/local/ /usr/local/
 COPY --from=softhsm-build /opt/openssl/ /opt/openssl/
 COPY deploy/softhsm/softhsm2.conf /etc/softhsm2.conf
 ENV PATH=/opt/openssl/bin:$PATH \
-    LD_LIBRARY_PATH=/opt/openssl/lib64:/opt/openssl/lib \
+    LD_LIBRARY_PATH=/usr/local/lib:/opt/openssl/lib64:/opt/openssl/lib \
     SOFTHSM2_CONF=/etc/softhsm2.conf
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
