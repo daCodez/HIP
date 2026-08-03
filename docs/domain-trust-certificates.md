@@ -113,7 +113,7 @@ The default application registration uses an unavailable managed signer and an e
 
 Key rotation adds a new managed key and public lifecycle record before authorization, switches issuance only after verification succeeds, retains old public keys while certificates remain verifiable, and revokes a compromised key through the existing key lifecycle. Rotation must never copy private material into application configuration.
 
-The provider model supports ML-DSA-65 verification and an explicitly configured SoftHSM PKCS #11 starter signer. This provides post-quantum algorithm interoperability, but SoftHSM remains software-backed custody on the application host. HIP does not describe that deployment as a hardware HSM, independently managed custody, or an audited production trust root. Those stronger claims require an audited provider, managed key custody integration, interoperability evidence, and deployment evidence.
+The provider model supports ML-DSA-65 verification and an explicitly configured SoftHSM PKCS #11 starter signer. This provides post-quantum algorithm interoperability, but SoftHSM remains software-backed custody on the application host and is not quantum-resistant by itself. HIP does not describe that deployment as a hardware HSM, independently managed custody, or an audited production trust root. Those stronger claims require an audited provider, managed key custody integration, interoperability evidence, and deployment evidence.
 
 ## Development with .NET Aspire
 
