@@ -147,6 +147,16 @@ public sealed class HipOpenIdConnectEvents(
     }
 
     /// <inheritdoc />
+    public override Task RedirectToIdentityProviderForSignOut(RedirectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        // HIP intentionally does not persist raw OIDC tokens in its session cookie. Keycloak accepts the
+        // registered confidential client identifier instead of an id_token_hint for RP-initiated logout.
+        context.ProtocolMessage.ClientId = options.ClientId;
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public override Task RemoteFailure(RemoteFailureContext context)
     {
         ArgumentNullException.ThrowIfNull(context);

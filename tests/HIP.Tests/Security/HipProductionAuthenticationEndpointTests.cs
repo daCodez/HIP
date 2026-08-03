@@ -337,6 +337,7 @@ public sealed class HipProductionAuthenticationEndpointTests
             "/login",
             sessionCookie);
         var setCookies = response.Headers.GetValues("Set-Cookie").ToArray();
+        var logoutQuery = QueryHelpers.ParseQuery(response.Headers.Location!.Query);
 
         Assert.Multiple(() =>
         {
@@ -347,6 +348,11 @@ public sealed class HipProductionAuthenticationEndpointTests
             Assert.That(
                 response.Headers.Location?.GetLeftPart(UriPartial.Path),
                 Is.EqualTo(HipProductionAuthenticationTestHost.IdentityProviderEndSessionEndpoint));
+            Assert.That(logoutQuery["client_id"].ToString(), Is.EqualTo("hip-web-test"));
+            Assert.That(
+                logoutQuery["post_logout_redirect_uri"].ToString(),
+                Is.EqualTo("https://localhost/signout-callback-oidc"));
+            Assert.That(logoutQuery.ContainsKey("id_token_hint"), Is.False);
             Assert.That(response.Headers.Location?.Query, Does.Not.Contain("secret").IgnoreCase);
         });
     }
