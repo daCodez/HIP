@@ -207,6 +207,7 @@ public sealed class PublicLookupServiceTests
             Assert.That(result.Status, Is.EqualTo(RiskStatus.LimitedTrustData));
             Assert.That(result.FinalHipScore, Is.InRange(45, 60));
             Assert.That(result.DisplayScore, Is.Null);
+            Assert.That(result.ProvisionalScore, Is.EqualTo(result.FinalHipScore));
             Assert.That(result.ScorePresentation, Is.EqualTo(PublicEvidencePresentation.ScoreWithheldInsufficientEvidence));
             Assert.That(result.EvidenceCoverage, Is.EqualTo(PublicEvidencePresentation.CoverageInsufficient));
             Assert.That(result.EvidenceConfidence, Is.EqualTo(PublicEvidencePresentation.ConfidenceNone));
@@ -250,6 +251,7 @@ public sealed class PublicLookupServiceTests
             Assert.That(result.IdentityVerificationStatus, Is.EqualTo("Verified"));
             Assert.That(result.IdentityStatus, Is.EqualTo("Verified"));
             Assert.That(result.DisplayScore, Is.Null);
+            Assert.That(result.ProvisionalScore, Is.EqualTo(result.FinalHipScore));
             Assert.That(result.ScorePresentation, Is.EqualTo(PublicEvidencePresentation.ScoreWithheldInsufficientEvidence));
             Assert.That(result.EvidenceCoverage, Is.EqualTo(PublicEvidencePresentation.CoverageInsufficient));
             Assert.That(result.VerificationMethod, Is.EqualTo("DnsTxt"));

@@ -37,7 +37,7 @@ Public lookup can show:
 
 Public lookup now prefers stored authoritative browser scan results. When HIP has one for a domain, lookup sets `scorePresentation = Available`, publishes `displayScore`, and displays layered HIP scoring, reasons, privacy-safe scan counts, last checked date, recommended action, and `dataSource = BrowserPluginScan`.
 
-When authenticated evidence is insufficient, lookup returns `displayScore = null`, `scorePresentation = WithheldInsufficientEvidence`, explicit evidence coverage and confidence, and the current identity status. Updated clients must not display the legacy compatibility score or its component scores in that state.
+When authenticated evidence is insufficient, lookup returns `displayScore = null`, `scorePresentation = WithheldInsufficientEvidence`, explicit evidence coverage and confidence, and the current identity status. Updated API clients and live badges must not display the legacy compatibility score as an authoritative safety assessment in that state. HIP's first-party lookup page may show the same deterministic baseline as a clearly labelled **provisional score · limited evidence** so visitors receive a useful starting point without confusing it with a completed site-safety assessment. The authoritative score remains withheld until authenticated scan evidence is available.
 
 Public lookup must not expose private chat logs, private reports, user identities, private sender names, private scan history, raw user-submitted evidence, full page URLs from browser scans, page URL hashes, form contents, private messages, or raw scan payloads.
 

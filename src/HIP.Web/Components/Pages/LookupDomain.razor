@@ -52,9 +52,9 @@
 
                     <div class="score-row">
                         <div class="score-value">
-                            @if (_lookup.DisplayScore is int displayScore)
+                            @if (PresentedScore is int presentedScore)
                             {
-                                <strong>@displayScore</strong><span>/ 100</span>
+                                <strong>@presentedScore</strong><span>/ 100</span>
                             }
                             else
                             {
@@ -63,6 +63,14 @@
                         </div>
                         <p>@_lookup.RecommendedAction</p>
                     </div>
+
+                    @if (_lookup.ProvisionalScore is not null)
+                    {
+                        <div class="provisional-note">
+                            <strong>Provisional score · limited evidence</strong>
+                            <span>This is HIP's conservative starting estimate, not a completed site-safety assessment. The score will update when authenticated scan evidence is available.</span>
+                        </div>
+                    }
 
                     <div class="score-track" aria-hidden="true"><i style="@ScoreWidth"></i></div>
 
@@ -216,7 +224,8 @@
 
     private string StatusClass => _lookup?.Status.ToString().ToLowerInvariant() ?? "unknown";
     private string StatusLabel => Humanize(_lookup?.Status.ToString() ?? "Unknown");
-    private string ScoreWidth => $"width:{Math.Clamp(_lookup?.DisplayScore ?? 0, 0, 100)}%";
+    private int? PresentedScore => _lookup?.DisplayScore ?? _lookup?.ProvisionalScore;
+    private string ScoreWidth => $"width:{Math.Clamp(PresentedScore ?? 0, 0, 100)}%";
 
     protected override async Task OnParametersSetAsync()
     {

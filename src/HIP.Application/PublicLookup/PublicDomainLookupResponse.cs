@@ -73,6 +73,17 @@ public sealed record PublicDomainLookupResponse(
     /// <summary>Nullable user-facing score. Null means HIP must not present the compatibility score.</summary>
     public int? DisplayScore { get; init; }
 
+    /// <summary>
+    /// Deterministic limited-evidence estimate available only to the first-party lookup experience.
+    /// It remains separate from <see cref="DisplayScore"/> so badges and API clients cannot mistake it for an
+    /// authoritative safety assessment.
+    /// </summary>
+    public int? ProvisionalScore =>
+        DisplayScore is null &&
+        DataSource is "NoStoredData" or "VerifiedIdentityOnly"
+            ? FinalHipScore
+            : null;
+
     /// <summary>Whether numeric score presentation is available or withheld for insufficient evidence.</summary>
     public string ScorePresentation { get; init; } = PublicEvidencePresentation.ScoreWithheldInsufficientEvidence;
 

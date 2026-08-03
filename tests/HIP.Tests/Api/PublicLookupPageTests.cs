@@ -52,6 +52,9 @@ public sealed class PublicLookupPageTests
             Assert.That(html, Does.Contain("hip-marketing-site"));
             Assert.That(html, Does.Contain("hip · trust result"));
             Assert.That(html, Does.Contain("trust-window"));
+            Assert.That(html, Does.Contain(">56</strong>"));
+            Assert.That(html, Does.Contain(">/ 100</span>"));
+            Assert.That(html, Does.Contain("Provisional score · limited evidence"));
             Assert.That(html, Does.Contain("Not Enough Data Yet"));
             Assert.That(html, Does.Contain("HIP has no authoritative site-safety assessment for this domain yet"));
             Assert.That(html, Does.Contain("Data source"));
