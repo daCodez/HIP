@@ -77,7 +77,7 @@ An X-ray pass inspects at most 2,500 structural elements and 400 eligible text-s
 
 ## Settings
 
-Version 0.1.26 understands the live badge's current certificate lifecycle state
+Version 0.1.28 understands the live badge's current certificate lifecycle state
 without treating suspension, revocation, renewal, or expiry as a rewrite of the
 original signed certificate. The extension still verifies the badge signature,
 retrieves the certificate directly from HIP, and fails closed when the domain,
@@ -89,6 +89,7 @@ Settings:
 
 - HIP API base URL
 - HIP Web base URL
+- On-page HIP control position (top-left, top-right, bottom-left, or bottom-right)
 - Submit scan results
 - Enable link scanning
 - Enable link badges
@@ -224,14 +225,16 @@ When the user closes the banner, the extension stores a per-page dismissal flag 
 
 ## Configuration
 
-Default local endpoints:
+Default production endpoints:
 
 ```js
-apiBaseUrl: "http://localhost:5099"
-webBaseUrl: "http://localhost:5123"
+apiBaseUrl: "https://api.guardwithhip.com"
+webBaseUrl: "https://guardwithhip.com"
 ```
 
-These match the default HTTP launch profiles used by Aspire for `hip-api` and `hip-web`. Update these in settings if local launch profiles use different ports.
+Older installations using HIP's exact former localhost defaults are migrated to
+production automatically. Local developers can still select their Aspire HTTP
+endpoints in settings; custom development URLs are preserved.
 
 The content script skips pages whose origin matches the configured HIP API or HIP Web base URL. This avoids recursive scanning of HIP's own lookup/admin UI and prevents noisy localhost errors while testing the product itself.
 

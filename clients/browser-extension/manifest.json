@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "HIP Browser Protection",
   "description": "Human Identity Protocol website and link trust checks.",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "action": {
     "default_title": "HIP",
     "default_popup": "src/popup.html"
@@ -31,6 +31,8 @@
     }
   ],
   "host_permissions": [
+    "https://api.guardwithhip.com/*",
+    "https://guardwithhip.com/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],

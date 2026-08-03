@@ -86,7 +86,7 @@
         if (!globalThis.HipXrayRules || !globalThis.HipXrayRenderer || !globalThis.HipXrayController) {
           throw new Error("HIP X-ray dependencies did not load.");
         }
-        xraySession ??= globalThis.HipXrayController.create();
+        xraySession ??= globalThis.HipXrayController.getOrCreate({ launcherPosition: settings?.badgePosition });
         const result = xraySession.start();
         sendResponse({ ok: true, result: { active: true, alreadyActive: result.alreadyActive, findingCount: result.findingCount } });
       } catch {
@@ -125,7 +125,7 @@
     if (!globalThis.HipXrayRules || !globalThis.HipXrayRenderer || !globalThis.HipXrayController) {
       return;
     }
-    xraySession ??= globalThis.HipXrayController.create();
+    xraySession ??= globalThis.HipXrayController.getOrCreate({ launcherPosition: settings?.badgePosition });
     xraySession.installLauncher();
     window.addEventListener("pagehide", () => xraySession?.destroy(), { once: true });
   }
@@ -218,6 +218,7 @@
    */
   async function initialize() {
     settings = await loadSettings();
+    xraySession?.setPreferences({ launcherPosition: settings.badgePosition });
     pluginVersion = await loadPluginVersion();
     lastSummary = emptySummary();
     collectHipBadgeSignals();

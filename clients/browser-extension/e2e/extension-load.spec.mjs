@@ -14,7 +14,7 @@ function chromiumExecutablePath() {
 }
 
 /** Launches HIP in a clean profile and returns its extension identifier. */
-async function launchHipExtension() {
+async function launchHipExtension({ useLocalServices = false } = {}) {
   const profilePath = await mkdtemp(path.join(tmpdir(), "hip-extension-e2e-"));
   const context = await chromium.launchPersistentContext(profilePath, {
     headless: false,
@@ -28,6 +28,14 @@ async function launchHipExtension() {
   });
   const serviceWorker = context.serviceWorkers()[0]
     ?? await context.waitForEvent("serviceworker", { timeout: 15_000 });
+  if (useLocalServices) {
+    await serviceWorker.evaluate(() => chrome.storage.sync.set({
+      hipApiBaseUrl: "http://localhost:5099",
+      apiBaseUrl: "http://localhost:5099",
+      webBaseUrl: "http://localhost:5123",
+      serviceDefaultsVersion: 1
+    }));
+  }
   return {
     context,
     extensionId: new URL(serviceWorker.url()).host,
@@ -66,7 +74,7 @@ test("loads the unpacked MV3 extension and renders the real popup", async () => 
 });
 
 test("prepares a non-exportable installation key through the consumer-page bridge", async () => {
-  const runtime = await launchHipExtension();
+  const runtime = await launchHipExtension({ useLocalServices: true });
   const page = await runtime.context.newPage();
 
   try {
@@ -112,7 +120,7 @@ test("prepares a non-exportable installation key through the consumer-page bridg
 });
 
 test("renders a meaningful-risk banner and submits privacy-safe feedback", async () => {
-  const runtime = await launchHipExtension();
+  const runtime = await launchHipExtension({ useLocalServices: true });
   const page = await runtime.context.newPage();
   const feedbackRequests = [];
 
@@ -223,7 +231,7 @@ test("renders a meaningful-risk banner and submits privacy-safe feedback", async
 });
 
 test("keeps routine trust in the popup and shows a safe API-failure state", async () => {
-  const runtime = await launchHipExtension();
+  const runtime = await launchHipExtension({ useLocalServices: true });
   const targetPage = await runtime.context.newPage();
   let apiAvailable = true;
   let savedScanCount = 0;
@@ -327,7 +335,7 @@ test("keeps routine trust in the popup and shows a safe API-failure state", asyn
 });
 
 test("routes a dangerous link through the HIP safety page", async () => {
-  const runtime = await launchHipExtension();
+  const runtime = await launchHipExtension({ useLocalServices: true });
   const page = await runtime.context.newPage();
   const dangerousUrl = "http://127.0.0.1:4175/dangerous-download";
   const safetyUrl = "http://localhost:5123/safety?source=e2e&risk=Dangerous";

@@ -712,7 +712,7 @@ async function startXray() {
       response = await chrome.tabs.sendMessage(activeTabId, { type: "HIP_XRAY_START" });
     } catch {
       await injectContentScanner(activeTabId);
-      response = await chrome.tabs.sendMessage(activeTabId, { type: "HIP_XRAY_START" });
+      response = await startInjectedXray(activeTabId, settings.badgePosition);
     }
     if (!response?.ok) throw new Error("X-ray did not start");
     const count = Number(response.result?.findingCount) || 0;
@@ -724,6 +724,26 @@ async function startXray() {
   } finally {
     elements.xrayPage.disabled = false;
   }
+}
+
+/**
+ * Starts the freshly injected X-ray session directly. This repairs already-open
+ * tabs whose previous content-script guard survived an unpacked extension reload.
+ */
+async function startInjectedXray(tabId, launcherPosition) {
+  const [execution] = await chrome.scripting.executeScript({
+    target: { tabId },
+    args: [launcherPosition],
+    func: position => {
+      const controller = globalThis.HipXrayController;
+      if (!controller?.getOrCreate) return { ok: false, error: "HIP X-ray dependencies did not load." };
+      const session = controller.getOrCreate({ launcherPosition: position });
+      session.installLauncher();
+      const result = session.start();
+      return { ok: true, result };
+    }
+  });
+  return execution?.result || { ok: false, error: "HIP X-ray could not start." };
 }
 
 /**
