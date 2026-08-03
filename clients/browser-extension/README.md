@@ -25,8 +25,63 @@ This Chromium Manifest V3 client helps users see HIP website trust, link risk, a
 - Automatic popup refresh while the page scan is still loading.
 - Scan refresh button as a fallback.
 - Settings page.
+- Explicit **X-ray this page** inspection with numbered markers and an accessible side panel.
+
+## X-ray This Page
+
+On a normal HTTP or HTTPS page, the extension displays the same teal **X-ray this page** control used on HIP's marketing page. Clicking that page control—or the equivalent popup action—starts the local inspection. No X-ray detector runs merely because the trigger is visible.
+
+The active experience mirrors the marketing demo: a dark page scrim, a teal scan line sweeping from top to bottom, visible element boxes lighting as the line reaches them, a compact right-side HUD, and finding rows revealed progressively during the 2.6-second visualization. Unlike the illustrative marketing demo, the extension shows actual local detector findings and severity labels; it does not invent score changes. The page receives one isolated Shadow DOM surface. The HUD provides:
+
+- numbered markers that correspond to findings without intercepting page clicks;
+- severity, category, observed evidence, remediation, and Local or HIP source;
+- Plain and Technical explanation modes;
+- Hide markers, Rescan, and Exit controls;
+- keyboard-visible focus states and reduced-motion behavior;
+- explicit coverage notes for inaccessible frames, closed shadow roots, scan caps, and unavailable HIP domain evidence.
+
+Selecting a finding scrolls its referenced element into view and draws an extension-owned outline around it. The page element itself is not restyled. **Exit** disconnects the mutation observer and active scan listeners, cancels pending work, removes the scrim, scan line, boxes, markers, and HUD, clears every in-memory element reference, and restores the idle X-ray trigger. Navigation destroys the remaining trigger host and its listener.
+
+The local ruleset is `hip-xray-local-1`; visible urgency, impersonation, and credential-request wording uses `hip-content-signals-1`. Local findings use this stable shape:
+
+```text
+id, ruleId, ruleVersion, category, severity, title,
+plainExplanation, technicalExplanation, evidence, remediation,
+source, elementRefKey
+```
+
+`elementRefKey` resolves only through an in-memory map owned by the active X-ray session. It is never persisted or transmitted. Scoring remains separate from findings. `mergeHipFindings` is the adapter seam for a future full HIP scan: it accepts only validated, bounded findings whose source is `HIP`. There is no compatible full-domain findings API in this client today, so the panel truthfully says **Full domain scan unavailable.**
+
+### Local X-ray detectors
+
+- password, authentication-shaped, or payment-shaped forms using HTTP page or action transport;
+- unencrypted effective form actions;
+- cross-origin form actions as informational context only;
+- mixed HTTP subresources on an HTTPS page;
+- link text that names a different hostname, encoded redirect destinations, complex hostnames, IDN/punycode, and versioned brand-lookalike patterns;
+- third-party scripts and frames as inventory context, not a danger claim;
+- scripts and frames added after X-ray starts;
+- bounded visible urgency, authority-impersonation, and credential-request categories, without retaining the observed wording.
+
+These local detectors do **not** claim domain age, certificate state or ownership, DNS or mail configuration, reputation, site ownership, or provider results. Those facts require authenticated HIP or provider evidence.
+
+### X-ray privacy and coexistence
+
+X-ray never reads entered control values, passwords, cookies, tokens, autofill data, clipboard contents, private messages, email bodies, browsing history, or page selection. It does not hash or log those values. It does not upload the DOM, page text, script contents, or X-ray findings, and it adds no telemetry.
+
+Structural collection reads only bounded element types and reviewed attributes such as form action, control type/name/autocomplete, link destination, and resource source. Visible wording checks are capped, exclude forms, editable content, chats, messages, inboxes, and log regions, and retain only matched rule-category names. Evidence strings contain structural facts or origins rather than copied page prose.
+
+The feature adds no permissions. It continues to use the existing `activeTab`, `scripting`, and `storage` permissions and does not use `debugger`, network interception, clipboard access, or a main-world script. X-ray creates no UI before or inside forms, changes no form/input attributes, does not read or change focus or selection, and adds no document-level event listener. The marker layer uses `pointer-events: none`; only the side panel accepts pointer input. Repeated starts reuse the same session.
+
+An X-ray pass inspects at most 2,500 structural elements and 400 eligible text-signal elements. DOM changes are debounced, automatic rescans stop after 12 passes, and the observer ignores HIP-owned nodes. Cross-origin or otherwise inaccessible frames are inventoried but their contents are not inspected. Closed shadow roots cannot be observed. Chrome and Edge protected pages do not accept content scripts, and the popup explains that X-ray is unavailable rather than requesting broader access.
 
 ## Settings
+
+Version 0.1.26 understands the live badge's current certificate lifecycle state
+without treating suspension, revocation, renewal, or expiry as a rewrite of the
+original signed certificate. The extension still verifies the badge signature,
+retrieves the certificate directly from HIP, and fails closed when the domain,
+certificate identity, level, validity, or active state is inconsistent.
 
 Open extension settings from the popup.
 

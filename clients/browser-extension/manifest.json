@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "HIP Browser Protection",
   "description": "Human Identity Protocol website and link trust checks.",
-  "version": "0.1.23",
+  "version": "0.1.26",
   "action": {
     "default_title": "HIP",
     "default_popup": "src/popup.html"
@@ -22,6 +22,9 @@
         "src/browserScanAssessment.js",
         "src/formalScoring.js",
         "src/contentMessageContracts.js",
+        "src/xrayRules.js",
+        "src/xrayRenderer.js",
+        "src/xrayController.js",
         "src/content.js"
       ],
       "run_at": "document_idle"

@@ -95,11 +95,14 @@ const elements = {
   feedbackState: document.getElementById("feedbackState"),
   lookupLink: document.getElementById("lookupLink"),
   safetyLink: document.getElementById("safetyLink"),
+  xrayPage: document.getElementById("xrayPage"),
+  xrayState: document.getElementById("xrayState"),
   refreshScan: document.getElementById("refreshScan"),
   settingsButton: document.getElementById("settingsButton")
 };
 
 elements.refreshScan.addEventListener("click", refreshScan);
+elements.xrayPage.addEventListener("click", startXray);
 elements.settingsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
 elements.feedbackLooksSafe.addEventListener("click", () => submitPopupFeedback("LooksSafe"));
 elements.feedbackLooksSuspicious.addEventListener("click", () => submitPopupFeedback("LooksSuspicious"));
@@ -421,6 +424,9 @@ async function injectContentScanner(tabId) {
       "src/browserScanAssessment.js",
       "src/formalScoring.js",
       "src/contentMessageContracts.js",
+      "src/xrayRules.js",
+      "src/xrayRenderer.js",
+      "src/xrayController.js",
       "src/content.js"
     ]
   });
@@ -685,6 +691,38 @@ async function refreshScan() {
     renderSummary(await getScanSummary());
   } finally {
     elements.refreshScan.disabled = false;
+  }
+}
+
+/**
+ * Starts an explicit, local-only page X-ray. Protected browser pages cannot run
+ * content scripts, and the popup explains that boundary without requesting more access.
+ */
+async function startXray() {
+  if (!activeTabId || !activeTabUrl || !/^https?:/i.test(activeTabUrl)) {
+    elements.xrayState.textContent = "X-ray is unavailable on protected browser pages. Open a normal HTTP or HTTPS page.";
+    return;
+  }
+
+  elements.xrayPage.disabled = true;
+  elements.xrayState.textContent = "Starting local X-ray…";
+  try {
+    let response;
+    try {
+      response = await chrome.tabs.sendMessage(activeTabId, { type: "HIP_XRAY_START" });
+    } catch {
+      await injectContentScanner(activeTabId);
+      response = await chrome.tabs.sendMessage(activeTabId, { type: "HIP_XRAY_START" });
+    }
+    if (!response?.ok) throw new Error("X-ray did not start");
+    const count = Number(response.result?.findingCount) || 0;
+    elements.xrayState.textContent = response.result?.alreadyActive
+      ? `X-ray is already open with ${count} ${count === 1 ? "finding" : "findings"}.`
+      : `X-ray opened on the page with ${count} ${count === 1 ? "finding" : "findings"}.`;
+  } catch {
+    elements.xrayState.textContent = "X-ray could not attach. The page may be protected or extension access may be unavailable.";
+  } finally {
+    elements.xrayPage.disabled = false;
   }
 }
 

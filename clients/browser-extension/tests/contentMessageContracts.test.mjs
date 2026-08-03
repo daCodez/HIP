@@ -19,9 +19,10 @@ const popupSender = {
   url: `chrome-extension://${runtimeId}/src/popup.html`
 };
 
-test("accepts only the two payload-free popup commands", () => {
+test("accepts only the reviewed payload-free popup commands", () => {
   assert.equal(contracts.validate({ type: "HIP_REFRESH_SCAN" }, popupSender, runtimeId).ok, true);
   assert.equal(contracts.validate({ type: "HIP_GET_CONTENT_SUMMARY" }, popupSender, runtimeId).ok, true);
+  assert.equal(contracts.validate({ type: "HIP_XRAY_START" }, popupSender, runtimeId).ok, true);
   assert.equal(contracts.validate({ type: "HIP_LOOKUP_DOMAIN" }, popupSender, runtimeId).ok, false);
   assert.equal(contracts.validate({ type: "HIP_REFRESH_SCAN", url: "https://attacker.example" }, popupSender, runtimeId).ok, false);
 });
