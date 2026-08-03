@@ -3,6 +3,7 @@
 
   const MAX_AUTOMATIC_RESCANS = 12;
   const RESCAN_DEBOUNCE_MS = 400;
+  const ROUTE_POLL_MS = 500;
 
   function create(options = {}) {
     const documentObject = options.document || global.document;
@@ -14,11 +15,15 @@
     const makeObserver = options.mutationObserverFactory || (callback => new MutationObserver(callback));
     const schedule = options.schedule || ((callback, delay) => setTimeout(callback, delay));
     const cancelScheduled = options.cancelScheduled || (handle => clearTimeout(handle));
+    const startInterval = options.startInterval || ((callback, delay) => setInterval(callback, delay));
+    const cancelInterval = options.cancelInterval || (handle => clearInterval(handle));
     let active = false;
     let renderer = null;
     let observer = null;
     let scheduledRescan = null;
     let animationFrame = null;
+    let routeWatcher = null;
+    let currentLocation = String(windowObject?.location?.href || "");
     let findings = [];
     let references = new Map();
     let coverage = {};
@@ -35,6 +40,7 @@
     function installLauncher() {
       ensureRenderer();
       renderer.mountLauncher();
+      startRouteWatcher();
       return { installed: true, active };
     }
 
@@ -59,6 +65,9 @@
       observer.observe(documentObject.documentElement, { childList: true, subtree: true });
       windowObject.addEventListener("scroll", requestPositionUpdate, { passive: true });
       windowObject.addEventListener("resize", requestPositionUpdate, { passive: true });
+      windowObject.addEventListener("popstate", handleRouteChange, { passive: true });
+      windowObject.addEventListener("hashchange", handleRouteChange, { passive: true });
+      startRouteWatcher();
       return { active: true, alreadyActive: false, findingCount: findings.length };
     }
 
@@ -86,9 +95,15 @@
     }
 
     function handleMutations(records = []) {
-      if (!active || automaticRescans >= MAX_AUTOMATIC_RESCANS) return;
+      if (!active) return;
+      if (renderer?.isMounted && !renderer.isMounted()) {
+        destroy();
+        return;
+      }
+      if (automaticRescans >= MAX_AUTOMATIC_RESCANS) return;
       let relevant = false;
       for (const record of records) {
+        if (Array.from(record?.removedNodes || []).some(node => node?.nodeType === 1)) requestPositionUpdate();
         for (const node of Array.from(record?.addedNodes || [])) {
           if (node?.nodeType !== 1 || node?.dataset?.hipXrayOwned === "true" || node?.closest?.("[data-hip-xray-owned='true']")) continue;
           if (newElements.size < 2500) newElements.add(node);
@@ -105,6 +120,27 @@
         automaticRescans += 1;
         runScan(true);
       }, RESCAN_DEBOUNCE_MS);
+    }
+
+    /** Starts one bounded URL watcher for History API route changes. */
+    function startRouteWatcher() {
+      if (routeWatcher !== null) return;
+      currentLocation = String(windowObject?.location?.href || "");
+      routeWatcher = startInterval(checkRoute, ROUTE_POLL_MS);
+    }
+
+    function checkRoute() {
+      const nextLocation = String(windowObject?.location?.href || "");
+      if (nextLocation === currentLocation) return;
+      currentLocation = nextLocation;
+      handleRouteChange();
+    }
+
+    /** Removes active overlays when the current document changes logical route. */
+    function handleRouteChange() {
+      currentLocation = String(windowObject?.location?.href || "");
+      if (active) stop();
+      renderer?.resetForNavigation?.();
     }
 
     function requestPositionUpdate() {
@@ -126,6 +162,8 @@
       animationFrame = null;
       windowObject.removeEventListener("scroll", requestPositionUpdate);
       windowObject.removeEventListener("resize", requestPositionUpdate);
+      windowObject.removeEventListener("popstate", handleRouteChange);
+      windowObject.removeEventListener("hashchange", handleRouteChange);
       renderer?.showLauncher();
       findings = [];
       references.clear();
@@ -141,6 +179,8 @@
 
     function destroy() {
       stop();
+      if (routeWatcher !== null) cancelInterval(routeWatcher);
+      routeWatcher = null;
       renderer?.destroy();
       renderer = null;
     }
@@ -148,5 +188,5 @@
     return Object.freeze({ installLauncher, start, stop, destroy, rescan: () => runScan(false), getState });
   }
 
-  global.HipXrayController = Object.freeze({ create, MAX_AUTOMATIC_RESCANS });
+  global.HipXrayController = Object.freeze({ create, MAX_AUTOMATIC_RESCANS, ROUTE_POLL_MS });
 })(globalThis);

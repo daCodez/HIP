@@ -39,8 +39,13 @@
         return;
       }
       inspected += 1;
-      const refKey = `xray-${++sequence}`;
-      references.set(refKey, element);
+      const selector = structuralSelector(element, documentObject);
+      const stableBasis = `${descriptor.kind || "element"}|${selector || `fallback-${++sequence}`}`;
+      const baseRefKey = `xray-${stableHash(stableBasis)}`;
+      let refKey = baseRefKey;
+      let collision = 1;
+      while (references.has(refKey)) refKey = `${baseRefKey}-${++collision}`;
+      references.set(refKey, createElementReference(element, documentObject, selector));
       elements.push({ refKey, ...descriptor });
     };
 
@@ -281,6 +286,50 @@
 
   function isPrivateContent(element) {
     try { return Boolean(element.closest?.(PRIVATE_CONTENT_SELECTOR)); } catch { return true; }
+  }
+  /**
+   * Keeps the live node plus a bounded structural selector in memory so a marker
+   * can recover when a SPA replaces an equivalent node. It never reads values,
+   * user-entered content, or private page text.
+   */
+  function createElementReference(element, documentObject, knownSelector = "") {
+    return Object.freeze({
+      element,
+      selector: knownSelector || structuralSelector(element, documentObject),
+      tagName: lower(element?.tagName)
+    });
+  }
+
+  function structuralSelector(element, documentObject) {
+    if (!element || element === documentObject?.documentElement) return "html";
+    const id = String(element.id || "");
+    if (/^[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(id)) return `#${escapeCssIdentifier(id)}`;
+    const parts = [];
+    let current = element;
+    while (current?.nodeType === 1 && current !== documentObject?.documentElement && parts.length < 7) {
+      const tag = lower(current.tagName) || "div";
+      const parent = current.parentElement;
+      if (!parent) break;
+      const siblings = safeQuery(parent, `:scope > ${tag}`);
+      const index = Math.max(0, siblings.indexOf(current)) + 1;
+      parts.unshift(`${tag}:nth-of-type(${index})`);
+      current = parent;
+    }
+    return parts.length ? parts.join(" > ") : "";
+  }
+
+  function escapeCssIdentifier(value) {
+    if (typeof global.CSS?.escape === "function") return global.CSS.escape(value);
+    return String(value).replace(/[^A-Za-z0-9_-]/g, character => `\\${character}`);
+  }
+  /** Creates a compact deterministic key without exposing selector metadata. */
+  function stableHash(value) {
+    let hash = 2166136261;
+    for (const character of String(value)) {
+      hash ^= character.codePointAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
   }
   function isHipOwned(element) { return element?.dataset?.hipXrayOwned === "true" || Boolean(element?.closest?.("[data-hip-xray-owned='true']")); }
   function safeQuery(root, selector) { try { return Array.from(root?.querySelectorAll?.(selector) || []); } catch { return []; } }

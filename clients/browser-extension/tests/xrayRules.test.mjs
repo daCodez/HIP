@@ -19,6 +19,25 @@ function scan(elements, page = {}) {
   });
 }
 
+function collectStableLink() {
+  const documentElement = { nodeType: 1, tagName: "HTML" };
+  const anchor = {
+    nodeType: 1,
+    tagName: "A",
+    id: "stable-link",
+    dataset: {},
+    textContent: "https://expected.example/",
+    parentElement: documentElement,
+    closest: () => null,
+    getAttribute: name => name === "href" ? "https://destination.example/" : null
+  };
+  const documentObject = {
+    documentElement,
+    querySelectorAll: selector => selector === "a[href]" ? [anchor] : []
+  };
+  return rules.collectPageSnapshot(documentObject, { href: "https://shop.example/" });
+}
+
 test("publishes a stable versioned finding schema", () => {
   const [finding] = scan([{ refKey: "e1", kind: "form", hasPassword: true, actionUrl: "http://shop.example/login", actionOrigin: "http://shop.example" }]).findings;
   assert.equal(rules.RULESET_VERSION, "hip-xray-local-1");
@@ -29,6 +48,16 @@ test("publishes a stable versioned finding schema", () => {
   ]);
   assert.equal(rules.validateFinding(finding), true);
   assert.equal(finding.source, "Local");
+});
+
+test("uses deterministic private reference keys that survive equivalent rescans", () => {
+  const first = collectStableLink();
+  const second = collectStableLink();
+  const firstKey = first.snapshot.elements[0].refKey;
+  assert.equal(second.snapshot.elements[0].refKey, firstKey);
+  assert.match(firstKey, /^xray-[a-z0-9]+$/);
+  assert.equal(first.references.get(firstKey).selector, "#stable-link");
+  assert.equal(first.references.get(firstKey).tagName, "a");
 });
 
 test("detects insecure password, authentication, payment, and form action transport", () => {
