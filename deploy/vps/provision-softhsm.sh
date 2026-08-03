@@ -36,7 +36,7 @@ if [[ ! -s "$HIP_SOFTHSM_SO_PIN_PATH" ]]; then
     openssl rand -hex 16 > "$HIP_SOFTHSM_SO_PIN_PATH"
 fi
 
-chown 1654:1654 "$HIP_SOFTHSM_USER_PIN_PATH"
+chown 1654:1654 "$HIP_SOFTHSM_USER_PIN_PATH" "$HIP_SOFTHSM_SO_PIN_PATH"
 chmod 0400 "$HIP_SOFTHSM_USER_PIN_PATH"
 chmod 0400 "$HIP_SOFTHSM_SO_PIN_PATH"
 
@@ -44,7 +44,7 @@ cd "$repository_root"
 docker compose \
     -f "$compose_base" \
     -f "$compose_production" \
-    run --rm --no-deps --user 0:0 \
+    run --rm --no-deps --user 1654:1654 \
     -v "$HIP_SOFTHSM_SO_PIN_PATH:/run/secrets/hip-softhsm-so-pin:ro" \
     --entrypoint /bin/sh \
     api -eu -c '

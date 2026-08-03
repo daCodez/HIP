@@ -85,6 +85,9 @@ public sealed class VpsDeploymentSecurityTests
             Assert.That(Occurrences(stagingComposeSource, "HipManagedSigning__Provider: SoftHsm"), Is.EqualTo(3));
             Assert.That(Occurrences(stagingComposeSource, "hip-softhsm-user-pin:ro"), Is.EqualTo(3));
             Assert.That(Occurrences(stagingComposeSource, "HipManagedSigning__Required: \"true\""), Is.EqualTo(1));
+            var provisionScript = File.ReadAllText(Path.Combine(root, "deploy", "vps", "provision-softhsm.sh"));
+            Assert.That(provisionScript, Does.Contain("--user 1654:1654"));
+            Assert.That(provisionScript, Does.Not.Contain("--user 0:0"));
             Assert.That(caddySource, Does.Not.Contain(
                 "header_up X-HIP-Trusted-Staging-Proxy "));
             Assert.That(caddySource, Does.Not.Contain("@publicRoot path /"));
