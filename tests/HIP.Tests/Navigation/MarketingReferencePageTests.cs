@@ -41,12 +41,16 @@ public sealed class MarketingReferencePageTests
         var root = RepositoryRoot();
         var script = File.ReadAllText(Path.Combine(root, "src", "HIP.Web", "wwwroot", "marketing-site.js"));
         var styles = File.ReadAllText(Path.Combine(root, "src", "HIP.Web", "wwwroot", "marketing-site.css"));
+        var brandStyles = File.ReadAllText(Path.Combine(root, "src", "HIP.Web", "wwwroot", "brand-compliance.css"));
         var layout = File.ReadAllText(Path.Combine(root, "src", "HIP.Web", "Components", "Layout", "MarketingLayout.razor"));
+        var home = File.ReadAllText(Path.Combine(root, "src", "HIP.Web", "Components", "Pages", "PublicHome.razor"));
 
         Assert.Multiple(() =>
         {
             Assert.That(script, Does.Contain("requestAnimationFrame"));
             Assert.That(script, Does.Contain("prefers-reduced-motion"));
+            Assert.That(script, Does.Contain("function motionEnabled()"));
+            Assert.That(script, Does.Contain("if (motionEnabled()) rot +="));
             Assert.That(script, Does.Contain("[data-rise]"));
             Assert.That(script, Does.Contain("[data-tilt]"));
             Assert.That(script, Does.Contain("[data-spot]"));
@@ -57,8 +61,11 @@ public sealed class MarketingReferencePageTests
             Assert.That(styles, Does.Not.Contain(":root{"));
             Assert.That(styles, Does.Contain("@media (max-width:520px)"));
             Assert.That(styles, Does.Contain("[data-domain-cta]{display:none !important}"));
+            Assert.That(brandStyles, Does.Contain("*:not(.hip-marketing-site[data-motion=full],.hip-marketing-site[data-motion=full] *)"));
             Assert.That(layout, Does.Contain("href=\"/lookup\""));
+            Assert.That(layout, Does.Contain("data-motion=\"full\""));
             Assert.That(layout, Does.Contain("https://github.com/daCodez/HIP"));
+            Assert.That(home, Does.Contain("data-signal-marquee"));
         });
     }
 

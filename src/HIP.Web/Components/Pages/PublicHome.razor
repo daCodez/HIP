@@ -134,7 +134,7 @@
     <div style="display:flex;align-items:center;gap:22px;padding:22px 0 22px 32px;overflow:hidden">
       <span style="font-size:11px;font-weight:800;letter-spacing:.18em;color:var(--muted);flex-shrink:0">SIGNALS CHECKED</span>
       <div style="position:relative;flex:1;overflow:hidden;mask-image:linear-gradient(90deg,transparent,#000 4%,#000 88%,transparent)">
-        <div style="display:flex;width:max-content;animation:hipMarquee 34s linear infinite">
+        <div data-signal-marquee style="display:flex;width:max-content;animation:hipMarquee 34s linear infinite">
           <div style="display:flex;gap:10px;padding-right:10px">
             @foreach (var s in SignalsLoop) {
               <span style="padding:7px 14px;border:1px solid var(--border);border-radius:999px;font-size:13px;color:var(--text);background:var(--bg);white-space:nowrap">@(s.Label)</span>

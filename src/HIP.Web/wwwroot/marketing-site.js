@@ -52,6 +52,12 @@
 
   var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  /** Returns whether the marketing shell explicitly opts into its full motion design. */
+  function motionEnabled() {
+    var root = document.querySelector(".hip-marketing-site");
+    return !!root && (root.dataset.motion === "full" || !reduced);
+  }
+
   /* ---------------- scroll: parallax, progress, reveals ---------------- */
 
   function initScroll() {
@@ -66,7 +72,7 @@
       var bar = document.querySelector("[data-progress]");
       if (bar) bar.style.width = Math.min(100, (y / max) * 100).toFixed(2) + "%";
 
-      if (!reduced) {
+      if (motionEnabled()) {
         document.querySelectorAll("[data-px]").forEach(function (el) {
           var speed = parseFloat(el.getAttribute("data-px")) || 0;
           var r = el.getBoundingClientRect();
@@ -91,7 +97,7 @@
     });
 
     // Content is visible by default; entrances are an enhancement only.
-    if (!reduced) armEntrances();
+    if (motionEnabled()) armEntrances();
     paint();
 
     var pump = setInterval(paint, 250);
@@ -127,7 +133,7 @@
     document.querySelectorAll("[data-count]:not([data-counted])").forEach(function (el) {
       if (el.getBoundingClientRect().top > line) return;
       el.setAttribute("data-counted", "1");
-      if (!reduced) countUp(el);
+      if (motionEnabled()) countUp(el);
     });
   }
 
@@ -168,7 +174,7 @@
   /* ---------------- pointer: tilt, spotlight, magnetic ---------------- */
 
   function initPointer() {
-    if (reduced) return;
+    if (!motionEnabled()) return;
 
     function onMove(e) {
       document.querySelectorAll("[data-tilt]").forEach(function (el) {
@@ -258,7 +264,7 @@
     function draw(now) {
       var dt = Math.min(48, now - last);
       last = now;
-      if (!reduced) rot += dt * 0.00016;
+      if (motionEnabled()) rot += dt * 0.00016;
 
       document.querySelectorAll("canvas[data-globe]").forEach(function (cv) {
         var dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -307,7 +313,7 @@
           ctx.beginPath(); ctx.arc(p.X, p.Y, s, 0, Math.PI * 2);
           ctx.fillStyle = rgba(teal, 0.10 + depth * 0.55);
           ctx.fill();
-          var pulse = reduced ? 0 : Math.max(0, Math.sin(now * 0.0011 + pt.seed * 9));
+          var pulse = motionEnabled() ? Math.max(0, Math.sin(now * 0.0011 + pt.seed * 9)) : 0;
           if (pulse > 0.985 && depth > 0.55) {
             ctx.beginPath(); ctx.arc(p.X, p.Y, s * 5, 0, Math.PI * 2);
             ctx.strokeStyle = rgba(teal, 0.35 * depth);
@@ -317,7 +323,7 @@
         });
 
         arcs.forEach(function (arc) {
-          if (!reduced) { arc.t += arc.spd * (dt / 16); if (arc.t > 1.35) arc.t = -0.15; }
+          if (motionEnabled()) { arc.t += arc.spd * (dt / 16); if (arc.t > 1.35) arc.t = -0.15; }
           var A = proj(arc.a), B = proj(arc.b);
           if (A.Z < -0.1 && B.Z < -0.1) return;
           var mx = (A.X + B.X) / 2, my = (A.Y + B.Y) / 2;
@@ -331,7 +337,7 @@
           ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.fillStyle = rgba(teal, 0.12); ctx.fill();
         });
 
-        if (!reduced) {
+        if (motionEnabled()) {
           var sy = cy + Math.sin(now * 0.00045) * R;
           var lg = ctx.createLinearGradient(cx - R, sy, cx + R, sy);
           lg.addColorStop(0, rgba(teal, 0));

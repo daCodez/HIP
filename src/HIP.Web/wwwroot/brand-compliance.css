@@ -21,4 +21,4 @@ input,textarea,select{color:var(--text);border-color:var(--border-strong);backgr
 .valid.modified:not([type=checkbox]){outline-color:var(--safe)}
 .invalid{outline-color:var(--danger)}
 .validation-message,.text-danger{color:var(--danger)}
-@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+@media(prefers-reduced-motion:reduce){*:not(.hip-marketing-site[data-motion=full],.hip-marketing-site[data-motion=full] *),*:not(.hip-marketing-site[data-motion=full],.hip-marketing-site[data-motion=full] *)::before,*:not(.hip-marketing-site[data-motion=full],.hip-marketing-site[data-motion=full] *)::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
