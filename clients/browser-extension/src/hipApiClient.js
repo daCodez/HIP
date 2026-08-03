@@ -1,6 +1,11 @@
 import { createInstallationRequestProof } from "./installationIdentity.js";
 
 export const HIP_CONFIG = Object.freeze({
+  apiBaseUrl: "https://api.guardwithhip.com",
+  webBaseUrl: "https://guardwithhip.com"
+});
+
+const LEGACY_LOCAL_DEFAULTS = Object.freeze({
   apiBaseUrl: "http://localhost:5099",
   webBaseUrl: "http://localhost:5123"
 });
@@ -55,6 +60,8 @@ export const DEFAULT_HIP_SETTINGS = Object.freeze({
   allowRawPageUrlSubmission: false,
   scanMode: "Normal",
   bannerDisplayMode: "WarningsOnly",
+  badgePosition: "bottom-left",
+  serviceDefaultsVersion: 1,
   externalProvidersEnabled: true,
   sslLabsEnabled: true,
   googleWebRiskEnabled: false,
@@ -505,7 +512,7 @@ export async function loadHipSettings() {
     });
   }
 
-  const stored = await chrome.storage.sync.get(DEFAULT_HIP_SETTINGS);
+  const stored = migrateLegacyLocalDefaults(await chrome.storage.sync.get(null));
   const settings = normalizeHipSettings({
     ...DEFAULT_HIP_SETTINGS,
     ...stored
@@ -514,6 +521,18 @@ export async function loadHipSettings() {
   if (!settings.instanceId) {
     settings.instanceId = createInstanceId();
     await chrome.storage.sync.set({ instanceId: settings.instanceId });
+  }
+
+
+  if (stored.serviceDefaultsVersion !== settings.serviceDefaultsVersion ||
+      stored.apiBaseUrl !== settings.apiBaseUrl ||
+      stored.webBaseUrl !== settings.webBaseUrl) {
+    await chrome.storage.sync.set({
+      hipApiBaseUrl: settings.apiBaseUrl,
+      apiBaseUrl: settings.apiBaseUrl,
+      webBaseUrl: settings.webBaseUrl,
+      serviceDefaultsVersion: settings.serviceDefaultsVersion
+    });
   }
 
   return settings;
@@ -560,6 +579,8 @@ export function normalizeHipSettings(settings = {}) {
     enableWarningBanner: settings.enableWarningBanner ?? true,
     scanMode: settings.scanMode || "Normal",
     bannerDisplayMode: normalizeBannerDisplayMode(settings.bannerDisplayMode),
+    badgePosition: normalizeBadgePosition(settings.badgePosition),
+    serviceDefaultsVersion: 1,
     externalProvidersEnabled: settings.externalProvidersEnabled ?? true,
     sslLabsEnabled: settings.sslLabsEnabled ?? true,
     googleWebRiskEnabled: settings.googleWebRiskEnabled ?? false,
@@ -568,6 +589,34 @@ export function normalizeHipSettings(settings = {}) {
       ? settings.instanceId.trim()
       : null
   };
+}
+
+/**
+ * Upgrades only the exact localhost pair shipped by older HIP builds. Custom
+ * development endpoints remain untouched and can still be saved explicitly.
+ */
+export function migrateLegacyLocalDefaults(settings = {}) {
+  const apiBaseUrl = settings.hipApiBaseUrl || settings.apiBaseUrl;
+  if (settings.serviceDefaultsVersion == null &&
+      apiBaseUrl === LEGACY_LOCAL_DEFAULTS.apiBaseUrl &&
+      settings.webBaseUrl === LEGACY_LOCAL_DEFAULTS.webBaseUrl) {
+    return {
+      ...settings,
+      hipApiBaseUrl: HIP_CONFIG.apiBaseUrl,
+      apiBaseUrl: HIP_CONFIG.apiBaseUrl,
+      webBaseUrl: HIP_CONFIG.webBaseUrl,
+      serviceDefaultsVersion: 1
+    };
+  }
+
+  return settings;
+}
+
+/** Normalizes the user-selected corner for HIP's floating on-page control. */
+export function normalizeBadgePosition(value) {
+  return ["bottom-left", "bottom-right", "top-left", "top-right"].includes(value)
+    ? value
+    : "bottom-left";
 }
 
 /**

@@ -18,6 +18,12 @@ async function launchExtension() {
   return { context, extensionId: new URL(worker.url()).host, profilePath };
 }
 
+/** Reopens the navigator when collision handling collapsed it to reveal a target. */
+async function ensureResultsOpen(page) {
+  const pill = page.getByRole("button", { name: /Open Page X-ray results/ });
+  if (await pill.isVisible().catch(() => false)) await pill.click();
+}
+
 test("X-ray is explicit, interactive, privacy-safe, and fully removable", async () => {
   const runtime = await launchExtension();
   const page = await runtime.context.newPage();
@@ -123,8 +129,11 @@ test("X-ray is explicit, interactive, privacy-safe, and fully removable", async 
       const original = document.querySelector("#login");
       original.replaceWith(original.cloneNode(true));
     });
+    await page.waitForTimeout(700);
+    await ensureResultsOpen(page);
     await page.getByRole("button", { name: /Locate finding .*Password form is not fully encrypted/ }).click();
-    await expect(page.getByText("Linked page element available", { exact: true })).toBeVisible();
+    await ensureResultsOpen(page);
+    await expect(page.locator("[data-hip-xray-owned='true'] .finding-item[data-selected='true'] .target-state")).toHaveText("Linked page element available");
 
     await page.evaluate(() => {
       const target = document.querySelector("#misleading");
@@ -132,15 +141,21 @@ test("X-ray is explicit, interactive, privacy-safe, and fully removable", async 
       globalThis.savedXrayParent = target.parentElement;
       target.remove();
     });
+    await page.waitForTimeout(700);
+    await ensureResultsOpen(page);
     await page.getByRole("button", { name: /Locate finding .*Link text and destination differ/ }).click();
-    await expect(page.getByText("Element no longer available", { exact: true })).toBeVisible();
+    await ensureResultsOpen(page);
+    await expect(page.locator("[data-hip-xray-owned='true'] .finding-item[data-selected='true'] .target-state")).toHaveText("Element no longer available");
     await page.evaluate(() => globalThis.savedXrayParent.append(globalThis.savedXrayTarget));
+    await page.waitForTimeout(700);
     await page.getByRole("button", { name: /Locate finding .*Link text and destination differ/ }).click();
-    await expect(page.getByText("Linked page element available", { exact: true })).toBeVisible();
+    await ensureResultsOpen(page);
+    await expect(page.locator("[data-hip-xray-owned='true'] .finding-item[data-selected='true'] .target-state")).toHaveText("Linked page element available");
 
     const markerCountBeforeRescan = await page.locator("[data-hip-xray-owned='true']").locator(".marker").count();
+    await ensureResultsOpen(page);
     await page.getByRole("button", { name: "Rescan the current page" }).click();
-    await expect(page.getByRole("status")).toContainText(/finding/);
+    await expect(page.locator("[data-hip-xray-owned='true'] .finding-count")).toContainText(/finding/);
     await expect(page.getByText("HIP · PAGE X-RAY RESULTS", { exact: true })).toBeVisible({ timeout: 5_000 });
     expect(await page.locator("[data-hip-xray-owned='true']").locator(".marker").count()).toBe(markerCountBeforeRescan);
 

@@ -12,6 +12,7 @@ const fields = {
   webBaseUrl: document.getElementById("webBaseUrl"),
   scanMode: document.getElementById("scanMode"),
   bannerDisplayMode: document.getElementById("bannerDisplayMode"),
+  badgePosition: document.getElementById("badgePosition"),
   enableLinkBadges: document.getElementById("enableLinkBadges"),
   enableLinkScanning: document.getElementById("enableLinkScanning"),
   enableWarningBanner: document.getElementById("enableWarningBanner"),
@@ -80,6 +81,7 @@ function render(settings) {
   fields.webBaseUrl.value = settings.webBaseUrl;
   fields.scanMode.value = settings.scanMode;
   fields.bannerDisplayMode.value = settings.bannerDisplayMode || "WarningsOnly";
+  fields.badgePosition.value = settings.badgePosition || "bottom-left";
   fields.enableLinkBadges.checked = settings.showRiskyLinkIcons ?? settings.enableLinkBadges;
   fields.enableLinkScanning.checked = settings.enableLinkScanning;
   fields.enableWarningBanner.checked = settings.enableWarningBanner;
@@ -101,6 +103,7 @@ function readForm() {
     webBaseUrl: fields.webBaseUrl.value.trim(),
     scanMode: fields.scanMode.value,
     bannerDisplayMode: fields.bannerDisplayMode.value,
+    badgePosition: fields.badgePosition.value,
     showRiskyLinkIcons: fields.enableLinkBadges.checked,
     enableLinkBadges: fields.enableLinkBadges.checked,
     enableLinkScanning: fields.enableLinkScanning.checked,

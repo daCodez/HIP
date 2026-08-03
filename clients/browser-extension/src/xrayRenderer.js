@@ -5,6 +5,7 @@
   const MAX_SCAN_BOXES = 180;
   const PANEL_MARGIN = 16;
   const TARGET_RESOLVE_COOLDOWN_MS = 500;
+  const LAUNCHER_POSITIONS = new Set(["bottom-left", "bottom-right", "top-left", "top-right"]);
   const TONES = Object.freeze({ Critical: "#ef4444", High: "#ef4444", Medium: "#f59e0b", Low: "#60a5fa", Info: "#22c55e" });
   const SCORE_PENALTIES = Object.freeze({ Critical: 30, High: 18, Medium: 9, Low: 4, Info: 0 });
   const SCAN_STAGES = Object.freeze([
@@ -23,10 +24,12 @@
   function create(controls, environment = {}) {
     const documentObject = environment.document || global.document;
     const windowObject = environment.window || global.window;
+    let launcherPosition = normalizeLauncherPosition(environment.launcherPosition);
     let host, shadow, launcher, theatre, scrim, scanLayer, markerLayer, scanLine, hud, collapsedPill;
     let scanView, resultView, statusLabel, scanProgressFill, scanElapsed, scanStageList;
     let scoreLabel, resultProgressFill, statusPill, hostnameLabel, metadata, summary, list, countLabel, categoryFilter, markerToggle;
     let animationFrame = null;
+    let animationTimeout = null;
     let animationRunning = false;
     let findings = [];
     let references = new Map();
@@ -37,6 +40,7 @@
     let technicalMode = false;
     let markersHidden = false;
     let panelCollapsed = false;
+    let markerOpenedPanel = false;
     let severityFilter = "all";
     let categoryFilterValue = "all";
     let pendingProgress = "";
@@ -51,11 +55,19 @@
         const style = documentObject.createElement("style");
         style.textContent = styleText();
         launcher = actionButton("X-ray this page", "X-ray this page", controls.start, "launcher");
+        launcher.dataset.position = launcherPosition;
         launcher.prepend(node("span", "scan-icon"));
         shadow.append(style, launcher);
         documentObject.documentElement.append(host);
       }
       launcher.hidden = false;
+    }
+
+    /** Moves only HIP's floating launcher; host-page elements are never changed. */
+    function setLauncherPosition(value) {
+      launcherPosition = normalizeLauncherPosition(value);
+      if (launcher) launcher.dataset.position = launcherPosition;
+      return launcherPosition;
     }
 
     function open() {
@@ -354,6 +366,10 @@
       setStageProgress(0);
       scanBoxes.forEach(item => { item.lit = false; item.box.style.opacity = "0"; });
       const startedAt = nowValue();
+      const scheduleTimeout = environment.setTimeout || global.setTimeout;
+      if (typeof scheduleTimeout === "function") {
+        animationTimeout = scheduleTimeout(() => completeAnimation(), SCAN_ANIMATION_MS + 350);
+      }
       const step = timestamp => {
         if (!animationRunning) return;
         const current = Number.isFinite(timestamp) ? timestamp : nowValue();
@@ -467,25 +483,27 @@
     }
 
     function selectFinding(finding, options = {}) {
+      if (!options.fromMarker) markerOpenedPanel = false;
       selectedFindingId = finding.id;
       const target = resolveFindingTarget(finding, true);
       selectedTarget = target;
       buildFindingRows();
       if (!target?.getBoundingClientRect) {
-        updateMarkerPositions();
+        controls.updatePositions();
         focusSelectedRow(options.focusRow === true);
         return;
       }
       target.scrollIntoView?.({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center", inline: "nearest" });
-      updateMarkerPositions();
       emphasizeMarker(finding.id);
-      placePanelAvoidingMarkers(true);
       focusSelectedRow(options.focusRow === true);
+      controls.updatePositions();
     }
 
     function activateMarker(finding) {
+      markerOpenedPanel = true;
+      selectFinding(finding, { focusRow: true, fromMarker: true });
       expandPanel(false);
-      selectFinding(finding, { focusRow: true });
+      focusSelectedRow(true);
     }
 
     function focusSelectedRow(shouldFocus) {
@@ -587,7 +605,10 @@
 
     function collapsePanel(persistPreference = true) {
       if (!hud || !collapsedPill) return;
-      if (persistPreference) panelCollapsed = true;
+      if (persistPreference) {
+        panelCollapsed = true;
+        markerOpenedPanel = false;
+      }
       hud.hidden = true;
       collapsedPill.hidden = false;
       updateCollapsedPill();
@@ -597,7 +618,10 @@
 
     function expandPanel(focusPanel = false, persistPreference = true) {
       if (!hud || !collapsedPill) return;
-      if (persistPreference) panelCollapsed = false;
+      if (persistPreference) {
+        panelCollapsed = false;
+        markerOpenedPanel = true;
+      }
       collapsedPill.hidden = true;
       hud.hidden = false;
       placePanelAvoidingMarkers(false);
@@ -644,7 +668,7 @@
         targetRect,
         PANEL_MARGIN
       );
-      if (collapseWhenBlocked && placement.selectedOverlap > 0) {
+      if (collapseWhenBlocked && !markerOpenedPanel && placement.selectedOverlap > 0) {
         collapsePanel(false);
         return;
       }
@@ -715,7 +739,13 @@
       if (host && !theatre) launcher.hidden = false;
     }
     function destroy() { cleanupTheatre(); host?.remove(); host = shadow = launcher = null; resolvedTargets.clear(); }
-    function cancelAnimation() { animationRunning = false; if (animationFrame !== null) windowObject.cancelAnimationFrame(animationFrame); animationFrame = null; }
+    function cancelAnimation() {
+      animationRunning = false;
+      if (animationFrame !== null) windowObject.cancelAnimationFrame(animationFrame);
+      animationFrame = null;
+      if (animationTimeout !== null) (environment.clearTimeout || global.clearTimeout)?.(animationTimeout);
+      animationTimeout = null;
+    }
     function handleKeydown(event) { if (event.key === "Escape") controls.exit(); }
     function focus() { if (hud?.hidden) expandPanel(true); else hud?.querySelector?.(".icon-collapse")?.focus?.({ preventScroll: true }); }
     function tone(severity) { return TONES[severity] || TONES.Info; }
@@ -738,7 +768,12 @@
     function textNode(tag, className, text) { const element = node(tag, className); element.textContent = text; return element; }
     function actionButton(label, ariaLabel, handler, className) { const button = textNode("button", className, label); button.type = "button"; button.ariaLabel = ariaLabel; button.addEventListener("click", handler); return button; }
 
-    return Object.freeze({ mountLauncher, open, render, setProgress, focus, updateMarkerPositions, showLauncher, resetForNavigation, isMounted: () => Boolean(host?.isConnected), destroy });
+    return Object.freeze({ mountLauncher, open, render, setProgress, setLauncherPosition, focus, updateMarkerPositions, showLauncher, resetForNavigation, isMounted: () => Boolean(host?.isConnected), destroy });
+  }
+
+  /** Accepts only the four viewport-safe corners supported by the options page. */
+  function normalizeLauncherPosition(value) {
+    return LAUNCHER_POSITIONS.has(value) ? value : "bottom-left";
   }
 
   /** Returns a compact, evidence-safe marker label without inferring AI origin. */
@@ -794,16 +829,16 @@
   function styleText() {
     return `
       :host{all:initial;position:fixed;inset:0;z-index:2147483646;pointer-events:none;color-scheme:dark;font-family:Satoshi,"Segoe UI",system-ui,sans-serif}
-      *{box-sizing:border-box}.launcher{pointer-events:auto;position:fixed;left:24px;bottom:24px;display:inline-flex;align-items:center;gap:10px;padding:13px 20px;border:1px solid #14b8a6;border-radius:11px;background:#111827;color:#14b8a6;box-shadow:0 12px 34px rgba(0,0,0,.34);font:700 15px/1 Satoshi,"Segoe UI",system-ui,sans-serif;cursor:pointer}.launcher:hover{background:#102522}.scan-icon{width:17px;height:17px;background:linear-gradient(#14b8a6,#14b8a6) 0 3px/17px 2px no-repeat,linear-gradient(#14b8a6,#14b8a6) 3px 8px/11px 2px no-repeat,linear-gradient(#14b8a6,#14b8a6) 0 13px/17px 2px no-repeat}
+      *{box-sizing:border-box}.launcher{pointer-events:auto;position:fixed;display:inline-flex;align-items:center;gap:10px;padding:13px 20px;border:1px solid #14b8a6;border-radius:11px;background:#111827;color:#14b8a6;box-shadow:0 12px 34px rgba(0,0,0,.34);font:700 15px/1 Satoshi,"Segoe UI",system-ui,sans-serif;cursor:pointer}.launcher[data-position="bottom-left"]{left:24px;bottom:24px}.launcher[data-position="bottom-right"]{right:24px;bottom:24px}.launcher[data-position="top-left"]{left:24px;top:24px}.launcher[data-position="top-right"]{right:24px;top:24px}.launcher:hover{background:#102522}.scan-icon{width:17px;height:17px;background:linear-gradient(#14b8a6,#14b8a6) 0 3px/17px 2px no-repeat,linear-gradient(#14b8a6,#14b8a6) 3px 8px/11px 2px no-repeat,linear-gradient(#14b8a6,#14b8a6) 0 13px/17px 2px no-repeat}
       .theatre{--scrim-opacity:0;position:fixed;inset:0;pointer-events:none}.scrim{pointer-events:none;position:absolute;inset:0;width:100%;height:100%;border:0;background:#0b1220;opacity:var(--scrim-opacity);backdrop-filter:saturate(.45) blur(1px)}.scan-layer,.marker-layer{position:fixed;inset:0;pointer-events:none}.scan-line{position:fixed;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg, transparent, #14b8a6, transparent);box-shadow:0 0 26px 5px rgba(20,184,166,.45);transform:translateY(-4px)}.scan-box{position:fixed;left:0;top:0;border:1px solid #14b8a6;border-radius:4px;opacity:0;box-shadow:inset 0 0 22px rgba(20,184,166,.1);transition:opacity .12s ease}.scan-label{position:absolute;left:0;top:-15px;color:#14b8a6;opacity:.85;font:9px/1 "JetBrains Mono",Consolas,monospace;letter-spacing:.06em}
       .hud{pointer-events:auto;position:fixed;width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow-y:auto;border:1px solid #1f2937;border-radius:16px;background:#111827;color:#f8fafb;box-shadow:0 26px 70px rgba(0,0,0,.55);font:14px/1.45 Satoshi,"Segoe UI",system-ui,sans-serif}.hud[data-dock="top-left"]{left:16px;top:16px}.hud[data-dock="top-right"]{right:16px;top:16px}.hud[data-dock="bottom-left"]{left:16px;bottom:16px}.hud[data-dock="bottom-right"]{right:16px;bottom:16px}.window-bar{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:10px;min-height:54px;padding:0 18px;border-bottom:1px solid #1f2937;background:#161e2e}.window-dots{display:flex;gap:7px}.window-dot{display:block;width:9px;height:9px;border-radius:50%;background:#202a3d}.window-title{flex:1;color:#9ca3af;font:600 12px/1 "JetBrains Mono",Consolas,monospace;letter-spacing:.02em}.icon-close,.icon-collapse{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid transparent;border-radius:8px;background:transparent;color:#9ca3af;font-size:18px;cursor:pointer}.icon-close:hover,.icon-collapse:hover{border-color:#334155;color:#f8fafb}.results-pill{pointer-events:auto;position:fixed;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);padding:9px 12px;border:1px solid #245b57;border-radius:999px;background:#111827;color:#f8fafb;box-shadow:0 14px 35px rgba(0,0,0,.45);cursor:pointer}.results-pill[data-dock="top-left"]{left:16px;top:16px}.results-pill[data-dock="top-right"]{right:16px;top:16px}.results-pill[data-dock="bottom-left"]{left:16px;bottom:16px}.results-pill[data-dock="bottom-right"]{right:16px;bottom:16px}.pill-count{display:grid;place-items:center;min-width:26px;height:26px;padding:0 7px;border-radius:999px;background:#14b8a6;color:#07131d;font:800 12px/1 "JetBrains Mono",Consolas,monospace}.pill-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}.pill-open{color:#5eead4;font-size:12px;font-weight:700}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
       .scan-body{position:relative;min-height:430px;padding:34px 34px 38px;overflow:hidden}.scan-body:before{content:"";position:absolute;inset:-45% -15%;background:radial-gradient(circle at 15% 30%,rgba(20,184,166,.13),transparent 46%);animation:scan-aurora 4s ease-in-out infinite;pointer-events:none}.scan-lead{position:relative;display:flex;align-items:center;gap:13px;margin-bottom:15px}.spinner{width:20px;height:20px;flex:0 0 auto;border:2px solid #334155;border-top-color:#14b8a6;border-radius:50%;animation:spin .85s linear infinite}.scan-status{flex:1;min-width:0;margin:0;overflow:hidden;color:#f8fafb;font:600 14px/1.3 "JetBrains Mono",Consolas,monospace;text-overflow:ellipsis;white-space:nowrap}.scan-elapsed{color:#9ca3af;font:12px/1 "JetBrains Mono",Consolas,monospace}.scan-progress,.result-progress{height:6px;overflow:hidden;border-radius:999px;background:#161e2e}.scan-progress{position:relative;margin-bottom:30px}.scan-progress-fill,.result-progress-fill{height:100%;width:0;background:linear-gradient(90deg,#1f6feb,#14b8a6);transition:width .16s linear}.scan-stage-list{position:relative;display:flex;flex-direction:column;gap:13px;margin:0;padding:0;list-style:none}.scan-stage{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:start;gap:12px;padding:13px 14px;border:1px solid #1f2937;border-radius:11px;background:#0b1220;opacity:.48;transition:opacity .2s ease,border-color .2s ease,transform .2s ease}.scan-stage[data-state="active"]{border-color:#245b57;opacity:1;transform:translateX(3px)}.scan-stage[data-state="done"]{opacity:1}.stage-indicator{width:8px;height:8px;margin-top:5px;border-radius:50%;background:#334155}.scan-stage[data-state="active"] .stage-indicator{background:#14b8a6;box-shadow:0 0 0 5px rgba(20,184,166,.12);animation:pulse 1s ease-in-out infinite}.scan-stage[data-state="done"] .stage-indicator{background:#22c55e}.stage-label,.stage-detail{display:block}.stage-label{color:#f8fafb;font-size:14px;line-height:1.35}.stage-detail{margin-top:2px;color:#9ca3af;font-size:12px;line-height:1.4}.stage-state{color:#22c55e;font:700 11px/1.4 "JetBrains Mono",Consolas,monospace}
       .result-view{animation:result-in .32s ease-out}.result-body{padding:22px 22px 20px}.result-top{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}.result-hostname{margin:0 0 6px;color:#9ca3af;font:600 12px/1.4 "JetBrains Mono",Consolas,monospace;overflow-wrap:anywhere}.result-score-row{display:flex;align-items:baseline;gap:8px}.result-score{color:#14b8a6;font:800 48px/.95 "JetBrains Mono",Consolas,monospace;letter-spacing:-.05em}.result-score-unit{color:#9ca3af;font-size:14px}.status-pill{flex:0 0 auto;margin-top:1px;padding:8px 13px;border-radius:999px;background:rgba(34,197,94,.13);color:#22c55e;font-size:12px;font-weight:700;white-space:nowrap}.status-pill[data-tone="warn"]{background:rgba(245,158,11,.13);color:#f59e0b}.status-pill[data-tone="risk"]{background:rgba(239,68,68,.13);color:#ef4444}.result-progress{margin-bottom:10px}.metadata{margin:0 0 14px;color:#9ca3af;font:10px/1.4 "JetBrains Mono",Consolas,monospace}.navigator{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}.finding-count{margin:0;color:#d7e0ed;font-size:12px;font-weight:700}.filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.filter-chip,.category-filter{min-height:28px;border:1px solid #263244;border-radius:999px;background:#0b1220;color:#aeb9c9;font:700 10px/1 Satoshi,"Segoe UI",system-ui,sans-serif}.filter-chip{padding:5px 9px;cursor:pointer}.filter-chip[aria-pressed="true"]{border-color:#14b8a6;background:#102522;color:#5eead4}.category-filter{max-width:140px;padding:4px 9px;border-radius:8px}.findings{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}.finding-item{overflow:hidden;border:1px solid #1f2937;border-radius:11px;background:#0b1220}.finding-item[data-selected="true"]{border-color:#14b8a6;box-shadow:0 0 0 2px rgba(20,184,166,.12)}.finding-row{display:flex;align-items:flex-start;gap:11px;width:100%;min-height:66px;padding:12px 14px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}.finding-row:hover{background:#0e1828}.finding-row-static{cursor:default}.tone-dot{width:8px;height:8px;flex:0 0 auto;margin-top:6px;border-radius:50%}.finding-copy{flex:1;min-width:0}.finding-title,.finding-explanation{display:block}.finding-title{color:#f8fafb;font-size:13px;font-weight:700;line-height:1.35}.finding-number{display:inline-block;margin-right:8px;color:#5eead4;font:800 10px/1 "JetBrains Mono",Consolas,monospace}.finding-explanation{display:-webkit-box;margin-top:2px;overflow:hidden;color:#9ca3af;font-size:11.5px;line-height:1.4;-webkit-box-orient:vertical;-webkit-line-clamp:2}.severity{flex:0 0 auto;margin-top:2px;font-size:11px;font-weight:700;white-space:nowrap}.finding-details{padding:0 14px 13px 33px;border-top:1px solid #1f2937}.detail-line,.target-state{margin:9px 0 0;color:#9ca3af;font-size:11.5px;line-height:1.45}.detail-label{display:block;color:#dbe5f1}.detail-copy{display:block;overflow-wrap:anywhere}.target-state:before{content:"✓ ";color:#22c55e;font-weight:800}.target-missing{color:#f8b4b4}.target-missing:before{content:"! ";color:#ef4444}.toolbar{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px;padding-top:13px;border-top:1px solid #1f2937}.tool{padding:7px 10px;border:1px solid #263244;border-radius:8px;background:transparent;color:#cbd5e1;font:700 11px/1 Satoshi,"Segoe UI",system-ui,sans-serif;cursor:pointer}.tool:hover,.tool[aria-pressed="true"]{border-color:#14b8a6;color:#14b8a6}.tool-close{margin-left:auto}.summary{margin:13px 0 0;color:#9ca3af;font-size:11px;line-height:1.5}.reason-note{margin:15px 0 0;padding-top:13px;border-top:1px solid #1f2937;color:#9ca3af;font-size:11.5px;line-height:1.5}
       .marker-frame{pointer-events:none;position:fixed;left:0;top:0;border:2px solid;border-radius:5px;background:color-mix(in srgb,var(--marker-tone,#14b8a6) 5%,transparent);box-shadow:inset 0 0 18px rgba(20,184,166,.08)}.marker-frame[data-selected="true"]{border-width:3px;box-shadow:0 0 0 4px rgba(20,184,166,.2),inset 0 0 22px rgba(20,184,166,.12)}.marker{pointer-events:auto;position:fixed;left:0;top:0;display:flex;align-items:center;max-width:240px;height:26px;padding:0;border:1px solid var(--marker-tone);border-radius:7px;background:#0b1220;color:#f8fafb;box-shadow:0 4px 15px rgba(0,0,0,.65);font:800 9px/1 "JetBrains Mono",Consolas,monospace;letter-spacing:.04em;text-align:left;cursor:pointer}.marker-number{display:grid;place-items:center;align-self:stretch;min-width:28px;padding:0 6px;background:var(--marker-tone);color:#07131d}.marker-label{min-width:0;padding:0 8px;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap}.marker[data-selected="true"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--marker-tone) 35%,transparent),0 4px 15px rgba(0,0,0,.65);animation:marker-pulse .8s ease-in-out 2}.highlight{pointer-events:none;position:fixed;left:0;top:0;border:3px solid #14b8a6;border-radius:5px;box-shadow:inset 0 0 22px rgba(20,184,166,.12),0 0 0 4px rgba(20,184,166,.2)}button:focus-visible,select:focus-visible{outline:3px solid #5eead4;outline-offset:3px}[hidden]{display:none!important}
       @keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{50%{transform:scale(.72);opacity:.65}}@keyframes marker-pulse{50%{filter:brightness(1.45)}}@keyframes scan-aurora{50%{transform:translate3d(8%,4%,0)}}@keyframes result-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-      @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}.marker[data-selected="true"]{outline:4px double var(--marker-tone);outline-offset:3px}}@media(max-width:620px){.launcher{left:12px;bottom:12px}.hud{left:8px!important;right:8px!important;top:8px!important;bottom:auto!important;width:auto;max-height:calc(100vh - 16px)}.window-bar{min-height:50px;padding:0 12px}.window-dots{display:none}.scan-body,.result-body{padding:18px 14px}.result-top{display:block}.status-pill{display:inline-block;margin-top:10px}.result-score{font-size:42px}.result-score-unit{font-size:12px}.finding-row{min-height:0;padding:11px}.finding-details{padding-left:14px}.severity{max-width:82px;overflow:hidden;text-overflow:ellipsis}.tool-close{margin-left:0}.marker{max-width:min(210px,calc(100vw - 12px))}.results-pill{left:8px!important;right:auto!important;top:8px!important;bottom:auto!important;max-width:calc(100vw - 16px)}}
+      @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}.marker[data-selected="true"]{outline:4px double var(--marker-tone);outline-offset:3px}}@media(max-width:620px){.launcher[data-position="bottom-left"]{left:12px;bottom:12px}.launcher[data-position="bottom-right"]{right:12px;bottom:12px}.launcher[data-position="top-left"]{left:12px;top:12px}.launcher[data-position="top-right"]{right:12px;top:12px}.hud{left:8px!important;right:8px!important;top:8px!important;bottom:auto!important;width:auto;max-height:calc(100vh - 16px)}.window-bar{min-height:50px;padding:0 12px}.window-dots{display:none}.scan-body,.result-body{padding:18px 14px}.result-top{display:block}.status-pill{display:inline-block;margin-top:10px}.result-score{font-size:42px}.result-score-unit{font-size:12px}.finding-row{min-height:0;padding:11px}.finding-details{padding-left:14px}.severity{max-width:82px;overflow:hidden;text-overflow:ellipsis}.tool-close{margin-left:0}.marker{max-width:min(210px,calc(100vw - 12px))}.results-pill{left:8px!important;right:auto!important;top:8px!important;bottom:auto!important;max-width:calc(100vw - 16px)}}
     `;
   }
 
-  global.HipXrayRenderer = Object.freeze({ create, SCAN_ANIMATION_MS, markerSummary, rectLike, intersectionArea, choosePanelPlacement });
+  global.HipXrayRenderer = Object.freeze({ create, SCAN_ANIMATION_MS, markerSummary, rectLike, intersectionArea, choosePanelPlacement, normalizeLauncherPosition });
 })(globalThis);

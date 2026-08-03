@@ -19,6 +19,7 @@ function createHarness({ mounted = true } = {}) {
     focus: () => calls.push("focus"),
     updateMarkerPositions: () => calls.push("position"),
     resetForNavigation: () => calls.push("reset-navigation"),
+    setLauncherPosition: value => calls.push(`launcher:${value}`),
     isMounted: () => mounted,
     destroy: () => calls.push("destroy")
   };
@@ -66,6 +67,15 @@ test("start is idempotent and reports real scan progress", () => {
   assert.equal(harness.calls.filter(item => item === "open").length, 1);
   assert.ok(harness.calls.includes("progress:Scanning this page…"));
   assert.ok(harness.calls.includes("progress:1 finding"));
+});
+
+test("launcher placement can change without replacing the active scan", () => {
+  const harness = createHarness();
+  harness.controller.installLauncher();
+  harness.controller.start();
+  harness.controller.setPreferences({ launcherPosition: "top-right" });
+  assert.ok(harness.calls.includes("launcher:top-right"));
+  assert.equal(harness.controller.getState().active, true);
 });
 
 test("mutation rescans are bounded and ignore HIP-owned nodes", () => {

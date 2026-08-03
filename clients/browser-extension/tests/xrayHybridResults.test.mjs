@@ -29,7 +29,7 @@ test("marker lifecycle replaces old overlays and retains every located finding",
 test("results and markers navigate in both directions", () => {
   assert.match(rendererSource, /target\.scrollIntoView\?\.\(/);
   assert.match(rendererSource, /emphasizeMarker\(finding\.id\)/);
-  assert.match(rendererSource, /function activateMarker\(finding\)[\s\S]*expandPanel\(false\)[\s\S]*focusRow: true/);
+  assert.match(rendererSource, /function activateMarker\(finding\)[\s\S]*focusRow: true, fromMarker: true[\s\S]*expandPanel\(false\)/);
   assert.match(rendererSource, /Element no longer available/);
 });
 

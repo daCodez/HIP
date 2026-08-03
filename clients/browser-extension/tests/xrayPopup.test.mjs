@@ -13,6 +13,8 @@ test("popup provides an explicit accessible X-ray action and status", () => {
   assert.match(html, /id="xrayPage"[^>]*>X-ray this page</);
   assert.match(html, /id="xrayState"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(popup, /HIP_XRAY_START/);
+  assert.match(popup, /startInjectedXray/);
+  assert.match(popup, /controller\.getOrCreate/);
   assert.match(popup, /X-ray is unavailable on protected browser pages/);
 });
 

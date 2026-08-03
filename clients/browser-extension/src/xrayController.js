@@ -4,6 +4,8 @@
   const MAX_AUTOMATIC_RESCANS = 12;
   const RESCAN_DEBOUNCE_MS = 400;
   const ROUTE_POLL_MS = 500;
+  const SESSION_VERSION = 2;
+  const SESSION_KEY = "__hipXrayControllerSession";
 
   function create(options = {}) {
     const documentObject = options.document || global.document;
@@ -49,7 +51,7 @@
       if (!documentObject?.documentElement || !windowObject || typeof rendererFactory !== "function" || typeof scan !== "function") {
         throw new Error("X-ray is unavailable on this page.");
       }
-      renderer = rendererFactory(controls, { document: documentObject, window: windowObject });
+      renderer = rendererFactory(controls, { document: documentObject, window: windowObject, launcherPosition: options.launcherPosition });
     }
 
     function start() {
@@ -177,6 +179,13 @@
       return { active, findingCount: findings.length, referenceCount: references.size, automaticRescans, coverage };
     }
 
+    /** Applies persisted presentation preferences without restarting an active scan. */
+    function setPreferences(preferences = {}) {
+      options.launcherPosition = preferences.launcherPosition || options.launcherPosition;
+      renderer?.setLauncherPosition?.(options.launcherPosition);
+      return { launcherPosition: options.launcherPosition || "bottom-left" };
+    }
+
     function destroy() {
       stop();
       if (routeWatcher !== null) cancelInterval(routeWatcher);
@@ -185,8 +194,23 @@
       renderer = null;
     }
 
-    return Object.freeze({ installLauncher, start, stop, destroy, rescan: () => runScan(false), getState });
+    return Object.freeze({ installLauncher, start, stop, destroy, rescan: () => runScan(false), getState, setPreferences });
   }
 
-  global.HipXrayController = Object.freeze({ create, MAX_AUTOMATIC_RESCANS, ROUTE_POLL_MS });
+  /**
+   * Returns one versioned session per isolated page world. Popup reinjection can
+   * call this directly even when a stale content-script guard skipped startup.
+   */
+  function getOrCreate(options = {}) {
+    const current = global[SESSION_KEY];
+    if (!current || current.version !== SESSION_VERSION || typeof current.session?.setPreferences !== "function") {
+      current?.session?.destroy?.();
+      global[SESSION_KEY] = { version: SESSION_VERSION, session: create(options) };
+    } else {
+      current.session.setPreferences(options);
+    }
+    return global[SESSION_KEY].session;
+  }
+
+  global.HipXrayController = Object.freeze({ create, getOrCreate, MAX_AUTOMATIC_RESCANS, ROUTE_POLL_MS, SESSION_VERSION });
 })(globalThis);

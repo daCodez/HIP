@@ -11,6 +11,8 @@ const packageDocument = JSON.parse(await readFile(path.join(extensionRoot, "pack
 test("manifest uses only reviewed runtime permissions", () => {
   assert.deepEqual(manifest.permissions, ["activeTab", "scripting", "storage"]);
   assert.deepEqual(manifest.host_permissions, [
+    "https://api.guardwithhip.com/*",
+    "https://guardwithhip.com/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
   ]);
