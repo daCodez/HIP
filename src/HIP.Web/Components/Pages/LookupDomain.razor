@@ -30,6 +30,7 @@
     }
     else if (_lookup is not null)
     {
+        var reviewedSignals = BuildReviewedSignals(_lookup);
         <div class="result-shell">
             <nav class="result-nav" aria-label="Lookup actions">
                 <a href="/lookup"><span aria-hidden="true">←</span> Check another domain</a>
@@ -85,6 +86,37 @@
                     <p class="trust-caveat">Every score comes with its reasons. Identity verification confirms control or authenticated identity evidence; it does not guarantee safety.</p>
                 </div>
             </section>
+
+            <details class="signals-disclosure" data-rise>
+                <summary>
+                    <span class="signals-summary-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+                    <span class="signals-summary-copy">
+                        <strong>Signals reviewed</strong>
+                        <small>@reviewedSignals.Count public-safe checks and evidence points</small>
+                    </span>
+                    <span class="signals-summary-action">View all <i aria-hidden="true"></i></span>
+                </summary>
+                <div class="signals-content">
+                    <header>
+                        <div>
+                            <p>HOW HIP REACHED THIS RESULT</p>
+                            <h2>Evidence and scoring signals</h2>
+                        </div>
+                        <span>HIP shows the public-safe evidence used for this result. Raw page text, form values, private messages, cookies, and browsing history are never included.</span>
+                    </header>
+                    <div class="signals-table" role="list">
+                        @foreach (var signal in reviewedSignals)
+                        {
+                            <article class="signal-row signal-@signal.Tone" role="listitem">
+                                <span class="signal-dot" aria-hidden="true"></span>
+                                <div class="signal-name"><small>@signal.Group</small><strong>@signal.Name</strong></div>
+                                <span class="signal-status">@signal.Status</span>
+                                <p>@signal.Detail</p>
+                            </article>
+                        }
+                    </div>
+                </div>
+            </details>
 
             @if (_lookup.DisplayScore is not null)
             {
@@ -227,6 +259,61 @@
     private int? PresentedScore => _lookup?.DisplayScore ?? _lookup?.ProvisionalScore;
     private string ScoreWidth => $"width:{Math.Clamp(PresentedScore ?? 0, 0, 100)}%";
 
+    /// <summary>Builds the complete public-safe signal inventory shown beneath a lookup result.</summary>
+    private static IReadOnlyList<ReviewedSignal> BuildReviewedSignals(PublicDomainLookupResponse lookup)
+    {
+        var signals = new List<ReviewedSignal>
+        {
+            new("Identity", "Domain control", lookup.IdentityStatus, $"Verification method: {lookup.VerificationMethod}.", lookup.IdentityStatus == "Verified" ? "safe" : "neutral"),
+            new("Evidence", "Evidence coverage", lookup.EvidenceCoverage, "Coverage describes how much authenticated trust and safety evidence HIP could use.", lookup.EvidenceCoverage == "Sufficient" ? "safe" : "unavailable"),
+            new("Evidence", "Evidence confidence", lookup.EvidenceConfidence, "Confidence reflects the strength and agreement of the available evidence.", lookup.EvidenceConfidence is "High" or "Medium" ? "safe" : "unavailable"),
+            new("Provenance", "Result data source", Humanize(lookup.DataSource), "The source is shown so the result can be interpreted in context.", "neutral")
+        };
+
+        foreach (var component in lookup.ScoreBreakdown)
+        {
+            var detail = component.Reasons.Count == 0
+                ? component.Explanation
+                : $"{component.Explanation} {string.Join(" ", component.Reasons)}";
+            signals.Add(new(
+                "Score component",
+                Humanize(component.Category),
+                $"{component.Score}/100 · {Humanize(component.Status.ToString())}",
+                detail,
+                ToneForStatus(component.Status.ToString())));
+        }
+
+        foreach (var warning in lookup.KnownRisks.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            signals.Add(new("Public warning", "Known risk signal", "Warning", warning, "warning"));
+        }
+
+        var publishedReasons = lookup.Explanations
+            .Concat(lookup.Reasons)
+            .Where(reason => !string.IsNullOrWhiteSpace(reason))
+            .Select(reason => reason.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var reason in publishedReasons)
+        {
+            signals.Add(new("Result reason", "Published evidence conclusion", "Reviewed", reason, "neutral"));
+        }
+
+        if (lookup.DataSource != "BrowserPluginScan")
+        {
+            signals.Add(new("Unavailable evidence", "Authenticated site-safety scan", "Not available", lookup.Message, "unavailable"));
+        }
+
+        return signals;
+    }
+
+    /// <summary>Maps risk labels to non-color signal tones used by the disclosure.</summary>
+    private static string ToneForStatus(string status) => status switch
+    {
+        "Trusted" or "MostlyTrusted" or "ProbablySafe" => "safe",
+        "Suspicious" or "HighRisk" or "Dangerous" or "Critical" => "warning",
+        _ => "neutral"
+    };
+
     protected override async Task OnParametersSetAsync()
     {
         if (string.IsNullOrWhiteSpace(Domain))
@@ -249,4 +336,6 @@
     /// <summary>Turns protocol enum names into compact user-facing status labels.</summary>
     private static string Humanize(string value) =>
         System.Text.RegularExpressions.Regex.Replace(value, "([a-z])([A-Z])", "$1 $2");
+
+    private sealed record ReviewedSignal(string Group, string Name, string Status, string Detail, string Tone);
 }

@@ -55,6 +55,12 @@ public sealed class PublicLookupPageTests
             Assert.That(html, Does.Contain(">56</strong>"));
             Assert.That(html, Does.Contain(">/ 100</span>"));
             Assert.That(html, Does.Contain("Provisional score · limited evidence"));
+            Assert.That(html, Does.Contain("Signals reviewed"));
+            Assert.That(html, Does.Contain("signals-disclosure"));
+            Assert.That(html, Does.Contain("Score component"));
+            Assert.That(html, Does.Contain("Authenticated site-safety scan"));
+            Assert.That(html, Does.Contain("Not available"));
+            Assert.That(html, Does.Contain("Raw page text, form values, private messages, cookies, and browsing history are never included"));
             Assert.That(html, Does.Contain("Not Enough Data Yet"));
             Assert.That(html, Does.Contain("HIP has no authoritative site-safety assessment for this domain yet"));
             Assert.That(html, Does.Contain("Data source"));
