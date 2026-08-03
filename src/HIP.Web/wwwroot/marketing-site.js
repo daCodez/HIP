@@ -19,14 +19,16 @@
         root.dataset.theme = root.dataset.theme === "light" ? "dark" : "light";
       });
 
-      var registerToggle = root.querySelector("[data-register-toggle]");
-      if (registerToggle) registerToggle.addEventListener("click", function () {
-        var technical = root.dataset.register !== "technical";
-        root.dataset.register = technical ? "technical" : "plain";
-        var label = registerToggle.querySelector("[data-register-label]");
-        if (label) label.textContent = technical ? "Technical" : "Plain language";
-        root.querySelectorAll("[data-register-copy]").forEach(function (copy) {
-          copy.textContent = copy.getAttribute(technical ? "data-technical" : "data-plain") || "";
+      root.querySelectorAll("[data-register-toggle]").forEach(function (registerToggle) {
+        registerToggle.addEventListener("click", function () {
+          var scope = registerToggle.closest("[data-register-scope]") || root;
+          var technical = scope.dataset.register !== "technical";
+          scope.dataset.register = technical ? "technical" : "plain";
+          var label = registerToggle.querySelector("[data-register-label]");
+          if (label) label.textContent = technical ? "Technical" : "Plain language";
+          scope.querySelectorAll("[data-register-copy]").forEach(function (copy) {
+            copy.textContent = copy.getAttribute(technical ? "data-technical" : "data-plain") || "";
+          });
         });
       });
 

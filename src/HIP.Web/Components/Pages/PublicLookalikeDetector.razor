@@ -1,0 +1,27 @@
+@page "/tools/lookalike-detector"
+@attribute [AllowAnonymous]
+@layout MarketingLayout
+@rendermode InteractiveServer
+
+<PageTitle>Lookalike Domain Detector — Homograph &amp; Punycode Guide | HIP</PageTitle>
+<HeadContent>
+  <meta name="description" content="Learn how homographs, Unicode, punycode, substitutions and misleading subdomains can make a dangerous address resemble a trusted one." />
+  <meta property="og:title" content="Lookalike Domain Detector | HIP" />
+  <meta property="og:description" content="An educational, non-navigating tool for recognizing deceptive domain patterns." />
+  <meta property="og:url" content="https://guardwithhip.com/tools/lookalike-detector" />
+  <meta property="og:image" content="https://guardwithhip.com/images/public/marketing/og-image.png" />
+  <link rel="canonical" href="https://guardwithhip.com/tools/lookalike-detector" />
+</HeadContent>
+
+<main>
+  <header style="max-width:900px;margin:0 auto;padding:clamp(56px,7vw,92px) clamp(16px,3vw,32px) 10px">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">EDUCATIONAL TOOL</div>
+    <h1 style="font-size:clamp(38px,5vw,58px);line-height:1.05;letter-spacing:-.03em;margin:0 0 18px">See the domain your eyes can miss.</h1>
+    <p style="font-size:19px;line-height:1.65;color:var(--muted);margin:0">Explore Unicode lookalikes, punycode, character substitutions and misleading subdomains. Generated examples are displayed as text and are never clickable.</p>
+  </header>
+  <LookalikeDetector />
+  <section style="max-width:900px;margin:0 auto;padding:0 clamp(16px,3vw,32px) 90px;text-align:center">
+    <p style="color:var(--muted);line-height:1.65">A visual match is a reason to slow down, not proof of abuse. For evidence beyond the address itself, use the full scanner.</p>
+    <a href="/website-trust-scanner" style="display:inline-block;padding:12px 18px;background:var(--action);color:var(--action-ink);border-radius:10px;font-weight:700;text-decoration:none">Check a real link safely</a>
+  </section>
+</main>

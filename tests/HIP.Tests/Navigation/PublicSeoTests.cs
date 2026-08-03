@@ -25,9 +25,10 @@ public sealed class PublicSeoTests
             Assert.That(html, Does.Contain("\"sameAs\": [\"https://github.com/daCodez/HIP\"]"));
             Assert.That(html, Does.Contain("HIP (Human-Interactive Protocol) is an open-source website trust and risk-scoring platform at guardwithhip.com"));
             Assert.That(html, Does.Contain("href=\"/platform\""));
-            Assert.That(html, Does.Contain("href=\"/how-it-works\""));
-            Assert.That(html, Does.Contain("href=\"/verification\""));
-            Assert.That(html, Does.Contain("href=\"/developers\""));
+            Assert.That(html, Does.Contain("href=\"/website-trust-scanner\""));
+            Assert.That(html, Does.Contain("href=\"/tools/lookalike-detector\""));
+            Assert.That(html, Does.Contain("href=\"/browser-extension\""));
+            Assert.That(html, Does.Contain("href=\"/domain-verification\""));
             Assert.That(html, Does.Contain("href=\"/signals\""));
             Assert.That(html, Does.Contain("href=\"/score-interpretation\""));
             Assert.That(html, Does.Contain("href=\"/evidence-providers\""));
@@ -60,7 +61,11 @@ public sealed class PublicSeoTests
     }
 
     /// <summary>Confirms each new search landing page is directly renderable and self-describing.</summary>
-    [TestCase("/website-trust-scanner", "Website Trust Scanner", "Check a website before you")]
+    [TestCase("/website-trust-scanner", "Website Trust Scanner", "Check the link. Then check the evidence")]
+    [TestCase("/tools/lookalike-detector", "Lookalike Domain Detector", "See the domain your eyes can miss")]
+    [TestCase("/browser-extension", "HIP Browser Extension", "HIP, where you browse")]
+    [TestCase("/domain-verification", "Domain Verification", "Prove it once, then keep it honest")]
+    [TestCase("/platform", "Platform", "Six signal families, one readable score")]
     [TestCase("/methodology", "Trust Methodology", "How a HIP score is produced")]
     [TestCase("/privacy", "Privacy Approach", "Collect less. Explain")]
     [TestCase("/appeals", "Appeals Policy", "A finding can be")]
@@ -103,6 +108,9 @@ public sealed class PublicSeoTests
             Assert.That(robots, Does.Contain("Sitemap: https://guardwithhip.com/sitemap.xml"));
             Assert.That(sitemapResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(sitemap, Does.Contain("https://guardwithhip.com/website-trust-scanner"));
+            Assert.That(sitemap, Does.Contain("https://guardwithhip.com/tools/lookalike-detector"));
+            Assert.That(sitemap, Does.Contain("https://guardwithhip.com/browser-extension"));
+            Assert.That(sitemap, Does.Contain("https://guardwithhip.com/domain-verification"));
             Assert.That(sitemap, Does.Contain("https://guardwithhip.com/methodology"));
             Assert.That(sitemap, Does.Contain("https://guardwithhip.com/signals"));
             Assert.That(sitemap, Does.Contain("https://guardwithhip.com/score-interpretation"));

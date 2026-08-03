@@ -1,36 +1,58 @@
 @page "/website-trust-scanner"
 @attribute [AllowAnonymous]
-@layout PublicLayout
+@layout MarketingLayout
+@rendermode InteractiveServer
+@inject IJSRuntime JS
 
-<PageTitle>Website Trust Scanner | HIP Human-Interactive Protocol</PageTitle>
+<PageTitle>Website Trust Scanner — Local Check &amp; HIP Scan | HIP</PageTitle>
 <HeadContent>
-    <meta name="description" content="Check a website for HTTPS, certificate, DNS, reputation and page-risk signals with HIP's explainable website trust scanner." />
+  <meta name="description" content="Check a link locally, then continue to HIP's explainable website lookup for available DNS, certificate, content and reputation evidence." />
+  <meta property="og:title" content="Website Trust Scanner — Local Check &amp; HIP Scan | HIP" />
+  <meta property="og:description" content="Run privacy-preserving local URL checks and continue to a full HIP website lookup when backend evidence is available." />
+  <meta property="og:url" content="https://guardwithhip.com/website-trust-scanner" />
+  <meta property="og:image" content="https://guardwithhip.com/images/public/marketing/og-image.png" />
+  <link rel="canonical" href="https://guardwithhip.com/website-trust-scanner" />
 </HeadContent>
 
-<main class="hip-public-page">
-    <section class="hip-page-hero hip-grid-bg">
-        <div class="hip-container">
-            <p class="hip-eyebrow">Website trust scanner</p>
-            <h1>Check a website before you <span>trust it.</span></h1>
-            <p class="hip-lead">HIP (Human-Interactive Protocol) examines available website trust and risk signals, then presents the result with plain-language reasons. A score describes the evidence checked at that time; it is not a guarantee of safety.</p>
-            <div class="hip-hero-actions">
-                <a class="hip-button" href="/lookup">Scan a website</a>
-                <a class="hip-button-secondary" href="/methodology">Read the scoring methodology</a>
-            </div>
-        </div>
-    </section>
+<main style="max-width:1240px;margin:0 auto;padding:clamp(56px,6vw,84px) clamp(16px,3vw,32px) 96px">
+  <header style="max-width:760px;margin-bottom:38px">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">WEBSITE TRUST SCANNER</div>
+    <h1 style="font-size:clamp(38px,5vw,58px);line-height:1.05;letter-spacing:-.03em;margin:0 0 18px">Check the link. Then check the evidence.</h1>
+    <p style="font-size:19px;line-height:1.65;color:var(--muted);margin:0">The first result runs entirely in this browser and inspects only the address you paste. A full HIP lookup is a separate step and shows only evidence the backend actually returned.</p>
+  </header>
 
-    <section class="hip-section">
-        <div class="hip-container">
-            <div class="hip-section-heading">
-                <p class="hip-eyebrow">Signals</p>
-                <h2>Evidence you can inspect.</h2>
-            </div>
-            <div class="hip-capability-grid">
-                <article><span>Connection</span><h3>HTTPS and certificates</h3><p>HIP checks encrypted transport, redirects, certificate validity, issuer details and expiry risk.</p></article>
-                <article><span>Identity</span><h3>DNS and ownership</h3><p>Domain records and explicit verification evidence can establish control. Control alone does not prove trustworthiness.</p></article>
-                <article><span>Risk</span><h3>Reputation and page signals</h3><p>Available reputation, content and behaviour signals contribute evidence with their source and effect explained.</p></article>
-            </div>
-        </div>
+  <section data-register-scope style="margin-bottom:46px">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button data-register-toggle type="button" style="padding:8px 12px;border:1px solid var(--border);background:var(--surface);border-radius:9px;color:var(--muted);font:600 12.5px inherit;cursor:pointer"><span data-register-label>Plain language</span></button>
+    </div>
+    <LinkCheckBar OnResultChanged="HandleResultChanged" />
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px">
+      <article style="padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface)"><strong>1 · Local address checks</strong><p data-register-copy data-plain="Parses the address and flags visible tricks without sending it anywhere." data-technical="Parses scheme, host, IDN form, user-info, label depth, raw IP and substitution patterns client-side." style="color:var(--muted);line-height:1.55;margin:8px 0 0">Parses the address and flags visible tricks without sending it anywhere.</p></article>
+      <article style="padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface)"><strong>2 · Full HIP lookup</strong><p data-register-copy data-plain="Opens the HIP lookup path for evidence the service can currently retrieve." data-technical="Requests the server-side lookup path; DNS, TLS, certificate, page and provider stages appear only when returned." style="color:var(--muted);line-height:1.55;margin:8px 0 0">Opens the HIP lookup path for evidence the service can currently retrieve.</p></article>
+      <article style="padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface)"><strong>3 · Explainable result</strong><p data-register-copy data-plain="Every available finding says what happened and why it matters." data-technical="The authoritative result preserves evidence source, scan time, rule version, score effect and unavailable stages." style="color:var(--muted);line-height:1.55;margin:8px 0 0">Every available finding says what happened and why it matters.</p></article>
+    </div>
+  </section>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:24px;align-items:start;margin-bottom:52px">
+    <div>
+      <div style="font-size:12px;font-weight:800;letter-spacing:.18em;color:var(--action);margin-bottom:12px">X-RAY PREVIEW · LOCAL DEMO</div>
+      <h2 style="font-size:30px;margin:0 0 12px">Connect findings to the page.</h2>
+      <p style="color:var(--muted);line-height:1.65">The X-ray preview inspects this rendered marketing page and highlights element-level observations. It is a local demonstration, not a full external HIP scan.</p>
+      <button @onclick="RunXray" style="padding:12px 18px;border:1px solid var(--action);background:var(--surface);color:var(--action);border-radius:10px;font-weight:700;cursor:pointer">X-ray this page</button>
+    </div>
+    <ResultPanel Score="82" Status="Mostly Trusted" Domain="example.com" />
+  </section>
+
+  @if (HasLocalResult)
+  {
+    <section style="border-top:1px solid var(--border);padding-top:48px">
+      <TrustReceipt />
     </section>
+  }
 </main>
+
+@code {
+  private bool HasLocalResult;
+  private void HandleResultChanged(bool hasResult) => HasLocalResult = hasResult;
+  private async Task RunXray() => await JS.InvokeVoidAsync("hip.xray");
+}

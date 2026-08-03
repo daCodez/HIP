@@ -1,5 +1,6 @@
 @page "/verification"
 @page "/verify"
+@page "/domain-verification"
 @attribute [AllowAnonymous]
 @layout MarketingLayout
 @rendermode InteractiveServer
@@ -10,6 +11,9 @@
   <meta name="description" content="Prove you control your domain, resolve what HIP found, and earn a trust badge through verification and human review — not by registering." />
   <meta property="og:title" content="Domain Verification and Trust Badges | HIP" />
   <meta property="og:description" content="Prove you control your domain, resolve what HIP found, and earn a trust badge through verification and human review — not by registering." />
+  <meta property="og:url" content="https://guardwithhip.com/domain-verification" />
+  <meta property="og:image" content="https://guardwithhip.com/images/public/marketing/og-image.png" />
+  <link rel="canonical" href="https://guardwithhip.com/domain-verification" />
 </HeadContent>
 
 <main style="max-width:1240px;margin:0 auto;padding:clamp(56px,6vw,80px) clamp(16px,3vw,32px) 110px">
@@ -63,6 +67,10 @@
     </div>
   </div>
 
+  <section aria-label="Sample trust receipt" style="margin-bottom:72px">
+    <TrustReceipt />
+  </section>
+
   <div style="text-align:center;padding:clamp(38px,5vw,56px) clamp(20px,3vw,32px);background:var(--surface);border:1px solid var(--border);border-radius:22px">
     <h2 style="font-size:clamp(26px,3vw,34px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 14px">Start with a scan.</h2>
     <p style="font-size:17px;color:var(--muted);margin:0 auto 28px;max-width:460px">Verification only makes sense once you know what is there.</p>
@@ -71,5 +79,5 @@
 </main>
 
 @code {
-    private void GoScan() => Nav.NavigateTo("/#scan");
+    private void GoScan() => Nav.NavigateTo("/website-trust-scanner");
 }

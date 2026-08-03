@@ -1,147 +1,32 @@
-@* No security vendor publishes this. It is the open-source argument, made concrete. *@
+@using HIP.Web.Marketing.Data
 
-<section data-rise style="position:relative;overflow:hidden;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
-  <div data-px="0.12" style="position:absolute;inset:-14% -3%;background:radial-gradient(620px 400px at 80% 30%,rgba(124,58,237,.10),transparent 70%),radial-gradient(600px 400px at 12% 75%,var(--tint),transparent 70%);pointer-events:none;will-change:transform"></div>
-
-  <div style="position:relative;max-width:1240px;margin:0 auto;padding:clamp(64px,7vw,100px) clamp(16px,3vw,32px)">
-    <div style="max-width:700px;margin-bottom:36px">
-      <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">ILLUSTRATIVE RULE DIFF</div>
-      <h2 data-words style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">Every scoring change, in the open.</h2>
-      <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">This fictional changelog demonstrates how HIP can explain what changed between versions, who it affects, and why. It is not production release history.</p>
+<section data-rise style="border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+  <div style="max-width:1240px;margin:0 auto;padding:clamp(64px,7vw,100px) clamp(16px,3vw,32px)">
+    <div style="max-width:720px;margin-bottom:34px">
+      <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">PUBLISHED RULE DIFF</div>
+      <h2 style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;margin:0 0 16px">Every published scoring change, side by side.</h2>
+      <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0">This comparison and the simulator above read from one versioned public catalog. It explains the public methodology snapshot; a scan receipt's recorded runtime version is authoritative for that result.</p>
     </div>
 
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:26px">
-      @foreach (var d in Diffs)
-      {
-        <button @onclick="() => Selected = d.Key" data-h="h-bd"
-                style="padding:9px 15px;border-radius:9px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;border:1px solid @(Selected == d.Key ? "var(--action)" : "var(--border)");background:@(Selected == d.Key ? "var(--tint)" : "var(--surface)");color:@(Selected == d.Key ? "var(--action)" : "var(--muted)")">
-          @d.Key
-        </button>
-      }
-      <span style="font-size:13px;color:var(--muted)">@Active.Shipped</span>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px;font-family:'JetBrains Mono',monospace;font-size:13px">
+      <span style="padding:7px 11px;border:1px solid var(--border);border-radius:8px;color:var(--muted)">@PublishedRuleCatalog.PreviousVersion</span>
+      <span aria-hidden="true">→</span>
+      <span style="padding:7px 11px;border:1px solid var(--action);border-radius:8px;color:var(--action)">@PublishedRuleCatalog.CurrentVersion</span>
     </div>
 
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:18px 22px;border-bottom:1px solid var(--border)">
-        <span style="font-size:15px;font-weight:700;color:var(--text)">@Active.Changes.Count rule changes</span>
-        <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--muted)">@Active.Affected of scored domains move by 1 point or more</span>
-      </div>
-
-      @foreach (var (c, i) in Active.Changes.Select((c, i) => (c, i)))
+    <div style="display:grid;gap:12px">
+      @foreach (var change in PublishedRuleCatalog.Changes)
       {
-        <div style="padding:20px 22px;border-top:@(i == 0 ? "0" : "1px solid var(--hairline)")">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:10px">
-            <span style="display:flex;align-items:center;gap:11px;min-width:0">
-              <span style="padding:3px 9px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;white-space:nowrap;background:@KindBg(c.Kind);color:@KindFg(c.Kind)">@c.Kind.ToUpperInvariant()</span>
-              <span style="font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:700;color:var(--text);word-break:break-all">@c.Id</span>
-            </span>
-
-            @if (c.Before is not null || c.After is not null)
-            {
-              <span style="display:flex;align-items:center;gap:9px;font-family:'JetBrains Mono',monospace;font-size:13px;white-space:nowrap">
-                @if (c.Before is not null)
-                {
-                  <span style="color:var(--muted);text-decoration:line-through">@Signed(c.Before.Value)</span>
-                  <span style="color:var(--muted)">&rarr;</span>
-                }
-                <span style="font-weight:700;color:@(c.After >= (c.Before ?? 0) ? ToneColors.Fg(Tone.Ok) : ToneColors.Fg(Tone.Warn))">@(c.After is null ? "removed" : Signed(c.After.Value))</span>
-              </span>
-            }
-          </div>
-
-          <div style="font-size:14.5px;line-height:1.55;color:var(--text);margin-bottom:6px">@c.What</div>
-          <div style="font-size:13.5px;line-height:1.6;color:var(--muted);max-width:760px">@c.Why</div>
-
-          @if (c.Example is not null)
-          {
-            <div style="margin-top:12px;padding:11px 14px;border-radius:10px;background:var(--bg);border:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">
-              @c.Example
-            </div>
-          }
-        </div>
+        <article style="padding:20px 22px;background:var(--surface);border:1px solid var(--border);border-radius:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:18px;align-items:start">
+          <strong style="font-family:'JetBrains Mono',monospace;font-size:13px;word-break:break-word">@change.Id</strong>
+          <span style="font-family:'JetBrains Mono',monospace;color:var(--muted)">@Signed(change.Before) → <b style="color:var(--action)">@Signed(change.After)</b></span>
+          <span style="color:var(--muted);line-height:1.55">@change.Reason</span>
+        </article>
       }
     </div>
-
-    <p style="font-size:13.5px;line-height:1.6;color:var(--muted);margin:22px 0 0;max-width:700px">
-      A result keeps the rule version that produced it. Nothing is retroactively rewritten — re-scanning is what applies a newer rule set.
-    </p>
   </div>
 </section>
 
 @code {
-    private record Change(string Kind, string Id, string What, string Why, int? Before, int? After, string? Example = null);
-    private record Diff(string Key, string Shipped, string Affected, List<Change> Changes);
-
-    private string Selected = "v2.3 → v2.4";
-
-    private Diff Active => Diffs.First(d => d.Key == Selected);
-
-    private static readonly List<Diff> Diffs = new()
-    {
-        new("v2.3 → v2.4", "Fictional example", "about 8% of example", new List<Change>
-        {
-            new("changed", "mail.auth_partial",
-                "Incomplete mail authentication now costs 6 points, down from 11.",
-                "The old weight punished small sites that had no mail on the domain at all. The rule now checks whether the domain actually sends mail before applying the full penalty.",
-                -11, -6,
-                "domains with no MX record: no longer penalised"),
-
-            new("added", "form.credentials_insecure",
-                "A password field submitting over an unencrypted connection is now a critical finding.",
-                "Previously this was covered indirectly by the transport rule, which under-weighted it. It is the single clearest signal that a visitor is about to be harmed.",
-                null, -35,
-                "fires when form.action_scheme = http and form.has_password_field = true"),
-
-            new("changed", "domain.new",
-                "Young domains lose 8 points instead of 15.",
-                "A new domain is not evidence of bad intent, and the old weight made legitimate launches look dangerous. The score now says \u2018limited history\u2019 rather than implying risk.",
-                -15, -8),
-
-            new("removed", "page.excessive_ads",
-                "Advertising density no longer affects the score.",
-                "It measured taste, not safety, and produced the largest share of successful appeals. Quality signals belong outside the trust score.",
-                -4, null,
-                "63% of appeals against this rule were upheld"),
-
-            new("changed", "urgency.deadline",
-                "Pressure wording is now capped and requires a second corroborating signal.",
-                "Wording rules are judgement calls. On its own, urgent language is not enough to move a score meaningfully — paired with an unverified domain, it is.",
-                -9, -4)
-        }),
-
-        new("v2.2 → v2.3", "Fictional example", "about 21% of example", new List<Change>
-        {
-            new("added", "provider.attribution",
-                "Every external provider result is recorded with its source and retrieval time.",
-                "Before this, a verdict could not be traced to the service that produced it. Attribution is now mandatory for any provider signal to count.",
-                null, 0),
-
-            new("changed", "https.not_enforced",
-                "Not forcing HTTPS costs 18 points, up from 12.",
-                "Browser defaults moved on. A site that still serves plain HTTP in 2026 is meaningfully behind, and the weight now reflects that.",
-                -12, -18),
-
-            new("added", "cert.expiring_soon",
-                "Certificates within 14 days of expiry raise a warning finding.",
-                "Expiry is the most common self-inflicted outage. Flagging it early is more useful than scoring it after the fact.",
-                null, -3,
-                "warning only \u00b7 does not affect badge eligibility")
-        })
-    };
-
-    private static string Signed(int w) => w > 0 ? "+" + w : w < 0 ? "\u2212" + Math.Abs(w) : "0";
-
-    private static string KindFg(string kind) => kind switch
-    {
-        "added" => "var(--ok)",
-        "removed" => "var(--danger)",
-        _ => "var(--info)"
-    };
-
-    private static string KindBg(string kind) => kind switch
-    {
-        "added" => "rgba(34,197,94,.14)",
-        "removed" => "rgba(239,68,68,.14)",
-        _ => "rgba(59,130,246,.14)"
-    };
+  private static string Signed(int value) => value > 0 ? $"+{value}" : value < 0 ? $"−{Math.Abs(value)}" : "0";
 }

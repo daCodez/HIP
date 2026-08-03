@@ -62,7 +62,7 @@ public sealed class MarketingReferencePageTests
             Assert.That(styles, Does.Contain("@media (max-width:520px)"));
             Assert.That(styles, Does.Contain("[data-domain-cta]{display:none !important}"));
             Assert.That(brandStyles, Does.Contain("*:not(.hip-marketing-site[data-motion=full],.hip-marketing-site[data-motion=full] *)"));
-            Assert.That(layout, Does.Contain("href=\"/lookup\""));
+            Assert.That(layout, Does.Contain("href=\"/website-trust-scanner\""));
             Assert.That(layout, Does.Contain("data-motion=\"full\""));
             Assert.That(layout, Does.Contain("https://github.com/daCodez/HIP"));
             Assert.That(home, Does.Contain("data-signal-marquee"));
@@ -84,15 +84,59 @@ public sealed class MarketingReferencePageTests
         Assert.Multiple(() =>
         {
             Assert.That(layout, Does.Contain("data-theme-toggle"));
-            Assert.That(layout, Does.Contain("data-register-toggle"));
+            Assert.That(layout, Does.Not.Contain("data-register-toggle"));
+            Assert.That(layout, Does.Not.Contain("<LinkCheckBar />"));
             Assert.That(layout, Does.Not.Contain("@onclick"));
             Assert.That(script, Does.Contain("initChrome()"));
             Assert.That(script, Does.Contain("window.location.assign(nav.value)"));
             Assert.That(script, Does.Contain("data-register-copy"));
             Assert.That(home, Does.Contain("/lookup/{Uri.EscapeDataString(domain)}"));
             Assert.That(home, Does.Contain("ILLUSTRATIVE EXAMPLE"));
-            Assert.That(simulator, Does.Contain("values are illustrative"));
+            Assert.That(simulator, Does.Contain("PublishedRuleCatalog.CurrentVersion"));
             Assert.That(receipt, Does.Contain("not a live scan or an issued HIP receipt"));
+        });
+    }
+
+    [Test]
+    public void Interactive_features_live_on_focused_routes_with_complete_metadata()
+    {
+        var root = RepositoryRoot();
+        var webRoot = Path.Combine(root, "src", "HIP.Web");
+        var pagesRoot = Path.Combine(webRoot, "Components", "Pages");
+        var expected = new Dictionary<string, (string Route, string Marker)>
+        {
+            ["PublicWebsiteTrustScanner.razor"] = ("/website-trust-scanner", "<LinkCheckBar"),
+            ["PublicLookalikeDetector.razor"] = ("/tools/lookalike-detector", "<LookalikeDetector />"),
+            ["PublicBrowserExtension.razor"] = ("/browser-extension", "<ExtensionSimulator />"),
+            ["PublicVerification.razor"] = ("/domain-verification", "<TrustReceipt />"),
+            ["PublicMethodology.razor"] = ("/methodology", "<ScoreSimulator />"),
+            ["PublicPlatform.razor"] = ("/platform", "<ScanPulse />")
+        };
+
+        Assert.Multiple(() =>
+        {
+            foreach (var (file, expectation) in expected)
+            {
+                var source = File.ReadAllText(Path.Combine(pagesRoot, file));
+                Assert.That(source, Does.Contain($"@page \"{expectation.Route}\""), file);
+                Assert.That(source, Does.Contain(expectation.Marker), file);
+                Assert.That(source, Does.Contain("<PageTitle>"), file);
+                Assert.That(source, Does.Contain("name=\"description\""), file);
+                Assert.That(source, Does.Contain("property=\"og:title\""), file);
+                Assert.That(source, Does.Contain("rel=\"canonical\""), file);
+            }
+
+            var home = File.ReadAllText(Path.Combine(pagesRoot, "PublicHome.razor"));
+            Assert.That(home, Does.Not.Contain("<ScoreSimulator />"));
+            Assert.That(home, Does.Not.Contain("<ExtensionSimulator />"));
+            Assert.That(home, Does.Not.Contain("<LookalikeDetector />"));
+            Assert.That(home, Does.Not.Contain("<TrustReceipt />"));
+
+            var sitemap = File.ReadAllText(Path.Combine(webRoot, "wwwroot", "sitemap.xml"));
+            foreach (var route in expected.Values.Select(value => value.Route))
+            {
+                Assert.That(sitemap, Does.Contain($"https://guardwithhip.com{route}"), route);
+            }
         });
     }
 

@@ -38,7 +38,7 @@
     <div data-px="0.34" style="position:absolute;top:-220px;left:-160px;width:760px;height:760px;background:radial-gradient(circle,var(--tint),transparent 66%);pointer-events:none;animation:hipAurora 26s ease-in-out infinite;will-change:transform"></div>
     <div data-px="0.22" style="position:absolute;bottom:-260px;right:-140px;width:640px;height:640px;background:radial-gradient(circle,rgba(31,111,235,.16),transparent 68%);pointer-events:none;animation:hipAurora 34s ease-in-out infinite reverse;will-change:transform"></div>
     <canvas data-globe style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.95"></canvas>
-    <div style="position:relative;max-width:1240px;margin:0 auto;padding:clamp(64px,8vw,104px) clamp(16px,3vw,32px) clamp(60px,7vw,96px);display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:clamp(40px,5vw,72px);align-items:center">
+    <div style="position:relative;max-width:1240px;margin:0 auto;padding:clamp(64px,8vw,104px) clamp(16px,3vw,32px) clamp(60px,7vw,96px);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:clamp(40px,5vw,72px);align-items:center">
       <div>
         <div style="display:inline-flex;align-items:center;gap:9px;padding:6px 13px 6px 9px;border:1px solid var(--border);background:var(--surface);border-radius:999px;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:26px">
           <span style="width:6px;height:6px;border-radius:50%;background:var(--action);animation:hipPulse 2.4s ease-in-out infinite"></span>
@@ -239,7 +239,14 @@
     </div>
   </section>
 
-  <LookalikeDetector />
+  <section data-rise style="max-width:1240px;margin:0 auto;padding:clamp(48px,6vw,76px) clamp(16px,3vw,32px)">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px">
+      <a href="/tools/lookalike-detector" style="padding:24px;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--text);text-decoration:none"><strong>Lookalike detector</strong><p style="color:var(--muted);line-height:1.55;margin-bottom:0">Learn how deceptive addresses hide in plain sight.</p></a>
+      <a href="/methodology" style="padding:24px;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--text);text-decoration:none"><strong>Score methodology</strong><p style="color:var(--muted);line-height:1.55;margin-bottom:0">Explore versioned weights and rule changes.</p></a>
+      <a href="/browser-extension" style="padding:24px;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--text);text-decoration:none"><strong>Browser extension</strong><p style="color:var(--muted);line-height:1.55;margin-bottom:0">Preview toolbar warnings and local X-ray behavior.</p></a>
+      <a href="/domain-verification" style="padding:24px;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--text);text-decoration:none"><strong>Domain verification</strong><p style="color:var(--muted);line-height:1.55;margin-bottom:0">See how ownership proof, review and badges work.</p></a>
+    </div>
+  </section>
 
   <!-- WHO IT IS FOR -->
   <section data-rise style="max-width:1240px;margin:0 auto;padding:clamp(64px,7vw,92px) clamp(16px,3vw,32px) 20px">
@@ -315,7 +322,6 @@
     </div>
   </section>
 
-  <ScoreSimulator />
 
   <!-- CAPABILITIES -->
   <section data-rise style="max-width:1240px;margin:0 auto;padding:clamp(56px,6vw,80px) clamp(16px,3vw,32px) 40px">
@@ -419,7 +425,7 @@
 
   <!-- BADGE SHOWCASE -->
   <section data-rise style="max-width:1240px;margin:0 auto;padding:clamp(56px,6vw,80px) clamp(16px,3vw,32px) 40px">
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:clamp(28px,3.6vw,52px);display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:56px;align-items:center">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:clamp(28px,3.6vw,52px);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:56px;align-items:center">
       <div>
         <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">VERIFICATION</div>
         <h2 style="font-size:clamp(26px,3vw,34px);line-height:1.15;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">The badge is earned through verification, not purchased.</h2>
@@ -461,7 +467,6 @@
     </div>
   </section>
 
-  <ExtensionSimulator />
 
   <!-- INTEGRATIONS -->
   <section data-rise style="max-width:1240px;margin:0 auto;padding:clamp(56px,6vw,80px) clamp(16px,3vw,32px) 40px">
@@ -504,9 +509,6 @@
     </div>
   </section>
 
-  <ScanPulse />
-
-  <TrustReceipt />
 
   <!-- FAQ -->
   <section data-rise style="max-width:900px;margin:0 auto;padding:clamp(56px,6vw,80px) clamp(16px,3vw,32px) 40px">
@@ -628,8 +630,8 @@
 
     private async Task RunXray() => await JS.InvokeVoidAsync("hip.xray");
 
-    private void GoScan() => Nav.NavigateTo("/#scan");
-    private void GoVerify() => Nav.NavigateTo("/verification");
+    private void GoScan() => Nav.NavigateTo("/website-trust-scanner");
+    private void GoVerify() => Nav.NavigateTo("/domain-verification");
     private void GoDev() => Nav.NavigateTo("/developers");
     private void GoPlatform() => Nav.NavigateTo("/platform");
 }

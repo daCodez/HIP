@@ -9,6 +9,9 @@
   <meta name="description" content="How HIP versions rules, explains scores, handles evidence, reviews findings, and states the limits of website trust scoring." />
   <meta property="og:title" content="Trust Methodology — Rules, Baseline, Limits | HIP" />
   <meta property="og:description" content="How HIP versions rules, explains scores, handles evidence, reviews findings, and states the limits of website trust scoring." />
+  <meta property="og:url" content="https://guardwithhip.com/methodology" />
+  <meta property="og:image" content="https://guardwithhip.com/images/public/marketing/og-image.png" />
+  <link rel="canonical" href="https://guardwithhip.com/methodology" />
 </HeadContent>
 
 <main style="max-width:1240px;margin:0 auto;padding:clamp(56px,6vw,80px) clamp(16px,3vw,32px) 110px">
@@ -160,7 +163,13 @@
   </section>
 </main>
 
+<section data-register-scope>
+  <div style="max-width:1240px;margin:0 auto;padding:0 clamp(16px,3vw,32px);display:flex;justify-content:flex-end">
+    <button data-register-toggle type="button" style="padding:8px 12px;border:1px solid var(--border);background:var(--surface);border-radius:9px;color:var(--muted);font:600 12.5px inherit;cursor:pointer"><span data-register-label>Plain language</span></button>
+  </div>
+  <ScoreSimulator />
 <RuleDiffViewer />
+</section>
 
 @code {
     private void GoScan() => Nav.NavigateTo("/#scan");

@@ -3,12 +3,12 @@
 @* Structural URL analysis. Everything here is computed from the text itself —
    no request is made, so it works offline and reveals nothing about the visitor. *@
 
-<div style="position:fixed;left:0;right:0;bottom:0;z-index:60;background:color-mix(in srgb, var(--surface) 94%, transparent);backdrop-filter:blur(14px);border-top:1px solid var(--border)">
+<section aria-labelledby="link-check-title" style="background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden">
   <div style="max-width:1240px;margin:0 auto;padding:12px clamp(16px,3vw,32px);display:flex;align-items:center;gap:14px;flex-wrap:wrap">
 
     <span style="display:flex;align-items:center;gap:9px;flex-shrink:0">
       <img src="/images/public/marketing/hip-logo.png" alt="" style="height:24px;width:auto;display:block" />
-      <span style="font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--muted);white-space:nowrap">CHECK A LINK</span>
+      <span id="link-check-title" style="font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--muted);white-space:nowrap">CHECK A LINK LOCALLY</span>
     </span>
 
     <div style="flex:1 1 260px;min-width:0;display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid @(Verdict is null ? "var(--border)" : Verdict.Fg);border-radius:10px;padding:0 13px;transition:border-color .25s">
@@ -29,6 +29,10 @@
         <span style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;letter-spacing:-.02em;color:@Verdict.Fg">@Verdict.Score</span>
         <span style="padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;background:@Verdict.Bg;color:@Verdict.Fg">@Verdict.Band</span>
       </span>
+      @if (LookupDomain is not null)
+      {
+        <a href="/lookup/@Uri.EscapeDataString(LookupDomain)" style="padding:9px 14px;background:var(--action);color:var(--action-ink);border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap">Start full HIP lookup</a>
+      }
     }
   </div>
 
@@ -42,13 +46,44 @@
           @n.Text
         </span>
       }
-      <span style="font-size:12px;color:var(--muted);align-self:center">Structure only — a full scan also reads the page.</span>
+      <span style="font-size:12px;color:var(--muted);align-self:center">Local result only — no DNS, certificate, content, or reputation request has run yet.</span>
     </div>
   }
-</div>
+  @if (Verdict is not null)
+  {
+    <div aria-label="Local scan progress" style="max-width:1240px;margin:0 auto;padding:0 clamp(16px,3vw,32px) 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
+      @foreach (var stage in LocalStages)
+      {
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--bg);font-size:12.5px">
+          <span aria-hidden="true" style="width:7px;height:7px;border-radius:50%;background:var(--ok)"></span>
+          <span style="flex:1">@stage</span>
+          <strong style="color:var(--ok);font-size:11px">COMPLETE</strong>
+        </div>
+      }
+    </div>
+  }
+</section>
 
 @code {
-    private string Url = "";
+    [Parameter] public EventCallback<bool> OnResultChanged { get; set; }
+
+    private string url = "";
+    private string Url
+    {
+        get => url;
+        set
+        {
+            url = value;
+            _ = OnResultChanged.InvokeAsync(Verdict is not null);
+        }
+    }
+
+    private static readonly string[] LocalStages =
+    [
+        "Address parsed",
+        "Host normalized",
+        "Visible deception patterns checked"
+    ];
 
     private record Note(Tone Tone, string Text);
 
@@ -164,6 +199,19 @@
                 Band = score >= 85 ? "Trusted" : score >= 70 ? "Mostly Trusted" : score >= 45 ? "Needs Review" : "High Risk",
                 Notes = notes
             };
+        }
+    }
+
+    private string? LookupDomain
+    {
+        get
+        {
+            var raw = Url.Trim();
+            if (raw.Length < 4) return null;
+            if (!raw.Contains("://", StringComparison.Ordinal)) raw = "https://" + raw;
+            return Uri.TryCreate(raw, UriKind.Absolute, out var uri) && !string.IsNullOrWhiteSpace(uri.Host)
+                ? uri.IdnHost
+                : null;
         }
     }
 

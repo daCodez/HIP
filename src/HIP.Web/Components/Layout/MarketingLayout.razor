@@ -35,12 +35,6 @@
 
       <div style="flex:1"></div>
 
-      <button data-register-toggle type="button" title="Switch between plain language and technical wording" data-h="h-bd-fg"
-              style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);background:var(--surface);border-radius:9px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;flex-shrink:0;white-space:nowrap;font-family:inherit">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h13"></path></svg>
-        <span data-register-label>Plain language</span>
-      </button>
-
       <button data-theme-toggle type="button" title="Toggle theme" data-h="h-bd-fg" style="width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--border);background:var(--surface);border-radius:9px;cursor:pointer;color:var(--muted);flex-shrink:0">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3L4.9 4.9M19.1 19.1l-1.4-1.4M17.7 6.3l1.4-1.4M4.9 19.1l1.4-1.4"></path><circle cx="12" cy="12" r="4.2"></circle></svg>
       </button>
@@ -50,7 +44,7 @@
         <span data-gh-label>GitHub</span>
       </a>
 
-      <a data-domain-cta href="/lookup" data-h="h-bright" style="padding:10px 16px;background:var(--action);color:var(--action-ink);border-radius:9px;font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap;flex-shrink:0">Check my domain</a>
+      <a data-domain-cta href="/website-trust-scanner" data-h="h-bright" style="padding:10px 16px;background:var(--action);color:var(--action-ink);border-radius:9px;font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap;flex-shrink:0">Scan a website</a>
     </div>
   </header>
 
@@ -58,7 +52,6 @@
 
   <SiteFooter />
 
-  <LinkCheckBar />
 </div>
 
 @if (IsCanonicalPublicHost)
@@ -71,10 +64,11 @@
     private static readonly (string Href, string Label)[] NavItems =
     {
         ("/", "Home"),
+        ("/website-trust-scanner", "Scanner"),
         ("/platform", "Platform"),
-        ("/how-it-works", "How it works"),
-        ("/verification", "Verification"),
-        ("/developers", "Developers"),
+        ("/tools/lookalike-detector", "Lookalikes"),
+        ("/browser-extension", "Extension"),
+        ("/domain-verification", "Verification"),
         ("/methodology", "Methodology")
     };
 

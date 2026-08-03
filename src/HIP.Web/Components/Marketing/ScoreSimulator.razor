@@ -4,7 +4,7 @@
   <div style="max-width:680px;margin-bottom:44px">
     <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">SCORE SIMULATOR</div>
     <h2 data-words style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">Change a signal. Watch the score move.</h2>
-    <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">This interactive example demonstrates how named findings can move an explainable score. The values are illustrative, not the current production rule set.</p>
+    <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">This simulator uses the same @PublishedRuleCatalog.CurrentVersion snapshot published on this methodology page. A live result's recorded rule version remains authoritative.</p>
   </div>
 
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;align-items:start">
@@ -52,8 +52,8 @@
 
       <div style="display:flex;flex-direction:column;gap:11px;font-size:14px">
         <div style="display:flex;justify-content:space-between;gap:16px">
-          <span style="color:var(--text)">Illustrative baseline</span>
-          <span style="font-family:'JetBrains Mono',monospace;color:var(--muted)">70</span>
+          <span style="color:var(--text)">Versioned baseline</span>
+          <span style="font-family:'JetBrains Mono',monospace;color:var(--muted)">@PublishedRuleCatalog.Baseline</span>
         </div>
         @foreach (var r in Rules)
         {
@@ -90,27 +90,7 @@
 </section>
 
 @code {
-    private record Rule(string Key, string Id, string Label, int OnWeight, int OffWeight, string OnReason, string OffReason, bool Required = false);
-
-    private static readonly Rule[] Rules =
-    {
-        new("https", "https.enforced", "HTTPS enforced with HSTS", 12, -18,
-            "HTTPS enforced, HSTS present", "Site does not force a secure connection", Required: true),
-        new("cert", "cert.valid", "Certificate valid and trusted", 8, -14,
-            "Certificate valid, trusted issuer", "Certificate expired or untrusted", Required: true),
-        new("owner", "owner.txt", "Domain ownership verified", 6, 0,
-            "Ownership verified via DNS", "", Required: true),
-        new("mail", "mail.auth", "Mail authentication complete", 6, -6,
-            "SPF, DKIM and DMARC enforced", "Mail authentication incomplete"),
-        new("providers", "provider.clean", "No provider listings", 4, -25,
-            "No listings across providers", "Listed by an external security provider"),
-        new("scripts", "third.party_known", "All third-party scripts known", 2, -2,
-            "No unexpected third-party scripts", "A new third-party script appeared"),
-        new("form", "form.credentials_secure", "Credentials submitted securely", 0, -35,
-            "", "A password field submits over an unencrypted connection", Required: true),
-        new("age", "domain.established", "Domain established over a year", 4, -8,
-            "Established domain history", "Domain registered very recently")
-    };
+    private static readonly IReadOnlyList<PublishedRuleCatalog.Rule> Rules = PublishedRuleCatalog.CurrentRules;
 
     private Dictionary<string, bool> State = Rules.ToDictionary(r => r.Key, _ => true);
 
@@ -125,7 +105,7 @@
     {
         get
         {
-            var s = 70 + Rules.Sum(r => State[r.Key] ? r.OnWeight : r.OffWeight);
+            var s = PublishedRuleCatalog.Baseline + Rules.Sum(r => State[r.Key] ? r.OnWeight : r.OffWeight);
             return Math.Clamp(s, 0, 100);
         }
     }
@@ -138,7 +118,7 @@
     private string BandFg => ToneColors.Fg(BandTone);
     private string BandBg => ToneColors.Bg(BandTone);
 
-    private bool BadgeEligible => Score >= 85 && Rules.Where(r => r.Required).All(r => State[r.Key]);
+    private bool BadgeEligible => Score >= PublishedRuleCatalog.BadgeThreshold && Rules.Where(r => r.Required).All(r => State[r.Key]);
 
     private string BadgeBlocker
     {
@@ -147,7 +127,7 @@
             var failed = Rules.Where(r => r.Required && !State[r.Key]).ToList();
             if (failed.Count > 0)
                 return "A required check is failing (" + string.Join(", ", failed.Select(f => f.Id)) + "), so a badge would be paused regardless of the score.";
-            return "Below the current badge standard of 85. The badge would be paused until the score recovers.";
+            return $"Below this published snapshot's badge standard of {PublishedRuleCatalog.BadgeThreshold}. The badge would be paused until the score recovers.";
         }
     }
 }
