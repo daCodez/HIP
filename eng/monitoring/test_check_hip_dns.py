@@ -94,6 +94,15 @@ class HipDnsMonitorTests(unittest.TestCase):
         self.assertNotIn(":53:53/udp", compose)
         self.assertNotIn(":53:53/tcp", compose)
 
+    def test_doq_shell_probes_use_linux_line_endings(self) -> None:
+        root = os.path.join(os.path.dirname(__file__), "..", "..")
+        for relative_path in (
+            ("deploy", "vps", "check-dns-over-quic.sh"),
+            ("eng", "monitoring", "check_hip_doq.sh"),
+        ):
+            with open(os.path.join(root, *relative_path), "rb") as script_file:
+                self.assertNotIn(b"\r\n", script_file.read())
+
     def test_incident_body_is_bounded_and_escaped(self) -> None:
         with mock.patch.dict(
             os.environ,
