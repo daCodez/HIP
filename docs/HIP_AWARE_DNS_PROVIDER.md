@@ -26,7 +26,7 @@ Accept: application/dns-message
 
 Wire responses remain valid DNS messages. HIP evidence is carried separately in `X-HIP-Status`, `X-HIP-Score` when available, `X-HIP-Evidence-Coverage`, and `X-HIP-Authoritative` response headers. DNSSEC validation is carried by the standard AD bit and the `X-HIP-DNSSEC-Status` header. `X-HIP-Authoritative` is currently always `false` because HIP trust evidence is not authoritative DNS data.
 
-JSON responses expose the same validation result in the standard `AD` field and a `dnssec` object. The status is `secure` only when the configured recursive resolver sets the authenticated-data bit. Unsigned or failed responses remain `indeterminate` until HIP is connected to a validating resolver that can provide a stronger insecure or bogus proof. This avoids treating a missing AD bit as proof of a DNSSEC failure.
+JSON responses expose the same validation result in the standard `AD` field and a `dnssec` object. HIP trusts DNSSEC status only from its explicitly configured validating resolver. Validated answers are `secure`, proven unsigned answers are `insecure`, DNSSEC validation failures with a standard Extended DNS Error are `bogus`, and other resolver failures remain `indeterminate`.
 
 ## Security and privacy boundaries
 
@@ -41,14 +41,19 @@ JSON responses expose the same validation result in the standard `AD` field and 
 
 ## Current provider
 
-`DnsClientLookupProvider` uses DnsClient.NET and HIP's existing validated resolver configuration. The application depends only on `IDnsLookupProvider`, so a managed resolver, enterprise CoreDNS adapter, or another recursive provider can replace it without changing the public contract.
+`DnsClientLookupProvider` uses DnsClient.NET and the private HIP-owned Unbound 1.25.2 resolver. Unbound is built from a pinned upstream revision, validates DNSSEC recursively from the root trust anchor, and is reachable only inside the deployment network. The application depends only on `IDnsLookupProvider`, so a managed resolver or another recursive provider can replace it without changing the public contract.
+
+The resolver uses bounded caches, stale-answer protection, query minimization, minimal responses, DNSSEC hardening, per-client and recursion rate limits, and cumulative privacy-safe operational counters. Its container health check performs a real DNSSEC-validated root query instead of checking only that the process is running. Operators can inspect health and aggregate counters without logging queried names:
+
+```sh
+./deploy/vps/check-unbound.sh
+```
 
 ## Deliberately deferred
 
 This is the provider and API foundation, not a complete public recursive DNS service. The following remain future milestones:
 
-- deployment of a dedicated validating resolver with insecure and bogus classifications;
 - DNS over TLS;
 - UDP and TCP port 53 listeners;
-- resolver-specific caching and abuse controls;
-- high-availability resolver deployment and monitoring.
+- a dedicated DNS front door with public-client abuse controls;
+- high-availability resolver deployment and external alerting.

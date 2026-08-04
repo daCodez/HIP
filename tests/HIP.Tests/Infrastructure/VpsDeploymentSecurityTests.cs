@@ -191,6 +191,7 @@ public sealed class VpsDeploymentSecurityTests
         var dockerfile = File.ReadAllText(Path.Combine(root, "deploy", "unbound", "Dockerfile"));
         var configuration = File.ReadAllText(Path.Combine(root, "deploy", "unbound", "unbound.conf"));
         var entrypoint = File.ReadAllText(Path.Combine(root, "deploy", "unbound", "entrypoint.sh"));
+        var operationalCheck = File.ReadAllText(Path.Combine(root, "deploy", "vps", "check-unbound.sh"));
         var unboundStart = compose.IndexOf("  unbound:", StringComparison.Ordinal);
         var unboundEnd = compose.IndexOf("\n  keycloak:", unboundStart, StringComparison.Ordinal);
         var unboundService = compose[unboundStart..unboundEnd];
@@ -214,6 +215,15 @@ public sealed class VpsDeploymentSecurityTests
             Assert.That(configuration, Does.Contain("access-control: 0.0.0.0/0 refuse"));
             Assert.That(configuration, Does.Contain("chroot: \"\""));
             Assert.That(configuration, Does.Contain("pidfile: \"/tmp/unbound.pid\""));
+            Assert.That(configuration, Does.Contain("deny-any: yes"));
+            Assert.That(configuration, Does.Contain("minimal-responses: yes"));
+            Assert.That(configuration, Does.Contain("ratelimit: 1000"));
+            Assert.That(configuration, Does.Contain("ip-ratelimit: 500"));
+            Assert.That(configuration, Does.Contain("extended-statistics: yes"));
+            Assert.That(dockerfile, Does.Contain("dig @127.0.0.1 -p 5353 . SOA +dnssec"));
+            Assert.That(dockerfile, Does.Contain("flags:.* ad;"));
+            Assert.That(operationalCheck, Does.Contain("stats_noreset"));
+            Assert.That(operationalCheck, Does.Contain("unexpectedly has a published host port"));
         });
     }
 

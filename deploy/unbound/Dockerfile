@@ -27,7 +27,7 @@ LABEL org.opencontainers.image.source="https://github.com/daCodez/HIP" \
       org.opencontainers.image.title="HIP validating DNS resolver"
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libevent-2.1-7 libexpat1 libssl3 \
+    && apt-get install -y --no-install-recommends bind9-dnsutils ca-certificates libevent-2.1-7 libexpat1 libssl3 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1655 unbound \
     && useradd --uid 1655 --gid 1655 --home-dir /var/lib/unbound --no-create-home --shell /usr/sbin/nologin unbound \
@@ -44,6 +44,8 @@ ENV PATH="/opt/unbound/sbin:/opt/unbound/bin:${PATH}"
 USER 1655:1655
 EXPOSE 5353/tcp 5353/udp
 VOLUME ["/var/lib/unbound"]
-HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=8 \
-    CMD ["unbound-control", "-c", "/etc/unbound/unbound.conf", "status"]
+HEALTHCHECK --interval=30s --timeout=8s --start-period=45s --retries=5 \
+    CMD output="$$(dig @127.0.0.1 -p 5353 . SOA +dnssec +time=3 +tries=1)" \
+        && echo "$${output}" | grep -q "status: NOERROR" \
+        && echo "$${output}" | grep -Eq "flags:.* ad;"
 ENTRYPOINT ["/usr/local/bin/hip-unbound-entrypoint"]
