@@ -18,6 +18,9 @@ public sealed class AdminAuthoritativeDnsPageTests
             Assert.That(page, Does.Contain("HipAdminPageAccess.ExecuteAuthorizedAsync"));
             Assert.That(page, Does.Contain("id=\"dns-domain\" @bind=\"_domain\" @bind:event=\"oninput\""));
             Assert.That(page, Does.Contain("aria-label=\"Record value\" @bind=\"_records[rowIndex].Content\" @bind:event=\"oninput\""));
+            Assert.That(page, Does.Contain("Confirm disable"));
+            Assert.That(page, Does.Contain("DnsManagement.DisableAsync("));
+            Assert.That(page, Does.Contain("_pendingDisableDomain != domain"));
             Assert.That(page, Does.Not.Contain("IAdminDashboardService"));
             Assert.That(navigation, Does.Contain("Policy=\"@AdminPolicies.CanManageAuthoritativeDns\""));
             Assert.That(navigation, Does.Contain("href=\"/dns\""));

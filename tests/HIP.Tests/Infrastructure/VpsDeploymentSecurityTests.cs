@@ -184,6 +184,30 @@ public sealed class VpsDeploymentSecurityTests
     }
 
     [Test]
+    public void Portal_hosts_route_to_their_role_specific_web_containers()
+    {
+        var root = RepositoryRoot();
+        var caddySources = new[]
+        {
+            File.ReadAllText(Path.Combine(root, "deploy", "vps", "Caddyfile")),
+            File.ReadAllText(Path.Combine(root, "deploy", "vps", "Caddyfile.production"))
+        };
+
+        Assert.Multiple(() =>
+        {
+            foreach (var caddySource in caddySources)
+            {
+                Assert.That(
+                    caddySource,
+                    Does.Match(@"(?s)\{\$HIP_CONSUMER_HOST\} \{.*?rewrite @consumerUi /consumer\{uri\}.*?reverse_proxy consumer-web:8080"));
+                Assert.That(
+                    caddySource,
+                    Does.Match(@"(?s)\{\$HIP_ADMIN_HOST\} \{.*?rewrite @adminUi /admin\{uri\}.*?reverse_proxy web:8080"));
+            }
+        });
+    }
+
+    [Test]
     public void Production_DNSSEC_resolver_is_private_pinned_and_fail_closed()
     {
         var root = RepositoryRoot();

@@ -132,7 +132,21 @@
                                 }
                             </details>
                         }
-                        <button type="button" class="hip-secondary-action" @onclick="() => LoadZone(zone)" disabled="@_submitting">Edit records</button>
+                        <div class="service-client-actions">
+                            <button type="button" class="hip-secondary-action" @onclick="() => LoadZone(zone)" disabled="@_submitting">Edit records</button>
+                            @if (zone.Status != AuthoritativeDnsZoneStatus.Disabled)
+                            {
+                                @if (_pendingDisableDomain == zone.Domain)
+                                {
+                                    <button type="button" class="hip-primary-action" @onclick="() => DisableAsync(zone.Domain)" disabled="@_submitting">Confirm disable</button>
+                                    <button type="button" class="hip-secondary-action" @onclick="CancelDisable" disabled="@_submitting">Cancel</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="hip-secondary-action" @onclick="() => PrepareDisable(zone.Domain)" disabled="@_submitting">Disable zone</button>
+                                }
+                            }
+                        </div>
                     </article>
                 }
             </div>
@@ -150,6 +164,7 @@
     private string? _status;
     private bool _loading = true;
     private bool _submitting;
+    private string? _pendingDisableDomain;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -240,6 +255,67 @@
         if (_records.Count == 0)
         {
             _records.Add(new RecordEditorRow());
+        }
+    }
+
+    private void PrepareDisable(string domain)
+    {
+        _pendingDisableDomain = domain;
+        _error = null;
+        _status = $"Confirm that you want to disable {domain} and remove it from the authoritative provider.";
+    }
+
+    private void CancelDisable()
+    {
+        _pendingDisableDomain = null;
+        _status = null;
+    }
+
+    private async Task DisableAsync(string domain)
+    {
+        if (_pendingDisableDomain != domain)
+        {
+            return;
+        }
+
+        _submitting = true;
+        _error = null;
+        _status = null;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipAdminPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                HostEnvironment,
+                [AdminPolicies.CanManageAuthoritativeDns, AdminPolicies.RecentPrivilegedAuthentication],
+                (actorId, cancellationToken) => DnsManagement.DisableAsync(
+                    domain,
+                    "Disable authoritative DNS zone",
+                    actorId,
+                    cancellationToken),
+                _pageCancellation.Token);
+            if (!access.Succeeded)
+            {
+                _error = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            _pendingDisableDomain = null;
+            _status = $"{domain} was disabled and removed from the authoritative provider.";
+            await LoadAsync();
+        }
+        catch (ArgumentException exception)
+        {
+            _error = exception.Message;
+        }
+        catch (InvalidOperationException exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _submitting = false;
         }
     }
 

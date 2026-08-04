@@ -124,7 +124,7 @@ www.{$HIP_PUBLIC_HOST} {
     @adminUi not path /api/* /auth /auth/* /signin-oidc /signout-callback-oidc /login /forbidden /step-up /not-found /Error /_framework/* /_blazor /_blazor/* /_content/* /js/* /lib/* /*.css /*.js /favicon.png /hip-logo.svg /hip-logo-original.png
     rewrite @adminUi /admin{uri}
 
-    reverse_proxy consumer-web:8080 {
+    reverse_proxy web:8080 {
         header_up -X-HIP-Admin-Role
         header_up -X-HIP-Admin-User
         header_up -X-HIP-Consumer-Id
