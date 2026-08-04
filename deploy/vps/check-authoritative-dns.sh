@@ -20,7 +20,7 @@ esac
 
 docker exec "$container" pdns_control rping | grep -q 'PONG'
 docker exec "$container" sh -c 'curl --fail --silent --show-error --max-time 5 -H "Accept: application/json" -H "X-API-Key: $HIP_POWERDNS_API_KEY" http://127.0.0.1:8081/api/v1/servers/localhost' \
-    | grep -q '"daemon_type":"authoritative"'
+    | grep -Eq '"daemon_type"[[:space:]]*:[[:space:]]*"authoritative"'
 
 refused="$(docker exec "$container" dig @127.0.0.1 -p 5300 cloudflare.com A +time=3 +tries=1)"
 echo "$refused" | grep -q 'status: REFUSED'
