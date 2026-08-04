@@ -7,6 +7,7 @@ using HIP.Application;
 using HIP.Application.Browser;
 using HIP.Application.Certificates;
 using HIP.Application.Devices;
+using HIP.Application.Dns;
 using HIP.Application.Identity;
 using HIP.Application.Performance;
 using HIP.Application.Protocol;
@@ -168,6 +169,39 @@ var browserApi = app.MapGroup("/api/v1/browser").WithTags("Browser Plugin");
 var siteSafetyApi = app.MapGroup("/api/v1/site-safety").WithTags("Site Safety");
 var domainVerificationApi = app.MapGroup("/api/v1/domain-verification").WithTags("Domain Verification");
 var protocolApi = app.MapGroup("/api/v1/protocol").WithTags("HIP Protocol");
+
+app.MapGet("/dns-query", async (
+    string name,
+    string? type,
+    IHipAwareDnsLookupService dnsLookupService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var recordType = ParseDnsLookupRecordType(type);
+        var response = await dnsLookupService.LookupAsync(name, recordType, cancellationToken);
+        return Results.Json(response, contentType: "application/dns-json");
+    }
+    catch (ArgumentException exception)
+    {
+        return Results.BadRequest(new ApiErrorResponse(exception.Message));
+    }
+})
+.WithName("HipAwareDnsQuery")
+.WithTags("HIP-aware DNS")
+.WithSummary("Resolves a public A or AAAA record and attaches HIP trust evidence.")
+.WithDescription("""
+Provides the bounded JSON form of HIP-aware DNS. The DNS answer comes from the configured recursive provider,
+while the hip property contains the same public-safe trust evidence used by HIP public lookup. The trust extension
+is not authoritative DNS data, does not prove that a site is safe, and never includes verification tokens or private
+scan content. This milestone supports GET queries for A and AAAA records only; DNS wire format, POST, DNSSEC
+validation, DoT, and UDP/TCP port 53 service are deliberately deferred.
+""")
+.Produces<HipAwareDnsLookupResponse>(StatusCodes.Status200OK, "application/dns-json")
+.Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+.AllowAnonymous()
+.RequireRateLimiting(PublicScanPolicy)
+.CacheOutput(HipOutputCachePolicies.PublicLookup);
 
 domainVerificationApi.MapPost("/check", async (
     DomainVerificationCheckApiRequest request,
@@ -1545,7 +1579,14 @@ static string GetPublicDomainLookupDescription() => """
 
     Example:
     `GET /api/v1/public/lookup/domain/example.com`
-    """;
+""";
+
+static DnsLookupRecordType ParseDnsLookupRecordType(string? value) => value?.Trim().ToUpperInvariant() switch
+{
+    null or "" or "A" or "1" => DnsLookupRecordType.A,
+    "AAAA" or "28" => DnsLookupRecordType.Aaaa,
+    _ => throw new ArgumentException("HIP DNS currently supports A and AAAA queries only.", nameof(value))
+};
 
 /// <summary>
 /// Provides detailed Swagger text for the public live badge endpoint.

@@ -11,6 +11,7 @@ using HIP.Application.Explanations;
 using HIP.Application.Platforms;
 using HIP.Application.Protocol;
 using HIP.Application.PublicLookup;
+using HIP.Application.Dns;
 using HIP.Application.Reporting;
 using HIP.Application.Reputation;
 using HIP.Application.Review;
@@ -117,6 +118,7 @@ public static class DependencyInjection
         services.AddScoped<RuleDeploymentService>();
         services.AddScoped<AiRuleDraftService>();
         services.AddScoped<IPublicDomainLookupService, PublicDomainLookupService>();
+        services.AddScoped<IHipAwareDnsLookupService, HipAwareDnsLookupService>();
         services.AddSingleton<ITrustExplanationProvider, DisabledTrustExplanationProvider>();
         services.AddSingleton<ITrustExplanationAssistant, TrustExplanationAssistant>();
         services.AddScoped<ITrustBadgeService, TrustBadgeService>();

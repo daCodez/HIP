@@ -4,6 +4,7 @@ using HIP.Application.Browser;
 using HIP.Application.Certificates;
 using HIP.Application.Consumer;
 using HIP.Application.Devices;
+using HIP.Application.Dns;
 using HIP.Application.Identity;
 using HIP.Application.Platforms;
 using HIP.Application.Protocol;
@@ -80,6 +81,7 @@ public static class DependencyInjection
                 "Service-client management mutation limiting options are invalid.")
             .ValidateOnStart();
         services.AddSingleton<IDnsTxtRecordResolver, DnsClientTxtRecordResolver>();
+        services.AddSingleton<IDnsLookupProvider, DnsClientLookupProvider>();
         services.AddSingleton<IPublicSuffixResolver, PublicSuffixListResolver>();
         services.AddSingleton(WellKnownHipDocumentFetchOptions.Default);
         services.AddSingleton<IWellKnownHipDocumentFetcher, SafeWellKnownHipDocumentFetcher>();
