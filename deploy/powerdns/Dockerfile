@@ -29,6 +29,6 @@ EXPOSE 5300/tcp 5300/udp 8081/tcp
 VOLUME ["/var/lib/powerdns"]
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=12 \
-    CMD ["pdns_control", "ping"]
+    CMD ["pdns_control", "rping"]
 
 ENTRYPOINT ["/usr/local/bin/hip-powerdns-entrypoint"]
