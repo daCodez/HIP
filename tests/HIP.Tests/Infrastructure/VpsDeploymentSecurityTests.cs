@@ -212,6 +212,8 @@ public sealed class VpsDeploymentSecurityTests
             Assert.That(configuration, Does.Contain("harden-dnssec-stripped: yes"));
             Assert.That(configuration, Does.Contain("ede: yes"));
             Assert.That(configuration, Does.Contain("access-control: 0.0.0.0/0 refuse"));
+            Assert.That(configuration, Does.Contain("chroot: \"\""));
+            Assert.That(configuration, Does.Contain("pidfile: \"/tmp/unbound.pid\""));
         });
     }
 
