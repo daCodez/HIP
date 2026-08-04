@@ -17,7 +17,23 @@ www.{$HIP_PUBLIC_HOST} {
         -Server
     }
 
-    respond "HIP DNS-over-TLS endpoint. Configure your DNS client to use {$HIP_DNS_HOST} on port 853." 200
+    handle /dns-query {
+        reverse_proxy api:8080 {
+            header_up -Authorization
+            header_up -Cookie
+            header_up -X-HIP-API-Key
+            header_up -X-HIP-Signer
+            header_up -X-HIP-Instance-Id
+            header_up -X-HIP-Admin-Role
+            header_up -X-HIP-Admin-User
+            header_up -X-HIP-Consumer-Id
+            header_up -X-HIP-Trusted-Staging-Proxy
+        }
+    }
+
+    handle {
+        respond "HIP encrypted DNS endpoint. Use https://{$HIP_DNS_HOST}/dns-query for DNS-over-HTTPS or {$HIP_DNS_HOST}:853 for DNS-over-TLS." 200
+    }
 }
 
 {$HIP_PUBLIC_HOST} {

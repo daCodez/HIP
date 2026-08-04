@@ -46,6 +46,11 @@ public sealed class HipPerformanceOptions
     public int PublicScanRequestsPerMinute { get; set; } = 60;
 
     /// <summary>
+    /// Gets or sets the maximum public DNS-over-HTTPS requests accepted per client IP per minute.
+    /// </summary>
+    public int PublicDnsRequestsPerMinute { get; set; } = 600;
+
+    /// <summary>
     /// Gets or sets the maximum public feedback/report submissions accepted per partition per minute.
     /// </summary>
     public int PublicFeedbackRequestsPerMinute { get; set; } = 30;

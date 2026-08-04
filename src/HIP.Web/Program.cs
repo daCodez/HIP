@@ -502,6 +502,7 @@ static bool ValidateHipPerformanceOptions(HipPerformanceOptions options) =>
     && options.SafetyCacheSeconds > 0
     && options.SiteSafetyCacheSeconds > 0
     && options.PublicScanRequestsPerMinute > 0
+    && options.PublicDnsRequestsPerMinute > 0
     && options.PublicFeedbackRequestsPerMinute > 0
     && options.IdentityRequestsPerMinute > 0;
 

@@ -29,6 +29,7 @@ using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 const string PublicScanPolicy = "PublicScanPolicy";
+const string PublicDnsPolicy = "PublicDnsPolicy";
 const string PublicFeedbackPolicy = "PublicFeedbackPolicy";
 const string HipInstanceIdHeader = "X-HIP-Instance-Id";
 
@@ -79,9 +80,12 @@ builder.Services.AddCors(options =>
 builder.Services.AddRateLimiter(options =>
 {
     var performance = BindHipPerformanceOptions(builder.Configuration);
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     // Baseline public limits reduce unauthenticated scan/report abuse until HIP client signatures are introduced.
     options.AddPolicy(PublicScanPolicy, httpContext =>
         CreateFixedWindowPartition(httpContext, "scan", performance.PublicScanRequestsPerMinute));
+    options.AddPolicy(PublicDnsPolicy, httpContext =>
+        CreateClientIpFixedWindowPartition(httpContext, "dns", performance.PublicDnsRequestsPerMinute));
     options.AddPolicy(PublicFeedbackPolicy, httpContext =>
         CreateFixedWindowPartition(httpContext, "feedback", performance.PublicFeedbackRequestsPerMinute));
 });
@@ -213,13 +217,15 @@ while the hip property contains the same public-safe trust evidence used by HIP 
 is not authoritative DNS data, does not prove that a site is safe, and never includes verification tokens or private
 scan content. JSON clients may use name and type. RFC 8484 clients use an unpadded base64url dns parameter and
 receive application/dns-message. DNSSEC validation evidence is reported from the configured recursive resolver.
-A and AAAA are supported. Production DNS-over-TLS is available at dns.guardwithhip.com:853; UDP/TCP port 53 remains deferred.
+A and AAAA are supported. Production DNS-over-HTTPS is available at https://dns.guardwithhip.com/dns-query,
+and DNS-over-TLS is available at dns.guardwithhip.com:853. UDP/TCP port 53 remains deferred.
 """)
 .Produces<HipAwareDnsLookupResponse>(StatusCodes.Status200OK, "application/dns-json")
 .Produces(StatusCodes.Status200OK, contentType: "application/dns-message")
 .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+.Produces(StatusCodes.Status429TooManyRequests)
 .AllowAnonymous()
-.RequireRateLimiting(PublicScanPolicy);
+.RequireRateLimiting(PublicDnsPolicy);
 
 app.MapPost("/dns-query", async (
     HttpContext httpContext,
@@ -267,8 +273,9 @@ app.MapPost("/dns-query", async (
 .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
 .Produces(StatusCodes.Status413PayloadTooLarge)
 .Produces(StatusCodes.Status415UnsupportedMediaType)
+.Produces(StatusCodes.Status429TooManyRequests)
 .AllowAnonymous()
-.RequireRateLimiting(PublicScanPolicy);
+.RequireRateLimiting(PublicDnsPolicy);
 
 domainVerificationApi.MapPost("/check", async (
     DomainVerificationCheckApiRequest request,
@@ -565,6 +572,7 @@ static bool ValidateHipPerformanceOptions(HipPerformanceOptions options) =>
     && options.SafetyCacheSeconds > 0
     && options.SiteSafetyCacheSeconds > 0
     && options.PublicScanRequestsPerMinute > 0
+    && options.PublicDnsRequestsPerMinute > 0
     && options.PublicFeedbackRequestsPerMinute > 0
     && options.IdentityRequestsPerMinute > 0;
 
@@ -578,6 +586,27 @@ static bool ValidateHipPerformanceOptions(HipPerformanceOptions options) =>
 static RateLimitPartition<string> CreateFixedWindowPartition(HttpContext httpContext, string policyPrefix, int permitLimit) =>
     RateLimitPartition.GetFixedWindowLimiter(
         ResolveRateLimitPartitionKey(httpContext, policyPrefix),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = permitLimit,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+
+/// <summary>
+/// Creates a DNS request limiter partitioned only by the proxy-resolved client IP.
+/// </summary>
+/// <remarks>
+/// Public DoH callers must not be able to rotate HIP identity headers to bypass the resolver budget.
+/// The API container is private and receives its remote address through the trusted Caddy boundary.
+/// </remarks>
+static RateLimitPartition<string> CreateClientIpFixedWindowPartition(
+    HttpContext httpContext,
+    string policyPrefix,
+    int permitLimit) =>
+    RateLimitPartition.GetFixedWindowLimiter(
+        $"{policyPrefix}:{NormalizeSettingsScopeSegment(httpContext.Connection.RemoteIpAddress?.ToString())}",
         _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = permitLimit,

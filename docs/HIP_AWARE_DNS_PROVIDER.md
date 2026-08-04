@@ -61,10 +61,20 @@ Caddy obtains and renews the public certificate. A root-only systemd timer valid
 ./deploy/vps/check-dns-over-tls.sh
 ```
 
+## DNS over HTTPS
+
+The same bounded RFC 8484 wire endpoint is published at `https://dns.guardwithhip.com/dns-query` over HTTP/2. Both GET with an unpadded base64url `dns` parameter and POST with an `application/dns-message` body are supported. The DNS hostname forwards only the exact `/dns-query` path to the private API service and removes cookies, authorization credentials, HIP identity headers, and internal proxy headers before forwarding.
+
+DoH uses a dedicated client-IP rate limit. Client-supplied identity headers cannot create new limiter partitions. The existing 4 KiB one-question request limit, A and AAAA record boundary, DNSSEC validation, cache lifetime handling, and privacy-safe aggregate resolver monitoring remain unchanged.
+
+```sh
+./deploy/vps/check-dns-over-https.sh
+```
+
 ## Deliberately deferred
 
 This is the provider and API foundation, not a complete public recursive DNS service. The following remain future milestones:
 
 - UDP and TCP port 53 listeners;
-- DNS over HTTPS and DNS over QUIC;
+- DNS over QUIC;
 - high-availability resolver deployment and external alerting.

@@ -100,6 +100,42 @@ public sealed class HipDnsWireApiServiceTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
     }
 
+    /// <summary>Confirms rotating caller-supplied HIP headers cannot bypass the client-IP DNS budget.</summary>
+    [Test]
+    public async Task Wire_requests_share_DNS_budget_when_identity_headers_change()
+    {
+        await using var baseFactory = new HipWebApplicationFactory<ApiServiceAlias::ApiServiceProgram>();
+        await using var factory = baseFactory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("HipPerformance:PublicDnsRequestsPerMinute", "2");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<IDnsLookupProvider>();
+                services.AddSingleton<IDnsLookupProvider, StubDnsLookupProvider>();
+            });
+        });
+        using var client = factory.CreateClient();
+        var dns = Convert.ToBase64String(Rfc8484ExampleQuery).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+        using var first = new HttpRequestMessage(HttpMethod.Get, $"/dns-query?dns={dns}");
+        first.Headers.Add("X-HIP-API-Key", "first");
+        using var second = new HttpRequestMessage(HttpMethod.Get, $"/dns-query?dns={dns}");
+        second.Headers.Add("X-HIP-Signer", "second");
+        using var third = new HttpRequestMessage(HttpMethod.Get, $"/dns-query?dns={dns}");
+        third.Headers.Add("X-HIP-Instance-Id", "third");
+
+        using var firstResponse = await client.SendAsync(first);
+        using var secondResponse = await client.SendAsync(second);
+        using var thirdResponse = await client.SendAsync(third);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(secondResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(thirdResponse.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
+        });
+    }
+
     private static Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<ApiServiceAlias::ApiServiceProgram>
         WithDnsProvider(HipWebApplicationFactory<ApiServiceAlias::ApiServiceProgram> baseFactory) =>
         baseFactory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
