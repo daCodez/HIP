@@ -1,2 +1,3 @@
 deploy/unbound/entrypoint.sh text eol=lf
 deploy/vps/check-unbound.sh text eol=lf
+deploy/vps/check-dns-frontdoor.sh text eol=lf
