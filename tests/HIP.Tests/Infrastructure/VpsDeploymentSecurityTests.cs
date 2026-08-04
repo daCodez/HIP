@@ -208,6 +208,28 @@ public sealed class VpsDeploymentSecurityTests
     }
 
     [Test]
+    public void Admin_web_uses_production_authentication_in_the_private_release_path()
+    {
+        var root = RepositoryRoot();
+        var compose = File.ReadAllText(Path.Combine(root, "deploy", "vps", "compose.private-staging.yml"));
+        var webStart = compose.IndexOf("  web:", StringComparison.Ordinal);
+        var webEnd = compose.IndexOf("\n  consumer-web:", webStart, StringComparison.Ordinal);
+        var webService = compose[webStart..webEnd];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(webService, Does.Contain("ASPNETCORE_ENVIRONMENT: Production"));
+            Assert.That(webService, Does.Not.Contain("ASPNETCORE_ENVIRONMENT: Development"));
+            Assert.That(webService, Does.Contain("HipDevelopmentProxy__Enabled: \"false\""));
+            Assert.That(webService, Does.Contain("HipAuthentication__Authority:"));
+            Assert.That(webService, Does.Contain("HipSessionProtection__ApplicationName: HIP.Web.Admin"));
+            Assert.That(webService, Does.Contain("AuthoritativeDns__Enabled: \"true\""));
+            Assert.That(webService, Does.Contain("HIP_SESSION_KEYRING_PATH"));
+            Assert.That(webService, Does.Contain("HIP_SESSION_CERTIFICATE_PATH"));
+        });
+    }
+
+    [Test]
     public void Production_DNSSEC_resolver_is_private_pinned_and_fail_closed()
     {
         var root = RepositoryRoot();
