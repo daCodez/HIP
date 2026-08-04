@@ -12,7 +12,7 @@ RUN git clone https://github.com/NLnetLabs/unbound.git /src/unbound \
     && git checkout --detach "${UNBOUND_REVISION}" \
     && test "$(git rev-parse HEAD)" = "${UNBOUND_REVISION}" \
     && autoreconf -fi \
-    && ./configure --prefix=/opt/unbound --with-libevent --with-libexpat --with-ssl \
+    && ./configure --prefix=/opt/unbound --with-libevent --with-libexpat=/usr --with-ssl \
     && make -j"$(nproc)" \
     && make install
 
