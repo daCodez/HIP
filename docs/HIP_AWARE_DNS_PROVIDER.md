@@ -71,10 +71,20 @@ DoH uses a dedicated client-IP rate limit. Client-supplied identity headers cann
 ./deploy/vps/check-dns-over-https.sh
 ```
 
+## External monitoring and alerts
+
+The public encrypted DNS transports are checked externally every 30 minutes by `.github/workflows/dns-availability.yml`, with an additional manual trigger and a focused push trigger for monitor changes. The standard-library monitor verifies the HTTPS status endpoint, RFC 8484 GET and POST, DNS-over-TLS certificate validity, DNSSEC-authenticated answers, fail-closed handling for a known-bogus DNSSEC domain, and continued closure of public TCP port 53.
+
+The monitor uses only the fixed public test names `cloudflare.com` and `dnssec-failed.org`. It does not inspect or retain user queries, resolver history, credentials, cookies, or private URLs. Reports contain only named check status, duration, and bounded error text.
+
+On the first failure, the workflow opens one GitHub issue named `[monitoring] HIP DNS availability incident`. Repeated failures retain that issue without creating comments or duplicates. A successful recovery adds one recovery comment and closes the incident. Workflow failure remains visible independently of issue automation.
+
+GitHub schedules may be delayed, so this is an availability alert rather than a real-time paging system. High availability and a separate paging provider remain future production work.
+
 ## Deliberately deferred
 
 This is the provider and API foundation, not a complete public recursive DNS service. The following remain future milestones:
 
 - UDP and TCP port 53 listeners;
 - DNS over QUIC;
-- high-availability resolver deployment and external alerting.
+- high-availability resolver deployment and independent real-time paging.

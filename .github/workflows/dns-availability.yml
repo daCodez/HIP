@@ -1,0 +1,57 @@
+name: HIP DNS availability
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/dns-availability.yml
+      - eng/monitoring/check_hip_dns.py
+      - eng/monitoring/update_dns_monitor_issue.py
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: hip-dns-availability
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    name: Check public encrypted DNS
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Run privacy-safe external checks
+        id: dns_monitor
+        continue-on-error: true
+        shell: bash
+        run: python3 eng/monitoring/check_hip_dns.py | tee dns-monitor-report.json
+
+      - name: Open or retain the incident alert
+        if: steps.dns_monitor.outcome == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 eng/monitoring/update_dns_monitor_issue.py
+          --status failed
+          --report dns-monitor-report.json
+
+      - name: Close a recovered incident alert
+        if: steps.dns_monitor.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 eng/monitoring/update_dns_monitor_issue.py
+          --status passed
+          --report dns-monitor-report.json
+
+      - name: Preserve a failed workflow signal
+        if: steps.dns_monitor.outcome == 'failure'
+        run: exit 1
