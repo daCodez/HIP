@@ -16,7 +16,8 @@ public sealed class PowerDnsAuthoritativePublisherTests
             Response(HttpStatusCode.Created, "{}"),
             Response(HttpStatusCode.NoContent, string.Empty),
             Response(HttpStatusCode.OK, "{}"),
-            Response(HttpStatusCode.OK, "[{\"active\":true,\"ds\":[\"12345 13 2 ABCDEF\"]}]"));
+            Response(HttpStatusCode.OK, "[{\"id\":7,\"active\":true,\"keytype\":\"csk\"}]"),
+            Response(HttpStatusCode.OK, "{\"id\":7,\"active\":true,\"ds\":[\"12345 13 2 ABCDEF\"],\"privatekey\":\"must not be used\"}"));
         var options = new PowerDnsAuthoritativeOptions(
             true,
             new Uri("http://powerdns:8081/api/v1/"),
@@ -32,11 +33,12 @@ public sealed class PowerDnsAuthoritativePublisherTests
         Assert.Multiple(() =>
         {
             Assert.That(publication.DsRecords, Is.EqualTo(new[] { "12345 13 2 ABCDEF" }));
-            Assert.That(handler.Requests, Has.Count.EqualTo(5));
+            Assert.That(handler.Requests, Has.Count.EqualTo(6));
             Assert.That(handler.Requests[1].Body, Does.Contain("\"dnssec\":true"));
             Assert.That(handler.Requests[1].Body, Does.Contain("\"api_rectify\":true"));
             Assert.That(handler.Requests[2].Method, Is.EqualTo(HttpMethod.Patch));
             Assert.That(handler.Requests[3].Path, Does.EndWith("/rectify"));
+            Assert.That(handler.Requests[5].Path, Does.EndWith("/cryptokeys/7/ds"));
             Assert.That(handler.Requests.All(request => request.ApiKey == new string('k', 40)), Is.True);
         });
     }

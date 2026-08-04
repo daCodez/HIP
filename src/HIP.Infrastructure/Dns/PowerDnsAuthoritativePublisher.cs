@@ -144,15 +144,39 @@ public sealed class PowerDnsAuthoritativePublisher(
         using var response = await SendAsync(HttpMethod.Get, $"{zonePath}/cryptokeys", null, cancellationToken).ConfigureAwait(false);
         await RequireSuccessAsync(response, "read DNSSEC delegation records", cancellationToken).ConfigureAwait(false);
         using var document = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false));
-        return document.RootElement
+        var activeKeyIds = document.RootElement
             .EnumerateArray()
             .Where(key => key.TryGetProperty("active", out var active) && active.GetBoolean())
-            .SelectMany(key => key.TryGetProperty("ds", out var ds) ? ds.EnumerateArray() : [])
-            .Select(value => value.GetString())
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value!)
-            .Distinct(StringComparer.Ordinal)
+            .Select(key => key.GetProperty("id").GetInt32())
             .ToArray();
+
+        var records = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var keyId in activeKeyIds)
+        {
+            using var keyResponse = await SendAsync(
+                HttpMethod.Get,
+                $"{zonePath}/cryptokeys/{keyId}/ds",
+                null,
+                cancellationToken).ConfigureAwait(false);
+            await RequireSuccessAsync(keyResponse, "read a DNSSEC delegation record", cancellationToken).ConfigureAwait(false);
+            using var keyDocument = JsonDocument.Parse(
+                await keyResponse.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false));
+            if (!keyDocument.RootElement.TryGetProperty("ds", out var ds))
+            {
+                continue;
+            }
+
+            foreach (var value in ds.EnumerateArray())
+            {
+                var record = value.GetString();
+                if (!string.IsNullOrWhiteSpace(record))
+                {
+                    records.Add(record);
+                }
+            }
+        }
+
+        return records.ToArray();
     }
 
     private static IReadOnlyCollection<object> BuildRecordSetChanges(
