@@ -45,7 +45,7 @@ USER 1655:1655
 EXPOSE 5353/tcp 5353/udp
 VOLUME ["/var/lib/unbound"]
 HEALTHCHECK --interval=30s --timeout=8s --start-period=45s --retries=5 \
-    CMD output="$$(dig @127.0.0.1 -p 5353 . SOA +dnssec +time=3 +tries=1)" \
-        && echo "$${output}" | grep -q "status: NOERROR" \
-        && echo "$${output}" | grep -Eq "flags:.* ad;"
+    CMD output="$(dig @127.0.0.1 -p 5353 . SOA +dnssec +time=3 +tries=1)" \
+        && echo "${output}" | grep -q "status: NOERROR" \
+        && echo "${output}" | grep -Eq "flags:.* ad;"
 ENTRYPOINT ["/usr/local/bin/hip-unbound-entrypoint"]

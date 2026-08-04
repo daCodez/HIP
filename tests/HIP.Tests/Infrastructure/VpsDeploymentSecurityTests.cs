@@ -222,6 +222,7 @@ public sealed class VpsDeploymentSecurityTests
             Assert.That(configuration, Does.Contain("extended-statistics: yes"));
             Assert.That(dockerfile, Does.Contain("dig @127.0.0.1 -p 5353 . SOA +dnssec"));
             Assert.That(dockerfile, Does.Contain("flags:.* ad;"));
+            Assert.That(dockerfile, Does.Not.Contain("$$(dig"));
             Assert.That(operationalCheck, Does.Contain("stats_noreset"));
             Assert.That(operationalCheck, Does.Contain("unexpectedly has a published host port"));
         });
