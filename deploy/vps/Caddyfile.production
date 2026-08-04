@@ -4,6 +4,10 @@
     }
 }
 
+www.{$HIP_PUBLIC_HOST} {
+    redir https://{$HIP_PUBLIC_HOST}{uri} permanent
+}
+
 {$HIP_PUBLIC_HOST} {
     encode zstd gzip
 
@@ -14,6 +18,15 @@
         Referrer-Policy "strict-origin-when-cross-origin"
         -Server
     }
+
+    @verificationAlias path /verification /verify
+    redir @verificationAlias /domain-verification permanent
+
+    @howAlias path /how
+    redir @howAlias /how-it-works permanent
+
+    @developersAlias path /dev
+    redir @developersAlias /developers permanent
 
     @legacyConsumerPortal path_regexp legacyConsumerPortal ^/consumer(?:/(.*))?$
     redir @legacyConsumerPortal https://{$HIP_CONSUMER_HOST}/{re.legacyConsumerPortal.1} 302

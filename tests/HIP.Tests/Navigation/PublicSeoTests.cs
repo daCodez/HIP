@@ -43,6 +43,8 @@ public sealed class PublicSeoTests
             Assert.That(html, Does.Contain("type=\"application/ld+json\""));
             Assert.That(html, Does.Contain("\"sameAs\": [\"https://github.com/daCodez/HIP\"]"));
             Assert.That(html, Does.Contain("HIP (Human Identity Protocol) is an open-source website trust and risk-scoring platform at guardwithhip.com"));
+            Assert.That(html, Does.Contain("\"\\u0040type\": \"WebSite\""));
+            Assert.That(html, Does.Contain("\"\\u0040id\": \"https://guardwithhip.com/#website\""));
             Assert.That(html, Does.Contain("href=\"/platform\""));
             Assert.That(html, Does.Contain("href=\"/website-trust-scanner\""));
             Assert.That(html, Does.Contain("href=\"/tools/lookalike-detector\""));
@@ -105,8 +107,14 @@ public sealed class PublicSeoTests
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(html, Does.Contain($"<title>{titleFragment}"));
             Assert.That(html, Does.Contain("<meta name=\"description\""));
+            Assert.That(html, Does.Contain($"<link rel=\"canonical\" href=\"https://guardwithhip.com{path}\""));
             Assert.That(html, Does.Contain(headingFragment));
         });
+
+        if (path == "/website-trust-scanner")
+        {
+            Assert.That(html, Does.Contain("\"\\u0040type\": \"WebApplication\""));
+        }
     }
 
     /// <summary>Confirms crawlers receive explicit policy and canonical sitemap endpoints.</summary>
@@ -137,6 +145,26 @@ public sealed class PublicSeoTests
             Assert.That(sitemap, Does.Contain("https://guardwithhip.com/evidence-providers"));
             Assert.That(sitemap, Does.Contain("https://guardwithhip.com/privacy"));
             Assert.That(sitemap, Does.Contain("https://guardwithhip.com/appeals"));
+            Assert.That(sitemap, Does.Not.Contain("https://guardwithhip.com/verification<"));
+            Assert.That(sitemap, Does.Not.Contain("https://guardwithhip.com/verify<"));
+            Assert.That(sitemap, Does.Not.Contain("https://guardwithhip.com/how<"));
+        });
+    }
+
+    [Test]
+    public void Production_proxy_obtains_www_tls_and_permanently_consolidates_aliases()
+    {
+        var root = RepositoryRoot();
+        var caddy = File.ReadAllText(Path.Combine(root, "deploy", "vps", "Caddyfile.production"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(caddy, Does.Contain("www.{$HIP_PUBLIC_HOST} {"));
+            Assert.That(caddy, Does.Contain("redir https://{$HIP_PUBLIC_HOST}{uri} permanent"));
+            Assert.That(caddy, Does.Contain("@verificationAlias path /verification /verify"));
+            Assert.That(caddy, Does.Contain("redir @verificationAlias /domain-verification permanent"));
+            Assert.That(caddy, Does.Contain("redir @howAlias /how-it-works permanent"));
+            Assert.That(caddy, Does.Contain("redir @developersAlias /developers permanent"));
         });
     }
 
