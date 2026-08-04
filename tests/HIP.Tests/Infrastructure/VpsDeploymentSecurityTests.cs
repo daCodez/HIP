@@ -190,6 +190,7 @@ public sealed class VpsDeploymentSecurityTests
         var compose = File.ReadAllText(Path.Combine(root, "deploy", "vps", "compose.private-staging.yml"));
         var dockerfile = File.ReadAllText(Path.Combine(root, "deploy", "unbound", "Dockerfile"));
         var configuration = File.ReadAllText(Path.Combine(root, "deploy", "unbound", "unbound.conf"));
+        var entrypoint = File.ReadAllText(Path.Combine(root, "deploy", "unbound", "entrypoint.sh"));
         var unboundStart = compose.IndexOf("  unbound:", StringComparison.Ordinal);
         var unboundEnd = compose.IndexOf("\n  keycloak:", unboundStart, StringComparison.Ordinal);
         var unboundService = compose[unboundStart..unboundEnd];
@@ -205,6 +206,7 @@ public sealed class VpsDeploymentSecurityTests
             Assert.That(dockerfile, Does.Contain("automake bison build-essential ca-certificates flex"));
             Assert.That(dockerfile, Does.Contain("--with-libexpat=/usr"));
             Assert.That(dockerfile, Does.Contain("USER 1655:1655"));
+            Assert.That(entrypoint, Does.Not.Contain("\r"), "The Linux entrypoint must retain LF line endings.");
             Assert.That(configuration, Does.Contain("auto-trust-anchor-file:"));
             Assert.That(configuration, Does.Contain("module-config: \"validator iterator\""));
             Assert.That(configuration, Does.Contain("harden-dnssec-stripped: yes"));

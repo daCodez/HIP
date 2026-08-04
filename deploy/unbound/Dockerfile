@@ -37,7 +37,8 @@ COPY --from=build /opt/unbound /opt/unbound
 COPY deploy/unbound/unbound.conf /etc/unbound/unbound.conf
 COPY deploy/unbound/entrypoint.sh /usr/local/bin/hip-unbound-entrypoint
 
-RUN chmod 0755 /usr/local/bin/hip-unbound-entrypoint
+RUN sed -i 's/\r$//' /usr/local/bin/hip-unbound-entrypoint \
+    && chmod 0755 /usr/local/bin/hip-unbound-entrypoint
 
 ENV PATH="/opt/unbound/sbin:/opt/unbound/bin:${PATH}"
 USER 1655:1655
