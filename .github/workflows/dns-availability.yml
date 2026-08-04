@@ -5,6 +5,7 @@ on:
     branches:
       - master
     paths:
+      - .gitattributes
       - .github/workflows/dns-availability.yml
       - eng/monitoring/check_hip_dns.py
       - eng/monitoring/check_hip_doq.sh
