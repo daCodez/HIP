@@ -50,11 +50,21 @@ dnsdist provides backend health checks, a bounded in-memory answer cache, and pe
 ./deploy/vps/check-unbound.sh
 ```
 
+## DNS over TLS
+
+The production composition exposes encrypted recursive DNS at `dns.guardwithhip.com:853`. Plain UDP and TCP port 53 remain closed. dnsdist requires TLS 1.2 or later, applies per-client connection and query limits plus a global ceiling, disables stored TLS sessions, and continues to keep query and response history disabled.
+
+Caddy obtains and renews the public certificate. A root-only systemd timer validates the certificate and matching private key, then copies only those two files into dnsdist's dedicated read-only certificate directory. dnsdist reloads renewed certificate material without enabling its console or web API.
+
+```sh
+./deploy/vps/install-dnsdist-certificate-sync.sh
+./deploy/vps/check-dns-over-tls.sh
+```
+
 ## Deliberately deferred
 
 This is the provider and API foundation, not a complete public recursive DNS service. The following remain future milestones:
 
-- DNS over TLS;
 - UDP and TCP port 53 listeners;
-- public exposure of the DNS front door and its encrypted-DNS certificate policy;
+- DNS over HTTPS and DNS over QUIC;
 - high-availability resolver deployment and external alerting.

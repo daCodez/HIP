@@ -1,0 +1,16 @@
+[Unit]
+Description=Synchronize the Caddy-managed HIP DNS certificate for dnsdist
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/opt/hip/current/deploy/vps/sync-dnsdist-certificate.sh
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/hip/shared/dnsdist-tls
+ReadOnlyPaths=/var/lib/docker/volumes/hip-staging_caddy-data/_data

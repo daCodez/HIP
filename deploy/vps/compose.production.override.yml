@@ -1,4 +1,12 @@
 services:
+  dnsdist:
+    ports:
+      - "${HIP_PUBLIC_BIND_ADDRESS:?HIP_PUBLIC_BIND_ADDRESS is required}:853:853/tcp"
+    volumes:
+      - ../dnsdist/dnsdist-dot.conf:/etc/dnsdist/conf.d/10-dot.conf:ro
+      - ${HIP_DNSDIST_TLS_PATH:?HIP_DNSDIST_TLS_PATH is required}:/etc/dnsdist/tls:ro
+    networks: [backend, dns-public]
+
   api:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -87,3 +95,7 @@ services:
   sandbox-worker:
     environment:
       DOTNET_ENVIRONMENT: Production
+
+networks:
+  dns-public:
+    driver: bridge

@@ -213,7 +213,7 @@ while the hip property contains the same public-safe trust evidence used by HIP 
 is not authoritative DNS data, does not prove that a site is safe, and never includes verification tokens or private
 scan content. JSON clients may use name and type. RFC 8484 clients use an unpadded base64url dns parameter and
 receive application/dns-message. DNSSEC validation evidence is reported from the configured recursive resolver.
-A and AAAA are supported; DoT and UDP/TCP port 53 remain deferred.
+A and AAAA are supported. Production DNS-over-TLS is available at dns.guardwithhip.com:853; UDP/TCP port 53 remains deferred.
 """)
 .Produces<HipAwareDnsLookupResponse>(StatusCodes.Status200OK, "application/dns-json")
 .Produces(StatusCodes.Status200OK, contentType: "application/dns-message")
