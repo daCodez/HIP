@@ -35,8 +35,10 @@ public sealed class HipDnsWireApiServiceTests
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/dns-message"));
             Assert.That(body[2] & 0x80, Is.EqualTo(0x80));
+            Assert.That(body[3] & 0x20, Is.EqualTo(0x20));
             Assert.That(body[7], Is.EqualTo(1));
             Assert.That(response.Headers.GetValues("X-HIP-Status").Single(), Is.Not.Empty);
+            Assert.That(response.Headers.GetValues("X-HIP-DNSSEC-Status").Single(), Is.EqualTo("secure"));
             Assert.That(response.Headers.GetValues("X-HIP-Authoritative").Single(), Is.EqualTo("false"));
             Assert.That(response.Headers.CacheControl?.MaxAge, Is.EqualTo(TimeSpan.FromSeconds(30)));
         });
@@ -118,6 +120,7 @@ public sealed class HipDnsWireApiServiceTests
                 0,
                 false,
                 true,
+                DnssecValidationStatus.Secure,
                 [new DnsLookupAnswer($"{domain}.", recordType, 30, "192.0.2.20")]));
     }
 }

@@ -29,6 +29,7 @@ public static class DnsWireMessageCodec
     private const ushort TruncatedFlag = 0x0200;
     private const ushort RecursionDesiredFlag = 0x0100;
     private const ushort RecursionAvailableFlag = 0x0080;
+    private const ushort AuthenticDataFlag = 0x0020;
     private const ushort CheckingDisabledFlag = 0x0010;
 
     /// <summary>Parses one standard IN-class DNS question.</summary>
@@ -97,6 +98,7 @@ public static class DnsWireMessageCodec
             response.Status,
             response.IsTruncated,
             response.IsRecursionAvailable,
+            response.IsAuthenticData && !query.IsCheckingDisabled,
             answers.Length);
         WriteQuestion(bytes, query);
         foreach (var answer in answers)
@@ -112,7 +114,7 @@ public static class DnsWireMessageCodec
     {
         ArgumentNullException.ThrowIfNull(query);
         var bytes = new List<byte>(64);
-        WriteHeader(bytes, query, dnsResponseCode, false, true, 0);
+        WriteHeader(bytes, query, dnsResponseCode, false, true, false, 0);
         WriteQuestion(bytes, query);
         return bytes.ToArray();
     }
@@ -141,6 +143,7 @@ public static class DnsWireMessageCodec
         int responseCode,
         bool isTruncated,
         bool isRecursionAvailable,
+        bool isAuthenticData,
         int answerCount)
     {
         ushort flags = ResponseFlag;
@@ -159,6 +162,10 @@ public static class DnsWireMessageCodec
         if (isRecursionAvailable)
         {
             flags |= RecursionAvailableFlag;
+        }
+        if (isAuthenticData)
+        {
+            flags |= AuthenticDataFlag;
         }
         flags |= (ushort)Math.Clamp(responseCode, 0, 15);
 

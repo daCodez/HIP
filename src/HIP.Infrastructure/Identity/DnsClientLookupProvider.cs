@@ -51,11 +51,14 @@ public sealed class DnsClientLookupProvider : IDnsLookupProvider
                 (int)response.Header.ResponseCode,
                 response.Header.ResultTruncated,
                 response.Header.RecursionAvailable,
+                response.Header.IsAuthenticData
+                    ? DnssecValidationStatus.Secure
+                    : DnssecValidationStatus.Indeterminate,
                 answers);
         }
         catch (DnsResponseException exception) when (exception.Code == DnsResponseCode.NotExistentDomain)
         {
-            return new DnsProviderLookupResult(3, false, true, []);
+            return new DnsProviderLookupResult(3, false, true, DnssecValidationStatus.Indeterminate, []);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -64,7 +67,7 @@ public sealed class DnsClientLookupProvider : IDnsLookupProvider
         catch (Exception exception)
         {
             logger.LogWarning(exception, "HIP DNS provider could not resolve {Domain} as {RecordType}.", domain, recordType);
-            return new DnsProviderLookupResult(2, false, true, []);
+            return new DnsProviderLookupResult(2, false, true, DnssecValidationStatus.Indeterminate, []);
         }
     }
 
@@ -86,6 +89,7 @@ public sealed class DnsClientLookupProvider : IDnsLookupProvider
         lookupOptions.Timeout = TimeSpan.FromMilliseconds(Math.Clamp(options.TimeoutMilliseconds, 500, 15000));
         lookupOptions.UseCache = true;
         lookupOptions.UseTcpOnly = options.UseTcpOnly;
+        lookupOptions.RequestDnsSecRecords = true;
         return new LookupClient(lookupOptions);
     }
 }

@@ -29,7 +29,7 @@ public sealed class HipAwareDnsLookupService(
             dnsResult.IsTruncated,
             true,
             dnsResult.IsRecursionAvailable,
-            false,
+            dnsResult.DnssecStatus == DnssecValidationStatus.Secure,
             false,
             [new DnsJsonQuestion($"{normalizedDomain}.", (int)recordType)],
             dnsResult.Answers
@@ -40,6 +40,10 @@ public sealed class HipAwareDnsLookupService(
                     answer.Data))
                 .ToArray(),
             dnsLookupProvider.Name,
+            new DnssecValidationSummary(
+                dnsResult.DnssecStatus.ToString().ToLowerInvariant(),
+                dnsResult.DnssecStatus == DnssecValidationStatus.Secure,
+                "recursive-resolver"),
             new HipDnsTrustSummary(
                 lookup.Domain,
                 lookup.DisplayScore,

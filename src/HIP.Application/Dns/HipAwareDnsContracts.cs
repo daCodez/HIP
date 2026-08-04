@@ -23,15 +23,33 @@ public sealed record DnsLookupAnswer(
     int TtlSeconds,
     string Data);
 
+/// <summary>DNSSEC validation state reported by the configured recursive resolver.</summary>
+public enum DnssecValidationStatus
+{
+    /// <summary>The resolver did not provide enough evidence to classify the answer.</summary>
+    Indeterminate,
+
+    /// <summary>The resolver cryptographically validated the answer chain.</summary>
+    Secure,
+
+    /// <summary>The resolver proved that the answer comes from an unsigned delegation.</summary>
+    Insecure,
+
+    /// <summary>The resolver proved that DNSSEC validation failed.</summary>
+    Bogus
+}
+
 /// <summary>Provider-neutral DNS lookup result.</summary>
 /// <param name="Status">DNS response code, where zero is NoError and three is NXDOMAIN.</param>
 /// <param name="IsTruncated">Whether the upstream response was truncated.</param>
 /// <param name="IsRecursionAvailable">Whether the upstream provider supports recursion.</param>
+/// <param name="DnssecStatus">Resolver-reported DNSSEC validation state.</param>
 /// <param name="Answers">Public DNS answers.</param>
 public sealed record DnsProviderLookupResult(
     int Status,
     bool IsTruncated,
     bool IsRecursionAvailable,
+    DnssecValidationStatus DnssecStatus,
     IReadOnlyCollection<DnsLookupAnswer> Answers);
 
 /// <summary>
@@ -61,6 +79,12 @@ public sealed record DnsJsonAnswer(
     [property: JsonPropertyName("TTL")] int TtlSeconds,
     [property: JsonPropertyName("data")] string Data);
 
+/// <summary>Public DNSSEC validation evidence kept separate from HIP trust evidence.</summary>
+public sealed record DnssecValidationSummary(
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("isValidated")] bool IsValidated,
+    [property: JsonPropertyName("source")] string Source);
+
 /// <summary>
 /// Public-safe HIP trust extension carried alongside DNS answers. It is evidence, not an authoritative DNS assertion.
 /// </summary>
@@ -89,6 +113,7 @@ public sealed record HipAwareDnsLookupResponse(
     [property: JsonPropertyName("Question")] IReadOnlyCollection<DnsJsonQuestion> Question,
     [property: JsonPropertyName("Answer")] IReadOnlyCollection<DnsJsonAnswer> Answer,
     [property: JsonPropertyName("provider")] string Provider,
+    [property: JsonPropertyName("dnssec")] DnssecValidationSummary Dnssec,
     [property: JsonPropertyName("hip")] HipDnsTrustSummary Hip);
 
 /// <summary>Combines public DNS answers with HIP public trust evidence.</summary>

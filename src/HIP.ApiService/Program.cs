@@ -212,7 +212,8 @@ Provides the bounded JSON form of HIP-aware DNS. The DNS answer comes from the c
 while the hip property contains the same public-safe trust evidence used by HIP public lookup. The trust extension
 is not authoritative DNS data, does not prove that a site is safe, and never includes verification tokens or private
 scan content. JSON clients may use name and type. RFC 8484 clients use an unpadded base64url dns parameter and
-receive application/dns-message. A and AAAA are supported; DNSSEC validation, DoT, and UDP/TCP port 53 remain deferred.
+receive application/dns-message. DNSSEC validation evidence is reported from the configured recursive resolver.
+A and AAAA are supported; DoT and UDP/TCP port 53 remain deferred.
 """)
 .Produces<HipAwareDnsLookupResponse>(StatusCodes.Status200OK, "application/dns-json")
 .Produces(StatusCodes.Status200OK, contentType: "application/dns-message")
@@ -1723,6 +1724,7 @@ static void ApplyHipDnsResponseHeaders(
     response.Headers["X-HIP-Status"] = lookup.Hip.Status;
     response.Headers["X-HIP-Evidence-Coverage"] = lookup.Hip.EvidenceCoverage;
     response.Headers["X-HIP-Authoritative"] = "false";
+    response.Headers["X-HIP-DNSSEC-Status"] = lookup.Dnssec.Status;
     if (lookup.Hip.DisplayScore is int score)
     {
         response.Headers["X-HIP-Score"] = score.ToString(System.Globalization.CultureInfo.InvariantCulture);

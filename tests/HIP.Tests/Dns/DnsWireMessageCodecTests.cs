@@ -41,6 +41,24 @@ public sealed class DnsWireMessageCodecTests
             "C00C000100010000001E0004C0000214"));
     }
 
+    /// <summary>Confirms a validated answer sets AD unless the client disables DNSSEC checking.</summary>
+    [Test]
+    public void Encode_sets_authentic_data_only_when_checking_is_enabled()
+    {
+        var query = DnsWireMessageCodec.ParseQuery(Convert.FromHexString(Rfc8484ExampleQueryHex));
+        var response = CreateResponse(query, [], isAuthenticData: true);
+
+        var validated = DnsWireMessageCodec.EncodeResponse(query, response);
+        var checkingDisabled = DnsWireMessageCodec.EncodeResponse(query with { IsCheckingDisabled = true }, response);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(validated[3] & 0x20, Is.EqualTo(0x20));
+            Assert.That(checkingDisabled[3] & 0x20, Is.EqualTo(0));
+            Assert.That(checkingDisabled[3] & 0x10, Is.EqualTo(0x10));
+        });
+    }
+
     /// <summary>Confirms multiple-question messages are rejected before provider resolution.</summary>
     [Test]
     public void Parse_rejects_multiple_questions()
@@ -73,17 +91,22 @@ public sealed class DnsWireMessageCodecTests
 
     private static HipAwareDnsLookupResponse CreateResponse(
         DnsWireQuery query,
-        IReadOnlyCollection<DnsJsonAnswer> answers) =>
+        IReadOnlyCollection<DnsJsonAnswer> answers,
+        bool isAuthenticData = false) =>
         new(
             0,
             false,
             query.IsRecursionDesired,
             true,
-            false,
+            isAuthenticData,
             query.IsCheckingDisabled,
             [new DnsJsonQuestion($"{query.Domain}.", (int)query.RecordType)],
             answers,
             "test-provider",
+            new DnssecValidationSummary(
+                isAuthenticData ? "secure" : "indeterminate",
+                isAuthenticData,
+                "recursive-resolver"),
             new HipDnsTrustSummary(
                 query.Domain,
                 82,

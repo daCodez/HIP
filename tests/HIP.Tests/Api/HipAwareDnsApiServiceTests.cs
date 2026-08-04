@@ -33,6 +33,8 @@ public sealed class HipAwareDnsApiServiceTests
         Assert.Multiple(() =>
         {
             Assert.That(json.RootElement.GetProperty("Status").GetInt32(), Is.EqualTo(0));
+            Assert.That(json.RootElement.GetProperty("AD").GetBoolean(), Is.True);
+            Assert.That(json.RootElement.GetProperty("dnssec").GetProperty("status").GetString(), Is.EqualTo("secure"));
             Assert.That(json.RootElement.GetProperty("Question")[0].GetProperty("type").GetInt32(), Is.EqualTo(1));
             Assert.That(json.RootElement.GetProperty("Answer")[0].GetProperty("data").GetString(), Is.EqualTo("192.0.2.20"));
             Assert.That(json.RootElement.GetProperty("hip").GetProperty("domain").GetString(), Is.EqualTo("example.com"));
@@ -63,6 +65,7 @@ public sealed class HipAwareDnsApiServiceTests
                 0,
                 false,
                 true,
+                DnssecValidationStatus.Secure,
                 [new DnsLookupAnswer($"{domain}.", recordType, 30, "192.0.2.20")]));
     }
 }

@@ -24,6 +24,9 @@ public sealed class HipAwareDnsLookupServiceTests
         {
             Assert.That(result.Status, Is.EqualTo(0));
             Assert.That(result.Provider, Is.EqualTo("test-provider"));
+            Assert.That(result.IsAuthenticData, Is.True);
+            Assert.That(result.Dnssec.Status, Is.EqualTo("secure"));
+            Assert.That(result.Dnssec.IsValidated, Is.True);
             Assert.That(result.Question.Single().Name, Is.EqualTo("example.com."));
             Assert.That(result.Answer.Single().Data, Is.EqualTo("192.0.2.10"));
             Assert.That(result.Hip.Domain, Is.EqualTo("example.com"));
@@ -58,6 +61,7 @@ public sealed class HipAwareDnsLookupServiceTests
                 0,
                 false,
                 true,
+                DnssecValidationStatus.Secure,
                 [new DnsLookupAnswer($"{domain}.", recordType, 60, "192.0.2.10")]));
     }
 

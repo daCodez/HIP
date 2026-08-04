@@ -24,12 +24,15 @@ Accept: application/dns-message
 {dns-message body}
 ```
 
-Wire responses remain valid DNS messages. HIP evidence is carried separately in `X-HIP-Status`, `X-HIP-Score` when available, `X-HIP-Evidence-Coverage`, and `X-HIP-Authoritative` response headers. `X-HIP-Authoritative` is currently always `false` because HIP trust evidence is not authoritative DNS data.
+Wire responses remain valid DNS messages. HIP evidence is carried separately in `X-HIP-Status`, `X-HIP-Score` when available, `X-HIP-Evidence-Coverage`, and `X-HIP-Authoritative` response headers. DNSSEC validation is carried by the standard AD bit and the `X-HIP-DNSSEC-Status` header. `X-HIP-Authoritative` is currently always `false` because HIP trust evidence is not authoritative DNS data.
+
+JSON responses expose the same validation result in the standard `AD` field and a `dnssec` object. The status is `secure` only when the configured recursive resolver sets the authenticated-data bit. Unsigned or failed responses remain `indeterminate` until HIP is connected to a validating resolver that can provide a stronger insecure or bogus proof. This avoids treating a missing AD bit as proof of a DNSSEC failure.
 
 ## Security and privacy boundaries
 
 - Only public host names and A or AAAA record types are accepted.
 - DNS answers come from the configured `IDnsLookupProvider` implementation.
+- DNSSEC records are requested from the upstream resolver and resolver-validated answers preserve the AD signal.
 - HIP trust data remains separate from authoritative DNS data.
 - A verified identity does not mean a site is safe.
 - Verification challenge tokens, private page content, form values, cookies, and raw private URLs are never returned.
@@ -44,7 +47,7 @@ Wire responses remain valid DNS messages. HIP evidence is carried separately in 
 
 This is the provider and API foundation, not a complete public recursive DNS service. The following remain future milestones:
 
-- DNSSEC validation reporting;
+- deployment of a dedicated validating resolver with insecure and bogus classifications;
 - DNS over TLS;
 - UDP and TCP port 53 listeners;
 - resolver-specific caching and abuse controls;
