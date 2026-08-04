@@ -98,9 +98,9 @@ expired, revoked, rotated, or unavailable credentials produce the same
 non-disclosing `401` challenge. A verified client with the wrong exact scope or
 domain grant receives `403`.
 
-Each owner-bound registration has exactly one scope—either
+Each owner-bound registration has exactly one scope, either
 `domain-verification:check` or
-`site-safety:external-evidence:check`—and one to sixteen exact canonical domain
+`site-safety:external-evidence:check`, and one to sixteen exact canonical domain
 grants. Wildcards and suffix grants are not accepted. The server derives owner
 scope from the authenticated administrative actor; service-client claims do not
 grant human roles or actor identity.

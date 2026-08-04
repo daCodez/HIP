@@ -98,7 +98,7 @@
     const state = displayState(badge);
     const score = badge.certificate?.isActive === true && badge.scorePresentation === "Available" && Number.isFinite(Number(badge.displayScore))
       ? String(badge.displayScore)
-      : "—";
+      : "-";
     const panelId = `hip-trust-panel-${++badgeInstance}`;
     const tooltipId = `${panelId}-status`;
     const label = `HIP ${state.label} for ${badge.domain}. Score ${score} out of 100. Open trust details.`;
@@ -116,7 +116,7 @@
         <section id="${panelId}" class="hip-trust-panel" aria-label="HIP trust information" hidden>
           <p class="hip-panel-loading" role="status">Checking the live HIP certificate…</p>
         </section>
-        <span id="${tooltipId}" class="hip-badge-tooltip" role="tooltip"><strong>${escapeHtml(state.label)}</strong> — ${escapeHtml(stateMeaning(state.key))}</span>
+        <span id="${tooltipId}" class="hip-badge-tooltip" role="tooltip"><strong>${escapeHtml(state.label)}</strong>: ${escapeHtml(stateMeaning(state.key))}</span>
       </div>`;
 
     const button = container.querySelector(".hip-badge-card");
@@ -229,7 +229,7 @@
     container.replaceChildren();
     container.classList.add("hip-trust-badge", "hip-badge-rendered", "hip-state-unable-to-verify");
     container.innerHTML = `<div class="hip-badge-anchor"><a class="hip-badge-card" href="${escapeAttribute(`${scriptOrigin}/lookup`)}" target="_blank" rel="noopener noreferrer" aria-label="HIP unable to verify. ${escapeAttribute(message)}">
-      <span class="hip-badge-mark" aria-hidden="true">${shieldMarkup()}</span><span class="hip-badge-copy"><small>HIP status</small><strong>Unable to verify</strong></span><span class="hip-badge-divider"></span><strong class="hip-badge-score">—</strong>
+      <span class="hip-badge-mark" aria-hidden="true">${shieldMarkup()}</span><span class="hip-badge-copy"><small>HIP status</small><strong>Unable to verify</strong></span><span class="hip-badge-divider"></span><strong class="hip-badge-score">-</strong>
     </a></div>`;
     scheduleOverlapAvoidance(container);
   }

@@ -1,4 +1,4 @@
-# Sandbox container isolation evidence — 2026-08-01
+# Sandbox container isolation evidence: 2026-08-01
 
 ## Target and artifact
 

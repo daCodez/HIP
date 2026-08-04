@@ -5,11 +5,11 @@
 @rendermode InteractiveServer
 @inject NavigationManager Nav
 
-<PageTitle>How HIP Works — Scan, Score, Review | HIP</PageTitle>
+<PageTitle>How HIP Works: Scan, Score, Review | HIP</PageTitle>
 <HeadContent>
   <meta name="description" content="From a web address to a score you can explain: collection, detection, scoring, review and appeal, and publication. Nothing is a black box." />
   <link rel="canonical" href="https://guardwithhip.com/how-it-works" />
-  <meta property="og:title" content="How HIP Works — Scan, Score, Review | HIP" />
+  <meta property="og:title" content="How HIP Works: Scan, Score, Review | HIP" />
   <meta property="og:description" content="From a web address to a score you can explain: collection, detection, scoring, review and appeal, and publication. Nothing is a black box." />
 </HeadContent>
 
@@ -17,32 +17,32 @@
   <div style="max-width:680px;margin-bottom:64px">
     <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:16px">HOW IT WORKS</div>
     <h1 style="font-size:clamp(36px,4.6vw,52px);line-height:1.06;letter-spacing:-.03em;font-weight:800;margin:0 0 18px;text-wrap:balance">Nothing here is a black box.</h1>
-    <p style="font-size:19px;line-height:1.6;color:var(--muted);margin:0;text-wrap:pretty">A HIP score is a sum of named findings. Here is the whole path, from a URL to a badge — and where a human can step in.</p>
+    <p style="font-size:19px;line-height:1.6;color:var(--muted);margin:0;text-wrap:pretty">A HIP score is a sum of named findings. Follow the path from a URL to a badge and see where a human can step in.</p>
   </div>
 
   <div style="display:grid;grid-template-columns:minmax(180px,220px) minmax(0,1fr);gap:0;margin-bottom:80px">
     <div style="border-right:1px solid var(--border);padding:0 32px 0 0">
       <div style="position:sticky;top:120px;font-size:13.5px;line-height:1.8;color:var(--muted)">
         <div style="font-weight:700;color:var(--text);margin-bottom:10px">On this page</div>
-        <div>1 — Collection</div>
-        <div>2 — Detection</div>
-        <div>3 — Scoring</div>
-        <div>4 — Review &amp; appeal</div>
-        <div>5 — Publication</div>
+        <div>1: Collection</div>
+        <div>2: Detection</div>
+        <div>3: Scoring</div>
+        <div>4: Review &amp; appeal</div>
+        <div>5: Publication</div>
       </div>
     </div>
     <div style="padding-left:clamp(0px,3vw,48px);display:flex;flex-direction:column;gap:44px">
       <div>
         <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--action)">01</span><h2 style="font-size:26px;font-weight:700;margin:0;letter-spacing:-.02em">Collection</h2></div>
-        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0;max-width:640px;text-wrap:pretty">HIP resolves the domain, follows redirects, negotiates TLS, reads DNS records and fetches the page as an ordinary visitor would. It records what it observed and when — not who asked. Provider lookups run in parallel and are attributed individually.</p>
+        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0;max-width:640px;text-wrap:pretty">HIP resolves the domain, follows redirects, negotiates TLS, reads DNS records and fetches the page as an ordinary visitor would. It records what it observed and when. It does not record who asked. Provider lookups run in parallel and are attributed individually.</p>
       </div>
       <div>
         <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--action)">02</span><h2 style="font-size:26px;font-weight:700;margin:0;letter-spacing:-.02em">Detection</h2></div>
-        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0;max-width:640px;text-wrap:pretty">Each detection rule looks at the collected evidence and either fires or does not. A rule that fires produces a finding with an id, a severity, a plain-language reason, and — where one exists — a suggested fix.</p>
+        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0;max-width:640px;text-wrap:pretty">Each detection rule looks at the collected evidence and either fires or does not. A rule that fires produces a finding with an id, a severity, a plain-language reason and, where one exists, a suggested fix.</p>
       </div>
       <div>
         <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--action)">03</span><h2 style="font-size:26px;font-weight:700;margin:0;letter-spacing:-.02em">Scoring</h2></div>
-        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0 0 22px;max-width:640px;text-wrap:pretty">Findings carry weights. The score starts from a configurable baseline and moves as findings apply — HIP does not treat 50 as automatically neutral, and the baseline itself is part of the published rule set. The breakdown is always shown alongside the number, so the number never has to be taken on faith.</p>
+        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0 0 22px;max-width:640px;text-wrap:pretty">Findings carry weights. The score starts from a configurable baseline and moves as findings apply. HIP does not treat 50 as automatically neutral, and the published rule set includes the baseline. The breakdown appears alongside the score.</p>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;max-width:640px">
           <div style="display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;letter-spacing:.16em;color:var(--muted);margin-bottom:18px"><span>EXAMPLE BREAKDOWN</span><span>SCORE 94</span></div>
           <div style="display:flex;flex-direction:column;gap:13px;font-size:14.5px">
@@ -63,7 +63,7 @@
       </div>
       <div>
         <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--action)">05</span><h2 style="font-size:26px;font-weight:700;margin:0;letter-spacing:-.02em">Publication</h2></div>
-        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0;max-width:640px;text-wrap:pretty">Results surface in the web portal, through the browser extension, and — for verified domains — as a domain verification record and an earned trust badge. A HIP-aware DNS service is planned so results can travel with a lookup rather than a page load.</p>
+        <p style="font-size:16.5px;line-height:1.7;color:var(--muted);margin:0;max-width:640px;text-wrap:pretty">Results surface in the web portal, through the browser extension and, for verified domains, as a domain verification record and an earned trust badge. A HIP-aware DNS service is planned so results can travel with a lookup rather than a page load.</p>
       </div>
     </div>
   </div>

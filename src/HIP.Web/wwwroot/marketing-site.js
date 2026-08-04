@@ -1,4 +1,4 @@
-/*  HIP — motion engine
+/*  HIP: motion engine
  *  Parallax, scroll reveals, count-ups, card spotlight, magnetic buttons,
  *  the hero trust-network globe, and the "X-ray this page" scanner.
  *  Boots itself for the static marketing shell; interactive page components can also call hip.xray().

@@ -115,7 +115,7 @@
                     <select id="admin-role" @bind="_role" disabled="@_busy">
                         @foreach (var role in AdminRoleCatalog.Roles)
                         {
-                            <option value="@role.Role">@role.Role — @role.Description</option>
+                            <option value="@role.Role">@role.Role: @role.Description</option>
                         }
                     </select>
 

@@ -1,4 +1,4 @@
-# V1 migration and rollback rehearsal evidence — 2026-08-01
+# V1 migration and rollback rehearsal evidence: 2026-08-01
 
 ## Scope
 

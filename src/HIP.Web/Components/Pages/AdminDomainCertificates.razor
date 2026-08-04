@@ -99,7 +99,7 @@
                                             <small>@item.BadgeLevel badge</small>
                                         }
                                     </td>
-                                    <td>@(item.CurrentScore is null ? "—" : $"{item.CurrentScore}/100")</td>
+                                    <td>@(item.CurrentScore is null ? "-" : $"{item.CurrentScore}/100")</td>
                                     <td>@item.UnresolvedCriticalFindings critical</td>
                                     <td><code>@item.PolicyVersion</code></td>
                                     <td><time datetime="@item.UpdatedAtUtc.ToString("O")">@item.UpdatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</time></td>

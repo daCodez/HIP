@@ -3,7 +3,7 @@
 You are continuing the HIP project.
 
 ==================================================
-AGENT SAFETY PROTOCOL — REQUIRED
+AGENT SAFETY PROTOCOL: REQUIRED
 ==================================================
 
 Before changing anything:
@@ -18,7 +18,7 @@ Before changing anything:
 Do not wipe configs, docs, workflows, database files, generated assets, or user-created files.
 
 ==================================================
-EXISTING WORK REVIEW — REQUIRED
+EXISTING WORK REVIEW: REQUIRED
 ==================================================
 
 Review the existing implementation first.

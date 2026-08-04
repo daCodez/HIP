@@ -1,6 +1,6 @@
 @using System.Globalization
 
-@* Structural URL analysis. Everything here is computed from the text itself —
+@* Structural URL analysis. Everything here is computed from the text itself.
    no request is made, so it works offline and reveals nothing about the visitor. *@
 
 <section aria-labelledby="link-check-title" style="background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden">
@@ -13,7 +13,7 @@
 
     <div style="flex:1 1 260px;min-width:0;display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid @(Verdict is null ? "var(--border)" : Verdict.Fg);border-radius:10px;padding:0 13px;transition:border-color .25s">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><path d="M9.5 13.5a4 4 0 015.7 0l3-3a4 4 0 10-5.7-5.7l-1.6 1.6"></path><path d="M14.5 10.5a4 4 0 01-5.7 0l-3 3a4 4 0 105.7 5.7l1.6-1.6"></path></svg>
-      <input @bind="Url" @bind:event="oninput" placeholder="Paste any link — checked instantly, nothing is sent"
+      <input @bind="Url" @bind:event="oninput" placeholder="Paste any link: checked instantly, nothing is sent"
              aria-label="Paste a link to check"
              style="flex:1 1 0;min-width:0;border:0;outline:0;background:transparent;color:var(--text);font-size:14px;padding:11px 0;font-family:'JetBrains Mono',monospace" />
       @if (!string.IsNullOrWhiteSpace(Url))
@@ -46,7 +46,7 @@
           @n.Text
         </span>
       }
-      <span style="font-size:12px;color:var(--muted);align-self:center">Local result only — no DNS, certificate, content, or reputation request has run yet.</span>
+      <span style="font-size:12px;color:var(--muted);align-self:center">Local result only: no DNS, certificate, content, or reputation request has run yet.</span>
     </div>
   }
   @if (Verdict is not null)
@@ -121,7 +121,7 @@
             var host = (slash > 0 ? rest[..slash] : rest);
             if (atIndex > 0 && (slash < 0 || atIndex < slash))
             {
-                notes.Add(new(Tone.Risk, "Credentials before an @ — the real host is after it"));
+                notes.Add(new(Tone.Risk, "Credentials before an @: the real host is after it"));
                 score -= 30;
                 host = host[(host.IndexOf('@') + 1)..];
             }
@@ -147,7 +147,7 @@
             }
             else if (host.StartsWith("xn--") || host.Contains(".xn--"))
             {
-                notes.Add(new(Tone.Warn, "Internationalised domain — verify it reads as expected"));
+                notes.Add(new(Tone.Warn, "Internationalised domain: verify it reads as expected"));
                 score -= 8;
             }
 
@@ -160,14 +160,14 @@
             var labels = host.Split('.');
             if (labels.Length >= 4)
             {
-                notes.Add(new(Tone.Warn, $"Deep subdomain — the real domain is {RegistrableDomain(labels)}"));
+                notes.Add(new(Tone.Warn, $"Deep subdomain: the real domain is {RegistrableDomain(labels)}"));
                 score -= 10;
             }
 
             var hyphens = host.Count(c => c == '-');
             if (hyphens >= 3)
             {
-                notes.Add(new(Tone.Warn, $"{hyphens} hyphens — a common padding pattern"));
+                notes.Add(new(Tone.Warn, $"{hyphens} hyphens: a common padding pattern"));
                 score -= 8;
             }
 

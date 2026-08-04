@@ -47,7 +47,7 @@ public sealed class BadgeEmbedDocumentationTests
         Assert.That(script, Does.Contain("#B91C1C"));
         Assert.That(script, Does.Contain("prefers-reduced-motion"));
         Assert.That(script, Does.Contain("The signed badge summary above remains unchanged."));
-        Assert.That(script, Does.Not.Contain("container.querySelector(\".hip-badge-score\").textContent = \"—\""));
+        Assert.That(script, Does.Not.Contain("container.querySelector(\".hip-badge-score\").textContent = \"\u2014\""));
         Assert.That(script, Does.Not.Contain("localStorage"));
         Assert.That(script, Does.Not.Contain("sessionStorage"));
     }

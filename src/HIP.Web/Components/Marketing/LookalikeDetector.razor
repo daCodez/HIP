@@ -7,7 +7,7 @@
     <div style="max-width:680px;margin-bottom:40px">
       <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">LOOKALIKE DETECTOR</div>
       <h2 data-words style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">Type a domain. Watch it get impersonated.</h2>
-      <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">These are the substitutions attackers actually use. Every variant below is generated in your browser from what you type — none of them are registered, and HIP does not create them.</p>
+      <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">These are the substitutions attackers actually use. Every variant below is generated in your browser from what you type: none of them are registered, and HIP does not create them.</p>
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;max-width:560px;margin-bottom:32px">
@@ -98,7 +98,7 @@
             var (name, tld) = Split();
             var list = new List<Variant>();
 
-            // 1 — Cyrillic homoglyph
+            // 1: Cyrillic homoglyph
             var swapped = new string(name.Select(c => Homoglyphs.TryGetValue(c, out var h) ? h : c).ToArray());
             if (swapped != name)
             {
@@ -108,7 +108,7 @@
                     "CRITICAL", Tone.Risk, ToPunycode(full)));
             }
 
-            // 2 — rn / vv ligature illusion
+            // 2: rn / vv ligature illusion
             if (name.Contains('m') || name.Contains('w'))
             {
                 var lig = name.Replace("m", "rn").Replace("w", "vv");
@@ -117,7 +117,7 @@
                     "HIGH", Tone.Risk, null));
             }
 
-            // 3 — hyphen manipulation
+            // 3: hyphen manipulation
             var hyphen = name.Contains('-') ? name.Replace("-", "") : InsertHyphen(name);
             list.Add(new Variant(hyphen + "." + tld, "Hyphen manipulation",
                 name.Contains('-')
@@ -125,18 +125,18 @@
                     : "A hyphen is inserted at a word boundary, which reads as a legitimate sub-brand.",
                 "HIGH", Tone.Risk, null));
 
-            // 4 — subdomain deception
+            // 4: subdomain deception
             list.Add(new Variant($"{name}.{tld}.secure-login.net", "Subdomain deception",
-                $"The real domain here is secure-login.net. Everything before it is decoration \u2014 but a phone shows only the left-hand side.",
+                $"The real domain here is secure-login.net. Everything before it is decoration, but a phone shows only the left-hand side.",
                 "CRITICAL", Tone.Risk, null));
 
-            // 5 — TLD swap
+            // 5: TLD swap
             var altTld = tld switch { "com" => "co", "org" => "org.co", "net" => "net.co", _ => "com" };
             list.Add(new Variant($"{name}.{altTld}", "Top-level domain swap",
                 "A single missing character. Typing it is a common slip, and the page can be a pixel-perfect copy.",
                 "MEDIUM", Tone.Warn, null));
 
-            // 6 — doubled character
+            // 6: doubled character
             var doubled = DoubleFirstVowel(name);
             if (doubled != name)
             {

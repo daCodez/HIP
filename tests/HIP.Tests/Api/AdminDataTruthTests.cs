@@ -91,7 +91,7 @@ public sealed class AdminDataTruthTests
             Assert.That(source, Does.Contain("clientTelemetryObservations"));
             Assert.That(source, Does.Contain("privacy-safe client observations stored"));
             Assert.That(source, Does.Not.Contain("preferredLabels"));
-            Assert.That(source, Does.Contain("card.IsPlaceholder ? \"—\" : card.Value"));
+            Assert.That(source, Does.Contain("card.IsPlaceholder ? \"-\" : card.Value"));
         });
     }
 

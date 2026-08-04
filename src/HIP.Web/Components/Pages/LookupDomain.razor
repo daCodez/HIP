@@ -59,7 +59,7 @@
                             }
                             else
                             {
-                                <strong class="score-pending">—</strong><span>Not enough evidence yet</span>
+                                <strong class="score-pending">-</strong><span>Not enough evidence yet</span>
                             }
                         </div>
                         <p>@_lookup.RecommendedAction</p>
@@ -234,7 +234,7 @@
                         <img src="/images/public/marketing/hip-logo.png" alt="" />
                         <span>Protected by<strong>HIP</strong></span>
                         <i></i>
-                        <b>@(_lookup.DisplayScore is int badgeScore ? badgeScore.ToString() : "—")</b>
+                        <b>@(_lookup.DisplayScore is int badgeScore ? badgeScore.ToString() : "-")</b>
                     </div>
                 </section>
             }

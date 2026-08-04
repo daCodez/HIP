@@ -57,7 +57,7 @@ else
 
         <article class="hip-panel padded">
             <h2>Live Signal Sources</h2>
-            <p>Empty connected sources show zero; unavailable or unconnected sources show —.</p>
+            <p>Empty connected sources show zero; unavailable or unconnected sources show Not available.</p>
             <div class="hip-risk-bars">
                 <label>Feedback <strong>@CardValue("feedbackReceived")</strong><span><i style="@BarStyle("feedbackReceived")"></i></span></label>
                 <label>Open Reviews <strong>@CardValue("openReviewItems")</strong><span><i style="@BarStyle("openReviewItems")"></i></span></label>
@@ -172,7 +172,7 @@ else
     {
         var card = Card(key);
         return card is null || card.IsPlaceholder
-            ? "—"
+            ? "-"
             : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 

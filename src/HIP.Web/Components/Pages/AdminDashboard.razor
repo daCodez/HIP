@@ -87,7 +87,7 @@
                     <h2>@PriorityThreat.ReasonSummary</h2>
                     <p class="priority-domain">@PriorityThreat.Domain</p>
                     <div class="priority-facts">
-                        <span>Final HIP score<b>@(PriorityThreat.FinalHipScore?.ToString() ?? "—")</b></span>
+                        <span>Final HIP score<b>@(PriorityThreat.FinalHipScore?.ToString() ?? "-")</b></span>
                         <span>Evidence source<b>@PriorityThreat.Source</b></span>
                     </div>
                     <a class="review-case" href="@ThreatLink(PriorityThreat)">Review case</a>
@@ -201,7 +201,7 @@
         <section class="editorial-details" aria-label="Supporting operational evidence">
             <article class="overview-panel"><header><div><p class="kicker">Domain identity</p><h2>Website verification</h2></div><a href="/identity/websites">Manage</a></header>@RuleRow("Registered domains", "registeredWebsiteIdentities") @RuleRow("Control verified", "verifiedWebsiteIdentities") @RuleRow("Awaiting verification", "pendingWebsiteIdentities") @RuleRow("Inactive verifications", "inactiveWebsiteIdentities")<small class="data-note">Verification confirms control of a domain. It does not certify that the site is safe or compliant.</small></article>
             <article class="overview-panel"><header><div><p class="kicker">Certificate authority</p><h2>Domain Trust Certificates</h2></div><a href="/certificates">Manage</a></header>@RuleRow("Current certificates", "domainCertificatesTotal") @RuleRow("Active", "domainCertificatesActive") @RuleRow("Expiring in 30 days", "domainCertificatesExpiringSoon") @RuleRow("Suspended", "domainCertificatesSuspended") @RuleRow("Revoked", "domainCertificatesRevoked") @RuleRow("Expired", "domainCertificatesExpired") @RuleRow("Registered level", "domainCertificatesRegistered") @RuleRow("Verified level", "domainCertificatesVerified") @RuleRow("Monitored level", "domainCertificatesMonitored") @RuleRow("Pending enrollments", "domainCertificateEnrollmentsPending")<small class="data-note">Certificate status and level are shown separately from site risk. A valid certificate does not automatically mean a site is safe.</small></article>
-            <article class="overview-panel"><header><div><p class="kicker">Priority response</p><h2>Recent threat cases</h2></div><a href="/review">Review all</a></header>@if (_summary.RecentThreats.Count == 0) { @Empty("No active threats", "No high-risk evidence is present in connected data.") } else { @foreach (var threat in _summary.RecentThreats.Take(4)) { <a class="threat-card" href="@ThreatLink(threat)"><span class="risk-dot"></span><div><b>@threat.Domain</b><small>@threat.ReasonSummary</small><em>@threat.Severity · @threat.Source · @Relative(threat.CreatedAtUtc)</em></div><strong>@(threat.FinalHipScore?.ToString() ?? "—")</strong></a> } }</article>
+            <article class="overview-panel"><header><div><p class="kicker">Priority response</p><h2>Recent threat cases</h2></div><a href="/review">Review all</a></header>@if (_summary.RecentThreats.Count == 0) { @Empty("No active threats", "No high-risk evidence is present in connected data.") } else { @foreach (var threat in _summary.RecentThreats.Take(4)) { <a class="threat-card" href="@ThreatLink(threat)"><span class="risk-dot"></span><div><b>@threat.Domain</b><small>@threat.ReasonSummary</small><em>@threat.Severity · @threat.Source · @Relative(threat.CreatedAtUtc)</em></div><strong>@(threat.FinalHipScore?.ToString() ?? "-")</strong></a> } }</article>
             <article class="overview-panel"><p class="kicker">Stored evidence</p><h2>Top risk categories</h2>@RiskBar("Suspicious links", "suspiciousLinksFound") @RiskBar("Dangerous links", "dangerousLinksFound") @RiskBar("Risk findings", "riskyFindings") @RiskBar("Feedback spikes", "suspiciousFeedbackSpikes")</article>
             <article class="overview-panel"><p class="kicker">Infrastructure</p><h2>Provider health</h2>@Health("HIP API", _summary.ApiHealth, "Dashboard request completed") @Health("Optional data sources", UnavailableSourceCount == 0 ? "Available" : "Degraded", UnavailableSourceCount == 0 ? "All dashboard dependencies answered" : $"{UnavailableSourceCount} source(s) unavailable") @Health("External providers", Card("externalProviderErrors")?.Status ?? "Unavailable", Card("externalProviderErrors")?.IsPlaceholder == true ? "No provider evidence" : "Evidence received") @Health("Browser scanner", _summary.HasScanData ? "Evidence" : ClientTelemetryCount > 0 ? "Telemetry" : "Waiting", _summary.HasScanData ? _summary.DataSource : ClientTelemetryCount > 0 ? $"{ClientTelemetryCount} non-authoritative client observations stored" : _summary.DataSource)</article>
             <article class="overview-panel"><p class="kicker">Detection logic</p><h2>Rule performance</h2>@RuleRow("Active rules", "activeRules") @RuleRow("Simulation rules", "simulationRules") @RuleRow("Watch-only rules", "watchOnlyRules") @RuleRow("Awaiting approval", "selfHealingCandidates")<small class="data-note">Trigger and false-positive metrics are not yet exposed by the dashboard service.</small></article>
@@ -233,7 +233,7 @@
     private RenderFragment Metric(string key, string label, string description) => builder =>
     {
         var card = Card(key);
-        var value = card is null || card.IsPlaceholder ? "—" : card.Value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+        var value = card is null || card.IsPlaceholder ? "-" : card.Value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
         builder.OpenElement(0, "article"); builder.AddAttribute(1, "class", "editorial-metric");
         builder.OpenElement(2, "span"); builder.AddContent(3, label); builder.CloseElement();
         builder.OpenElement(4, "strong"); builder.AddContent(5, value); builder.CloseElement();
@@ -244,7 +244,7 @@
     private RenderFragment JudgmentRow(string label, string description, string key, string href) => builder =>
     {
         var card = Card(key);
-        var value = card is null || card.IsPlaceholder ? "—" : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var value = card is null || card.IsPlaceholder ? "-" : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         builder.OpenElement(0, "a"); builder.AddAttribute(1, "class", "judgment-row"); builder.AddAttribute(2, "href", href);
         builder.OpenElement(3, "strong"); builder.AddContent(4, value); builder.CloseElement();
         builder.OpenElement(5, "span"); builder.OpenElement(6, "b"); builder.AddContent(7, label); builder.CloseElement(); builder.OpenElement(8, "small"); builder.AddContent(9, card is null || card.IsPlaceholder ? card?.Status ?? "Unavailable" : description); builder.CloseElement(); builder.CloseElement();
@@ -258,12 +258,12 @@
 
     private RenderFragment RiskBar(string label, string key) => builder =>
     {
-        var card = Card(key); var value = card is null || card.IsPlaceholder ? "—" : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture); var width = card is null || card.IsPlaceholder ? 0 : Math.Min(100, card.Value * 10);
+        var card = Card(key); var value = card is null || card.IsPlaceholder ? "-" : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture); var width = card is null || card.IsPlaceholder ? 0 : Math.Min(100, card.Value * 10);
         builder.AddMarkupContent(0, $"<div class='risk-bar'><span>{label}<b>{value}</b></span><i style='--w:{width}'></i></div>");
     };
 
     private RenderFragment Health(string name, string status, string note) => builder => builder.AddMarkupContent(0, $"<div class='health-row'><i class='{HealthTone(status)}'></i><span><b>{name}</b><small>{note}</small></span><strong>{status}</strong></div>");
-    private RenderFragment RuleRow(string label, string key) => builder => { var card = Card(key); builder.AddMarkupContent(0, $"<div class='rule-row'><span>{label}</span><b>{(card is null || card.IsPlaceholder ? "—" : card.Value)}</b></div>"); };
+    private RenderFragment RuleRow(string label, string key) => builder => { var card = Card(key); builder.AddMarkupContent(0, $"<div class='rule-row'><span>{label}</span><b>{(card is null || card.IsPlaceholder ? "-" : card.Value)}</b></div>"); };
 
     private int UnavailableSourceCount => _summary?.Sources.Count(source => !source.IsAvailable) ?? 0;
     private IReadOnlyList<AdminRecentScanItem> RangeScans => _summary?.RecentScans.Where(scan => scan.LastCheckedUtc >= DateTimeOffset.UtcNow.AddDays(-_rangeDays)).ToArray() ?? [];
@@ -287,7 +287,7 @@
     private int ClientTrustedPercent => OutcomePercent(ClientTrustedCount, ClientClassifiedCount);
     private int ClientCautionPercent => OutcomePercent(ClientCautionCount, ClientClassifiedCount);
     private int ClientRiskPercent => OutcomePercent(ClientRiskCount, ClientClassifiedCount);
-    private string ProtectionScoreText => (_summary?.HasScanData == true ? ProtectionScore : HasClientObservedScore ? ClientObservedScore : (int?)null)?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "—";
+    private string ProtectionScoreText => (_summary?.HasScanData == true ? ProtectionScore : HasClientObservedScore ? ClientObservedScore : (int?)null)?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-";
     private string ProtectionScoreAriaLabel => _summary?.HasScanData == true ? $"Authoritative protection score {ProtectionScore} out of 100" : HasClientObservedScore ? $"Client-observed score {ClientObservedScore} out of 100; not authoritative" : "Protection score unavailable";
     private int JudgmentCount => CountCard("pendingReviewItems") + CountCard("selfHealingCandidates") + CountCard("pendingAppeals");
     private AdminRecentThreatItem? PriorityThreat => _summary?.RecentThreats.FirstOrDefault();
@@ -345,6 +345,6 @@
     private static string Relative(DateTimeOffset value) { var age = DateTimeOffset.UtcNow - value; return age.TotalMinutes < 60 ? $"{Math.Max(1, (int)age.TotalMinutes)}m ago" : age.TotalHours < 24 ? $"{(int)age.TotalHours}h ago" : $"{(int)age.TotalDays}d ago"; }
     private static string ThreatLink(AdminRecentThreatItem threat) => string.IsNullOrWhiteSpace(threat.RelatedScanId) ? "/review" : $"/scans/{Uri.EscapeDataString(threat.RelatedScanId)}";
     private static string ScanLink(AdminRecentScanItem scan) => $"/scans/{Uri.EscapeDataString(scan.ScanResultId)}";
-    private static string Score(int? value) => value?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "—";
+    private static string Score(int? value) => value?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-";
     private sealed record DailyOutcome(string Label, int Trusted, int Caution, int Risk, int Total) { public int Classified => Trusted + Caution + Risk; }
 }

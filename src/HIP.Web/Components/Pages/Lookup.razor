@@ -20,7 +20,7 @@
         <div class="lookup-copy" data-rise>
             <p class="lookup-eyebrow"><span class="pulse-dot"></span> PUBLIC HIP LOOKUP</p>
             <h1 id="lookup-title">Know what you're<br /><span>dealing with.</span></h1>
-            <p class="lookup-lead">Enter a domain to see the identity, origin, reputation, and risk evidence HIP can verify — with every conclusion explained.</p>
+            <p class="lookup-lead">Enter a domain to see the identity, origin, reputation, and risk evidence HIP can verify. HIP explains every conclusion.</p>
 
             <form class="domain-search" @onsubmit="SubmitLookup">
                 <label for="domainInput">Website domain</label>
@@ -29,7 +29,7 @@
                     <input id="domainInput" @bind="_domain" placeholder="example.com" autocomplete="url" inputmode="url" aria-describedby="domain-help" />
                     <button type="submit">Check domain <span aria-hidden="true">→</span></button>
                 </div>
-                <p id="domain-help" class="search-help">Enter the domain only — no path, account information, or private URL.</p>
+                <p id="domain-help" class="search-help">Enter the domain only: no path, account information, or private URL.</p>
                 @if (_error is not null)
                 {
                     <p class="lookup-error" role="alert">@_error</p>

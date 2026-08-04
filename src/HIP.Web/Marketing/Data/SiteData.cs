@@ -4,7 +4,7 @@ namespace HIP.Web.Marketing.Data;
 
 /// <summary>
 /// Illustrative content for the marketing site. Example results are clearly
-/// labelled as such in the UI — nothing here is a live scan.
+/// labelled as such in the UI. Nothing here is a live scan.
 /// </summary>
 public static class SiteData
 {
@@ -75,16 +75,16 @@ public static class SiteData
     public static readonly List<Faq> Faqs = new()
     {
         new("Is a high HIP score a guarantee that a site is safe?",
-            "No. A score describes what HIP checked on a specific date and what it found. It is strong evidence, not a promise — HIP cannot see everything, and no system prevents every threat. The date and the checked-signal list are always shown next to the score for exactly this reason."),
+            "No. A score describes what HIP checked on a specific date and what it found. It is strong evidence, not a promise. HIP cannot see everything, and no system prevents every threat. The date and the checked-signal list appear next to the score for exactly this reason."),
         new("How is this different from a security vendor's rating?",
             "The rules are open. You can read every detection, see its weight, argue with it in public, and propose a change. Nothing about a HIP score depends on trusting a company you cannot inspect."),
         new("What happens if HIP gets my site wrong?",
             "Contest it. Findings marked appealable can be appealed with context, a human reviews the same evidence you see, and the outcome is either an adjustment to your result or a fix to the rule for everyone. Appeals and their outcomes are recorded."),
         new("Do I have to install anything on my website?",
-            "No. Scanning needs nothing from you. Verification asks you to publish one DNS TXT record. The optional badge is a single link and image — no tracking scripts."),
+            "No. Scanning needs nothing from you. Verification asks you to publish one DNS TXT record. The optional badge uses a single link and image with no tracking scripts."),
         new("What data does HIP keep about visitors?",
             "HIP is built to check content, not people. It records what it observed about a domain or page and when. The design goal for future work on links, email and chat is the same: no storage of private conversations and no unnecessary personal data."),
         new("Which parts are not built yet?",
-            "The HIP-aware DNS service and the extension of the trust layer to email, chat, images and files are planned, not shipped. Anything on this site marked DESIGN or RESEARCH is a direction — the roadmap in the repository is the honest source.")
+            "The HIP-aware DNS service and the extension of the trust layer to email, chat, images and files are planned, not shipped. The repository roadmap records the status of anything marked DESIGN or RESEARCH on this site.")
     };
 }

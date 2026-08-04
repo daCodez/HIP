@@ -6,7 +6,7 @@
     <div style="max-width:680px;margin-bottom:40px">
       <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">TIME MACHINE</div>
       <h2 data-words style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">A domain's history is its strongest signal.</h2>
-      <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">Age is not proof of good behaviour — but a domain registered four days ago has no history to check, and HIP says so out loud rather than guessing.</p>
+      <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">Age is not proof of good behaviour. A domain registered four days ago has no history to check, and HIP says so rather than guessing.</p>
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;max-width:560px;margin-bottom:36px">
@@ -49,7 +49,7 @@
       </div>
 
       <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border);font-size:13.5px;line-height:1.6;color:var(--muted)">
-        Illustrative timeline generated in your browser from the name you typed — HIP does not look this domain up from this page. A real scan reads registration and certificate dates directly.
+        Illustrative timeline generated in your browser from the name you typed: HIP does not look this domain up from this page. A real scan reads registration and certificate dates directly.
       </div>
     </div>
   </div>
@@ -81,7 +81,7 @@
                 var h = 17;
                 foreach (var c in CleanDomain) h = h * 31 + c;
                 var v = Math.Abs(h);
-                // Short names with a hyphen skew young — the pattern attackers actually use.
+                // Short names with a hyphen skew young: the pattern attackers actually use.
                 var ceiling = CleanDomain.Contains('-') ? 900 : 6200;
                 return 3 + v % ceiling;
             }
@@ -111,7 +111,7 @@
     private List<Ev> Events => new()
     {
         new(Registered.ToString("d MMM yyyy"), "Domain registered",
-            AgeDays < 30 ? "Days before this page appeared — nothing about it can be corroborated yet." : "The clock on this domain's reputation started here.",
+            AgeDays < 30 ? "Days before this page appeared: nothing about it can be corroborated yet." : "The clock on this domain's reputation started here.",
             $"whois.created = {Registered:yyyy-MM-dd} \u00b7 age {AgeDays}d", AgeFg, 0),
 
         new(Registered.AddDays(Math.Min(2, AgeDays)).ToString("d MMM yyyy"), "Certificate first issued",
@@ -123,7 +123,7 @@
             "hip.first_seen \u00b7 illustrative rule set", ToneColors.Fg(Tone.Ok), Math.Max(30, FillPercent - 25)),
 
         new("Today", "Most recent scan",
-            "Scores describe one moment. This one is current — anything older is shown with its date.",
+            "Scores describe one moment. This one is current: anything older is shown with its date.",
             "hip.last_scan \u00b7 illustrative rule set", "var(--action)", 100)
     };
 

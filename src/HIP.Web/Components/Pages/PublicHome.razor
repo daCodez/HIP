@@ -56,7 +56,7 @@
           Open source · Apache-2.0 · independently developed
         </div>
         <h1 data-words style="font-size:clamp(40px,5.6vw,68px);line-height:1.03;letter-spacing:-.032em;font-weight:800;margin:0 0 22px;text-wrap:balance">Trust is your<br />strongest signal.</h1>
-        <p style="font-size:19.5px;line-height:1.6;color:var(--muted);margin:0 0 34px;max-width:530px;text-wrap:pretty">Paste a web address and HIP checks for trust and risk signals, then explains what it found — in words anyone can read.</p>
+        <p style="font-size:19.5px;line-height:1.6;color:var(--muted);margin:0 0 34px;max-width:530px;text-wrap:pretty">Paste a web address and HIP checks for trust and risk signals, then explains the findings in words anyone can read.</p>
         <div style="display:flex;flex-direction:column;gap:12px;max-width:520px">
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <div style="flex:1 1 0;min-width:0;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:0 14px">
@@ -110,7 +110,7 @@
         An open trust layer for the web
       </div>
       <h1 data-words style="font-size:clamp(38px,5.2vw,62px);line-height:1.05;letter-spacing:-.032em;font-weight:800;margin:0 0 20px;text-wrap:balance">Every score comes<br />with its reasons.</h1>
-      <p style="font-size:19.5px;line-height:1.6;color:var(--muted);margin:0 auto 36px;max-width:600px;text-wrap:pretty">HIP checks a website for the things that make it safe or risky, then explains what it found and what to do about it — in plain words, not security jargon.</p>
+      <p style="font-size:19.5px;line-height:1.6;color:var(--muted);margin:0 auto 36px;max-width:600px;text-wrap:pretty">HIP checks a website for the things that make it safe or risky, then explains the findings and next steps in plain words.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;max-width:560px;margin:0 auto 14px">
         <div style="flex:1 1 0;min-width:0;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:0 14px">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.6 3 2.6 15 0 18M12 3c-2.6 3-2.6 15 0 18"></path></svg>
@@ -163,7 +163,7 @@
       <div style="max-width:660px;margin-bottom:44px">
         <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">TRY IT YOURSELF</div>
         <h2 data-words style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">One of these two pages is fake. Which one?</h2>
-        <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">Both are fictional, and both were built to look convincing. Pick the one you would trust with your password — then see what HIP saw.</p>
+        <p style="font-size:17px;line-height:1.65;color:var(--muted);margin:0;text-wrap:pretty">Both are fictional, and both were built to look convincing. Pick the one you would trust with your password. Then see what HIP found.</p>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:24px;margin-bottom:28px">
@@ -243,7 +243,7 @@
           @if (SpotRevealed && !SpotCorrect) {
             <span style="font-size:16px;font-weight:700;color:var(--warn)">That was the fake one.</span>
           }
-          <span style="flex:1;min-width:240px;font-size:15px;line-height:1.6;color:var(--muted)">Design is the one thing an attacker can copy perfectly. Certificates, domain age and where a form sends your password are not — and those are what HIP reads.</span>
+          <span style="flex:1;min-width:240px;font-size:15px;line-height:1.6;color:var(--muted)">Design is the one thing an attacker can copy perfectly. Attackers cannot copy certificates, domain age, or where a form sends your password. HIP reads those signals.</span>
           <button @onclick="SpotNext" style="padding:11px 18px;border:0;border-radius:10px;background:var(--action);color:var(--action-ink);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0" data-h="h-bright">Try another pair</button>
         </div>
       }
@@ -318,7 +318,7 @@
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px">
         <div style="width:34px;height:34px;border-radius:9px;background:var(--tint);color:var(--action);display:grid;place-items:center;font-size:14px;font-weight:800;font-family:'JetBrains Mono',monospace;margin-bottom:18px">02</div>
         <h3 style="font-size:18px;font-weight:700;margin:0 0 9px;letter-spacing:-.01em">Score</h3>
-        <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">Detection rules and weighted scoring rules combine the signals into one trust score — with every reason listed.</p>
+        <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">Detection rules and weighted scoring rules combine the signals into one trust score and list every reason.</p>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px">
         <div style="width:34px;height:34px;border-radius:9px;background:var(--tint);color:var(--action);display:grid;place-items:center;font-size:14px;font-weight:800;font-family:'JetBrains Mono',monospace;margin-bottom:18px">03</div>
@@ -354,7 +354,7 @@
           <span style="padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.04em;background:var(--tint);color:var(--action);white-space:nowrap">AVAILABLE</span>
         </div>
         <h3 style="font-size:17.5px;font-weight:700;margin:0 0 8px">HTTPS &amp; certificate checks</h3>
-        <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">Redirect behaviour, protocol versions, issuer, validity window and expiry risk — flagged before your visitors see a warning.</p>
+        <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">HIP flags redirect behaviour, protocol versions, issuer, validity window and expiry risk before your visitors see a warning.</p>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
@@ -418,7 +418,7 @@
           <span style="padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.04em;background:rgba(148,163,184,.16);color:var(--muted);white-space:nowrap">RESEARCH</span>
         </div>
         <h3 style="font-size:17.5px;font-weight:700;margin:0 0 8px">Links, messages, images &amp; files</h3>
-        <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">The same trust layer applied to email and chat links — without storing private conversations or extra personal data.</p>
+        <p style="font-size:14.5px;line-height:1.6;color:var(--muted);margin:0">The same trust layer applies to email and chat links without storing private conversations or extra personal data.</p>
       </div>
     </div>
   </section>
@@ -429,7 +429,7 @@
       <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">THE PORTAL</div>
       <h2 style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 14px;max-width:620px;text-wrap:balance">Your domain, its signals, and what to do next.</h2>
       <p style="font-size:17px;line-height:1.6;color:var(--muted);margin:0 0 20px;max-width:600px">Every finding is a row you can open. Every row says what was checked, what was found, and how much it affects the score.</p>
-      <p style="font-size:12.5px;color:var(--muted);margin:0 0 34px;font-family:'JetBrains Mono',monospace">// Illustrative interface — example data for one domain</p>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 34px;font-family:'JetBrains Mono',monospace">// Illustrative interface: example data for one domain</p>
       <DashboardPreview />
     </div>
   </section>
@@ -440,7 +440,7 @@
       <div>
         <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">VERIFICATION</div>
         <h2 style="font-size:clamp(26px,3vw,34px);line-height:1.15;letter-spacing:-.025em;font-weight:800;margin:0 0 16px;text-wrap:balance">The badge is earned through verification, not purchased.</h2>
-        <p style="font-size:16.5px;line-height:1.65;color:var(--muted);margin:0 0 22px;text-wrap:pretty">Registering a domain is not enough. You have to prove you control it, resolve the problems HIP found, and pass a review before the badge is granted. The badge you then embed links to a live result page with the date, the checks and the score history — so a visitor can verify the claim instead of trusting it.</p>
+        <p style="font-size:16.5px;line-height:1.65;color:var(--muted);margin:0 0 22px;text-wrap:pretty">Registering a domain is not enough. You have to prove you control it, resolve the problems HIP found, and pass a review before the badge is granted. The embedded badge links to a live result page with the date, checks, and score history. Visitors can verify the claim instead of trusting it.</p>
         <ul style="list-style:none;margin:0 0 28px;padding:0;display:flex;flex-direction:column;gap:11px">
           <li style="display:flex;gap:11px;font-size:15px;color:var(--text)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.2" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><path d="M20 6.5L9.5 17 4 11.5"></path></svg>Granted only after ownership proof and review</li>
           <li style="display:flex;gap:11px;font-size:15px;color:var(--text)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.2" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><path d="M20 6.5L9.5 17 4 11.5"></path></svg>Paused if required checks fail or the score falls below the current standard</li>
@@ -450,7 +450,7 @@
       </div>
       <div style="display:flex;flex-direction:column;gap:16px">
         <div style="background:#0B1220;border:1px solid #1F2937;border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:14px">
-          <div style="font-size:10.5px;font-weight:800;letter-spacing:.18em;color:#9CA3AF">WEBSITE BADGE — DARK</div>
+          <div style="font-size:10.5px;font-weight:800;letter-spacing:.18em;color:#9CA3AF">WEBSITE BADGE: DARK</div>
           <div style="display:inline-flex;align-items:center;gap:11px;background:#111827;border:1px solid #1F2937;border-radius:11px;padding:11px 15px;align-self:flex-start">
             <img src="/images/public/marketing/hip-logo.png" alt="HIP" style="height:30px;width:auto;display:block;flex-shrink:0" />
             <div style="display:flex;flex-direction:column;line-height:1.25">
@@ -462,7 +462,7 @@
           </div>
         </div>
         <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:14px">
-          <div style="font-size:10.5px;font-weight:800;letter-spacing:.18em;color:#64748B">WEBSITE BADGE — LIGHT</div>
+          <div style="font-size:10.5px;font-weight:800;letter-spacing:.18em;color:#64748B">WEBSITE BADGE: LIGHT</div>
           <div style="display:inline-flex;align-items:center;gap:11px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px;align-self:flex-start">
             <img src="/images/public/marketing/hip-logo.png" alt="HIP" style="height:30px;width:auto;display:block;flex-shrink:0" />
             <div style="display:flex;flex-direction:column;line-height:1.25">
@@ -483,7 +483,7 @@
   <section data-rise style="max-width:1240px;margin:0 auto;padding:clamp(56px,6vw,80px) clamp(16px,3vw,32px) 40px">
     <div style="font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--action);margin-bottom:14px">INTEGRATIONS</div>
     <h2 style="font-size:clamp(30px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:800;margin:0 0 14px;max-width:620px;text-wrap:balance">HIP does not ask you to take its word for it.</h2>
-    <p style="font-size:17px;line-height:1.6;color:var(--muted);margin:0 0 46px;max-width:620px">Independent providers contribute signals alongside HIP's own checks, and each one is attributed in the result so you can see which source raised what. These integrations are being built and reviewed — the methodology page records exactly how each provider's result is used.</p>
+    <p style="font-size:17px;line-height:1.6;color:var(--muted);margin:0 0 46px;max-width:620px">Independent providers contribute signals alongside HIP's own checks, and each one is attributed in the result so you can see which source raised what. These integrations are being built and reviewed. The methodology page records exactly how HIP uses each provider's result.</p>
     <div data-cards style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">

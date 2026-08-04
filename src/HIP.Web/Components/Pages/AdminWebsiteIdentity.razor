@@ -226,7 +226,7 @@
                                 <td>@MethodLabel(identity.PreferredVerificationMethod)</td>
                                 <td>@identity.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
                                 <td>@(identity.LastCheckedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Not checked")</td>
-                                <td>@(identity.VerifiedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                <td>@(identity.VerifiedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
                                 <td>
                                     <div class="verification-actions">
                                         <button type="button"

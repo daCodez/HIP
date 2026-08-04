@@ -173,6 +173,38 @@ public sealed class PublicSeoTests
         }
     }
 
+    /// <summary>Prevents the removed punctuation style from returning to first-party public content.</summary>
+    [Test]
+    public void First_party_content_contains_no_em_dashes()
+    {
+        var root = RepositoryRoot();
+        var contentRoots = new[]
+        {
+            Path.Combine(root, "src", "HIP.Web"),
+            Path.Combine(root, "clients", "browser-extension"),
+            Path.Combine(root, "docs"),
+            Path.Combine(root, "design")
+        };
+        var textExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".cs", ".css", ".html", ".js", ".json", ".md", ".razor"
+        };
+        var files = contentRoots
+            .SelectMany(path => Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+            .Where(path => textExtensions.Contains(Path.GetExtension(path)))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}node_modules{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}wwwroot{Path.DirectorySeparatorChar}lib{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Append(Path.Combine(root, "README.md"));
+
+        Assert.Multiple(() =>
+        {
+            foreach (var file in files)
+            {
+                Assert.That(File.ReadAllText(file), Does.Not.Contain("\u2014"), file);
+            }
+        });
+    }
+
     /// <summary>Confirms repeated marketing footers point to specific destinations rather than the repository root.</summary>
     [Test]
     public void Marketing_footers_use_specific_product_project_and_policy_links()

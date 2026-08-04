@@ -331,5 +331,5 @@ public partial class AdminApiDeveloper : IDisposable
                 : "active";
 
     private static string FormatDate(DateTimeOffset? value) =>
-        value?.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "—";
+        value?.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "-";
 }

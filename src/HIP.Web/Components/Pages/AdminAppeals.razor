@@ -45,7 +45,7 @@
                 <dt>ID</dt><dd>@_selected.AppealId</dd>
                 <dt>Target</dt><dd>@_selected.TargetType: @_selected.TargetId</dd>
                 <dt>Reason</dt><dd>@_selected.Reason</dd>
-                <dt>Decision</dt><dd>@(string.IsNullOrWhiteSpace(_selected.Decision) ? "Pending" : _selected.Decision) @(string.IsNullOrWhiteSpace(_selected.DecisionReason) ? null : $"— {_selected.DecisionReason}")</dd>
+                <dt>Decision</dt><dd>@(string.IsNullOrWhiteSpace(_selected.Decision) ? "Pending" : _selected.Decision) @(string.IsNullOrWhiteSpace(_selected.DecisionReason) ? null : $"· {_selected.DecisionReason}")</dd>
             </dl>
 
             @if (CanDecide(_selected.Status))

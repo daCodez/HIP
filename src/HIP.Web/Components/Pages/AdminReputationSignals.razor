@@ -135,7 +135,7 @@
     {
         var card = _summary?.Cards.FirstOrDefault(card => card.Key.Equals(cardId, StringComparison.OrdinalIgnoreCase));
         return card is null || card.IsPlaceholder
-            ? "—"
+            ? "-"
             : card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 }
