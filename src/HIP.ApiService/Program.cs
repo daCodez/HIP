@@ -171,13 +171,30 @@ var domainVerificationApi = app.MapGroup("/api/v1/domain-verification").WithTags
 var protocolApi = app.MapGroup("/api/v1/protocol").WithTags("HIP Protocol");
 
 app.MapGet("/dns-query", async (
-    string name,
+    HttpContext httpContext,
+    string? name,
     string? type,
+    string? dns,
     IHipAwareDnsLookupService dnsLookupService,
     CancellationToken cancellationToken) =>
 {
     try
     {
+        if (!string.IsNullOrWhiteSpace(dns))
+        {
+            var wireQuery = DnsWireMessageCodec.ParseQuery(DecodeDnsBase64Url(dns), allowUnsupportedRecordType: true);
+            return await ResolveDnsWireQueryAsync(
+                httpContext,
+                wireQuery,
+                dnsLookupService,
+                isPost: false,
+                cancellationToken);
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("A DNS name or RFC 8484 dns parameter is required.", nameof(name));
+        }
         var recordType = ParseDnsLookupRecordType(type);
         var response = await dnsLookupService.LookupAsync(name, recordType, cancellationToken);
         return Results.Json(response, contentType: "application/dns-json");
@@ -194,14 +211,63 @@ app.MapGet("/dns-query", async (
 Provides the bounded JSON form of HIP-aware DNS. The DNS answer comes from the configured recursive provider,
 while the hip property contains the same public-safe trust evidence used by HIP public lookup. The trust extension
 is not authoritative DNS data, does not prove that a site is safe, and never includes verification tokens or private
-scan content. This milestone supports GET queries for A and AAAA records only; DNS wire format, POST, DNSSEC
-validation, DoT, and UDP/TCP port 53 service are deliberately deferred.
+scan content. JSON clients may use name and type. RFC 8484 clients use an unpadded base64url dns parameter and
+receive application/dns-message. A and AAAA are supported; DNSSEC validation, DoT, and UDP/TCP port 53 remain deferred.
 """)
 .Produces<HipAwareDnsLookupResponse>(StatusCodes.Status200OK, "application/dns-json")
+.Produces(StatusCodes.Status200OK, contentType: "application/dns-message")
 .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
 .AllowAnonymous()
-.RequireRateLimiting(PublicScanPolicy)
-.CacheOutput(HipOutputCachePolicies.PublicLookup);
+.RequireRateLimiting(PublicScanPolicy);
+
+app.MapPost("/dns-query", async (
+    HttpContext httpContext,
+    IHipAwareDnsLookupService dnsLookupService,
+    CancellationToken cancellationToken) =>
+{
+    if (!string.Equals(
+        httpContext.Request.ContentType?.Split(';', 2)[0].Trim(),
+        "application/dns-message",
+        StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.StatusCode(StatusCodes.Status415UnsupportedMediaType);
+    }
+
+    if (httpContext.Request.ContentLength > DnsWireMessageCodec.MaximumQueryBytes)
+    {
+        return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+    }
+
+    try
+    {
+        var body = await ReadBoundedDnsWireBodyAsync(httpContext.Request, cancellationToken);
+        var wireQuery = DnsWireMessageCodec.ParseQuery(body, allowUnsupportedRecordType: true);
+        return await ResolveDnsWireQueryAsync(
+            httpContext,
+            wireQuery,
+            dnsLookupService,
+            isPost: true,
+            cancellationToken);
+    }
+    catch (InvalidDataException)
+    {
+        return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+    }
+    catch (ArgumentException exception)
+    {
+        return Results.BadRequest(new ApiErrorResponse(exception.Message));
+    }
+})
+.WithName("HipAwareDnsQueryPost")
+.WithTags("HIP-aware DNS")
+.WithSummary("Resolves an RFC 8484 DNS wire-format request.")
+.Accepts<byte[]>("application/dns-message")
+.Produces(StatusCodes.Status200OK, contentType: "application/dns-message")
+.Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+.Produces(StatusCodes.Status413PayloadTooLarge)
+.Produces(StatusCodes.Status415UnsupportedMediaType)
+.AllowAnonymous()
+.RequireRateLimiting(PublicScanPolicy);
 
 domainVerificationApi.MapPost("/check", async (
     DomainVerificationCheckApiRequest request,
@@ -1587,6 +1653,87 @@ static DnsLookupRecordType ParseDnsLookupRecordType(string? value) => value?.Tri
     "AAAA" or "28" => DnsLookupRecordType.Aaaa,
     _ => throw new ArgumentException("HIP DNS currently supports A and AAAA queries only.", nameof(value))
 };
+
+static byte[] DecodeDnsBase64Url(string value)
+{
+    var encoded = value.Trim();
+    if (encoded.Length == 0 || encoded.Length > ((DnsWireMessageCodec.MaximumQueryBytes + 2) / 3 * 4))
+    {
+        throw new ArgumentException("RFC 8484 dns parameter length is invalid.", nameof(value));
+    }
+
+    var normalized = encoded.Replace('-', '+').Replace('_', '/');
+    normalized = normalized.PadRight(normalized.Length + ((4 - normalized.Length % 4) % 4), '=');
+    try
+    {
+        return Convert.FromBase64String(normalized);
+    }
+    catch (FormatException exception)
+    {
+        throw new ArgumentException("RFC 8484 dns parameter is not valid base64url.", nameof(value), exception);
+    }
+}
+
+static async Task<byte[]> ReadBoundedDnsWireBodyAsync(HttpRequest request, CancellationToken cancellationToken)
+{
+    await using var buffer = new MemoryStream();
+    var chunk = new byte[1024];
+    while (true)
+    {
+        var read = await request.Body.ReadAsync(chunk, cancellationToken);
+        if (read == 0)
+        {
+            break;
+        }
+        if (buffer.Length + read > DnsWireMessageCodec.MaximumQueryBytes)
+        {
+            throw new InvalidDataException("DNS wire request exceeds the configured limit.");
+        }
+        await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken);
+    }
+    return buffer.ToArray();
+}
+
+static async Task<IResult> ResolveDnsWireQueryAsync(
+    HttpContext httpContext,
+    DnsWireQuery wireQuery,
+    IHipAwareDnsLookupService dnsLookupService,
+    bool isPost,
+    CancellationToken cancellationToken)
+{
+    if (wireQuery.RecordType is not DnsLookupRecordType.A and not DnsLookupRecordType.Aaaa)
+    {
+        httpContext.Response.Headers.CacheControl = "no-store";
+        return Results.Bytes(
+            DnsWireMessageCodec.EncodeErrorResponse(wireQuery, dnsResponseCode: 4),
+            "application/dns-message");
+    }
+
+    var lookup = await dnsLookupService.LookupAsync(wireQuery.Domain, wireQuery.RecordType, cancellationToken);
+    var response = DnsWireMessageCodec.EncodeResponse(wireQuery, lookup);
+    ApplyHipDnsResponseHeaders(httpContext.Response, lookup, isPost);
+    return Results.Bytes(response, "application/dns-message");
+}
+
+static void ApplyHipDnsResponseHeaders(
+    HttpResponse response,
+    HipAwareDnsLookupResponse lookup,
+    bool isPost)
+{
+    response.Headers["X-HIP-Status"] = lookup.Hip.Status;
+    response.Headers["X-HIP-Evidence-Coverage"] = lookup.Hip.EvidenceCoverage;
+    response.Headers["X-HIP-Authoritative"] = "false";
+    if (lookup.Hip.DisplayScore is int score)
+    {
+        response.Headers["X-HIP-Score"] = score.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    var minimumTtl = lookup.Answer.Count == 0
+        ? 0
+        : lookup.Answer.Min(answer => Math.Max(0, answer.TtlSeconds));
+    response.Headers.CacheControl = isPost ? "no-store" : $"public, max-age={minimumTtl}";
+    response.Headers.Vary = "Accept";
+}
 
 /// <summary>
 /// Provides detailed Swagger text for the public live badge endpoint.
