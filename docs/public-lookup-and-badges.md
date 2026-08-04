@@ -158,7 +158,7 @@ Badge and certificate routes:
 - `GET /api/v1/public/certificates/{certificateId}`
 - `/certificate/{certificateId}`
 
-A badge response includes the public lookup facts, a short-lived signed `hip-live-badge` document, signature status, and—when one exists—the current public certificate ID, exact domain, level, lifecycle state, signature status, expiry, public URL, and active flag. HIP derives this projection from the persisted certificate and verifies its signature before release.
+A badge response includes the public lookup facts, a short-lived signed `hip-live-badge` document, signature status, and, when one exists, the current public certificate ID, exact domain, level, lifecycle state, signature status, expiry, public URL, and active flag. HIP derives this projection from the persisted certificate and verifies its signature before release.
 
 ## Embed example
 

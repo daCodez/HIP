@@ -29,7 +29,7 @@ This Chromium Manifest V3 client helps users see HIP website trust, link risk, a
 
 ## X-ray This Page
 
-On a normal HTTP or HTTPS page, the extension displays the same teal **X-ray this page** control used on HIP's marketing page. Clicking that page control—or the equivalent popup action—starts the local inspection. No X-ray detector runs merely because the trigger is visible.
+On a normal HTTP or HTTPS page, the extension displays the same teal **X-ray this page** control used on HIP's marketing page. Clicking that page control, or the equivalent popup action, starts the local inspection. No X-ray detector runs merely because the trigger is visible.
 
 The active experience mirrors the marketing demo: a dark page scrim, a teal scan line sweeping from top to bottom, visible element boxes lighting as the line reaches them, a compact right-side HUD, and finding rows revealed progressively during the 2.6-second visualization. Unlike the illustrative marketing demo, the extension shows actual local detector findings and severity labels; it does not invent score changes. The page receives one isolated Shadow DOM surface. The HUD provides:
 

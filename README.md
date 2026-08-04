@@ -1,4 +1,4 @@
-# HIP — Human Identity Protocol
+# HIP: Human Identity Protocol
 
 > **HIP (Human Identity Protocol)** is an application-layer trust and interaction protocol for verifying digital origin, integrity, and risk evidence across web and virtual-world clients.
 
