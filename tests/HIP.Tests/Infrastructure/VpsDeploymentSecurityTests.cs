@@ -202,6 +202,7 @@ public sealed class VpsDeploymentSecurityTests
             Assert.That(compose, Does.Contain("unbound: { condition: service_healthy }"));
             Assert.That(unboundService, Does.Not.Contain("\n    ports:"));
             Assert.That(dockerfile, Does.Match(@"ARG UNBOUND_REVISION=[a-f0-9]{40}"));
+            Assert.That(dockerfile, Does.Contain("automake bison build-essential ca-certificates flex"));
             Assert.That(dockerfile, Does.Contain("USER 1655:1655"));
             Assert.That(configuration, Does.Contain("auto-trust-anchor-file:"));
             Assert.That(configuration, Does.Contain("module-config: \"validator iterator\""));

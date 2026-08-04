@@ -4,7 +4,7 @@ ARG UNBOUND_REVISION=c33ad1b1a21e48bfe4f140e90252a9be1b0c5745
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        autoconf automake build-essential ca-certificates git libevent-dev libexpat1-dev libssl-dev libtool pkg-config \
+        autoconf automake bison build-essential ca-certificates flex git libevent-dev libexpat1-dev libssl-dev libtool pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 RUN git clone https://github.com/NLnetLabs/unbound.git /src/unbound \
