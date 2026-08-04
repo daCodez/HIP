@@ -55,8 +55,20 @@ jobs:
       - name: Build solution
         run: dotnet build HIP.slnx --configuration Release --no-restore --warnaserror
 
-      - name: Run complete .NET test suite
-        run: dotnet test HIP.slnx --configuration Release --no-build --no-restore
+      - name: Run API, client, and navigation tests
+        run: >-
+          dotnet test tests/HIP.Tests/HIP.Tests.csproj --configuration Release --no-build --no-restore
+          --filter "FullyQualifiedName~HIP.Tests.Ai|FullyQualifiedName~HIP.Tests.Api|FullyQualifiedName~HIP.Tests.Application|FullyQualifiedName~HIP.Tests.Browser|FullyQualifiedName~HIP.Tests.Certificates|FullyQualifiedName~HIP.Tests.Consumer|FullyQualifiedName~HIP.Tests.Devices|FullyQualifiedName~HIP.Tests.Identity|FullyQualifiedName~HIP.Tests.Navigation|FullyQualifiedName~HIP.Tests.Platforms|FullyQualifiedName~HIP.Tests.PublicLookup|FullyQualifiedName~HIP.Tests.Reporting|FullyQualifiedName~HIP.Tests.Reputation|FullyQualifiedName~HIP.Tests.Review|FullyQualifiedName~HIP.Tests.Rules|FullyQualifiedName~HIP.Tests.SecondLife|FullyQualifiedName~HIP.Tests.ServiceClients|FullyQualifiedName~HIP.Tests.Simulation|FullyQualifiedName~HIP.Tests.Support"
+
+      - name: Run infrastructure and security tests
+        run: >-
+          dotnet test tests/HIP.Tests/HIP.Tests.csproj --configuration Release --no-build --no-restore
+          --filter "FullyQualifiedName~HIP.Tests.Infrastructure|FullyQualifiedName~HIP.Tests.Observability|FullyQualifiedName~HIP.Tests.Performance|FullyQualifiedName~HIP.Tests.Persistence|FullyQualifiedName~HIP.Tests.Protocol|FullyQualifiedName~HIP.Tests.Scalability|FullyQualifiedName~HIP.Tests.Security|FullyQualifiedName~HIP.Tests.SelfHealing"
+
+      - name: Run scoring and safety tests
+        run: >-
+          dotnet test tests/HIP.Tests/HIP.Tests.csproj --configuration Release --no-build --no-restore
+          --filter "FullyQualifiedName~HIP.Tests.Safety|FullyQualifiedName~HIP.Tests.Scoring|FullyQualifiedName~HIP.Tests.SiteSafety"
 
       - name: Install browser extension dependencies
         working-directory: clients/browser-extension

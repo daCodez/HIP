@@ -31,7 +31,10 @@ public sealed partial class CiSecurityBaselineTests
             Assert.That(workflow, Does.Contain("dotnet restore HIP.slnx"));
             Assert.That(workflow, Does.Contain("--vulnerable --include-transitive --format json"));
             Assert.That(workflow, Does.Contain("dotnet build HIP.slnx"));
-            Assert.That(workflow, Does.Contain("dotnet test HIP.slnx"));
+            Assert.That(workflow, Does.Contain("dotnet test tests/HIP.Tests/HIP.Tests.csproj"));
+            Assert.That(workflow, Does.Contain("Run API, client, and navigation tests"));
+            Assert.That(workflow, Does.Contain("Run infrastructure and security tests"));
+            Assert.That(workflow, Does.Contain("Run scoring and safety tests"));
             Assert.That(workflow, Does.Contain("node --check"));
             Assert.That(workflow, Does.Contain("run: npm ci"));
             Assert.That(workflow, Does.Contain("npm audit --audit-level=high"));
