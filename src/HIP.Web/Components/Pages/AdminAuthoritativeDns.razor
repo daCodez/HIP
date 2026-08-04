@@ -51,11 +51,11 @@
         <div class="dns-form-grid">
             <div class="form-group">
                 <label for="dns-domain">Verified domain</label>
-                <input id="dns-domain" @bind="_domain" maxlength="253" autocomplete="off" placeholder="example.com" />
+                <input id="dns-domain" @bind="_domain" @bind:event="oninput" maxlength="253" autocomplete="off" placeholder="example.com" />
             </div>
             <div class="form-group dns-reason">
                 <label for="dns-reason">Change reason</label>
-                <input id="dns-reason" @bind="_reason" maxlength="500" autocomplete="off" placeholder="Initial website DNS configuration" />
+                <input id="dns-reason" @bind="_reason" @bind:event="oninput" maxlength="500" autocomplete="off" placeholder="Initial website DNS configuration" />
             </div>
         </div>
 
@@ -69,7 +69,7 @@
                     {
                         var rowIndex = index;
                         <tr @key="_records[rowIndex].Id">
-                            <td><input aria-label="Record name" @bind="_records[rowIndex].Name" maxlength="253" placeholder="Apex or www" /></td>
+                            <td><input aria-label="Record name" @bind="_records[rowIndex].Name" @bind:event="oninput" maxlength="253" placeholder="Apex or www" /></td>
                             <td>
                                 <select aria-label="Record type" @bind="_records[rowIndex].Type">
                                     @foreach (var type in Enum.GetValues<AuthoritativeDnsRecordType>())
@@ -78,8 +78,8 @@
                                     }
                                 </select>
                             </td>
-                            <td><input aria-label="Record value" @bind="_records[rowIndex].Content" maxlength="512" placeholder="Record value" /></td>
-                            <td><input aria-label="Record TTL" type="number" min="60" max="86400" @bind="_records[rowIndex].Ttl" /></td>
+                            <td><input aria-label="Record value" @bind="_records[rowIndex].Content" @bind:event="oninput" maxlength="512" placeholder="Record value" /></td>
+                            <td><input aria-label="Record TTL" type="number" min="60" max="86400" @bind="_records[rowIndex].Ttl" @bind:event="oninput" /></td>
                             <td><button type="button" class="hip-secondary-action" @onclick="() => RemoveRecord(rowIndex)" disabled="@(_records.Count == 1 || _submitting)">Remove</button></td>
                         </tr>
                     }
