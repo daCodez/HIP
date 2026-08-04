@@ -59,7 +59,7 @@ public sealed class DnsClientTxtRecordResolver : IDnsTxtRecordResolver
     private static LookupClient CreateLookupClient(DnsVerificationOptions options)
     {
         var lookupOptions = !string.IsNullOrWhiteSpace(options.NameServerHost) && options.NameServerPort is > 0 and <= 65535
-            ? new LookupClientOptions(new IPEndPoint(IPAddress.Parse(options.NameServerHost), options.NameServerPort.Value))
+            ? new LookupClientOptions(new IPEndPoint(ResolveNameServer(options.NameServerHost), options.NameServerPort.Value))
             : new LookupClientOptions();
 
         lookupOptions.Timeout = TimeSpan.FromMilliseconds(Math.Clamp(options.TimeoutMilliseconds, 500, 15000));
@@ -67,5 +67,17 @@ public sealed class DnsClientTxtRecordResolver : IDnsTxtRecordResolver
         lookupOptions.UseTcpOnly = options.UseTcpOnly;
 
         return new LookupClient(lookupOptions);
+    }
+
+    private static IPAddress ResolveNameServer(string host)
+    {
+        if (IPAddress.TryParse(host, out var address))
+        {
+            return address;
+        }
+
+        return Dns.GetHostAddresses(host)
+            .FirstOrDefault(candidate => candidate.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+            ?? Dns.GetHostAddresses(host).First();
     }
 }

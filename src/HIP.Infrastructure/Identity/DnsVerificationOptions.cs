@@ -29,4 +29,9 @@ public sealed class DnsVerificationOptions
     /// Whether lookups should use TCP only. This is useful for local Aspire port mapping.
     /// </summary>
     public bool UseTcpOnly { get; init; }
+
+    /// <summary>
+    /// Whether the configured resolver is controlled by HIP and performs DNSSEC validation.
+    /// </summary>
+    public bool TrustDnssecValidation { get; init; }
 }

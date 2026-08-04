@@ -446,5 +446,7 @@ public static class DependencyInjection
     private static bool ValidateDnsVerificationOptions(DnsVerificationOptions options) =>
         options.TimeoutMilliseconds is >= 500 and <= 15000
         && (options.NameServerPort is null or (> 0 and <= 65535))
-        && (string.IsNullOrWhiteSpace(options.NameServerHost) || System.Net.IPAddress.TryParse(options.NameServerHost, out _));
+        && (string.IsNullOrWhiteSpace(options.NameServerHost)
+            || Uri.CheckHostName(options.NameServerHost) is UriHostNameType.IPv4 or UriHostNameType.IPv6 or UriHostNameType.Dns)
+        && (!options.TrustDnssecValidation || !string.IsNullOrWhiteSpace(options.NameServerHost));
 }

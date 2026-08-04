@@ -183,6 +183,34 @@ public sealed class VpsDeploymentSecurityTests
         });
     }
 
+    [Test]
+    public void Production_DNSSEC_resolver_is_private_pinned_and_fail_closed()
+    {
+        var root = RepositoryRoot();
+        var compose = File.ReadAllText(Path.Combine(root, "deploy", "vps", "compose.private-staging.yml"));
+        var dockerfile = File.ReadAllText(Path.Combine(root, "deploy", "unbound", "Dockerfile"));
+        var configuration = File.ReadAllText(Path.Combine(root, "deploy", "unbound", "unbound.conf"));
+        var unboundStart = compose.IndexOf("  unbound:", StringComparison.Ordinal);
+        var unboundEnd = compose.IndexOf("\n  keycloak:", unboundStart, StringComparison.Ordinal);
+        var unboundService = compose[unboundStart..unboundEnd];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(compose, Does.Contain("image: guardwithhip/unbound:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}"));
+            Assert.That(compose, Does.Contain("DnsVerification__NameServerHost: unbound"));
+            Assert.That(compose, Does.Contain("DnsVerification__TrustDnssecValidation: \"true\""));
+            Assert.That(compose, Does.Contain("unbound: { condition: service_healthy }"));
+            Assert.That(unboundService, Does.Not.Contain("\n    ports:"));
+            Assert.That(dockerfile, Does.Match(@"ARG UNBOUND_REVISION=[a-f0-9]{40}"));
+            Assert.That(dockerfile, Does.Contain("USER 1655:1655"));
+            Assert.That(configuration, Does.Contain("auto-trust-anchor-file:"));
+            Assert.That(configuration, Does.Contain("module-config: \"validator iterator\""));
+            Assert.That(configuration, Does.Contain("harden-dnssec-stripped: yes"));
+            Assert.That(configuration, Does.Contain("ede: yes"));
+            Assert.That(configuration, Does.Contain("access-control: 0.0.0.0/0 refuse"));
+        });
+    }
+
     private static int Occurrences(string value, string fragment)
     {
         var count = 0;
