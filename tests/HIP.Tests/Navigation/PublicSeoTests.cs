@@ -155,17 +155,22 @@ public sealed class PublicSeoTests
     public void Production_proxy_obtains_www_tls_and_permanently_consolidates_aliases()
     {
         var root = RepositoryRoot();
-        var caddy = File.ReadAllText(Path.Combine(root, "deploy", "vps", "Caddyfile.production"));
+        var configurations = new[] { "Caddyfile", "Caddyfile.production" };
 
-        Assert.Multiple(() =>
+        foreach (var configuration in configurations)
         {
-            Assert.That(caddy, Does.Contain("www.{$HIP_PUBLIC_HOST} {"));
-            Assert.That(caddy, Does.Contain("redir https://{$HIP_PUBLIC_HOST}{uri} permanent"));
-            Assert.That(caddy, Does.Contain("@verificationAlias path /verification /verify"));
-            Assert.That(caddy, Does.Contain("redir @verificationAlias /domain-verification permanent"));
-            Assert.That(caddy, Does.Contain("redir @howAlias /how-it-works permanent"));
-            Assert.That(caddy, Does.Contain("redir @developersAlias /developers permanent"));
-        });
+            var caddy = File.ReadAllText(Path.Combine(root, "deploy", "vps", configuration));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(caddy, Does.Contain("www.{$HIP_PUBLIC_HOST} {"), configuration);
+                Assert.That(caddy, Does.Contain("redir https://{$HIP_PUBLIC_HOST}{uri} permanent"), configuration);
+                Assert.That(caddy, Does.Contain("@verificationAlias path /verification /verify"), configuration);
+                Assert.That(caddy, Does.Contain("redir @verificationAlias /domain-verification permanent"), configuration);
+                Assert.That(caddy, Does.Contain("redir @howAlias /how-it-works permanent"), configuration);
+                Assert.That(caddy, Does.Contain("redir @developersAlias /developers permanent"), configuration);
+            });
+        }
     }
 
     /// <summary>Confirms repeated marketing footers point to specific destinations rather than the repository root.</summary>
