@@ -7,3 +7,5 @@ deploy/vps/check-dns-over-quic.sh text eol=lf
 deploy/vps/sync-dnsdist-certificate.sh text eol=lf
 deploy/vps/install-dnsdist-certificate-sync.sh text eol=lf
 eng/monitoring/check_hip_doq.sh text eol=lf
+deploy/powerdns/entrypoint.sh text eol=lf
+deploy/vps/check-authoritative-dns.sh text eol=lf

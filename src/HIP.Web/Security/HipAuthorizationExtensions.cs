@@ -81,6 +81,7 @@ public static class HipAuthorizationExtensions
                 options,
                 AdminPolicies.CanManageDomainVerifications,
                 [AdminRoles.Owner, AdminRoles.Admin]);
+            AddAdminPolicy(options, AdminPolicies.CanManageAuthoritativeDns, [AdminRoles.Owner]);
             AddAdminPolicy(options, AdminPolicies.CanRevokeDomainVerifications, [AdminRoles.Owner]);
             options.AddPolicy(AdminPolicies.CanRequestPrivilegedStepUp, policy =>
             {

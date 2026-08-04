@@ -23,6 +23,7 @@ public static class AdminPolicies
     public const string CanManageServiceClients = nameof(CanManageServiceClients);
     public const string CanViewAdminDashboard = nameof(CanViewAdminDashboard);
     public const string CanManageDomainVerifications = nameof(CanManageDomainVerifications);
+    public const string CanManageAuthoritativeDns = nameof(CanManageAuthoritativeDns);
     public const string CanRevokeDomainVerifications = nameof(CanRevokeDomainVerifications);
     public const string CanRequestPrivilegedStepUp = nameof(CanRequestPrivilegedStepUp);
     public const string RecentPrivilegedAuthentication = nameof(RecentPrivilegedAuthentication);

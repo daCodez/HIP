@@ -22,6 +22,7 @@ using HIP.Application.SiteSafety;
 using HIP.Application.Simulation;
 using HIP.Infrastructure.Identity;
 using HIP.Infrastructure.Certificates;
+using HIP.Infrastructure.AuthoritativeDns;
 using HIP.Infrastructure.Persistence;
 using HIP.Infrastructure.Persistence.Repositories;
 using HIP.Infrastructure.Protocol;
@@ -146,6 +147,13 @@ public static class DependencyInjection
         services.AddScoped<IScanResultDedupeService, EfScanResultDedupeService>();
         services.AddScoped<IDashboardScanAggregateStore, EfDashboardScanAggregateStore>();
         services.AddScoped<IPlatformConnectionRepository, EfPlatformConnectionRepository>();
+        services.AddScoped<IAuthoritativeDnsZoneRepository, EfAuthoritativeDnsZoneRepository>();
+        var authoritativeDnsOptions = PowerDnsAuthoritativeOptions.FromConfiguration(configuration);
+        services.AddSingleton(authoritativeDnsOptions);
+        services.AddHttpClient<IAuthoritativeDnsPublisher, PowerDnsAuthoritativePublisher>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(8);
+        });
 
         AddManagedSigningProvider(services, configuration);
 

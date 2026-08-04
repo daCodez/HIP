@@ -108,6 +108,29 @@ services:
     depends_on:
       unbound: { condition: service_healthy }
 
+  powerdns:
+    image: guardwithhip/powerdns:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
+    build:
+      context: ../..
+      dockerfile: deploy/powerdns/Dockerfile
+      args:
+        HIP_RELEASE_REVISION: ${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
+        HIP_RELEASE_VERSION: ${HIP_RELEASE_VERSION:?HIP_RELEASE_VERSION is required}
+    restart: unless-stopped
+    user: "1656:1656"
+    read_only: true
+    tmpfs:
+      - /run/pdns:uid=1656,gid=1656,mode=0700
+      - /tmp:uid=1656,gid=1656,mode=1777
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 256m
+    environment:
+      HIP_POWERDNS_API_KEY: ${HIP_POWERDNS_API_KEY:?HIP_POWERDNS_API_KEY is required}
+    volumes:
+      - powerdns-data:/var/lib/powerdns
+    networks: [backend]
+
   keycloak:
     image: guardwithhip/identity:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
     build:
@@ -258,6 +281,11 @@ services:
       ExternalSiteEvidence__SslLabs__Enabled: "true"
       ExternalSiteEvidence__GoogleWebRisk__Enabled: "false"
       ExternalSiteEvidence__VirusTotal__Enabled: "false"
+      AuthoritativeDns__Enabled: "true"
+      AuthoritativeDns__ApiBaseUrl: http://powerdns:8081/api/v1/
+      AuthoritativeDns__ApiKey: ${HIP_POWERDNS_API_KEY:?HIP_POWERDNS_API_KEY is required}
+      AuthoritativeDns__NameServers__0: ns1.guardwithhip.com.
+      AuthoritativeDns__NameServers__1: ns2.guardwithhip.com.
     ports:
       - "127.0.0.1:5123:8080"
     volumes:
@@ -266,6 +294,7 @@ services:
     networks: [backend, egress]
     depends_on:
       api: { condition: service_healthy }
+      powerdns: { condition: service_healthy }
 
   consumer-web:
     image: guardwithhip/consumer-web:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
@@ -418,3 +447,4 @@ volumes:
   keycloak-data:
   keycloak-postgres-data:
   unbound-data:
+  powerdns-data:

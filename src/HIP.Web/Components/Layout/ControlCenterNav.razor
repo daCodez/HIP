@@ -64,6 +64,11 @@ else
 
     <p class="group-title">Identity &amp; clients</p>
     <NavLink class="nav-item" href="/identity/websites" title="Domain Verification">@Icon("domain-check")<span>Domain Verification</span></NavLink>
+    <AuthorizeView Policy="@AdminPolicies.CanManageAuthoritativeDns">
+        <Authorized>
+            <NavLink class="nav-item" href="/dns" title="Authoritative DNS">@Icon("dns")<span>Authoritative DNS</span></NavLink>
+        </Authorized>
+    </AuthorizeView>
     <NavLink class="nav-item" href="/platforms" title="Platform Connections">@Icon("plug")<span>Platform Connections</span></NavLink>
     <a class="nav-item" href="@PortalLinks.Consumer("/devices")" data-enhance-nav="false" title="Devices">@Icon("devices")<span>Devices</span></a>
     <AuthorizeView Policy="@AdminPolicies.CanViewLicenses">
@@ -193,6 +198,7 @@ else
         "report" => Svg("<path d=\"M5 3h14v18H5zM8 17v-4M12 17V8M16 17v-7\"/>"),
         "feedback" => Svg("<path d=\"M4 4h16v13H9l-5 4z\"/><path d=\"M8 9h8M8 13h5\"/>"),
         "domain-check" => Svg("<circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"M3 11h16M11 3c3 3 3 13 0 16M11 3c-3 3-3 13 0 16m5 1 2 2 4-5\"/>"),
+        "dns" => Svg("<ellipse cx=\"12\" cy=\"6\" rx=\"8\" ry=\"3\"/><path d=\"M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6\"/>"),
         "plug" => Svg("<path d=\"M8 3v5M16 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4\"/>"),
         "devices" => Svg("<rect x=\"3\" y=\"4\" width=\"13\" height=\"10\" rx=\"1\"/><path d=\"M7 18h5M9.5 14v4\"/><rect x=\"17\" y=\"8\" width=\"4\" height=\"12\" rx=\"1\"/>"),
         "key" => Svg("<circle cx=\"8\" cy=\"12\" r=\"4\"/><path d=\"M12 12h9M17 12v3M20 12v2\"/>"),

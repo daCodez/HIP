@@ -1,0 +1,285 @@
+@page "/admin/dns"
+@attribute [Authorize(Policy = AdminPolicies.CanManageAuthoritativeDns)]
+@rendermode InteractiveServer
+@implements IDisposable
+@using HIP.Application.Dns
+@inject IAuthoritativeDnsManagementService DnsManagement
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthorizationService AuthorizationService
+@inject IHostEnvironment HostEnvironment
+
+<PageTitle>HIP Authoritative DNS</PageTitle>
+
+<main class="admin-rule-page authoritative-dns-page">
+    <section class="admin-rule-header">
+        <div>
+            <p class="eyebrow">HIP Admin · DNS control plane</p>
+            <h1>Authoritative DNS</h1>
+            <p>Publish DNS records only for domains whose ownership HIP has already verified. Resolver traffic and authoritative zone management remain isolated.</p>
+        </div>
+    </section>
+
+    @if (_error is not null)
+    {
+        <p class="admin-error" role="alert">@_error</p>
+    }
+    @if (_status is not null)
+    {
+        <p class="admin-message" role="status">@_status</p>
+    }
+
+    <section class="lookup-result dns-safety-note" aria-labelledby="dns-safety-title">
+        <div>
+            <p class="eyebrow">Protected publication</p>
+            <h2 id="dns-safety-title">Verified zones only</h2>
+            <p>HIP rejects unverified domains, out-of-zone names, wildcards, unsafe TTLs, unsupported record types, duplicate records, and CNAME conflicts before contacting the authoritative provider.</p>
+        </div>
+        <div class="dns-endpoint-facts">
+            <span><strong>Primary</strong> ns1.guardwithhip.com</span>
+            <span><strong>Secondary</strong> ns2.guardwithhip.com</span>
+            <span><strong>DNSSEC</strong> Enabled on publication</span>
+        </div>
+    </section>
+
+    <section class="lookup-result" aria-labelledby="publish-zone-title">
+        <header>
+            <p class="eyebrow">Create or replace</p>
+            <h2 id="publish-zone-title">Publish a hosted zone</h2>
+            <p>Saving replaces the managed A, AAAA, CNAME, MX, and TXT records for this zone as one reviewed change.</p>
+        </header>
+
+        <div class="dns-form-grid">
+            <div class="form-group">
+                <label for="dns-domain">Verified domain</label>
+                <input id="dns-domain" @bind="_domain" maxlength="253" autocomplete="off" placeholder="example.com" />
+            </div>
+            <div class="form-group dns-reason">
+                <label for="dns-reason">Change reason</label>
+                <input id="dns-reason" @bind="_reason" maxlength="500" autocomplete="off" placeholder="Initial website DNS configuration" />
+            </div>
+        </div>
+
+        <div class="table-scroll" tabindex="0" aria-label="DNS records to publish">
+            <table class="dns-record-table">
+                <thead>
+                    <tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Value</th><th scope="col">TTL</th><th scope="col">Action</th></tr>
+                </thead>
+                <tbody>
+                    @for (var index = 0; index < _records.Count; index++)
+                    {
+                        var rowIndex = index;
+                        <tr @key="_records[rowIndex].Id">
+                            <td><input aria-label="Record name" @bind="_records[rowIndex].Name" maxlength="253" placeholder="Apex or www" /></td>
+                            <td>
+                                <select aria-label="Record type" @bind="_records[rowIndex].Type">
+                                    @foreach (var type in Enum.GetValues<AuthoritativeDnsRecordType>())
+                                    {
+                                        <option value="@type">@RecordTypeLabel(type)</option>
+                                    }
+                                </select>
+                            </td>
+                            <td><input aria-label="Record value" @bind="_records[rowIndex].Content" maxlength="512" placeholder="Record value" /></td>
+                            <td><input aria-label="Record TTL" type="number" min="60" max="86400" @bind="_records[rowIndex].Ttl" /></td>
+                            <td><button type="button" class="hip-secondary-action" @onclick="() => RemoveRecord(rowIndex)" disabled="@(_records.Count == 1 || _submitting)">Remove</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="service-client-actions">
+            <button type="button" class="hip-secondary-action" @onclick="AddRecord" disabled="@(_records.Count >= 100 || _submitting)">Add record</button>
+            <button type="button" class="hip-primary-action" @onclick="PublishAsync" disabled="@_submitting">@(_submitting ? "Publishing..." : "Publish zone")</button>
+        </div>
+    </section>
+
+    <section class="lookup-result" aria-labelledby="hosted-zones-title">
+        <header>
+            <p class="eyebrow">Provider state</p>
+            <h2 id="hosted-zones-title">Hosted zones</h2>
+        </header>
+        @if (_loading)
+        {
+            <p class="admin-message" role="status">Loading authoritative DNS zones...</p>
+        }
+        else if (_zones.Count == 0)
+        {
+            <p class="admin-message">No authoritative DNS zones are stored yet.</p>
+        }
+        else
+        {
+            <div class="dns-zone-list">
+                @foreach (var zone in _zones)
+                {
+                    <article class="dns-zone-card">
+                        <header>
+                            <div><h3>@zone.Domain</h3><span class="dns-zone-status">@ZoneStatusLabel(zone.Status)</span></div>
+                            <time datetime="@zone.UpdatedAtUtc.ToString("O")">@zone.UpdatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</time>
+                        </header>
+                        <p>@zone.SafeStatusDetail</p>
+                        <dl>
+                            <div><dt>Records</dt><dd>@zone.Records.Count</dd></div>
+                            <div><dt>DNSSEC</dt><dd>@(zone.DnssecEnabled ? "Enabled" : "Disabled")</dd></div>
+                            <div><dt>Version</dt><dd>@zone.Version</dd></div>
+                        </dl>
+                        @if (zone.DsRecords.Count > 0)
+                        {
+                            <details>
+                                <summary>Registrar DS records</summary>
+                                @foreach (var ds in zone.DsRecords)
+                                {
+                                    <code class="dns-ds-record">@ds</code>
+                                }
+                            </details>
+                        }
+                        <button type="button" class="hip-secondary-action" @onclick="() => LoadZone(zone)" disabled="@_submitting">Edit records</button>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+</main>
+
+@code {
+    private readonly CancellationTokenSource _pageCancellation = new();
+    private readonly List<RecordEditorRow> _records = [new()];
+    private IReadOnlyCollection<AuthoritativeDnsZone> _zones = [];
+    private string _domain = string.Empty;
+    private string _reason = string.Empty;
+    private string? _error;
+    private string? _status;
+    private bool _loading = true;
+    private bool _submitting;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _zones = await DnsManagement.ListAsync(_pageCancellation.Token);
+        }
+        catch (OperationCanceledException) when (_pageCancellation.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            _error = "HIP could not load authoritative DNS state right now.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void AddRecord() => _records.Add(new RecordEditorRow());
+
+    private void RemoveRecord(int index)
+    {
+        if (_records.Count > 1 && index >= 0 && index < _records.Count)
+        {
+            _records.RemoveAt(index);
+        }
+    }
+
+    private async Task PublishAsync()
+    {
+        _submitting = true;
+        _error = null;
+        _status = null;
+        try
+        {
+            var request = new PublishAuthoritativeDnsZoneRequest(
+                _domain,
+                _records.Select(row => new AuthoritativeDnsRecordInput(row.Name, row.Type, row.Content, row.Ttl)).ToArray(),
+                _reason);
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var access = await HipAdminPageAccess.ExecuteAuthorizedAsync(
+                authenticationState.User,
+                AuthorizationService,
+                HostEnvironment,
+                [AdminPolicies.CanManageAuthoritativeDns, AdminPolicies.RecentPrivilegedAuthentication],
+                (actorId, cancellationToken) => DnsManagement.PublishAsync(request, actorId, cancellationToken),
+                _pageCancellation.Token);
+            if (!access.Succeeded || access.Value is null)
+            {
+                _error = HipAdminPageAccess.AccessUnavailableMessage;
+                return;
+            }
+
+            _status = $"{access.Value.Domain} was published with {access.Value.Records.Count} managed records.";
+            await LoadAsync();
+        }
+        catch (ArgumentException exception)
+        {
+            _error = exception.Message;
+        }
+        catch (InvalidOperationException exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void LoadZone(AuthoritativeDnsZone zone)
+    {
+        _domain = zone.Domain;
+        _reason = $"Update {zone.Domain} DNS records";
+        _records.Clear();
+        _records.AddRange(zone.Records.Select(record => new RecordEditorRow
+        {
+            Name = record.Name == zone.Domain + "." ? "@" : record.Name[..^(zone.Domain.Length + 2)],
+            Type = record.Type,
+            Content = DisplayContent(record),
+            Ttl = record.Ttl
+        }));
+        if (_records.Count == 0)
+        {
+            _records.Add(new RecordEditorRow());
+        }
+    }
+
+    private static string DisplayContent(AuthoritativeDnsRecord record) => record.Type switch
+    {
+        AuthoritativeDnsRecordType.Cname => record.Content.TrimEnd('.'),
+        AuthoritativeDnsRecordType.Mx => record.Content.TrimEnd('.'),
+        AuthoritativeDnsRecordType.Txt when record.Content.Length >= 2 => record.Content[1..^1].Replace("\\\"", "\"", StringComparison.Ordinal).Replace("\\\\", "\\", StringComparison.Ordinal),
+        _ => record.Content
+    };
+
+    private static string RecordTypeLabel(AuthoritativeDnsRecordType type) => type switch
+    {
+        AuthoritativeDnsRecordType.Aaaa => "AAAA",
+        AuthoritativeDnsRecordType.Cname => "CNAME",
+        AuthoritativeDnsRecordType.Mx => "MX",
+        AuthoritativeDnsRecordType.Txt => "TXT",
+        _ => type.ToString()
+    };
+
+    private static string ZoneStatusLabel(AuthoritativeDnsZoneStatus status) => status switch
+    {
+        AuthoritativeDnsZoneStatus.PendingPublication => "Publishing",
+        AuthoritativeDnsZoneStatus.PublicationFailed => "Needs attention",
+        AuthoritativeDnsZoneStatus.Published => "Published",
+        _ => "Disabled"
+    };
+
+    public void Dispose()
+    {
+        _pageCancellation.Cancel();
+        _pageCancellation.Dispose();
+    }
+
+    private sealed class RecordEditorRow
+    {
+        public Guid Id { get; } = Guid.NewGuid();
+        public string Name { get; set; } = "@";
+        public AuthoritativeDnsRecordType Type { get; set; } = AuthoritativeDnsRecordType.A;
+        public string Content { get; set; } = string.Empty;
+        public int Ttl { get; set; } = 300;
+    }
+}

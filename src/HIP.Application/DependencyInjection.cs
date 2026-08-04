@@ -119,6 +119,7 @@ public static class DependencyInjection
         services.AddScoped<AiRuleDraftService>();
         services.AddScoped<IPublicDomainLookupService, PublicDomainLookupService>();
         services.AddScoped<IHipAwareDnsLookupService, HipAwareDnsLookupService>();
+        services.AddScoped<IAuthoritativeDnsManagementService, AuthoritativeDnsManagementService>();
         services.AddSingleton<ITrustExplanationProvider, DisabledTrustExplanationProvider>();
         services.AddSingleton<ITrustExplanationAssistant, TrustExplanationAssistant>();
         services.AddScoped<ITrustBadgeService, TrustBadgeService>();
