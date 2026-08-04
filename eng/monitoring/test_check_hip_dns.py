@@ -69,10 +69,30 @@ class HipDnsMonitorTests(unittest.TestCase):
         self.assertIn('cron: "17,47 * * * *"', workflow)
         self.assertIn("continue-on-error: true", workflow)
         self.assertIn("id: dns_monitor", workflow)
+        self.assertIn("id: doq_monitor", workflow)
+        self.assertIn("knot-dnsutils", workflow)
         self.assertNotIn("steps.dns-monitor", workflow)
         self.assertIn("--status failed", workflow)
         self.assertIn("--status passed", workflow)
         self.assertNotIn("secrets.", workflow)
+
+    def test_doq_listener_is_public_but_plain_dns_remains_unpublished(self) -> None:
+        root = os.path.join(os.path.dirname(__file__), "..", "..")
+        with open(os.path.join(root, "deploy", "dnsdist", "dnsdist-dot.conf"), encoding="utf-8") as config_file:
+            config = config_file.read()
+        with open(
+            os.path.join(root, "deploy", "vps", "compose.production.override.yml"), encoding="utf-8"
+        ) as compose_file:
+            compose = compose_file.read()
+
+        self.assertIn("addDOQLocal(", config)
+        self.assertIn("idleTimeout=5", config)
+        self.assertIn("maxInFlight=64", config)
+        self.assertNotIn("keyLogFile", config)
+        self.assertNotIn("qLogDir", config)
+        self.assertIn(":853:853/udp", compose)
+        self.assertNotIn(":53:53/udp", compose)
+        self.assertNotIn(":53:53/tcp", compose)
 
     def test_incident_body_is_bounded_and_escaped(self) -> None:
         with mock.patch.dict(

@@ -2,6 +2,7 @@ services:
   dnsdist:
     ports:
       - "${HIP_PUBLIC_BIND_ADDRESS:?HIP_PUBLIC_BIND_ADDRESS is required}:853:853/tcp"
+      - "${HIP_PUBLIC_BIND_ADDRESS:?HIP_PUBLIC_BIND_ADDRESS is required}:853:853/udp"
     volumes:
       - ../dnsdist/dnsdist-dot.conf:/etc/dnsdist/conf.d/10-dot.conf:ro
       - ${HIP_DNSDIST_TLS_PATH:?HIP_DNSDIST_TLS_PATH is required}:/etc/dnsdist/tls:ro

@@ -32,7 +32,7 @@ www.{$HIP_PUBLIC_HOST} {
     }
 
     handle {
-        respond "HIP encrypted DNS endpoint. Use https://{$HIP_DNS_HOST}/dns-query for DNS-over-HTTPS or {$HIP_DNS_HOST}:853 for DNS-over-TLS." 200
+        respond "HIP encrypted DNS endpoint. Use https://{$HIP_DNS_HOST}/dns-query for DNS-over-HTTPS, or {$HIP_DNS_HOST}:853 for DNS-over-TLS and DNS-over-QUIC." 200
     }
 }
 

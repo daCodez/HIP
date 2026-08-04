@@ -16,7 +16,7 @@ RUN apt-get update \
 COPY deploy/dnsdist/dnsdist.conf /etc/dnsdist/dnsdist.conf
 
 USER 953:953
-EXPOSE 5353/tcp 5353/udp 853/tcp
+EXPOSE 5353/tcp 5353/udp 853/tcp 853/udp
 HEALTHCHECK --interval=30s --timeout=8s --start-period=15s --retries=5 \
     CMD output="$(dig @127.0.0.1 -p 5353 . SOA +dnssec +time=3 +tries=1)" \
         && echo "${output}" | grep -q "status: NOERROR" \

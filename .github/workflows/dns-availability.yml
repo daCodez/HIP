@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/dns-availability.yml
       - eng/monitoring/check_hip_dns.py
+      - eng/monitoring/check_hip_doq.sh
       - eng/monitoring/update_dns_monitor_issue.py
   schedule:
     - cron: "17,47 * * * *"
@@ -32,26 +33,38 @@ jobs:
         id: dns_monitor
         continue-on-error: true
         shell: bash
-        run: python3 eng/monitoring/check_hip_dns.py | tee dns-monitor-report.json
+        run: |
+          set -o pipefail
+          python3 eng/monitoring/check_hip_dns.py | tee dns-monitor-report.txt
+
+      - name: Check DNS over QUIC
+        id: doq_monitor
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends knot-dnsutils
+          sh eng/monitoring/check_hip_doq.sh | tee -a dns-monitor-report.txt
 
       - name: Open or retain the incident alert
-        if: steps.dns_monitor.outcome == 'failure'
+        if: steps.dns_monitor.outcome == 'failure' || steps.doq_monitor.outcome == 'failure'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
           python3 eng/monitoring/update_dns_monitor_issue.py
           --status failed
-          --report dns-monitor-report.json
+          --report dns-monitor-report.txt
 
       - name: Close a recovered incident alert
-        if: steps.dns_monitor.outcome == 'success'
+        if: steps.dns_monitor.outcome == 'success' && steps.doq_monitor.outcome == 'success'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
           python3 eng/monitoring/update_dns_monitor_issue.py
           --status passed
-          --report dns-monitor-report.json
+          --report dns-monitor-report.txt
 
       - name: Preserve a failed workflow signal
-        if: steps.dns_monitor.outcome == 'failure'
+        if: steps.dns_monitor.outcome == 'failure' || steps.doq_monitor.outcome == 'failure'
         run: exit 1
