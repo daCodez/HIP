@@ -41,11 +41,12 @@ JSON responses expose the same validation result in the standard `AD` field and 
 
 ## Current provider
 
-`DnsClientLookupProvider` uses DnsClient.NET and the private HIP-owned Unbound 1.25.2 resolver. Unbound is built from a pinned upstream revision, validates DNSSEC recursively from the root trust anchor, and is reachable only inside the deployment network. The application depends only on `IDnsLookupProvider`, so a managed resolver or another recursive provider can replace it without changing the public contract.
+`DnsClientLookupProvider` uses DnsClient.NET through a private dnsdist 2.1 front door backed by the HIP-owned Unbound 1.25.2 resolver. Both layers are reachable only inside the deployment network. Unbound is built from a pinned upstream revision and validates DNSSEC recursively from the root trust anchor. The application depends only on `IDnsLookupProvider`, so a managed resolver or another recursive provider can replace it without changing the public contract.
 
-The resolver uses bounded caches, stale-answer protection, query minimization, minimal responses, DNSSEC hardening, per-client and recursion rate limits, and cumulative privacy-safe operational counters. Its container health check performs a real DNSSEC-validated root query instead of checking only that the process is running. Operators can inspect health and aggregate counters without logging queried names:
+dnsdist provides backend health checks, a bounded in-memory answer cache, and per-client query and TCP limits before requests reach Unbound. Its query and response history rings, web interface, control API, and public listeners are disabled. Unbound continues to provide bounded caches, stale-answer protection, query minimization, minimal responses, DNSSEC hardening, recursion rate limits, and cumulative privacy-safe operational counters. Both container health checks perform a real DNSSEC-validated root query instead of checking only that a process is running. Operators can verify the private front door and inspect aggregate Unbound counters without logging queried names:
 
 ```sh
+./deploy/vps/check-dns-frontdoor.sh
 ./deploy/vps/check-unbound.sh
 ```
 
@@ -55,5 +56,5 @@ This is the provider and API foundation, not a complete public recursive DNS ser
 
 - DNS over TLS;
 - UDP and TCP port 53 listeners;
-- a dedicated DNS front door with public-client abuse controls;
+- public exposure of the DNS front door and its encrypted-DNS certificate policy;
 - high-availability resolver deployment and external alerting.

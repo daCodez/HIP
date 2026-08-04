@@ -84,6 +84,30 @@ services:
       - unbound-data:/var/lib/unbound
     networks: [backend, egress]
 
+  dnsdist:
+    image: guardwithhip/dnsdist:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
+    build:
+      context: ../..
+      dockerfile: deploy/dnsdist/Dockerfile
+      args:
+        HIP_RELEASE_REVISION: ${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
+        HIP_RELEASE_VERSION: ${HIP_RELEASE_VERSION:?HIP_RELEASE_VERSION is required}
+    restart: unless-stopped
+    user: "953:953"
+    read_only: true
+    tmpfs:
+      - /tmp:uid=953,gid=953,mode=1777
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 256m
+    ulimits:
+      nofile:
+        soft: 2048
+        hard: 2048
+    networks: [backend]
+    depends_on:
+      unbound: { condition: service_healthy }
+
   keycloak:
     image: guardwithhip/identity:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}
     build:
@@ -163,7 +187,7 @@ services:
       ExternalSiteEvidence__SslLabs__Enabled: "true"
       ExternalSiteEvidence__GoogleWebRisk__Enabled: "false"
       ExternalSiteEvidence__VirusTotal__Enabled: "false"
-      DnsVerification__NameServerHost: unbound
+      DnsVerification__NameServerHost: dnsdist
       DnsVerification__NameServerPort: "5353"
       DnsVerification__TrustDnssecValidation: "true"
     ports:
@@ -176,7 +200,7 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       queue: { condition: service_healthy }
-      unbound: { condition: service_healthy }
+      dnsdist: { condition: service_healthy }
 
   web:
     image: guardwithhip/admin-web:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}

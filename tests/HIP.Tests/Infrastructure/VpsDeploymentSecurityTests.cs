@@ -199,9 +199,9 @@ public sealed class VpsDeploymentSecurityTests
         Assert.Multiple(() =>
         {
             Assert.That(compose, Does.Contain("image: guardwithhip/unbound:${HIP_RELEASE_REVISION:?HIP_RELEASE_REVISION is required}"));
-            Assert.That(compose, Does.Contain("DnsVerification__NameServerHost: unbound"));
+            Assert.That(compose, Does.Contain("DnsVerification__NameServerHost: dnsdist"));
             Assert.That(compose, Does.Contain("DnsVerification__TrustDnssecValidation: \"true\""));
-            Assert.That(compose, Does.Contain("unbound: { condition: service_healthy }"));
+            Assert.That(compose, Does.Contain("dnsdist: { condition: service_healthy }"));
             Assert.That(unboundService, Does.Not.Contain("\n    ports:"));
             Assert.That(dockerfile, Does.Match(@"ARG UNBOUND_REVISION=[a-f0-9]{40}"));
             Assert.That(dockerfile, Does.Contain("automake bison build-essential ca-certificates flex"));
