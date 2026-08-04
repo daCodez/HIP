@@ -44,6 +44,36 @@ public sealed class PowerDnsAuthoritativePublisherTests
     }
 
     [Test]
+    public async Task Inline_ds_records_avoid_requesting_key_details_that_may_contain_private_material()
+    {
+        var handler = new SequenceHandler(
+            Response(HttpStatusCode.NotFound, "{}"),
+            Response(HttpStatusCode.Created, "{}"),
+            Response(HttpStatusCode.NoContent, string.Empty),
+            Response(HttpStatusCode.OK, "{}"),
+            Response(HttpStatusCode.OK, "[{\"id\":7,\"active\":true,\"keytype\":\"csk\",\"ds\":[\"12345 13 2 ABCDEF\"]}]"));
+        var publisher = new PowerDnsAuthoritativePublisher(
+            new HttpClient(handler),
+            new PowerDnsAuthoritativeOptions(
+                true,
+                new Uri("http://powerdns:8081/api/v1/"),
+                new string('k', 40),
+                ["ns1.guardwithhip.com.", "ns2.guardwithhip.com."]));
+
+        var publication = await publisher.PublishAsync(
+            "example.com",
+            [new AuthoritativeDnsRecord("example.com.", AuthoritativeDnsRecordType.A, "203.0.113.10", 300)],
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(publication.DsRecords, Is.EqualTo(new[] { "12345 13 2 ABCDEF" }));
+            Assert.That(handler.Requests, Has.Count.EqualTo(5));
+            Assert.That(handler.Requests.All(request => !request.Path.Contains("/cryptokeys/7/", StringComparison.Ordinal)), Is.True);
+        });
+    }
+
+    [Test]
     public void Provider_error_does_not_expose_response_body_or_api_key()
     {
         var secret = new string('s', 40);

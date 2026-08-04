@@ -144,15 +144,19 @@ public sealed class PowerDnsAuthoritativePublisher(
         using var response = await SendAsync(HttpMethod.Get, $"{zonePath}/cryptokeys", null, cancellationToken).ConfigureAwait(false);
         await RequireSuccessAsync(response, "read DNSSEC delegation records", cancellationToken).ConfigureAwait(false);
         using var document = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false));
-        var activeKeyIds = document.RootElement
+        var records = new HashSet<string>(StringComparer.Ordinal);
+        var activeKeys = document.RootElement
             .EnumerateArray()
             .Where(key => key.TryGetProperty("active", out var active) && active.GetBoolean())
-            .Select(key => key.GetProperty("id").GetInt32())
             .ToArray();
-
-        var records = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var keyId in activeKeyIds)
+        foreach (var key in activeKeys)
         {
+            if (AddDsRecords(key, records))
+            {
+                continue;
+            }
+
+            var keyId = key.GetProperty("id").GetInt32();
             using var keyResponse = await SendAsync(
                 HttpMethod.Get,
                 $"{zonePath}/cryptokeys/{keyId}/ds",
@@ -161,22 +165,29 @@ public sealed class PowerDnsAuthoritativePublisher(
             await RequireSuccessAsync(keyResponse, "read a DNSSEC delegation record", cancellationToken).ConfigureAwait(false);
             using var keyDocument = JsonDocument.Parse(
                 await keyResponse.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false));
-            if (!keyDocument.RootElement.TryGetProperty("ds", out var ds))
-            {
-                continue;
-            }
-
-            foreach (var value in ds.EnumerateArray())
-            {
-                var record = value.GetString();
-                if (!string.IsNullOrWhiteSpace(record))
-                {
-                    records.Add(record);
-                }
-            }
+            _ = AddDsRecords(keyDocument.RootElement, records);
         }
 
         return records.ToArray();
+    }
+
+    private static bool AddDsRecords(JsonElement key, HashSet<string> records)
+    {
+        if (!key.TryGetProperty("ds", out var ds) || ds.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        foreach (var value in ds.EnumerateArray())
+        {
+            var record = value.GetString();
+            if (!string.IsNullOrWhiteSpace(record))
+            {
+                records.Add(record);
+            }
+        }
+
+        return true;
     }
 
     private static IReadOnlyCollection<object> BuildRecordSetChanges(
