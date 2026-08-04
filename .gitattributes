@@ -2,5 +2,6 @@ deploy/unbound/entrypoint.sh text eol=lf
 deploy/vps/check-unbound.sh text eol=lf
 deploy/vps/check-dns-frontdoor.sh text eol=lf
 deploy/vps/check-dns-over-tls.sh text eol=lf
+deploy/vps/check-dns-over-https.sh text eol=lf
 deploy/vps/sync-dnsdist-certificate.sh text eol=lf
 deploy/vps/install-dnsdist-certificate-sync.sh text eol=lf
