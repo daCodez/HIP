@@ -484,12 +484,16 @@ public sealed class DomainCertificateRepositoryTests
             Assert.That(auditEvent.PublicSummary, Does.Not.Contain("82"));
         });
     }
-    [Test]
-    public async Task Monitoring_promotion_atomically_replaces_current_signed_certificate_and_is_idempotent()
+    [TestCase(DomainCertificateLevel.Verified)]
+    [TestCase(DomainCertificateLevel.Monitored)]
+    public async Task Monitoring_promotion_atomically_replaces_current_signed_certificate_and_is_idempotent(
+        DomainCertificateLevel currentLevel)
     {
         await using var context = Context();
         var repository = Repository(context);
         await repository.TryCreateIssuedAsync(Record(), CancellationToken.None);
+        context.DomainCertificates.Single(item => item.CertificateId == "hip-domain-cert-0001").Level = currentLevel;
+        await context.SaveChangesAsync();
         var enabledAt = Now.AddMinutes(20);
         await repository.TryEnableAsync(
             new DomainMonitoringEnableRecord(
