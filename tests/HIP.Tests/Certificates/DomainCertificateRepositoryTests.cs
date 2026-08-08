@@ -484,10 +484,12 @@ public sealed class DomainCertificateRepositoryTests
             Assert.That(auditEvent.PublicSummary, Does.Not.Contain("82"));
         });
     }
-    [TestCase(DomainCertificateLevel.Verified)]
-    [TestCase(DomainCertificateLevel.Monitored)]
+    [TestCase(DomainCertificateLevel.Verified, DomainEnrollmentStatus.Verified)]
+    [TestCase(DomainCertificateLevel.Monitored, DomainEnrollmentStatus.Verified)]
+    [TestCase(DomainCertificateLevel.Monitored, DomainEnrollmentStatus.Monitored)]
     public async Task Monitoring_promotion_atomically_replaces_current_signed_certificate_and_is_idempotent(
-        DomainCertificateLevel currentLevel)
+        DomainCertificateLevel currentLevel,
+        DomainEnrollmentStatus currentEnrollmentStatus)
     {
         await using var context = Context();
         var repository = Repository(context);
@@ -500,10 +502,12 @@ public sealed class DomainCertificateRepositoryTests
                 "enrollment-1", "owner-1", "example.com", enabledAt, enabledAt,
                 "certificate-event:monitoring-enabled:enrollment-1"),
             CancellationToken.None);
+        context.DomainEnrollments.Single(item => item.EnrollmentId == "enrollment-1").Status = currentEnrollmentStatus;
+        await context.SaveChangesAsync();
         var checkedAt = enabledAt.AddMinutes(1);
         var check = new DomainMonitoringCheckRecord(
             "enrollment-1", "owner-1", "example.com",
-            DomainEnrollmentStatus.Verified, DomainEnrollmentStatus.Monitored,
+            currentEnrollmentStatus, DomainEnrollmentStatus.Monitored,
             82, 0, checkedAt, checkedAt.AddHours(24), $"sha256:{new string('e', 64)}",
             "certificate-event:monitoring-check:promoted");
         var promoted = PromotedRecord(checkedAt);

@@ -10,7 +10,7 @@ namespace HIP.Application.Certificates;
 public sealed record DomainCertificatePublicEndpointOptions(string PublicOrigin)
 {
     public static DomainCertificatePublicEndpointOptions Default { get; } =
-        new("https://hiptrust.com");
+        new("https://guardwithhip.com");
 }
 
 public enum DomainCertificateProvisioningStatus
