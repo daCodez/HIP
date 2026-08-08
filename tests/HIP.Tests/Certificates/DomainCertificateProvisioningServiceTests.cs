@@ -70,7 +70,7 @@ public sealed class DomainCertificateProvisioningServiceTests
             Assert.That(issuance.Request.Draft.PublicOrganizationName, Is.EqualTo("Example Org"));
             Assert.That(issuance.Request.Draft.CompletedVerificationMethods, Has.Count.EqualTo(2));
             Assert.That(issuance.Request.Draft.RevocationStatusUrl,
-                Does.StartWith("https://hiptrust.com/api/v1/certificates/"));
+                Does.StartWith("https://guardwithhip.com/api/v1/public/certificates/"));
         });
     }
 

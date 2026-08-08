@@ -122,7 +122,8 @@ public sealed class DomainCertificateMonitoringPromotionServiceTests
         {
             Assert.That(result.Status, Is.EqualTo(DomainCertificateMonitoringPromotionStatus.Promoted));
             Assert.That(signer.Draft?.PublicCertificateUrl, Does.StartWith("https://guardwithhip.com/"));
-            Assert.That(signer.Draft?.RevocationStatusUrl, Does.StartWith("https://guardwithhip.com/"));
+            Assert.That(signer.Draft?.RevocationStatusUrl,
+                Does.StartWith("https://guardwithhip.com/api/v1/public/certificates/"));
         });
     }
 
