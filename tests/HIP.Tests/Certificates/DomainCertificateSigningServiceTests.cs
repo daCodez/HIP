@@ -60,6 +60,47 @@ public sealed class DomainCertificateSigningServiceTests
     }
 
     [Test]
+    public async Task Authorized_manual_review_allows_a_review_required_certificate_to_be_signed()
+    {
+        var signer = new FakeManagedSigner();
+        var draft = Draft() with
+        {
+            Evaluation = Evaluation(DomainCertificatePolicyDecision.RequiresReview),
+            AuthorizedReview = new DomainCertificateAuthorizedReview(
+                "domain-application_123", "admin-reviewer", Now.AddMinutes(-2), "Approved")
+        };
+
+        var result = await Service(signer, Verified()).SignAsync(draft, default);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateSigningStatus.Signed));
+            Assert.That(result.Certificate, Is.Not.Null);
+            Assert.That(signer.SignCount, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task Invalid_manual_review_metadata_is_rejected_before_key_custody()
+    {
+        var signer = new FakeManagedSigner();
+        var draft = Draft() with
+        {
+            Evaluation = Evaluation(DomainCertificatePolicyDecision.RequiresReview),
+            AuthorizedReview = new DomainCertificateAuthorizedReview(
+                "domain-application_123", "admin-reviewer", Now.AddMinutes(1), "Approved")
+        };
+
+        var result = await Service(signer, Verified()).SignAsync(draft, default);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateSigningStatus.InvalidRequest));
+            Assert.That(signer.GetKeyCount, Is.Zero);
+        });
+    }
+
+    [Test]
     public async Task Unapproved_certificate_authority_key_cannot_sign()
     {
         var signer = new FakeManagedSigner();

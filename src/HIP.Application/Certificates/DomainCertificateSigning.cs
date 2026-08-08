@@ -24,6 +24,13 @@ public enum DomainCertificateSigningStatus
 
 public sealed record DomainCertificateAuthorizedSigner(string AuthorityId, string KeyId);
 
+/// <summary>Private authorization evidence that permits signing after a required manual review.</summary>
+public sealed record DomainCertificateAuthorizedReview(
+    string ApplicationId,
+    string ReviewerId,
+    DateTimeOffset ReviewedAtUtc,
+    string Decision);
+
 /// <summary>Fail-closed allowlist for managed keys authorized to sign domain certificates.</summary>
 public sealed class DomainCertificateSigningAuthorityPolicy
 {
@@ -79,7 +86,8 @@ public sealed record DomainCertificateSigningDraft(
     string PublicCertificateUrl,
     DateTimeOffset LastVerificationAtUtc,
     DateTimeOffset? LastMonitoringAtUtc,
-    DomainCertificatePolicyEvaluationResult Evaluation);
+    DomainCertificatePolicyEvaluationResult Evaluation,
+    DomainCertificateAuthorizedReview? AuthorizedReview = null);
 
 public sealed record DomainTrustCertificatePayload(
     string CertificateId,
@@ -176,7 +184,7 @@ public sealed class DomainCertificateSigningService(
         {
             return Result(DomainCertificateSigningStatus.Ineligible);
         }
-        if (draft.Evaluation.Decision == DomainCertificatePolicyDecision.RequiresReview)
+        if (draft.Evaluation.Decision == DomainCertificatePolicyDecision.RequiresReview && draft.AuthorizedReview is null)
         {
             return Result(DomainCertificateSigningStatus.ReviewRequired);
         }
@@ -288,7 +296,8 @@ public sealed class DomainCertificateSigningService(
         ArgumentNullException.ThrowIfNull(draft.PublicFindingCodes);
         var domain = DomainInputValidator.ValidateAndNormalize(draft.Domain);
         if (!string.Equals(domain, draft.Domain, StringComparison.Ordinal) ||
-            draft.Evaluation.Decision != DomainCertificatePolicyDecision.Eligible ||
+            draft.Evaluation.Decision is not (DomainCertificatePolicyDecision.Eligible or DomainCertificatePolicyDecision.RequiresReview) ||
+            (draft.Evaluation.Decision == DomainCertificatePolicyDecision.Eligible && draft.AuthorizedReview is not null) ||
             !string.Equals(draft.Evaluation.Domain, domain, StringComparison.Ordinal) ||
             draft.Evaluation.RequestedLevel != draft.Level ||
             !string.Equals(draft.Evaluation.PolicyVersion, certificatePolicy.Version, StringComparison.Ordinal) ||
@@ -306,6 +315,7 @@ public sealed class DomainCertificateSigningService(
         ValidateOptionalText(draft.PublicDisplayName, 200, nameof(draft.PublicDisplayName));
         ValidateOptionalText(draft.PublicOrganizationName, 200, nameof(draft.PublicOrganizationName));
         ValidateOptionalText(draft.RegistrantPublicKeyId, 128, nameof(draft.RegistrantPublicKeyId));
+        ValidateAuthorizedReview(draft.AuthorizedReview, issuedAtUtc);
         var methods = draft.CompletedVerificationMethods.Distinct().Order().ToArray();
         if (methods.Length == 0)
         {
@@ -366,6 +376,28 @@ public sealed class DomainCertificateSigningService(
             (string.IsNullOrWhiteSpace(value) || value.Length > maximumLength || value.Any(char.IsControl)))
         {
             throw new ArgumentException("Public certificate text is invalid.", parameterName);
+        }
+    }
+
+    private static void ValidateAuthorizedReview(DomainCertificateAuthorizedReview? review, DateTimeOffset issuedAtUtc)
+    {
+        if (review is null) return;
+        ValidateToken(review.ApplicationId, 128, nameof(review.ApplicationId));
+        ValidatePrivateIdentifier(review.ReviewerId, 256, nameof(review.ReviewerId));
+        ValidateToken(review.Decision, 32, nameof(review.Decision));
+        if (!string.Equals(review.Decision, "Approved", StringComparison.Ordinal) ||
+            review.ReviewedAtUtc.Offset != TimeSpan.Zero || review.ReviewedAtUtc > issuedAtUtc)
+        {
+            throw new ArgumentException("Authorized certificate review is invalid.", nameof(review));
+        }
+    }
+
+    private static void ValidatePrivateIdentifier(string value, int maximumLength, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > maximumLength ||
+            value.Any(character => char.IsControl(character) || char.IsSurrogate(character)))
+        {
+            throw new ArgumentException("Private certificate identifier is invalid.", parameterName);
         }
     }
 

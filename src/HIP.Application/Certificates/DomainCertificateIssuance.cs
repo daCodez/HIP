@@ -231,7 +231,8 @@ public sealed class DomainCertificateIssuanceService(
                 .ThenBy(item => item.Status)
                 .ThenBy(item => item.PublicSummary, StringComparer.Ordinal)
                 .ToArray(),
-            evaluation.EvaluatedAtUtc);
+            evaluation.EvaluatedAtUtc,
+            draft.AuthorizedReview);
         return Digest(JsonSerializer.SerializeToUtf8Bytes(identity, SourceJsonOptions), canonicalizer);
     }
 
@@ -359,5 +360,6 @@ public sealed class DomainCertificateIssuanceService(
         DomainCertificatePolicyDecision Decision,
         string PublicMeaning,
         IReadOnlyCollection<DomainCertificateRequirementResult> Requirements,
-        DateTimeOffset EvaluatedAtUtc);
+        DateTimeOffset EvaluatedAtUtc,
+        DomainCertificateAuthorizedReview? AuthorizedReview);
 }
