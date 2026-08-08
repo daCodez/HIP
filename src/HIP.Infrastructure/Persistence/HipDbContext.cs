@@ -41,6 +41,18 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
     /// <summary>Gets the append-only domain certificate audit trail.</summary>
     public DbSet<HipDomainCertificateEventEntity> DomainCertificateEvents => Set<HipDomainCertificateEventEntity>();
 
+    /// <summary>Gets stable managed domains shared by individual and organization accounts.</summary>
+    public DbSet<HipManagedDomainEntity> ManagedDomains => Set<HipManagedDomainEntity>();
+
+    /// <summary>Gets domain-management organizations.</summary>
+    public DbSet<HipDomainOrganizationEntity> DomainOrganizations => Set<HipDomainOrganizationEntity>();
+
+    /// <summary>Gets organization-wide domain memberships.</summary>
+    public DbSet<HipOrganizationMembershipEntity> OrganizationMemberships => Set<HipOrganizationMembershipEntity>();
+
+    /// <summary>Gets direct per-domain access grants.</summary>
+    public DbSet<HipManagedDomainAccessEntity> ManagedDomainAccess => Set<HipManagedDomainAccessEntity>();
+
     /// <summary>
     /// Configures table names, keys, lengths, and indexes for HIP persistence.
     /// </summary>
@@ -116,5 +128,6 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
         });
 
         DomainCertificateModelConfiguration.Configure(modelBuilder);
+        ManagedDomainModelConfiguration.Configure(modelBuilder);
     }
 }

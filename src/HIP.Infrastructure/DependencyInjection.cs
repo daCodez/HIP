@@ -5,6 +5,7 @@ using HIP.Application.Certificates;
 using HIP.Application.Consumer;
 using HIP.Application.Devices;
 using HIP.Application.Dns;
+using HIP.Application.Domains;
 using HIP.Application.Identity;
 using HIP.Application.Platforms;
 using HIP.Application.Protocol;
@@ -96,6 +97,8 @@ public static class DependencyInjection
         services.AddScoped<IServiceClientRepository, EfServiceClientRepository>();
         services.AddScoped<ISigningKeyLifecycleRepository, EfSigningKeyLifecycleRepository>();
         services.AddScoped<IHipTrustReceiptRepository, EfHipTrustReceiptRepository>();
+        services.AddScoped<IManagedDomainRepository, EfManagedDomainRepository>();
+        services.AddScoped<IDomainManagementService, DomainManagementService>();
         services.AddScoped<EfDomainCertificateRepository>();
         services.AddScoped<IDomainCertificateRepository>(provider => provider.GetRequiredService<EfDomainCertificateRepository>());
         services.AddScoped<IDomainCertificateOwnerQuery>(provider => provider.GetRequiredService<EfDomainCertificateRepository>());
