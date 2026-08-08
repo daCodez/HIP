@@ -2196,6 +2196,44 @@ static void MapConsumerApis(RouteGroupBuilder consumerApi)
 /// <summary>Maps authenticated, membership-authorized domain-management endpoints.</summary>
 static void MapConsumerDomainApis(RouteGroupBuilder domainsApi)
 {
+    domainsApi.MapPost("/organizations", async (ManagedDomainOrganizationRequest request, HttpContext context, IAntiforgery antiforgery, IDomainManagementService domains, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try
+        {
+            var organization = await domains.CreateOrganizationAsync(ConsumerId(context), request.Name, token);
+            return Results.Created($"{ApiRoutes.Consumer}/domains/organizations/{Uri.EscapeDataString(organization.OrganizationId)}", organization);
+        }
+        catch (ArgumentException exception) { return Results.BadRequest(new ApiErrorResponse(exception.Message)); }
+    }).WithName("CreateManagedDomainOrganization");
+
+    domainsApi.MapPost("/organizations/{organizationId}/members", async (string organizationId, ManagedDomainMemberRequest request, HttpContext context, IAntiforgery antiforgery, IDomainManagementService domains, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try
+        {
+            await domains.AddOrganizationMemberAsync(ConsumerId(context), organizationId, request.UserId, request.Role, token);
+            return Results.NoContent();
+        }
+        catch (ArgumentException exception) { return Results.BadRequest(new ApiErrorResponse(exception.Message)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+    }).WithName("AddManagedDomainOrganizationMember");
+
+    domainsApi.MapPost("/{domainId}/members", async (string domainId, ManagedDomainMemberRequest request, HttpContext context, IAntiforgery antiforgery, IDomainManagementService domains, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try
+        {
+            await domains.AddDomainMemberAsync(ConsumerId(context), domainId, request.UserId, request.Role, token);
+            return Results.NoContent();
+        }
+        catch (ArgumentException exception) { return Results.BadRequest(new ApiErrorResponse(exception.Message)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+    }).WithName("AddManagedDomainMember");
+
     domainsApi.MapGet("/dashboard", async (
         string? search,
         HIP.Domain.Domains.ManagedDomainStatus? status,
@@ -3654,6 +3692,12 @@ public sealed record ManagedDomainVerificationStartRequest(HIP.Domain.Identity.V
 
 /// <summary>Requested certification level for a new managed-domain application.</summary>
 public sealed record ManagedDomainCertificateApplicationRequest(HIP.Domain.Certificates.DomainCertificateLevel RequestedLevel);
+
+/// <summary>Creates an organization used to group domains and memberships.</summary>
+public sealed record ManagedDomainOrganizationRequest(string Name);
+
+/// <summary>Assigns one non-owner role to an organization or stable domain.</summary>
+public sealed record ManagedDomainMemberRequest(string UserId, HIP.Domain.Domains.DomainAccessRole Role);
 
 /// <summary>Administrative approval or rejection of a pending managed-domain certificate application.</summary>
 public sealed record ManagedDomainCertificateReviewRequest(bool Approve, string? ReviewerNotes);

@@ -128,6 +128,27 @@ public sealed class DomainManagementServiceTests
         });
     }
 
+    [Test]
+    public async Task Domain_administrator_can_grant_direct_security_access_but_cannot_assign_owner()
+    {
+        var service = Service();
+        var domain = await service.RegisterAsync("owner", new RegisterManagedDomainRequest("example.com"), default);
+        await service.AddDomainMemberAsync("owner", domain.DomainId, "administrator", DomainAccessRole.Administrator, default);
+
+        await service.AddDomainMemberAsync(
+            "administrator", domain.DomainId, "security-manager", DomainAccessRole.SecurityManager, default);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(service.GetAsync("security-manager", domain.DomainId, default).Result?.AccessRole,
+                Is.EqualTo(DomainAccessRole.SecurityManager));
+            Assert.That(
+                async () => await service.AddDomainMemberAsync(
+                    "administrator", domain.DomainId, "second-owner", DomainAccessRole.Owner, default),
+                Throws.ArgumentException);
+        });
+    }
+
     private static DomainManagementService Service() => new(
         new InMemoryManagedDomainRepository(),
         new DomainRegistrationNormalizer(new TestPublicSuffixResolver()),

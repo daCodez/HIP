@@ -74,6 +74,8 @@ public interface IDomainManagementService
     Task<DomainOrganization> CreateOrganizationAsync(string actorId, string name, CancellationToken cancellationToken);
     /// <summary>Adds or changes an organization member when the actor can manage memberships.</summary>
     Task AddOrganizationMemberAsync(string actorId, string organizationId, string userId, DomainAccessRole role, CancellationToken cancellationToken);
+    /// <summary>Adds or changes a direct domain member when the actor can manage memberships.</summary>
+    Task AddDomainMemberAsync(string actorId, string domainId, string userId, DomainAccessRole role, CancellationToken cancellationToken);
     /// <summary>Returns a domain only when the actor has access, otherwise a uniform null result.</summary>
     Task<ManagedDomainAccessView?> GetAsync(string actorId, string domainId, CancellationToken cancellationToken);
     /// <summary>Lists only domains visible to the actor.</summary>
@@ -182,6 +184,25 @@ public sealed class DomainManagementService(
             .ConfigureAwait(false);
         await repository.AddOrUpdateOrganizationMembershipAsync(
             new OrganizationDomainMembership(normalizedOrganizationId, memberId, role, existing?.CreatedAtUtc ?? now, now),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task AddDomainMemberAsync(
+        string actorId,
+        string domainId,
+        string userId,
+        DomainAccessRole role,
+        CancellationToken cancellationToken)
+    {
+        var domain = await RequireDomainAsync(actorId, domainId, ManagedDomainAccessPolicy.CanManageMembers, cancellationToken)
+            .ConfigureAwait(false);
+        var memberId = NormalizeId(userId, nameof(userId));
+        RequireAssignableRole(role);
+        var now = timeProvider.GetUtcNow();
+        var existing = await repository.GetDomainAccessAsync(domain.DomainId, memberId, cancellationToken).ConfigureAwait(false);
+        await repository.AddOrUpdateDomainAccessAsync(
+            new ManagedDomainAccessGrant(domain.DomainId, memberId, role, existing?.CreatedAtUtc ?? now, now),
             cancellationToken).ConfigureAwait(false);
     }
 
