@@ -21,7 +21,7 @@ namespace HIP.Tests.Security;
 [TestFixture]
 public sealed class HipWebRouteAuthorizationClosureTests
 {
-    private const int ExpectedProtectedRouteCount = 137;
+    private const int ExpectedProtectedRouteCount = 144;
 
     private static readonly PrincipalKind[] HumanPrincipals = Enum.GetValues<PrincipalKind>();
 
@@ -83,6 +83,7 @@ public sealed class HipWebRouteAuthorizationClosureTests
                 PrincipalKind.Support,
                 PrincipalKind.ReadOnly),
             [AdminPolicies.CanManageDomainVerifications] = Allowed(PrincipalKind.Owner, PrincipalKind.Admin),
+            [AdminPolicies.CanManageAuthoritativeDns] = Allowed(PrincipalKind.Owner, PrincipalKind.Admin),
             [AdminPolicies.CanRevokeDomainVerifications] = Allowed(PrincipalKind.Owner),
             [AdminPolicies.RecentPrivilegedAuthentication] = Allowed(PrincipalKind.Owner, PrincipalKind.Admin),
             [ConsumerPolicies.CanUseConsumerPortal] = Allowed(PrincipalKind.Consumer),
@@ -184,6 +185,8 @@ public sealed class HipWebRouteAuthorizationClosureTests
         Route(HttpMethods.Post, "/api/v1/admin/reputation-overrides", AdminPolicies.CanApproveOverrides, AdminPolicies.RecentPrivilegedAuthentication),
         Route(HttpMethods.Post, "/api/v1/admin/reputation-overrides/{id}/approve", AdminPolicies.CanApproveOverrides, AdminPolicies.RecentPrivilegedAuthentication),
         Route(HttpMethods.Post, "/api/v1/admin/reputation-overrides/{id}/reject", AdminPolicies.CanApproveOverrides, AdminPolicies.RecentPrivilegedAuthentication),
+        Route(HttpMethods.Get, "/api/v1/admin/domain-certificate-applications/pending", AdminPolicies.CanViewReviews),
+        Route(HttpMethods.Post, "/api/v1/admin/domain-certificate-applications/{applicationId}/review", AdminPolicies.CanManageDomainVerifications, AdminPolicies.RecentPrivilegedAuthentication),
 
         // License and identity administration, including the human-only HUD simulator: 16 (83 cumulative).
         Route(HttpMethods.Post, "/api/v1/licenses/setup-codes", AdminPolicies.CanAdministerLicenses, AdminPolicies.RecentPrivilegedAuthentication),
@@ -231,7 +234,11 @@ public sealed class HipWebRouteAuthorizationClosureTests
         Route(HttpMethods.Get, "/api/v1/consumer/devices", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Post, "/api/v1/consumer/devices/{deviceId}/revoke", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Get, "/api/v1/consumer/domains", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Get, "/api/v1/consumer/domains/dashboard", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Post, "/api/v1/consumer/domains/organizations", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Post, "/api/v1/consumer/domains/organizations/{organizationId}/members", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Get, "/api/v1/consumer/domains/{domainId}", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Post, "/api/v1/consumer/domains/{domainId}/members", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Post, "/api/v1/consumer/domains", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Patch, "/api/v1/consumer/domains/{domainId}", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Delete, "/api/v1/consumer/domains/{domainId}", ConsumerPolicies.CanUseConsumerPortal),
@@ -243,7 +250,8 @@ public sealed class HipWebRouteAuthorizationClosureTests
         Route(HttpMethods.Post, "/api/v1/consumer/domains/{domainId}/certificate-applications", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Get, "/api/v1/consumer/domains/certificate-applications/{applicationId}", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Post, "/api/v1/consumer/domains/certificate-applications/{applicationId}/submit", ConsumerPolicies.CanUseConsumerPortal),
-        Route(HttpMethods.Post, "/api/v1/consumer/domains/certificate-applications/{applicationId}/withdraw", ConsumerPolicies.CanUseConsumerPortal)
+        Route(HttpMethods.Post, "/api/v1/consumer/domains/certificate-applications/{applicationId}/withdraw", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Post, "/api/v1/consumer/domains/certificate-applications/{applicationId}/issue", ConsumerPolicies.CanUseConsumerPortal)
     ];
 
     /// <summary>

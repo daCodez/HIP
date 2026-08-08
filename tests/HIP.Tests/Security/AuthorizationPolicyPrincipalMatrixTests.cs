@@ -102,6 +102,7 @@ public sealed class AuthorizationPolicyPrincipalMatrixTests
             PrincipalKind.Support,
             PrincipalKind.ReadOnly),
         Admin(AdminPolicies.CanManageDomainVerifications, PrincipalKind.Owner, PrincipalKind.Admin),
+        Admin(AdminPolicies.CanManageAuthoritativeDns, PrincipalKind.Owner, PrincipalKind.Admin),
         Admin(AdminPolicies.CanRevokeDomainVerifications, PrincipalKind.Owner),
         Admin(AdminPolicies.CanRequestPrivilegedStepUp, PrincipalKind.Owner, PrincipalKind.Admin),
         Admin(AdminPolicies.RecentPrivilegedAuthentication, PrincipalKind.Owner, PrincipalKind.Admin)
