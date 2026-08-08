@@ -48,6 +48,8 @@ test("persistent Page panel links findings to pointer-transparent page markers",
     await target.locator("#password").fill("do-not-read-this");
 
     await expect(panel.locator("#activeDomain")).toHaveText("Unsupported browser page");
+    await expect(panel.locator(".panel-header h1")).toHaveText("Website Trust");
+    await expect(panel.locator("#pluginVersion")).toContainText("v0.1.31");
     await expect(panel.getByRole("tab", { name: "Page" })).toHaveAttribute("aria-selected", "true");
     await expect(panel.getByRole("button", { name: "X-ray this page" })).toBeVisible();
     const started = await panel.evaluate(id => chrome.tabs.sendMessage(id, { type: "HIP_XRAY_START" }), tabId);
@@ -108,12 +110,16 @@ test("side-panel tabs are keyboard accessible in a narrow reduced-motion view", 
     await expect(panel.getByRole("tab", { name: "Site" })).toHaveAttribute("aria-selected", "true");
     await expect(panel.frameLocator("#siteFrame").locator("body")).toBeVisible();
     await expect(panel.frameLocator("#siteFrame").locator("#domain")).not.toBeEmpty();
-    await panel.screenshot({ path: testInfo.outputPath("site-tab.png"), fullPage: true });
+    await expect(panel.frameLocator("#siteFrame").locator(".popup-header")).toBeHidden();
+    await expect(panel.locator(".panel-header")).toBeVisible();
+    await panel.screenshot({ path: testInfo.outputPath("site-tab.png"), fullPage: false });
     await panel.keyboard.press("ArrowRight");
     await expect(panel.getByRole("tab", { name: "Settings" })).toHaveAttribute("aria-selected", "true");
     await expect(panel.locator("#settingsFrame")).toBeVisible();
     await expect(panel.frameLocator("#settingsFrame").locator("#settingsForm")).toBeVisible();
-    await panel.screenshot({ path: testInfo.outputPath("settings-tab.png"), fullPage: true });
+    await expect(panel.locator(".panel-header")).toBeVisible();
+    await expect.poll(async () => (await panel.locator(".panel-header").boundingBox())?.y ?? 999).toBeLessThan(80);
+    await panel.screenshot({ path: testInfo.outputPath("settings-tab.png"), fullPage: false });
     await panel.keyboard.press("Home");
     await expect(panel.getByRole("tab", { name: "Page" })).toHaveAttribute("aria-selected", "true");
 

@@ -80,7 +80,7 @@ An X-ray pass inspects at most 2,500 structural elements and 400 eligible text-s
 
 ## Settings
 
-Version 0.1.30 understands the live badge's current certificate lifecycle state
+Version 0.1.31 understands the live badge's current certificate lifecycle state
 without treating suspension, revocation, renewal, or expiry as a rewrite of the
 original signed certificate. The extension still verifies the badge signature,
 retrieves the certificate directly from HIP, and fails closed when the domain,

@@ -5,6 +5,7 @@ const tabs = [...document.querySelectorAll('[role="tab"]')];
 const panels = new Map(tabs.map(tab => [tab.id, document.getElementById(tab.getAttribute("aria-controls"))]));
 const page = {
   domain: document.getElementById("activeDomain"), empty: document.getElementById("pageEmpty"), message: document.getElementById("pageMessage"),
+  pluginVersion: document.getElementById("pluginVersion"),
   start: document.getElementById("startXray"), results: document.getElementById("pageResults"), status: document.getElementById("pageStatus"),
   score: document.getElementById("pageScore"), scoreBar: document.getElementById("scoreBar"), progress: document.getElementById("scanProgress"),
   findingCount: document.getElementById("findingCount"), visibleCount: document.getElementById("visibleFindingCount"), inspectedCount: document.getElementById("inspectedCount"),
@@ -14,6 +15,7 @@ const page = {
   inventory: document.getElementById("inventory"), inventorySummary: document.getElementById("inventorySummary"), loadMore: document.getElementById("loadMoreInventory"), loadMoreFindings: document.getElementById("loadMoreFindings"),
   announcer: document.getElementById("announcer"), siteFrame: document.getElementById("siteFrame")
 };
+page.pluginVersion.textContent = `HIP Plugin v${chrome.runtime.getManifest().version}-dev`;
 let currentState = null;
 let inventoryOffset = 0;
 let findingOffset = 0;

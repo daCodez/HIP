@@ -1,0 +1,18 @@
+.panel-header {
+  position: sticky;
+  top: 43px;
+  z-index: 4;
+  background: var(--bg);
+}
+
+.panel-header small {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.brand-shield {
+  flex: 0 0 auto;
+  object-fit: contain;
+}

@@ -7,10 +7,12 @@ const manifest = JSON.parse(await readFile(new URL("manifest.json", root), "utf8
 const background = await readFile(new URL("src/background.js", root), "utf8");
 const html = await readFile(new URL("src/sidepanel.html", root), "utf8");
 const popupHtml = await readFile(new URL("src/popup.html", root), "utf8");
+const popupCss = await readFile(new URL("src/popup.css", root), "utf8");
+const shellCss = await readFile(new URL("src/sidepanel-shell.css", root), "utf8").catch(() => "");
 const sidePanelScript = await readFile(new URL("src/sidepanel.js", root), "utf8");
 
 test("manifest opens the persistent side panel from the toolbar", () => {
-  assert.equal(manifest.version, "0.1.30");
+  assert.equal(manifest.version, "0.1.31");
   assert.ok(manifest.permissions.includes("sidePanel"));
   assert.equal(manifest.side_panel.default_path, "src/sidepanel.html");
   assert.equal("default_popup" in manifest.action, false);
@@ -25,9 +27,16 @@ test("side panel provides accessible Page, Site, and Settings tabs", () => {
   }
   assert.match(html, /role="tabpanel"/);
   assert.match(html, /<img[^>]+class="brand-shield"[^>]+src="\.\.\/assets\/hip-logo\.png"/);
+  assert.ok(html.indexOf('class="tabs"') < html.indexOf('class="panel-header"'));
+  assert.match(html, /<h1>Website Trust<\/h1>/);
+  assert.match(html, /id="pluginVersion"/);
+  assert.match(html, /href="sidepanel-shell\.css"/);
+  assert.match(shellCss, /\.panel-header\s*\{[^}]*position:\s*sticky[^}]*top:\s*43px/s);
+  assert.match(sidePanelScript, /chrome\.runtime\.getManifest\(\)\.version/);
   assert.match(html, /<button id="startXray"[^>]*>X-ray this page<\/button>/);
   assert.doesNotMatch(html, /class="brand-mark"[^>]*>\s*HIP\s*</);
   assert.doesNotMatch(sidePanelScript, /siteFrame\.src\s*=\s*["']about:blank["']/);
   assert.doesNotMatch(sidePanelScript, /page\.start\.hidden\s*=\s*!supported/);
   assert.match(popupHtml, /<img[^>]+class="brand-shield"[^>]+src="\.\.\/assets\/hip-logo\.png"/);
+  assert.match(popupCss, /body\.embedded\s+\.popup-header\s*\{[^}]*display:\s*none/);
 });

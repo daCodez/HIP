@@ -11,6 +11,7 @@ body {
 }
 
 body.embedded { width: auto; min-width: 0; }
+body.embedded .popup-header { display: none; }
 
 .popup-shell {
   padding: 16px;
