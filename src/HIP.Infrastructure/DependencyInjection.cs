@@ -102,6 +102,9 @@ public static class DependencyInjection
         services.AddScoped<IDomainManagementService, DomainManagementService>();
         services.AddScoped<IManagedDomainVerificationAuditRepository, EfManagedDomainVerificationAuditRepository>();
         services.AddScoped<ManagedDomainVerificationService>();
+        services.AddScoped<IManagedDomainCertificateApplicationRepository, EfManagedDomainCertificateApplicationRepository>();
+        services.AddScoped<IManagedDomainCertificationEvidenceSource, EfManagedDomainCertificationEvidenceSource>();
+        services.AddScoped<ManagedDomainCertificateApplicationService>();
         services.AddScoped<EfDomainCertificateRepository>();
         services.AddScoped<IDomainCertificateRepository>(provider => provider.GetRequiredService<EfDomainCertificateRepository>());
         services.AddScoped<IDomainCertificateOwnerQuery>(provider => provider.GetRequiredService<EfDomainCertificateRepository>());

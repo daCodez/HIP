@@ -3,6 +3,8 @@ using HIP.Domain.Domains;
 using HIP.Infrastructure.Persistence;
 using HIP.Infrastructure.Persistence.Repositories;
 using HIP.Domain.Identity;
+using HIP.Application.Certificates;
+using HIP.Domain.Certificates;
 using Microsoft.EntityFrameworkCore;
 
 namespace HIP.Tests.Persistence;
@@ -102,6 +104,36 @@ public sealed class ManagedDomainPersistenceTests
             Assert.That(events, Has.Count.EqualTo(2));
             Assert.That(events.Select(item => item.EventId), Is.EqualTo(new[] { "event_1", "event_2" }));
             Assert.That(events.All(item => item.TokenDigest.Length == 71), Is.True);
+        });
+    }
+
+    [Test]
+    public async Task Certificate_application_round_trips_eligibility_and_history_fields()
+    {
+        var options = new DbContextOptionsBuilder<HipDbContext>()
+            .UseInMemoryDatabase($"hip-managed-domain-application-{Guid.NewGuid():N}").Options;
+        var now = new DateTimeOffset(2026, 8, 8, 12, 0, 0, TimeSpan.Zero);
+        await using var context = new HipDbContext(options);
+        await new EfManagedDomainRepository(context).AddDomainAsync(new ManagedDomain(
+            "domain_1", "example.com", "owner", null, ManagedDomainStatus.Active,
+            DomainDnssecStatus.Valid, null, now, now, 1), default);
+        var evaluation = new DomainCertificatePolicyEvaluationResult(
+            "example.com", DomainCertificateLevel.Certified, "policy-v1",
+            DomainCertificatePolicyDecision.RequiresReview, "Review required.",
+            [new("review.certified", DomainCertificateRequirementStatus.ReviewRequired, "Review required.")], now);
+        var repository = new EfManagedDomainCertificateApplicationRepository(context);
+        await repository.AddAsync(new ManagedDomainCertificateApplication(
+            "application_1", "domain_1", "example.com", DomainCertificateLevel.Certified, "owner", null,
+            DomainCertificateApplicationStatus.PendingReview, now, now, evaluation,
+            ["review.certified"], [], null, null, null, null, 1), default);
+
+        var stored = await repository.GetAsync("application_1", default);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(stored?.Status, Is.EqualTo(DomainCertificateApplicationStatus.PendingReview));
+            Assert.That(stored?.Eligibility?.PolicyVersion, Is.EqualTo("policy-v1"));
+            Assert.That(stored?.SecurityFindings, Is.EqualTo(new[] { "review.certified" }));
         });
     }
 }

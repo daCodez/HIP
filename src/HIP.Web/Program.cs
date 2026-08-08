@@ -2285,6 +2285,50 @@ static void MapConsumerDomainApis(RouteGroupBuilder domainsApi)
         try { return Results.Ok(await verification.ListHistoryAsync(ConsumerId(context), domainId, token)); }
         catch (DomainAccessDeniedException) { return Results.NotFound(); }
     }).WithName("ListManagedDomainVerificationHistory");
+
+    domainsApi.MapGet("/{domainId}/certificate-applications", async (string domainId, HttpContext context, ManagedDomainCertificateApplicationService applications, CancellationToken token) =>
+    {
+        try { return Results.Ok(await applications.ListAsync(ConsumerId(context), domainId, token)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+    }).WithName("ListManagedDomainCertificateApplications");
+
+    domainsApi.MapPost("/{domainId}/certificate-applications", async (string domainId, ManagedDomainCertificateApplicationRequest request, HttpContext context, IAntiforgery antiforgery, ManagedDomainCertificateApplicationService applications, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try
+        {
+            var created = await applications.CreateDraftAsync(ConsumerId(context), domainId, request.RequestedLevel, token);
+            return Results.Created($"{ApiRoutes.Consumer}/domains/certificate-applications/{Uri.EscapeDataString(created.ApplicationId)}", created);
+        }
+        catch (ArgumentException exception) { return Results.BadRequest(new ApiErrorResponse(exception.Message)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+        catch (InvalidOperationException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
+    }).WithName("CreateManagedDomainCertificateApplication");
+
+    domainsApi.MapGet("/certificate-applications/{applicationId}", async (string applicationId, HttpContext context, ManagedDomainCertificateApplicationService applications, CancellationToken token) =>
+    {
+        try { return Results.Ok(await applications.GetAsync(ConsumerId(context), applicationId, token)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+    }).WithName("GetManagedDomainCertificateApplication");
+
+    domainsApi.MapPost("/certificate-applications/{applicationId}/submit", async (string applicationId, HttpContext context, IAntiforgery antiforgery, ManagedDomainCertificateApplicationService applications, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try { return Results.Ok(await applications.SubmitAsync(ConsumerId(context), applicationId, token)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+        catch (InvalidOperationException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
+    }).WithName("SubmitManagedDomainCertificateApplication");
+
+    domainsApi.MapPost("/certificate-applications/{applicationId}/withdraw", async (string applicationId, HttpContext context, IAntiforgery antiforgery, ManagedDomainCertificateApplicationService applications, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try { return Results.Ok(await applications.WithdrawAsync(ConsumerId(context), applicationId, token)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+        catch (InvalidOperationException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
+    }).WithName("WithdrawManagedDomainCertificateApplication");
 }
 
 /// <summary>Maps consumer-owned device registration, listing, and revocation endpoints.</summary>
@@ -3552,6 +3596,9 @@ public sealed record ManagedDomainTransferRequest(string NewOwnerId);
 
 /// <summary>Requested managed-domain ownership verification method.</summary>
 public sealed record ManagedDomainVerificationStartRequest(HIP.Domain.Identity.VerificationMethod Method);
+
+/// <summary>Requested certification level for a new managed-domain application.</summary>
+public sealed record ManagedDomainCertificateApplicationRequest(HIP.Domain.Certificates.DomainCertificateLevel RequestedLevel);
 
 /// <summary>
 /// Carries a review status decision. <paramref name="ActorId"/> is compatibility-only and never trusted for attribution.

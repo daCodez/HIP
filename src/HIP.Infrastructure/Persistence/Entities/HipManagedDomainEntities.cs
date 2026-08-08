@@ -1,5 +1,6 @@
 using HIP.Domain.Domains;
 using HIP.Domain.Identity;
+using HIP.Domain.Certificates;
 
 namespace HIP.Infrastructure.Persistence.Entities;
 
@@ -33,6 +34,28 @@ public sealed class HipManagedDomainVerificationEventEntity
     public int ChallengeVersion { get; set; }
     public DateTimeOffset OccurredAtUtc { get; set; }
     public DateTimeOffset? ChallengeExpiresAtUtc { get; set; }
+}
+
+/// <summary>One immutable-identity, history-preserving managed-domain certificate application.</summary>
+public sealed class HipManagedDomainCertificateApplicationEntity
+{
+    public required string ApplicationId { get; set; }
+    public required string DomainId { get; set; }
+    public required string DomainName { get; set; }
+    public DomainCertificateLevel RequestedLevel { get; set; }
+    public required string ApplicantId { get; set; }
+    public string? OrganizationId { get; set; }
+    public DomainCertificateApplicationStatus Status { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset? SubmittedAtUtc { get; set; }
+    public string? EligibilityJson { get; set; }
+    public required string SecurityFindingsJson { get; set; }
+    public required string RequiredRemediationJson { get; set; }
+    public string? ReviewerId { get; set; }
+    public string? ReviewerNotes { get; set; }
+    public string? Decision { get; set; }
+    public DateTimeOffset? DecisionAtUtc { get; set; }
+    public long Version { get; set; }
 }
 
 /// <summary>Organization that can group managed domains and memberships.</summary>

@@ -62,6 +62,31 @@ internal static class ManagedDomainModelConfiguration
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<HipManagedDomainCertificateApplicationEntity>(entity =>
+        {
+            entity.ToTable("hip_managed_domain_certificate_applications");
+            entity.HasKey(item => item.ApplicationId);
+            entity.Property(item => item.ApplicationId).HasMaxLength(128);
+            entity.Property(item => item.DomainId).HasMaxLength(256).IsRequired();
+            entity.Property(item => item.DomainName).HasMaxLength(253).IsRequired();
+            entity.Property(item => item.RequestedLevel).HasConversion<string>().HasMaxLength(32);
+            entity.Property(item => item.ApplicantId).HasMaxLength(256).IsRequired();
+            entity.Property(item => item.OrganizationId).HasMaxLength(256);
+            entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(32);
+            entity.Property(item => item.SecurityFindingsJson).IsRequired();
+            entity.Property(item => item.RequiredRemediationJson).IsRequired();
+            entity.Property(item => item.ReviewerId).HasMaxLength(256);
+            entity.Property(item => item.ReviewerNotes).HasMaxLength(2000);
+            entity.Property(item => item.Decision).HasMaxLength(500);
+            entity.Property(item => item.Version).IsConcurrencyToken();
+            entity.HasIndex(item => new { item.DomainId, item.CreatedAtUtc });
+            entity.HasIndex(item => item.Status);
+            entity.HasOne<HipManagedDomainEntity>()
+                .WithMany()
+                .HasForeignKey(item => item.DomainId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<HipOrganizationMembershipEntity>(entity =>
         {
             entity.ToTable("hip_organization_memberships");

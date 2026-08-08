@@ -21,7 +21,7 @@ namespace HIP.Tests.Security;
 [TestFixture]
 public sealed class HipWebRouteAuthorizationClosureTests
 {
-    private const int ExpectedProtectedRouteCount = 132;
+    private const int ExpectedProtectedRouteCount = 137;
 
     private static readonly PrincipalKind[] HumanPrincipals = Enum.GetValues<PrincipalKind>();
 
@@ -238,7 +238,12 @@ public sealed class HipWebRouteAuthorizationClosureTests
         Route(HttpMethods.Post, "/api/v1/consumer/domains/{domainId}/transfer", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Post, "/api/v1/consumer/domains/{domainId}/verification", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Post, "/api/v1/consumer/domains/{domainId}/verification/check", ConsumerPolicies.CanUseConsumerPortal),
-        Route(HttpMethods.Get, "/api/v1/consumer/domains/{domainId}/verification/history", ConsumerPolicies.CanUseConsumerPortal)
+        Route(HttpMethods.Get, "/api/v1/consumer/domains/{domainId}/verification/history", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Get, "/api/v1/consumer/domains/{domainId}/certificate-applications", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Post, "/api/v1/consumer/domains/{domainId}/certificate-applications", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Get, "/api/v1/consumer/domains/certificate-applications/{applicationId}", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Post, "/api/v1/consumer/domains/certificate-applications/{applicationId}/submit", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Post, "/api/v1/consumer/domains/certificate-applications/{applicationId}/withdraw", ConsumerPolicies.CanUseConsumerPortal)
     ];
 
     /// <summary>

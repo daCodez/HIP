@@ -5,9 +5,14 @@ public enum DomainCertificateApplicationStatus
 {
     Draft,
     Submitted,
+    Evaluating,
+    ActionRequired,
+    PendingReview,
     ChangesRequested,
     Approved,
-    Denied
+    Denied,
+    Rejected,
+    Withdrawn
 }
 
 /// <summary>Versioned applicant declarations required before HIP accepts a certificate application.</summary>
