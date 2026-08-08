@@ -98,6 +98,30 @@ public sealed class DomainCertificateRepositoryTests
     }
 
     [Test]
+    public async Task PostgreSql_microsecond_precision_does_not_invalidate_signed_certificate_timestamps()
+    {
+        await using var context = Context();
+        var repository = Repository(context);
+        var record = RecordWithSubMicrosecondTimestamps();
+        await repository.TryCreateIssuedAsync(record, CancellationToken.None);
+        context.ChangeTracker.Clear();
+
+        var certificate = await context.DomainCertificates.SingleAsync();
+        certificate.IssuedAtUtc = ToPostgreSqlPrecision(certificate.IssuedAtUtc!.Value);
+        certificate.ExpiresAtUtc = ToPostgreSqlPrecision(certificate.ExpiresAtUtc!.Value);
+        certificate.LastVerificationAtUtc = ToPostgreSqlPrecision(certificate.LastVerificationAtUtc!.Value);
+        certificate.LastMonitoringAtUtc = ToPostgreSqlPrecision(certificate.LastMonitoringAtUtc!.Value);
+        var issuanceEvent = await context.DomainCertificateEvents.SingleAsync();
+        issuanceEvent.OccurredAtUtc = ToPostgreSqlPrecision(issuanceEvent.OccurredAtUtc);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var loaded = await repository.GetCurrentByDomainAsync("example.com", CancellationToken.None);
+
+        Assert.That(loaded?.SignedCertificateJson, Is.EqualTo(record.SignedCertificateJson));
+    }
+
+    [Test]
     public async Task Live_status_can_change_without_rewriting_the_signed_issuance_payload()
     {
         await using var context = Context();
@@ -671,6 +695,31 @@ public sealed class DomainCertificateRepositoryTests
                 "HIP issued the domain certificate.",
                 Now));
     }
+
+    private static HipStoredDomainCertificate RecordWithSubMicrosecondTimestamps()
+    {
+        var original = Record();
+        var issuedAtUtc = Now.AddTicks(4);
+        var payload = original.Certificate.Payload with
+        {
+            IssuedAtUtc = issuedAtUtc,
+            ExpiresAtUtc = Now.AddDays(365).AddTicks(4),
+            LastVerificationAtUtc = Now.AddMinutes(-10).AddTicks(4),
+            LastMonitoringAtUtc = Now.AddMinutes(-5).AddTicks(4)
+        };
+        var certificate = original.Certificate with { Payload = payload };
+        var json = DomainTrustCertificateJson.Serialize(certificate);
+        return original with
+        {
+            Certificate = certificate,
+            SignedCertificateJson = json,
+            CertificateDigest = Digest(json),
+            IssuanceEvent = original.IssuanceEvent with { OccurredAtUtc = issuedAtUtc }
+        };
+    }
+
+    private static DateTimeOffset ToPostgreSqlPrecision(DateTimeOffset value) =>
+        value.AddTicks(-(value.Ticks % TimeSpan.TicksPerMicrosecond));
     private static HipStoredDomainCertificate PromotedRecord(DateTimeOffset checkedAt)
     {
         var original = Record();
