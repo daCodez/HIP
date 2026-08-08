@@ -24,7 +24,8 @@ public sealed class DomainCertificateMonitoringPromotionServiceTests
             persistence,
             signer,
             new Rfc8785CanonicalJsonService(),
-            DomainCertificatePublicEndpointOptions.Default);
+            DomainCertificatePublicEndpointOptions.Default,
+            ProductionAuthorityPolicy());
         var state = Enrollment();
         var scan = ScanResult();
         var check = Check();
@@ -46,6 +47,39 @@ public sealed class DomainCertificateMonitoringPromotionServiceTests
             Assert.That(persistence.Promotion?.Certificate.Certificate.Payload.Level,
                 Is.EqualTo(DomainCertificateLevel.Monitored));
             Assert.That(persistence.Promotion?.Certificate.Certificate.Payload.CertificateVersion, Is.EqualTo(2));
+        });
+    }
+
+    [Test]
+    public async Task Eligible_monitoring_reissues_monitored_certificate_from_unauthorized_legacy_signer()
+    {
+        var current = LegacyMonitoredCertificate();
+        var certificates = new FixedCertificateRepository(current);
+        var persistence = new RecordingMonitoringRepository();
+        var signer = new RecordingSigner();
+        var service = new DomainCertificateMonitoringPromotionService(
+            certificates,
+            persistence,
+            signer,
+            new Rfc8785CanonicalJsonService(),
+            DomainCertificatePublicEndpointOptions.Default,
+            ProductionAuthorityPolicy());
+        var state = Enrollment() with
+        {
+            EnrollmentStatus = DomainEnrollmentStatus.Monitored,
+            CertificateLevel = DomainCertificateLevel.Monitored
+        };
+        var check = Check() with { ExpectedStatus = DomainEnrollmentStatus.Monitored };
+
+        var result = await service.PromoteAsync(state, ScanResult(), check, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateMonitoringPromotionStatus.Promoted));
+            Assert.That(signer.Draft?.CertificateVersion, Is.EqualTo(5));
+            Assert.That(signer.Draft?.Level, Is.EqualTo(DomainCertificateLevel.Monitored));
+            Assert.That(persistence.Promotion?.ExpectedCertificateId,
+                Is.EqualTo(current.Certificate.Payload.CertificateId));
         });
     }
 
@@ -126,6 +160,38 @@ public sealed class DomainCertificateMonitoringPromotionServiceTests
                 "HIP issued the verified certificate.",
                 certificate.Payload.IssuedAtUtc));
     }
+
+    private static HipStoredDomainCertificate LegacyMonitoredCertificate()
+    {
+        var current = CurrentCertificate();
+        var certificate = current.Certificate with
+        {
+            Payload = current.Certificate.Payload with
+            {
+                CertificateId = "hip-domain-cert-legacy-v4",
+                CertificateVersion = 4,
+                Level = DomainCertificateLevel.Monitored,
+                LastMonitoringAtUtc = Now.AddHours(-1)
+            },
+            Signature = current.Certificate.Signature with
+            {
+                AuthorityId = "hip:development:web-certificate-authority",
+                KeyId = "development-legacy-key"
+            }
+        };
+        return current with
+        {
+            Certificate = certificate,
+            SignedCertificateJson = DomainTrustCertificateJson.Serialize(certificate)
+        };
+    }
+
+    private static DomainCertificateSigningAuthorityPolicy ProductionAuthorityPolicy() =>
+        new([
+            new DomainCertificateAuthorizedSigner(
+                "hip:service:domain-certificate-authority",
+                "certificate-key-1")
+        ]);
 
     private sealed class FixedCertificateRepository(HipStoredDomainCertificate current)
         : IDomainCertificateRepository

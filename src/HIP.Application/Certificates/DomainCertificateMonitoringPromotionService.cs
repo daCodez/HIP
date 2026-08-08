@@ -13,7 +13,8 @@ public sealed class DomainCertificateMonitoringPromotionService(
     IDomainCertificateMonitoringRepository monitoringRepository,
     IDomainCertificateSigningService signingService,
     ICanonicalJsonService canonicalJsonService,
-    DomainCertificatePublicEndpointOptions endpointOptions)
+    DomainCertificatePublicEndpointOptions endpointOptions,
+    DomainCertificateSigningAuthorityPolicy signingAuthorityPolicy)
     : IDomainCertificateMonitoringPromotionService
 {
     public async Task<DomainCertificateMonitoringPromotionResult> PromoteAsync(
@@ -48,7 +49,8 @@ public sealed class DomainCertificateMonitoringPromotionService(
             return Result(DomainCertificateMonitoringPromotionStatus.Conflict);
         }
 
-        if (current!.Certificate.Payload.Level == DomainCertificateLevel.Monitored)
+        if (current!.Certificate.Payload.Level == DomainCertificateLevel.Monitored &&
+            IsSignedByAuthorizedAuthority(current.Certificate, signingAuthorityPolicy))
         {
             var refresh = await monitoringRepository.TryApplyCheckAsync(check, cancellationToken)
                 .ConfigureAwait(false);
@@ -178,6 +180,13 @@ public sealed class DomainCertificateMonitoringPromotionService(
         current.Certificate.Payload.Status == DomainCertificateStatus.Active &&
         current.Certificate.Payload.Level == state.CertificateLevel &&
         current.Certificate.Payload.Level is DomainCertificateLevel.Verified or DomainCertificateLevel.Monitored;
+
+    private static bool IsSignedByAuthorizedAuthority(
+        SignedDomainTrustCertificate certificate,
+        DomainCertificateSigningAuthorityPolicy signingAuthorityPolicy) =>
+        signingAuthorityPolicy.IsAuthorized(
+            certificate.Signature.AuthorityId,
+            certificate.Signature.KeyId);
 
     private static string NextCertificateId(string enrollmentId, string domain, int version)
     {
