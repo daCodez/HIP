@@ -22,7 +22,12 @@ public sealed record HipStoredDomainCertificate(
     string CertificateDigest,
     string SourceDecisionDigest,
     DomainCertificateAuditEvent IssuanceEvent,
-    DomainCertificateStatus CurrentStatus = DomainCertificateStatus.Active);
+    DomainCertificateStatus CurrentStatus = DomainCertificateStatus.Active,
+    string? ManagedDomainId = null,
+    string? OrganizationId = null,
+    string? ApplicationId = null,
+    string? PublicCertificateNumber = null,
+    DomainCertificateIssuanceSnapshot? Snapshot = null);
 
 /// <summary>Outcome of an insert-only certificate issuance write.</summary>
 public enum DomainCertificateRepositoryWriteStatus

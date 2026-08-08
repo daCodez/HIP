@@ -31,6 +31,40 @@ public sealed class DomainCertificateIssuanceServiceTests
     }
 
     [Test]
+    public async Task Managed_domain_metadata_and_issuance_snapshot_are_committed_atomically()
+    {
+        var signed = CertificateTestData.SignedCertificate();
+        var repository = new FakeRepository();
+        var service = new DomainCertificateIssuanceService(
+            new FakeSigningService(new DomainCertificateSigningResult(DomainCertificateSigningStatus.Signed, signed)),
+            repository,
+            new HIP.Application.Protocol.Rfc8785CanonicalJsonService());
+        var original = CertificateTestData.Request();
+        var snapshot = new DomainCertificateIssuanceSnapshot(
+            92, 90, 88, 7, "Safe", true, HIP.Domain.Domains.DomainDnssecStatus.Valid,
+            "scan_1", "rules-v1", original.Draft.Evaluation.PolicyVersion, signed.Payload.IssuedAtUtc);
+        var request = original with
+        {
+            ManagedDomainId = "domain_1",
+            OrganizationId = "org_1",
+            ApplicationId = "application_1",
+            PublicCertificateNumber = "HIP-2026-ABCDEF123456",
+            Snapshot = snapshot
+        };
+
+        var result = await service.IssueAsync(request, default);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateIssuanceStatus.Issued));
+            Assert.That(repository.Created?.ManagedDomainId, Is.EqualTo("domain_1"));
+            Assert.That(repository.Created?.ApplicationId, Is.EqualTo("application_1"));
+            Assert.That(repository.Created?.PublicCertificateNumber, Is.EqualTo("HIP-2026-ABCDEF123456"));
+            Assert.That(repository.Created?.Snapshot, Is.EqualTo(snapshot));
+        });
+    }
+
+    [Test]
     public async Task Exact_retry_returns_existing_without_signing_again()
     {
         var signed = CertificateTestData.SignedCertificate();

@@ -70,7 +70,28 @@ public sealed class HipDomainCertificateEntity
     public string? CertificateDigest { get; set; }
     public string? SourceDecisionDigest { get; set; }
     public string? RevocationStatusUrl { get; set; }
+    public string? ManagedDomainId { get; set; }
+    public string? OrganizationId { get; set; }
+    public string? ApplicationId { get; set; }
+    public string? PublicCertificateNumber { get; set; }
     public long AggregateVersion { get; set; }
+}
+
+/// <summary>Immutable security and score snapshot captured with certificate issuance or renewal.</summary>
+public sealed class HipDomainCertificateSnapshotEntity
+{
+    public required string CertificateId { get; set; }
+    public int HipScore { get; set; }
+    public int? DomainTrustScore { get; set; }
+    public int? PageTrustScore { get; set; }
+    public int? ContentRiskScore { get; set; }
+    public required string RelevantSecurityStatus { get; set; }
+    public bool HttpsAvailable { get; set; }
+    public HIP.Domain.Domains.DomainDnssecStatus DnssecStatus { get; set; }
+    public string? ScanId { get; set; }
+    public required string RuleVersion { get; set; }
+    public required string PolicyVersion { get; set; }
+    public DateTimeOffset EvaluatedAtUtc { get; set; }
 }
 
 /// <summary>Append-only, privacy-safe event in a domain certificate audit trail.</summary>

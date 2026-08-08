@@ -19,15 +19,18 @@ public sealed class DomainCertificatePersistenceModelTests
         var enrollment = model.FindEntityType("HIP.Infrastructure.Persistence.Entities.HipDomainEnrollmentEntity");
         var certificate = model.FindEntityType("HIP.Infrastructure.Persistence.Entities.HipDomainCertificateEntity");
         var auditEvent = model.FindEntityType("HIP.Infrastructure.Persistence.Entities.HipDomainCertificateEventEntity");
+        var snapshot = model.FindEntityType("HIP.Infrastructure.Persistence.Entities.HipDomainCertificateSnapshotEntity");
 
         Assert.Multiple(() =>
         {
             Assert.That(enrollment, Is.Not.Null);
             Assert.That(certificate, Is.Not.Null);
             Assert.That(auditEvent, Is.Not.Null);
+            Assert.That(snapshot, Is.Not.Null);
             Assert.That(enrollment!.GetTableName(), Is.EqualTo("hip_domain_enrollments"));
             Assert.That(certificate!.GetTableName(), Is.EqualTo("hip_domain_certificates"));
             Assert.That(auditEvent!.GetTableName(), Is.EqualTo("hip_domain_certificate_events"));
+            Assert.That(snapshot!.GetTableName(), Is.EqualTo("hip_domain_certificate_snapshots"));
             Assert.That(HasIndex(enrollment!, "Domain"), Is.True);
             Assert.That(HasIndex(enrollment!, "OwnerId"), Is.True);
             Assert.That(HasIndex(enrollment!, "Status"), Is.True);

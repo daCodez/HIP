@@ -59,15 +59,39 @@ internal static class DomainCertificateModelConfiguration
             entity.Property(item => item.CertificateDigest).HasMaxLength(71);
             entity.Property(item => item.SourceDecisionDigest).HasMaxLength(71);
             entity.Property(item => item.RevocationStatusUrl).HasMaxLength(512);
+            entity.Property(item => item.ManagedDomainId).HasMaxLength(256);
+            entity.Property(item => item.OrganizationId).HasMaxLength(256);
+            entity.Property(item => item.ApplicationId).HasMaxLength(128);
+            entity.Property(item => item.PublicCertificateNumber).HasMaxLength(64);
             entity.Property(item => item.AggregateVersion).IsConcurrencyToken();
             entity.HasIndex(item => item.Domain).IsUnique().HasFilter("\"IsCurrent\" = TRUE");
             entity.HasIndex(item => item.OwnerId);
             entity.HasIndex(item => item.Status);
             entity.HasIndex(item => item.ExpiresAtUtc);
             entity.HasIndex(item => item.EnrollmentId);
+            entity.HasIndex(item => item.ManagedDomainId);
+            entity.HasIndex(item => item.ApplicationId);
+            entity.HasIndex(item => item.PublicCertificateNumber).IsUnique();
             entity.HasOne<HipDomainEnrollmentEntity>()
                 .WithMany()
                 .HasForeignKey(item => item.EnrollmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<HipDomainCertificateSnapshotEntity>(entity =>
+        {
+            entity.ToTable("hip_domain_certificate_snapshots");
+            entity.HasKey(item => item.CertificateId);
+            entity.Property(item => item.CertificateId).HasMaxLength(128);
+            entity.Property(item => item.RelevantSecurityStatus).HasMaxLength(80).IsRequired();
+            entity.Property(item => item.DnssecStatus).HasConversion<string>().HasMaxLength(32);
+            entity.Property(item => item.ScanId).HasMaxLength(220);
+            entity.Property(item => item.RuleVersion).HasMaxLength(128).IsRequired();
+            entity.Property(item => item.PolicyVersion).HasMaxLength(128).IsRequired();
+            entity.HasIndex(item => item.ScanId);
+            entity.HasOne<HipDomainCertificateEntity>()
+                .WithOne()
+                .HasForeignKey<HipDomainCertificateSnapshotEntity>(item => item.CertificateId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

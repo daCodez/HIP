@@ -1394,6 +1394,12 @@ public sealed class EfDomainCertificateRepository(
         }
 
         dbContext.DomainCertificates.Add(ToCertificateEntity(certificate));
+        if (certificate.Snapshot is not null)
+        {
+            dbContext.DomainCertificateSnapshots.Add(ToSnapshotEntity(
+                certificate.Certificate.Payload.CertificateId,
+                certificate.Snapshot));
+        }
         dbContext.DomainCertificateEvents.Add(ToEventEntity(certificate));
         try
         {
@@ -1462,7 +1468,12 @@ public sealed class EfDomainCertificateRepository(
                 auditEvent.ReasonCode,
                 auditEvent.PublicSummary,
                 auditEvent.OccurredAtUtc),
-            entity.Status);
+            entity.Status,
+            entity.ManagedDomainId,
+            entity.OrganizationId,
+            entity.ApplicationId,
+            entity.PublicCertificateNumber,
+            await SnapshotAsync(entity.CertificateId, cancellationToken));
         Validate(stored, requireInitialActiveStatus: false);
         ValidateIndexes(entity, stored);
         return stored;
@@ -1510,9 +1521,41 @@ public sealed class EfDomainCertificateRepository(
             PublicRiskClassification = payload.PublicRiskClassification.ToString(),
             PublicCertificateUrl = payload.PublicCertificateUrl,
             RevocationStatusUrl = payload.RevocationStatusUrl,
+            ManagedDomainId = stored.ManagedDomainId,
+            OrganizationId = stored.OrganizationId,
+            ApplicationId = stored.ApplicationId,
+            PublicCertificateNumber = stored.PublicCertificateNumber,
             AggregateVersion = 1
         };
     }
+
+    private async Task<DomainCertificateIssuanceSnapshot?> SnapshotAsync(string certificateId, CancellationToken cancellationToken)
+    {
+        var item = await dbContext.DomainCertificateSnapshots.AsNoTracking()
+            .SingleOrDefaultAsync(candidate => candidate.CertificateId == certificateId, cancellationToken);
+        return item is null ? null : new DomainCertificateIssuanceSnapshot(
+            item.HipScore, item.DomainTrustScore, item.PageTrustScore, item.ContentRiskScore,
+            item.RelevantSecurityStatus, item.HttpsAvailable, item.DnssecStatus, item.ScanId,
+            item.RuleVersion, item.PolicyVersion, item.EvaluatedAtUtc);
+    }
+
+    private static HipDomainCertificateSnapshotEntity ToSnapshotEntity(
+        string certificateId,
+        DomainCertificateIssuanceSnapshot snapshot) => new()
+    {
+        CertificateId = certificateId,
+        HipScore = snapshot.HipScore,
+        DomainTrustScore = snapshot.DomainTrustScore,
+        PageTrustScore = snapshot.PageTrustScore,
+        ContentRiskScore = snapshot.ContentRiskScore,
+        RelevantSecurityStatus = snapshot.RelevantSecurityStatus,
+        HttpsAvailable = snapshot.HttpsAvailable,
+        DnssecStatus = snapshot.DnssecStatus,
+        ScanId = snapshot.ScanId,
+        RuleVersion = snapshot.RuleVersion,
+        PolicyVersion = snapshot.PolicyVersion,
+        EvaluatedAtUtc = snapshot.EvaluatedAtUtc
+    };
 
     private static HipDomainCertificateEventEntity ToEventEntity(HipStoredDomainCertificate stored) => new()
     {

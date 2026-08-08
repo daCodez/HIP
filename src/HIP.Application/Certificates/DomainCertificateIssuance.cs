@@ -6,12 +6,31 @@ using HIP.Application.Protocol;
 
 namespace HIP.Application.Certificates;
 
+/// <summary>Immutable evidence captured at certificate issuance or renewal time.</summary>
+public sealed record DomainCertificateIssuanceSnapshot(
+    int HipScore,
+    int? DomainTrustScore,
+    int? PageTrustScore,
+    int? ContentRiskScore,
+    string RelevantSecurityStatus,
+    bool HttpsAvailable,
+    HIP.Domain.Domains.DomainDnssecStatus DnssecStatus,
+    string? ScanId,
+    string RuleVersion,
+    string PolicyVersion,
+    DateTimeOffset EvaluatedAtUtc);
+
 /// <summary>Authorized application request to issue one policy-evaluated domain certificate.</summary>
 public sealed record DomainCertificateIssuanceRequest(
     string EnrollmentId,
     string OwnerId,
     string ActorId,
-    DomainCertificateSigningDraft Draft);
+    DomainCertificateSigningDraft Draft,
+    string? ManagedDomainId = null,
+    string? OrganizationId = null,
+    string? ApplicationId = null,
+    string? PublicCertificateNumber = null,
+    DomainCertificateIssuanceSnapshot? Snapshot = null);
 
 /// <summary>Safe outcome returned by the transactional certificate issuance coordinator.</summary>
 public enum DomainCertificateIssuanceStatus
@@ -174,7 +193,12 @@ public sealed class DomainCertificateIssuanceService(
             certificate.Payload.IssuedAtUtc);
         return new HipStoredDomainCertificate(
             request.EnrollmentId, request.OwnerId, certificate, certificateJson,
-            certificateDigest, sourceDecisionDigest, auditEvent);
+            certificateDigest, sourceDecisionDigest, auditEvent,
+            ManagedDomainId: request.ManagedDomainId,
+            OrganizationId: request.OrganizationId,
+            ApplicationId: request.ApplicationId,
+            PublicCertificateNumber: request.PublicCertificateNumber,
+            Snapshot: request.Snapshot);
     }
 
     private static string SourceDecisionDigest(
@@ -227,7 +251,12 @@ public sealed class DomainCertificateIssuanceService(
         existing.Certificate.Payload.Domain == request.Draft.Domain &&
         existing.Certificate.Payload.Level == request.Draft.Level &&
         existing.Certificate.Payload.CertificateVersion == request.Draft.CertificateVersion &&
-        existing.SourceDecisionDigest == sourceDecisionDigest;
+        existing.SourceDecisionDigest == sourceDecisionDigest &&
+        existing.ManagedDomainId == request.ManagedDomainId &&
+        existing.OrganizationId == request.OrganizationId &&
+        existing.ApplicationId == request.ApplicationId &&
+        existing.PublicCertificateNumber == request.PublicCertificateNumber &&
+        Equals(existing.Snapshot, request.Snapshot);
 
     private static void Validate(DomainCertificateIssuanceRequest request)
     {
@@ -240,6 +269,14 @@ public sealed class DomainCertificateIssuanceService(
         ValidateIdentifier(request.EnrollmentId, 128);
         ValidateIdentifier(request.OwnerId, 256);
         ValidateIdentifier(request.ActorId, 256);
+        ValidateOptionalIdentifier(request.ManagedDomainId, 256);
+        ValidateOptionalIdentifier(request.OrganizationId, 256);
+        ValidateOptionalIdentifier(request.ApplicationId, 128);
+        ValidateOptionalIdentifier(request.PublicCertificateNumber, 64);
+        if (request.Snapshot is { } snapshot)
+        {
+            ValidateSnapshot(snapshot, request.Draft.Evaluation.PolicyVersion);
+        }
     }
 
     private static void ValidateIdentifier(string value, int maximumLength)
@@ -249,6 +286,28 @@ public sealed class DomainCertificateIssuanceService(
             value.Any(character => char.IsControl(character) || char.IsSurrogate(character)))
         {
             throw new ArgumentException("Certificate issuance identifier is invalid.");
+        }
+    }
+
+    private static void ValidateOptionalIdentifier(string? value, int maximumLength)
+    {
+        if (value is not null) ValidateIdentifier(value, maximumLength);
+    }
+
+    private static void ValidateSnapshot(DomainCertificateIssuanceSnapshot snapshot, string evaluationPolicyVersion)
+    {
+        if (snapshot.HipScore is < 0 or > 100 ||
+            snapshot.DomainTrustScore is < 0 or > 100 || snapshot.PageTrustScore is < 0 or > 100 ||
+            snapshot.ContentRiskScore is < 0 or > 100 || snapshot.EvaluatedAtUtc.Offset != TimeSpan.Zero ||
+            string.IsNullOrWhiteSpace(snapshot.RelevantSecurityStatus) || snapshot.RelevantSecurityStatus.Length > 80 ||
+            string.IsNullOrWhiteSpace(snapshot.RuleVersion) || snapshot.RuleVersion.Length > 128 ||
+            string.IsNullOrWhiteSpace(snapshot.PolicyVersion) || snapshot.PolicyVersion.Length > 128 ||
+            snapshot.RelevantSecurityStatus.Any(char.IsControl) || snapshot.RuleVersion.Any(char.IsControl) ||
+            snapshot.PolicyVersion.Any(char.IsControl) || snapshot.ScanId?.Any(char.IsControl) == true ||
+            !string.Equals(snapshot.PolicyVersion, evaluationPolicyVersion, StringComparison.Ordinal) ||
+            snapshot.ScanId is { Length: > 220 })
+        {
+            throw new ArgumentException("Certificate issuance snapshot is invalid.");
         }
     }
 
