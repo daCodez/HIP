@@ -9,7 +9,7 @@ const manifest = JSON.parse(await readFile(path.join(extensionRoot, "manifest.js
 const packageDocument = JSON.parse(await readFile(path.join(extensionRoot, "package.json"), "utf8"));
 
 test("manifest uses only reviewed runtime permissions", () => {
-  assert.deepEqual(manifest.permissions, ["activeTab", "scripting", "storage"]);
+  assert.deepEqual(manifest.permissions, ["activeTab", "scripting", "storage", "sidePanel"]);
   assert.deepEqual(manifest.host_permissions, [
     "https://api.guardwithhip.com/*",
     "https://guardwithhip.com/*",
@@ -45,6 +45,9 @@ test("all declared executable files are packaged local files", async () => {
     manifest.background.service_worker,
     ...manifest.content_scripts.flatMap(contentScript => contentScript.js),
     "src/popup.js",
+    "src/sidepanel.js",
+    "src/sidePanelState.js",
+    "src/embeddedPanelBridge.js",
     "src/options.js"
   ];
 

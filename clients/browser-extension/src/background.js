@@ -10,6 +10,10 @@ import {
   stageInstallationKey
 } from "./installationIdentity.js";
 
+chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true })?.catch(() => {
+  // Older Chromium builds can load HIP without breaking automatic scanning.
+});
+
 const fastScanCache = new FastScanCache();
 const scanSubmissionDeduper = new RecentSubmissionDeduper();
 const scanSummaries = new BoundedLruStore(128);
@@ -21,6 +25,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
   message = validation.message;
+
+  if (message?.type === "HIP_OPEN_SIDE_PANEL") {
+    const tab = _sender?.tab;
+    if (!Number.isInteger(tab?.windowId)) {
+      sendResponse({ ok: false, error: "HIP side panel is unavailable" });
+      return false;
+    }
+    chrome.sidePanel.open({ windowId: tab.windowId })
+      .then(() => sendResponse({ ok: true, result: { tabId: tab.id, findingId: message.findingId } }))
+      .catch(() => sendResponse({ ok: false, error: "HIP side panel is unavailable" }));
+    return true;
+  }
 
   if (message?.type === "HIP_GET_PLUGIN_VERSION") {
     sendResponse({ ok: true, result: safeExtensionResult(getPluginVersion()) });

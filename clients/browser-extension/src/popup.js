@@ -7,6 +7,7 @@ import {
   loadingSummaryViewModel,
   unavailableMessage
 } from "./popupViewModel.js";
+import { embeddedTabIdFromLocation, isEmbeddedPanel, notifyPanelHost } from "./embeddedPanelBridge.js";
 
 let settings = DEFAULT_HIP_SETTINGS;
 let client = new HipApiClient(settings);
@@ -20,6 +21,7 @@ let popupStartedContentScan = false;
 let badgeObservationPromise = null;
 
 const summaryPollAttempts = 24;
+if (isEmbeddedPanel()) document.body.classList.add("embedded");
 const summaryPollDelayMs = 500;
 
 const elements = {
@@ -102,8 +104,8 @@ const elements = {
 };
 
 elements.refreshScan.addEventListener("click", refreshScan);
-elements.xrayPage.addEventListener("click", startXray);
-elements.settingsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
+elements.xrayPage.addEventListener("click", () => isEmbeddedPanel() ? notifyPanelHost("page") : startXray());
+elements.settingsButton.addEventListener("click", () => isEmbeddedPanel() ? notifyPanelHost("settings") : chrome.runtime.openOptionsPage());
 elements.feedbackLooksSafe.addEventListener("click", () => submitPopupFeedback("LooksSafe"));
 elements.feedbackLooksSuspicious.addEventListener("click", () => submitPopupFeedback("LooksSuspicious"));
 elements.feedbackReportIssue.addEventListener("click", () => submitPopupFeedback("ReportIssue"));
@@ -116,7 +118,8 @@ async function initialize() {
   settings = await loadHipSettings();
   elements.pluginVersion.textContent = await loadPluginVersion();
   client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const embeddedTabId = embeddedTabIdFromLocation();
+  const tab = embeddedTabId ? await chrome.tabs.get(embeddedTabId).catch(() => null) : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
   activeTabId = tab?.id ?? null;
   const currentUrl = tab?.url ? new URL(tab.url) : null;
   activeTabUrl = currentUrl?.toString() || null;

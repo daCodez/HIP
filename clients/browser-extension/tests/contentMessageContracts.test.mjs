@@ -44,3 +44,13 @@ test("bounds summaries returned to popup pages", () => {
   assert.deepEqual(contracts.safeSummary({ status: "Safe", score: 90 }), { status: "Safe", score: 90 });
   assert.throws(() => contracts.safeSummary({ value: "x".repeat(129 * 1024) }), /size limit/);
 });
+
+test("accepts only bounded side-panel X-ray payloads", () => {
+  assert.equal(contracts.validate({ type: "HIP_XRAY_GET_STATE", inventoryOffset: 50, inventoryLimit: 50 }, popupSender, runtimeId).ok, true);
+  assert.equal(contracts.validate({ type: "HIP_XRAY_SELECT_FINDING", findingId: "rule:element" }, popupSender, runtimeId).ok, true);
+  assert.equal(contracts.validate({ type: "HIP_XRAY_SET_MARKERS", visible: false }, popupSender, runtimeId).ok, true);
+  assert.equal(contracts.validate({ type: "HIP_XRAY_SELECT_FINDING", findingId: "x".repeat(241) }, popupSender, runtimeId).ok, false);
+  assert.equal(contracts.validate({ type: "HIP_XRAY_SET_MARKERS", visible: "yes" }, popupSender, runtimeId).ok, false);
+  assert.equal(contracts.validate({ type: "HIP_XRAY_GET_STATE", inventoryLimit: 101 }, popupSender, runtimeId).ok, false);
+  assert.equal(contracts.validate({ type: "HIP_XRAY_GET_STATE", pageText: "private" }, popupSender, runtimeId).ok, false);
+});

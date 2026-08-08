@@ -39,13 +39,14 @@ test("the exact legacy localhost defaults migrate without replacing custom devel
   assert.equal(custom.webBaseUrl, "http://localhost:6002");
 });
 
-test("badge placement is normalized and exposed in the options page", () => {
+test("legacy placement is normalized while X-ray results move to the side panel", () => {
   for (const position of ["bottom-left", "bottom-right", "top-left", "top-right"]) {
     assert.equal(normalizeBadgePosition(position), position);
     assert.match(optionsHtml, new RegExp(`value="${position}"`));
-    assert.match(rendererSource, new RegExp(`launcher\\[data-position="${position}"\\]`));
   }
   assert.equal(normalizeBadgePosition("center"), "bottom-left");
   assert.equal(normalizeHipSettings({ badgePosition: "top-right" }).badgePosition, "top-right");
   assert.match(optionsScript, /badgePosition/);
+  assert.doesNotMatch(rendererSource, /launcher\[data-position/);
+  assert.match(rendererSource, /return "side-panel"/);
 });

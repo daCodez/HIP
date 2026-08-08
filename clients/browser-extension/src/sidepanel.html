@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HIP Trust scores</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <main class="panel-shell">
+    <header class="panel-header">
+      <img class="brand-shield" src="../assets/hip-logo.png" width="42" height="50" alt="HIP shield">
+      <div><h1>Trust scores</h1><p id="activeDomain">Choose an eligible page</p></div>
+    </header>
+
+    <div class="tabs" role="tablist" aria-label="HIP side panel">
+      <button id="pageTab" role="tab" aria-selected="true" aria-controls="pagePanel" type="button">Page</button>
+      <button id="siteTab" role="tab" aria-selected="false" aria-controls="sitePanel" tabindex="-1" type="button">Site</button>
+      <button id="settingsTab" role="tab" aria-selected="false" aria-controls="settingsPanel" tabindex="-1" type="button">Settings</button>
+    </div>
+
+    <section id="pagePanel" role="tabpanel" aria-labelledby="pageTab">
+      <div id="pageEmpty" class="empty-state">
+        <h2>Page X-ray</h2>
+        <p id="pageMessage">Open an HTTP or HTTPS page to inspect its supported elements.</p>
+        <button id="startXray" type="button">X-ray this page</button>
+      </div>
+
+      <div id="pageResults" hidden>
+        <section class="score-card" aria-label="Current page score">
+          <div><span id="pageStatus" class="status-pill">Not scanned</span><strong id="pageScore">--</strong></div>
+          <p id="scanProgress" role="status" aria-live="polite">Ready</p>
+          <div class="score-bar" aria-hidden="true"><span id="scoreBar"></span></div>
+          <dl class="counts">
+            <div><dt>Findings</dt><dd id="findingCount">0</dd></div>
+            <div><dt>Inspected</dt><dd id="inspectedCount">0</dd></div>
+          </dl>
+          <p id="truncationNote" class="muted" hidden>The scan reached the 2,500 supported-element limit.</p>
+          <p class="storage-note"><strong id="pageStorage">Local only</strong><span id="lastSubmitted"></span><br>Detailed element findings stay in this browser tab.</p>
+        </section>
+
+        <div class="actions" role="toolbar" aria-label="Page X-ray controls">
+          <button id="rescan" type="button">Rescan</button>
+          <button id="markerToggle" type="button" aria-pressed="true">Markers on</button>
+        </div>
+
+        <section aria-labelledby="findingsHeading">
+          <div class="section-heading"><h2 id="findingsHeading">Findings</h2><span id="visibleFindingCount"></span></div>
+          <div class="filters" aria-label="Finding filters">
+            <label>Severity<select id="severityFilter"><option value="all">All</option><option value="Critical">Risky</option><option value="High">High risk</option><option value="Medium">Caution</option><option value="Low">Review</option><option value="Info">Informational</option></select></label>
+            <label>Category<select id="categoryFilter"><option value="all">All</option></select></label>
+            <label>Element<select id="kindFilter"><option value="all">All</option></select></label>
+          </div>
+          <ol id="findings" class="finding-list"></ol>
+          <button id="loadMoreFindings" type="button" hidden>Load more findings</button>
+        </section>
+
+        <details class="inventory-section">
+          <summary>All inspected elements <span id="inventorySummary"></span></summary>
+          <ul id="inventory" class="inventory-list"></ul>
+          <button id="loadMoreInventory" type="button" hidden>Load more elements</button>
+        </details>
+      </div>
+    </section>
+
+    <section id="sitePanel" role="tabpanel" aria-labelledby="siteTab" hidden>
+      <iframe id="siteFrame" title="HIP website trust details" src="popup.html?embedded=1"></iframe>
+    </section>
+
+    <section id="settingsPanel" role="tabpanel" aria-labelledby="settingsTab" hidden>
+      <iframe id="settingsFrame" title="HIP extension settings" src="options.html?embedded=1"></iframe>
+    </section>
+  </main>
+  <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

@@ -18,7 +18,13 @@
   function collectAndScan(documentObject, locationObject, options = {}) {
     const collected = collectPageSnapshot(documentObject, locationObject, options);
     const result = scanSnapshot(collected.snapshot);
-    return { ...result, references: collected.references };
+    const inventory = collected.snapshot.elements.slice(0, MAX_SCANNED_ELEMENTS).map(element => ({
+      id: `element:${element.refKey}`,
+      elementRefKey: element.refKey,
+      elementKind: element.kind,
+      status: "No issue observed"
+    }));
+    return { ...result, references: collected.references, inventory };
   }
 
   function collectPageSnapshot(documentObject, locationObject, options = {}) {

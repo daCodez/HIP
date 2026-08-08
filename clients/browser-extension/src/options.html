@@ -41,14 +41,14 @@
         </select>
       </label>
 
-      <label>On-page HIP control position
+      <label>On-page marker label position
         <select id="badgePosition">
           <option value="bottom-left">Bottom left</option>
           <option value="bottom-right">Bottom right</option>
           <option value="top-left">Top left</option>
           <option value="top-right">Top right</option>
         </select>
-        <small>Sets where the floating X-ray badge appears so it can avoid a site's trust badge.</small>
+        <small>Provides a preferred corner for HIP marker labels. The main results stay in the side panel.</small>
       </label>
 
       <section class="settings-section" aria-labelledby="scanBehaviorHeading">
@@ -77,6 +77,16 @@
         <label class="switch-row">
           <span>Submit privacy-safe scan results</span>
           <input id="submitScanResults" type="checkbox" role="switch">
+        </label>
+
+        <label class="switch-row">
+          <span>Show X-ray markers by default</span>
+          <input id="showXrayMarkers" type="checkbox" role="switch">
+        </label>
+
+        <label class="switch-row warning-setting">
+          <span>Submit stripped page URL<small>Optional and off by default. Query strings and fragments are removed; URL-hash-only storage is more private.</small></span>
+          <input id="allowRawPageUrlSubmission" type="checkbox" role="switch">
         </label>
       </section>
 

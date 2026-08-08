@@ -106,12 +106,12 @@ test("destroy removes the persistent page trigger on navigation teardown", () =>
   assert.ok(harness.calls.includes("cancel-interval:7"));
 });
 
-test("SPA navigation clears active results and leaves one launcher", () => {
+test("SPA navigation clears stale targets and rescans the current route", () => {
   const harness = createHarness();
   harness.controller.start();
   harness.navigate("https://example.test/two");
-  assert.equal(harness.controller.getState().active, false);
-  assert.equal(harness.calls.filter(item => item === "show-launcher").length, 1);
+  assert.equal(harness.controller.getState().active, true);
+  assert.ok(harness.calls.filter(item => item.startsWith("render:")).length >= 2);
   assert.equal(harness.calls.filter(item => item === "reset-navigation").length, 1);
 });
 

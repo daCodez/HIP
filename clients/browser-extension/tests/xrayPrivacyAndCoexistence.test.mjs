@@ -2,79 +2,56 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [rules, renderer, controller, content, manifestText] = await Promise.all([
+const [rules, renderer, controller, content, sidePanel, manifestText] = await Promise.all([
   readFile(new URL("../src/xrayRules.js", import.meta.url), "utf8"),
   readFile(new URL("../src/xrayRenderer.js", import.meta.url), "utf8"),
   readFile(new URL("../src/xrayController.js", import.meta.url), "utf8"),
   readFile(new URL("../src/content.js", import.meta.url), "utf8"),
+  readFile(new URL("../src/sidepanel.js", import.meta.url), "utf8"),
   readFile(new URL("../manifest.json", import.meta.url), "utf8")
 ]);
 
 test("X-ray never reads entered values or private browser data", () => {
-  const combined = `${rules}\n${renderer}\n${controller}`;
-  assert.doesNotMatch(combined, /\.value\b|getSelection|clipboard|cookie|localStorage|sessionStorage|outerHTML|innerHTML/);
-  assert.doesNotMatch(combined, /crypto\.subtle|fetch\s*\(|sendMessage\s*\(/);
+  const scanner = `${rules}\n${renderer}\n${controller}`;
+  assert.doesNotMatch(scanner, /\.value\b|getSelection|clipboard|cookie|localStorage|sessionStorage|outerHTML|innerHTML/);
+  assert.doesNotMatch(sidePanel, /pageText|formValue|inputValue|cookieValue|authToken|privateMessage/);
+  assert.doesNotMatch(`${rules}\n${renderer}\n${controller}`, /crypto\.subtle|fetch\s*\(|sendMessage\s*\(/);
   assert.match(rules, /PRIVATE_CONTENT_SELECTOR/);
 });
 
-test("X-ray owns one isolated shadow root and does not alter host forms", () => {
+test("X-ray owns one isolated shadow marker root and does not alter host forms", () => {
   assert.match(renderer, /attachShadow\(\{ mode: "open" \}\)/);
-  assert.match(renderer, /pointer-events:\s*none/);
-  assert.doesNotMatch(renderer, /insertBefore|setAttribute\(|removeAttribute\(|autofocus|autocomplete/);
-  assert.doesNotMatch(renderer, /target\.focus|selectedTarget\.focus|documentObject\.activeElement/);
-  assert.match(renderer, /findRow\(selectedFindingId\).*focus/s);
+  assert.match(renderer, /pointer-events:none/);
+  assert.doesNotMatch(renderer, /insertBefore|removeAttribute\(|autofocus|autocomplete|target\.focus/);
   assert.doesNotMatch(controller, /document\.addEventListener/);
 });
 
-test("panel exposes accessibility semantics and honors reduced motion", () => {
-  assert.match(renderer, /ariaLabel = "HIP X-ray findings"/);
+test("marker layer exposes announcements and honors reduced motion", () => {
   assert.match(renderer, /ariaLive = "polite"/);
-  assert.match(renderer, /role = "toolbar"/);
-  assert.match(renderer, /prefers-reduced-motion: reduce/);
+  assert.match(renderer, /prefers-reduced-motion:reduce/);
   assert.match(renderer, /prefersReducedMotion\(\) \? "auto" : "smooth"/);
 });
 
-test("X-ray is explicit and does not run during automatic content startup", () => {
-  const startHandler = content.indexOf('message?.type === "HIP_XRAY_START"');
-  const automaticScan = content.indexOf("runScan().catch(handleInitializationError)");
-  assert.ok(startHandler > -1);
-  assert.ok(automaticScan > -1);
-  assert.doesNotMatch(content, /installXrayLauncher\(\)\.start\(\)/);
-  assert.match(content, /installLauncher\(\)/);
+test("X-ray remains explicit and automatic Site Safety stays independent", () => {
+  assert.ok(content.indexOf('message?.type === "HIP_XRAY_START"') > -1);
+  assert.ok(content.indexOf("runScan().catch(handleInitializationError)") > -1);
+  assert.doesNotMatch(content, /createXraySession\(\)\.start\(\)/);
 });
 
-test("page trigger and scan theatre match the marketing-site interaction language", () => {
-  assert.match(renderer, /X-ray this page/);
-  assert.match(renderer, /HIP · SCANNING THIS PAGE/);
+test("the page keeps only scan sweep, markers, highlights, and announcements", () => {
   assert.match(renderer, /SCAN_ANIMATION_MS\s*=\s*2600/);
   assert.match(renderer, /linear-gradient\(90deg, transparent, #14b8a6, transparent\)/i);
-  assert.match(renderer, /Satoshi/);
-  assert.match(renderer, /JetBrains Mono/);
-  assert.match(renderer, /finding-row/);
-  assert.match(renderer, /targetOffsets/);
+  assert.match(renderer, /marker-frame/);
+  assert.match(renderer, /marker-label/);
+  assert.match(renderer, /ariaLive/);
+  assert.doesNotMatch(renderer, /results-pill|finding-row|className = "hud"|X-ray this page/);
 });
 
-test("scan theatre transitions into the marketing-style trust result", () => {
-  assert.match(renderer, /className = "scan-view"|"scan-view"/);
-  assert.match(renderer, /className = "result-view"|"result-view"/);
-  assert.match(renderer, /scanning this page/i);
-  assert.match(renderer, /Reading page structure/);
-  assert.match(renderer, /Applying local HIP rules/);
-  assert.match(renderer, /HIP · PAGE X-RAY RESULTS/i);
-  assert.match(renderer, /result-score/);
-  assert.match(renderer, /result-progress-fill/);
-  assert.match(renderer, /Every score comes with its reasons\. Nothing is hidden\./);
-});
-
-test("manifest permissions remain unchanged and X-ray dependencies load before content", () => {
+test("manifest adds only the reviewed side-panel runtime permission", () => {
   const manifest = JSON.parse(manifestText);
-  assert.deepEqual(manifest.permissions, ["activeTab", "scripting", "storage"]);
+  assert.deepEqual(manifest.permissions, ["activeTab", "scripting", "storage", "sidePanel"]);
+  assert.equal(manifest.permissions.includes("tabs"), false);
   assert.equal(manifest.permissions.includes("debugger"), false);
-  const scripts = manifest.content_scripts[0].js;
-  for (const file of ["src/xrayRules.js", "src/xrayRenderer.js", "src/xrayController.js"]) {
-    assert.ok(scripts.indexOf(file) > -1);
-    assert.ok(scripts.indexOf(file) < scripts.indexOf("src/content.js"));
-  }
 });
 
 test("collection and mutation work are capped", () => {

@@ -86,12 +86,47 @@
         if (!globalThis.HipXrayRules || !globalThis.HipXrayRenderer || !globalThis.HipXrayController) {
           throw new Error("HIP X-ray dependencies did not load.");
         }
-        xraySession ??= globalThis.HipXrayController.getOrCreate({ launcherPosition: settings?.badgePosition });
+        xraySession ??= createXraySession();
         const result = xraySession.start();
-        sendResponse({ ok: true, result: { active: true, alreadyActive: result.alreadyActive, findingCount: result.findingCount } });
+        sendResponse({ ok: true, result: contentMessageContracts.safeSummary(xraySession.getState()) });
       } catch {
         sendResponse({ ok: false, error: "X-ray is unavailable on this page." });
       }
+      return false;
+    }
+
+    if (message?.type === "HIP_XRAY_GET_STATE") {
+      xraySession ??= createXraySession();
+      sendResponse({ ok: true, result: contentMessageContracts.safeSummary(xraySession.getState(message)) });
+      return false;
+    }
+
+    if (message?.type === "HIP_XRAY_RESCAN") {
+      try {
+        xraySession ??= createXraySession();
+        xraySession.rescan();
+        sendResponse({ ok: true, result: contentMessageContracts.safeSummary(xraySession.getState()) });
+      } catch {
+        sendResponse({ ok: false, error: "X-ray is unavailable on this page." });
+      }
+      return false;
+    }
+
+    if (message?.type === "HIP_XRAY_SELECT_FINDING") {
+      xraySession ??= createXraySession();
+      sendResponse({ ok: true, result: contentMessageContracts.safeSummary(xraySession.selectFinding(message.findingId)) });
+      return false;
+    }
+
+    if (message?.type === "HIP_XRAY_SET_MARKERS") {
+      xraySession ??= createXraySession();
+      sendResponse({ ok: true, result: contentMessageContracts.safeSummary(xraySession.setMarkersVisible(message.visible)) });
+      return false;
+    }
+
+    if (message?.type === "HIP_XRAY_STOP") {
+      xraySession?.stop();
+      sendResponse({ ok: true, result: { active: false } });
       return false;
     }
 
@@ -117,17 +152,21 @@
     void handleDeviceRegistrationBridgeMessage(event);
   });
 
-  installXrayLauncher();
-
   runScan().catch(handleInitializationError);
 
-  function installXrayLauncher() {
+  function createXraySession() {
     if (!globalThis.HipXrayRules || !globalThis.HipXrayRenderer || !globalThis.HipXrayController) {
-      return;
+      throw new Error("HIP X-ray dependencies did not load.");
     }
-    xraySession ??= globalThis.HipXrayController.getOrCreate({ launcherPosition: settings?.badgePosition });
-    xraySession.installLauncher();
+    const session = globalThis.HipXrayController.getOrCreate({
+      markersVisible: settings?.showXrayMarkers !== false,
+      getSummaryMetadata: () => lastSummary,
+      onMarkerActivated: findingId => {
+        chrome.runtime.sendMessage({ type: "HIP_OPEN_SIDE_PANEL", findingId }).catch(() => {});
+      }
+    });
     window.addEventListener("pagehide", () => xraySession?.destroy(), { once: true });
+    return session;
   }
 
   /**
@@ -218,7 +257,7 @@
    */
   async function initialize() {
     settings = await loadSettings();
-    xraySession?.setPreferences({ launcherPosition: settings.badgePosition });
+    xraySession?.setPreferences({ markersVisible: settings.showXrayMarkers !== false });
     pluginVersion = await loadPluginVersion();
     lastSummary = emptySummary();
     collectHipBadgeSignals();

@@ -1,5 +1,8 @@
 import { DEFAULT_HIP_SETTINGS, HipApiClient, loadHipSettings, saveHipSettings } from "./hipApiClient.js";
 import { ensureHipHostPermissions } from "./extensionHostPermissions.js";
+import { isEmbeddedPanel } from "./embeddedPanelBridge.js";
+
+if (isEmbeddedPanel()) document.body.classList.add("embedded");
 
 const form = document.getElementById("settingsForm");
 const status = document.getElementById("status");
@@ -18,6 +21,8 @@ const fields = {
   enableWarningBanner: document.getElementById("enableWarningBanner"),
   enableSafetyRouting: document.getElementById("enableSafetyRouting"),
   submitScanResults: document.getElementById("submitScanResults"),
+  showXrayMarkers: document.getElementById("showXrayMarkers"),
+  allowRawPageUrlSubmission: document.getElementById("allowRawPageUrlSubmission"),
   externalProvidersEnabled: document.getElementById("externalProvidersEnabled"),
   sslLabsEnabled: document.getElementById("sslLabsEnabled"),
   googleWebRiskEnabled: document.getElementById("googleWebRiskEnabled"),
@@ -31,6 +36,7 @@ document.getElementById("refreshProviders").addEventListener("click", async () =
 document.getElementById("restoreDefaults").addEventListener("click", async () => {
   await saveHipSettings(DEFAULT_HIP_SETTINGS);
   render(DEFAULT_HIP_SETTINGS);
+  await applyActiveTabSettings(DEFAULT_HIP_SETTINGS);
   currentProviderSettings = null;
   status.textContent = "Defaults restored.";
   providerStatus.textContent = "Provider preferences restored locally. Save settings to sync with HIP.";
@@ -49,10 +55,11 @@ form.addEventListener("submit", async event => {
     }
 
     const savedSettings = await saveHipSettings(settings);
-    const syncMessage = await syncProviderSettings(savedSettings);
+    const syncResult = await syncProviderSettings(savedSettings);
     render(savedSettings);
-    status.textContent = "Settings saved.";
-    providerStatus.textContent = syncMessage;
+    await applyActiveTabSettings(savedSettings);
+    status.textContent = syncResult.ok ? "Settings saved." : "Settings saved locally; provider settings were not synced.";
+    providerStatus.textContent = syncResult.message;
   } catch (error) {
     status.textContent = `Settings not saved: ${error.message}`;
   }
@@ -87,6 +94,8 @@ function render(settings) {
   fields.enableWarningBanner.checked = settings.enableWarningBanner;
   fields.enableSafetyRouting.checked = settings.enableSafetyPageRouting ?? settings.enableSafetyRouting;
   fields.submitScanResults.checked = settings.submitScanResults;
+  fields.showXrayMarkers.checked = settings.showXrayMarkers !== false;
+  fields.allowRawPageUrlSubmission.checked = settings.allowRawPageUrlSubmission === true;
   fields.externalProvidersEnabled.checked = settings.externalProvidersEnabled;
   fields.sslLabsEnabled.checked = settings.sslLabsEnabled;
   fields.googleWebRiskEnabled.checked = settings.googleWebRiskEnabled;
@@ -111,12 +120,24 @@ function readForm() {
     enableSafetyPageRouting: fields.enableSafetyRouting.checked,
     enableSafetyRouting: fields.enableSafetyRouting.checked,
     submitScanResults: fields.submitScanResults.checked,
+    showXrayMarkers: fields.showXrayMarkers.checked,
+    allowRawPageUrlSubmission: fields.allowRawPageUrlSubmission.checked,
     externalProvidersEnabled: fields.externalProvidersEnabled.checked,
     sslLabsEnabled: fields.sslLabsEnabled.checked,
     googleWebRiskEnabled: fields.googleWebRiskEnabled.checked,
     virusTotalEnabled: fields.virusTotalEnabled.checked,
     instanceId: currentInstanceId
   };
+}
+
+async function applyActiveTabSettings(settings) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!Number.isInteger(tab?.id)) return;
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: "HIP_XRAY_SET_MARKERS", visible: settings.showXrayMarkers !== false });
+  } catch {
+    // Restricted tabs and pages without a content script simply apply on next eligible load.
+  }
 }
 
 /**
@@ -173,9 +194,9 @@ async function syncProviderSettings(settings) {
 
   try {
     currentProviderSettings = await client.updateExternalProviderSettings(request);
-    return "Provider settings synced with HIP.";
+    return { ok: true, message: "Provider settings synced with HIP." };
   } catch (error) {
-    return `Provider preferences saved locally. HIP admin sync failed: ${error.message}`;
+    return { ok: false, message: `Provider preferences saved locally. HIP admin sync failed: ${error.message}` };
   }
 }
 

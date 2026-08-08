@@ -4,7 +4,7 @@ This Chromium Manifest V3 client helps users see HIP website trust, link risk, a
 
 ## Features
 
-- Current website HIP score and status in the popup.
+- Current website HIP score and status in a persistent side panel.
 - A simple trust message: HTTPS secures the connection; HIP verifies trust.
 - Score band and status badge display.
 - Public lookup and safety details links.
@@ -16,7 +16,7 @@ This Chromium Manifest V3 client helps users see HIP website trust, link risk, a
 - Privacy-safe browser scan result submission.
 - HIP Site Safety Scan popup panel for malware, phishing, redirect, download, and script risk.
 - Privacy-safe risk finding reports for risky links.
-- Popup-first HIP details surface with final score, layered scores, Site Safety, confidence, reasons, warnings, and feedback.
+- Persistent Page, Site, and Settings views, with the existing site-trust surface reused inside the Site tab.
 - Injected HIP trust banner with score/status, Details, Looks Safe, Looks Suspicious, and dismiss controls only when page risk is meaningful.
 - Download-like link detection foundation.
 - Login/form risk indicator foundation.
@@ -29,18 +29,21 @@ This Chromium Manifest V3 client helps users see HIP website trust, link risk, a
 
 ## X-ray This Page
 
-On a normal HTTP or HTTPS page, the extension displays the same teal **X-ray this page** control used on HIP's marketing page. Clicking that page control, or the equivalent popup action, starts the local inspection. No X-ray detector runs merely because the trigger is visible.
+On a normal HTTP or HTTPS page, selecting **X-ray this page** in the Page tab starts an explicit local inspection. No X-ray detector runs merely because the side panel is open.
 
-The active experience mirrors the marketing demo: a dark page scrim, a teal scan line sweeping from top to bottom, visible element boxes lighting as the line reaches them, a compact right-side HUD, and finding rows revealed progressively during the 2.6-second visualization. Unlike the illustrative marketing demo, the extension shows actual local detector findings and severity labels; it does not invent score changes. The page receives one isolated Shadow DOM surface. The HUD provides:
+The page receives one isolated Shadow DOM marker surface with the scan sweep, numbered markers, and selected-element outline. All persistent controls and detailed results remain in the side panel, so HIP does not cover or reflow the host page. The Page tab provides:
 
-- numbered markers that correspond to findings without intercepting page clicks;
+- numbered markers that correspond to stable finding IDs without intercepting unrelated page clicks;
 - severity, category, observed evidence, remediation, and Local or HIP source;
 - Plain and Technical explanation modes;
-- Hide markers, Rescan, and Exit controls;
+- marker visibility, Rescan, and Stop controls;
+- bounded category and severity filters plus a privacy-safe inspected-element inventory;
 - keyboard-visible focus states and reduced-motion behavior;
 - explicit coverage notes for inaccessible frames, closed shadow roots, scan caps, and unavailable HIP domain evidence.
 
-Selecting a finding scrolls its referenced element into view and draws an extension-owned outline around it. The page element itself is not restyled. **Exit** disconnects the mutation observer and active scan listeners, cancels pending work, removes the scrim, scan line, boxes, markers, and HUD, clears every in-memory element reference, and restores the idle X-ray trigger. Navigation destroys the remaining trigger host and its listener.
+Selecting a finding scrolls its referenced element into view and draws an extension-owned outline around it. Activating a marker opens the side panel and selects the matching row. The page element itself is not restyled. **Stop** disconnects observers and active scan listeners, cancels pending work, removes the sweep and markers, and clears in-memory element references. Navigation and rescans remove stale state without creating duplicate UI.
+
+The side-panel state coordinator, content-message contracts, marker renderer, scanner/controller, and embedded Site/Settings bridge are separate modules. This keeps presentation, browser lifecycle, scanning, and scoring concerns replaceable rather than tightly coupling them.
 
 The local ruleset is `hip-xray-local-1`; visible urgency, impersonation, and credential-request wording uses `hip-content-signals-1`. Local findings use this stable shape:
 
@@ -71,25 +74,27 @@ X-ray never reads entered control values, passwords, cookies, tokens, autofill d
 
 Structural collection reads only bounded element types and reviewed attributes such as form action, control type/name/autocomplete, link destination, and resource source. Visible wording checks are capped, exclude forms, editable content, chats, messages, inboxes, and log regions, and retain only matched rule-category names. Evidence strings contain structural facts or origins rather than copied page prose.
 
-The feature adds no permissions. It continues to use the existing `activeTab`, `scripting`, and `storage` permissions and does not use `debugger`, network interception, clipboard access, or a main-world script. X-ray creates no UI before or inside forms, changes no form/input attributes, does not read or change focus or selection, and adds no document-level event listener. The marker layer uses `pointer-events: none`; only the side panel accepts pointer input. Repeated starts reuse the same session.
+The feature adds only Chromium's reviewed `sidePanel` permission. It continues to use `activeTab`, `scripting`, and `storage` and does not use `debugger`, network interception, clipboard access, or a main-world script. X-ray creates no UI inside forms, changes no form/input attributes, and does not read or change focus or selection. The marker layer and frames use `pointer-events: none`; only explicit marker buttons accept pointer input on the page. Repeated starts reuse the same session.
 
 An X-ray pass inspects at most 2,500 structural elements and 400 eligible text-signal elements. DOM changes are debounced, automatic rescans stop after 12 passes, and the observer ignores HIP-owned nodes. Cross-origin or otherwise inaccessible frames are inventoried but their contents are not inspected. Closed shadow roots cannot be observed. Chrome and Edge protected pages do not accept content scripts, and the popup explains that X-ray is unavailable rather than requesting broader access.
 
 ## Settings
 
-Version 0.1.28 understands the live badge's current certificate lifecycle state
+Version 0.1.30 understands the live badge's current certificate lifecycle state
 without treating suspension, revocation, renewal, or expiry as a rewrite of the
 original signed certificate. The extension still verifies the badge signature,
 retrieves the certificate directly from HIP, and fails closed when the domain,
 certificate identity, level, validity, or active state is inconsistent.
 
-Open extension settings from the popup.
+Open extension settings from the persistent side panel.
 
 Settings:
 
 - HIP API base URL
 - HIP Web base URL
 - On-page HIP control position (top-left, top-right, bottom-left, or bottom-right)
+- Show X-ray markers
+- Allow raw page URL submission (off by default, with an explicit privacy warning)
 - Submit scan results
 - Enable link scanning
 - Enable link badges
@@ -111,6 +116,7 @@ Settings are stored with `chrome.storage.sync`.
 Current setting keys:
 
 - `hipApiBaseUrl`
+- `hipWebBaseUrl`
 - `submitScanResults`
 - `enableLinkScanning`
 - `enableSafetyPageRouting`
@@ -122,6 +128,8 @@ Current setting keys:
 - `googleWebRiskEnabled`
 - `virusTotalEnabled`
 - `instanceId`
+- `showXrayMarkers`
+- `allowRawPageUrlSubmission`
 
 External provider switches:
 
@@ -151,7 +159,7 @@ Default banner behavior:
 - `HighRisk`: warning banner
 - `Dangerous` / `Critical`: strong warning banner
 
-The popup remains the default place to view full HIP details. The banner is for protecting users when page risk is meaningful, not for forcing users to close a banner on normal pages.
+The side panel remains the default place to view full HIP details. The banner is for protecting users when page risk is meaningful, not for forcing users to close a banner on normal pages.
 
 Limited trust pages show a banner only for meaningful risky signals:
 
@@ -165,9 +173,9 @@ Limited trust pages show a banner only for meaningful risky signals:
 
 `DangerousOnly` mode shows the banner only when HIP sees a `Dangerous` page status. It does not globally suppress future Dangerous warnings when a different page is dismissed.
 
-## Popup Primary UX
+## Site Tab Primary UX
 
-The popup shows the full user-facing HIP state for the current tab:
+The side panel's Site tab shows the full user-facing HIP state for the current tab:
 
 - `Final HIP Score`: the final trust score for this interaction.
 - `Status`: plain-English HIP status, such as `Trusted`, `MostlyTrusted`, `LimitedTrustData`, `Unknown`, `Suspicious`, `HighRisk`, or `Dangerous`.

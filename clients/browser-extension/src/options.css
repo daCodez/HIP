@@ -9,6 +9,9 @@ body {
   background: #f8fafc;
 }
 
+body.embedded .settings-shell { max-width: none; padding: 12px; }
+body.embedded header, body.embedded form { padding: 14px; }
+
 .settings-shell {
   max-width: 720px;
   margin: 0 auto;

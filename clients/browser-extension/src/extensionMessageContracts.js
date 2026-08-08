@@ -6,6 +6,7 @@ const MAX_DEPTH = 6;
 const MESSAGE_KEYS = Object.freeze({
   HIP_GET_PLUGIN_VERSION: [],
   HIP_GET_SETTINGS: [],
+  HIP_OPEN_SIDE_PANEL: ["findingId"],
   HIP_GET_BANNER_DISMISSED: ["domain", "pageKey"],
   HIP_SET_BANNER_DISMISSED: ["domain", "pageKey"],
   HIP_LOOKUP_DOMAIN: ["domain"],
@@ -36,6 +37,7 @@ const EXTENSION_PAGE_MESSAGES = new Set([
 const CONTENT_SCRIPT_MESSAGES = new Set([
   "HIP_GET_PLUGIN_VERSION",
   "HIP_GET_SETTINGS",
+  "HIP_OPEN_SIDE_PANEL",
   "HIP_GET_BANNER_DISMISSED",
   "HIP_SET_BANNER_DISMISSED",
   "HIP_LOOKUP_DOMAIN",
@@ -175,6 +177,9 @@ function validateMessageFields(message, sender) {
   switch (message.type) {
     case "HIP_GET_PLUGIN_VERSION":
     case "HIP_GET_SETTINGS":
+      return;
+    case "HIP_OPEN_SIDE_PANEL":
+      assertBoundedString(message.findingId, 240);
       return;
     case "HIP_GET_BANNER_DISMISSED":
     case "HIP_SET_BANNER_DISMISSED":

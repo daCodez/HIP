@@ -4,7 +4,7 @@
   const MAX_AUTOMATIC_RESCANS = 12;
   const RESCAN_DEBOUNCE_MS = 400;
   const ROUTE_POLL_MS = 500;
-  const SESSION_VERSION = 2;
+  const SESSION_VERSION = 3;
   const SESSION_KEY = "__hipXrayControllerSession";
 
   function create(options = {}) {
@@ -29,6 +29,11 @@
     let findings = [];
     let references = new Map();
     let coverage = {};
+    let inventory = [];
+    let selectedFindingId = "";
+    let scanState = "idle";
+    let scanTimestamp = null;
+    let markersVisible = options.markersVisible !== false;
     let automaticRescans = 0;
     const newElements = new Set();
 
@@ -36,7 +41,8 @@
       start: () => start(),
       rescan: () => runScan(false),
       exit: () => stop(),
-      updatePositions: () => requestPositionUpdate()
+      updatePositions: () => requestPositionUpdate(),
+      activateFinding: findingId => activateFromMarker(findingId)
     });
 
     function installLauncher() {
@@ -51,7 +57,7 @@
       if (!documentObject?.documentElement || !windowObject || typeof rendererFactory !== "function" || typeof scan !== "function") {
         throw new Error("X-ray is unavailable on this page.");
       }
-      renderer = rendererFactory(controls, { document: documentObject, window: windowObject, launcherPosition: options.launcherPosition });
+      renderer = rendererFactory(controls, { document: documentObject, window: windowObject, markersVisible });
     }
 
     function start() {
@@ -75,6 +81,7 @@
 
     function runScan(isAutomatic) {
       if (!active) return { active: false, findingCount: 0 };
+      scanState = "scanning";
       renderer.setProgress("Scanning this page…");
       const result = scan({ newElements: new Set(newElements), isAutomatic });
       const backendFindings = backendAdapter?.readAvailableFindings?.() || [];
@@ -84,6 +91,9 @@
       findings = Array.isArray(mergedResult?.findings) ? mergedResult.findings : [];
       references = result?.references instanceof Map ? result.references : new Map();
       coverage = result?.coverage || {};
+      inventory = Array.isArray(result?.inventory) ? result.inventory.slice(0, 2500) : [];
+      scanTimestamp = new Date().toISOString();
+      scanState = "complete";
       renderer.render(
         findings,
         references,
@@ -141,8 +151,9 @@
     /** Removes active overlays when the current document changes logical route. */
     function handleRouteChange() {
       currentLocation = String(windowObject?.location?.href || "");
-      if (active) stop();
       renderer?.resetForNavigation?.();
+      selectedFindingId = "";
+      if (active) runScan(true);
     }
 
     function requestPositionUpdate() {
@@ -172,18 +183,74 @@
       references = new Map();
       newElements.clear();
       coverage = {};
+      inventory = [];
+      selectedFindingId = "";
+      scanState = "idle";
+      scanTimestamp = null;
       automaticRescans = 0;
     }
 
-    function getState() {
-      return { active, findingCount: findings.length, referenceCount: references.size, automaticRescans, coverage };
+    function getState(request = {}) {
+      const offset = Math.max(0, Math.min(Number(request.inventoryOffset) || 0, inventory.length));
+      const limit = Math.max(1, Math.min(Number(request.inventoryLimit) || 50, 100));
+      const nextOffset = Math.min(inventory.length, offset + limit);
+      const findingOffset = Math.max(0, Math.min(Number(request.findingOffset) || 0, findings.length));
+      const findingLimit = Math.max(1, Math.min(Number(request.findingLimit) || 50, 100));
+      const nextFindingOffset = Math.min(findings.length, findingOffset + findingLimit);
+      const metadata = options.getSummaryMetadata?.() || {};
+      const severity = highestSeverity(findings);
+      return {
+        active,
+        scanState,
+        scanTimestamp,
+        score: scoreFor(findings),
+        status: findings.length ? statusForSeverity(severity) : "Safe in this scan",
+        statusSeverity: findings.length ? severity : "Safe",
+        findingCount: findings.length,
+        referenceCount: references.size,
+        coverage: safeCoverage(coverage),
+        selectedFindingId,
+        markersVisible,
+        findings: findings.slice(findingOffset, nextFindingOffset).map(finding => safeFinding(finding, inventory)),
+        nextFindingOffset: nextFindingOffset < findings.length ? nextFindingOffset : null,
+        inventory: {
+          items: inventory.slice(offset, nextOffset).map(safeInventoryItem),
+          nextOffset: nextOffset < inventory.length ? nextOffset : null
+        },
+        submissionState: safeText(metadata.scanResultSubmission, 40) || "Skipped",
+        lastSubmittedUtc: safeText(metadata.scanResultLastSubmittedUtc || metadata.lastSubmittedUtc, 40) || null
+      };
+    }
+
+    function selectFinding(findingId) {
+      if (!active) return { status: "stale", findingId };
+      let result = renderer?.selectFinding?.(findingId) || { status: "stale", findingId };
+      if (result.status === "missing") {
+        runScan(false);
+        result = renderer?.selectFinding?.(findingId) || { status: "stale", findingId };
+      }
+      if (result.status === "selected") selectedFindingId = findingId;
+      return result;
+    }
+
+    function setMarkersVisible(visible) {
+      markersVisible = visible === true;
+      renderer?.setMarkersVisible?.(markersVisible);
+      return { visible: markersVisible };
+    }
+
+    function activateFromMarker(findingId) {
+      const result = selectFinding(findingId);
+      options.onMarkerActivated?.(findingId, result);
+      return result;
     }
 
     /** Applies persisted presentation preferences without restarting an active scan. */
     function setPreferences(preferences = {}) {
       options.launcherPosition = preferences.launcherPosition || options.launcherPosition;
       renderer?.setLauncherPosition?.(options.launcherPosition);
-      return { launcherPosition: options.launcherPosition || "bottom-left" };
+      if (typeof preferences.markersVisible === "boolean") setMarkersVisible(preferences.markersVisible);
+      return { launcherPosition: "side-panel", markersVisible };
     }
 
     function destroy() {
@@ -194,7 +261,60 @@
       renderer = null;
     }
 
-    return Object.freeze({ installLauncher, start, stop, destroy, rescan: () => runScan(false), getState, setPreferences });
+    return Object.freeze({ installLauncher, start, stop, destroy, rescan: () => active ? runScan(false) : start(), getState, selectFinding, setMarkersVisible, setPreferences });
+  }
+
+  function safeFinding(finding = {}, inventory = []) {
+    const inspected = inventory.find(item => item.elementRefKey === finding.elementRefKey);
+    return {
+      findingId: safeText(finding.id, 240),
+      ruleId: safeText(finding.ruleId, 160),
+      ruleVersion: safeText(finding.ruleVersion, 80),
+      source: safeText(finding.source, 40),
+      category: safeText(finding.category, 80),
+      severity: ["Info", "Low", "Medium", "High", "Critical"].includes(finding.severity) ? finding.severity : "Info",
+      title: safeText(finding.title, 160),
+      plainExplanation: safeText(finding.plainExplanation, 600),
+      technicalExplanation: safeText(finding.technicalExplanation, 800),
+      evidence: safeText(finding.evidence, 600),
+      remediation: safeText(finding.remediation, 600),
+      elementKind: safeText(finding.elementKind || inspected?.elementKind || finding.category, 80)
+    };
+  }
+
+  function safeInventoryItem(item = {}) {
+    return {
+      id: safeText(item.id, 240),
+      elementKind: safeText(item.elementKind, 80) || "element",
+      status: "No issue observed"
+    };
+  }
+
+  function safeCoverage(value = {}) {
+    return {
+      inspectedElementCount: Math.max(0, Math.min(2500, Number(value.inspectedElementCount) || 0)),
+      inaccessibleFrameCount: Math.max(0, Math.min(2500, Number(value.inaccessibleFrameCount) || 0)),
+      truncated: value.truncated === true,
+      closedShadowRoots: "Closed shadow roots are not observable"
+    };
+  }
+
+  function safeText(value, maximum) {
+    return String(value || "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, maximum);
+  }
+
+  function highestSeverity(items) {
+    const rank = { Info: 0, Low: 1, Medium: 2, High: 3, Critical: 4 };
+    return items.reduce((value, item) => (rank[item.severity] > rank[value] ? item.severity : value), "Info");
+  }
+
+  function statusForSeverity(severity) {
+    return ({ Critical: "Risky", High: "Risky", Medium: "Caution", Low: "Review", Info: "Informational" })[severity] || "Informational";
+  }
+
+  function scoreFor(items) {
+    const penalties = { Critical: 30, High: 18, Medium: 9, Low: 4, Info: 0 };
+    return Math.max(0, Math.min(100, 100 - items.reduce((total, item) => total + (penalties[item.severity] || 0), 0)));
   }
 
   /**

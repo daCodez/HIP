@@ -2,10 +2,12 @@
   "manifest_version": 3,
   "name": "HIP Browser Protection",
   "description": "Human Identity Protocol website and link trust checks.",
-  "version": "0.1.28",
+  "version": "0.1.30",
   "action": {
-    "default_title": "HIP",
-    "default_popup": "src/popup.html"
+    "default_title": "Open HIP side panel"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel.html"
   },
   "options_page": "src/options.html",
   "background": {
@@ -42,10 +44,11 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "sidePanel"
   ],
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:* https:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:* https:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'"
   },
   "icons": {
     "16": "assets/icons/hip-16.svg",
