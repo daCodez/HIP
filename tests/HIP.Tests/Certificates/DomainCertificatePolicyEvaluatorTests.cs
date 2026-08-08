@@ -6,6 +6,55 @@ namespace HIP.Tests.Certificates;
 /// <summary>Locks certificate levels to explicit, versioned evidence instead of score alone.</summary>
 public sealed class DomainCertificatePolicyEvaluatorTests
 {
+    [Test]
+    public void Registered_requires_verified_domain_control()
+    {
+        var result = Evaluate(
+            DomainCertificateLevel.Registered,
+            Evidence() with { AccountContactVerified = true });
+
+        Assert.That(result.Decision, Is.EqualTo(DomainCertificatePolicyDecision.Ineligible));
+        Assert.That(result.Requirements.Single(item => item.Code == "ownership.domain-control").Status,
+            Is.EqualTo(DomainCertificateRequirementStatus.Missing));
+    }
+
+    [Test]
+    public void Certified_applies_stronger_configured_requirements()
+    {
+        var result = Evaluate(
+            DomainCertificateLevel.Certified,
+            VerifiedEvidence() with
+            {
+                DnssecStatus = HIP.Domain.Domains.DomainDnssecStatus.Valid,
+                OrganizationIdentityVerified = true,
+                UnresolvedHighRiskFindings = 0,
+                CurrentTrustScore = 90
+            });
+
+        Assert.That(result.Decision, Is.EqualTo(DomainCertificatePolicyDecision.RequiresReview));
+        Assert.That(result.Requirements.Select(item => item.Code), Does.Contain("dnssec.valid"));
+        Assert.That(result.Requirements.Select(item => item.Code), Does.Contain("security.no-high-risk-findings"));
+        Assert.That(result.Requirements.Select(item => item.Code), Does.Contain("identity.organization"));
+        Assert.That(result.Requirements.Select(item => item.Code), Does.Contain("score.certified-minimum"));
+        Assert.That(result.Requirements.Select(item => item.Code), Does.Contain("review.certified"));
+    }
+
+    [Test]
+    public void Certified_rejects_invalid_dnssec_even_when_verified_requirements_pass()
+    {
+        var result = Evaluate(
+            DomainCertificateLevel.Certified,
+            VerifiedEvidence() with
+            {
+                DnssecStatus = HIP.Domain.Domains.DomainDnssecStatus.Invalid,
+                OrganizationIdentityVerified = true,
+                CurrentTrustScore = 100
+            });
+
+        Assert.That(result.Decision, Is.EqualTo(DomainCertificatePolicyDecision.Ineligible));
+        Assert.That(result.Requirements.Single(item => item.Code == "dnssec.valid").Status,
+            Is.EqualTo(DomainCertificateRequirementStatus.Missing));
+    }
     private static readonly DateTimeOffset Now = new(2026, 7, 24, 12, 0, 0, TimeSpan.Zero);
 
     [Test]

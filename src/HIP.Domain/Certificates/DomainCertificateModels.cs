@@ -5,7 +5,8 @@ public enum DomainCertificateLevel
 {
     Registered,
     Verified,
-    Monitored
+    Monitored,
+    Certified
 }
 
 /// <summary>Lifecycle state of a domain enrollment.</summary>
@@ -45,6 +46,21 @@ public sealed record DomainCertificatePolicy(
     int MinimumMonitoredTrustScore,
     int MaximumVerificationAttempts)
 {
+    /// <summary>Minimum HIP score required for the stronger Certified level.</summary>
+    public int MinimumCertifiedTrustScore { get; init; } = 85;
+
+    /// <summary>Whether the Verified level requires a currently valid DNSSEC chain.</summary>
+    public bool RequireDnssecForVerified { get; init; }
+
+    /// <summary>Whether the Certified level requires a currently valid DNSSEC chain.</summary>
+    public bool RequireDnssecForCertified { get; init; } = true;
+
+    /// <summary>Whether Certified issuance requires verified organization or registrant identity.</summary>
+    public bool RequireIdentityForCertified { get; init; } = true;
+
+    /// <summary>Whether Certified issuance must be routed through authorized manual review.</summary>
+    public bool RequireManualReviewForCertified { get; init; } = true;
+
     /// <summary>Initial policy defaults for the working HIP V1 certificate implementation.</summary>
     public static DomainCertificatePolicy V1 { get; } = new(
         "hip-domain-certificate-v1",
@@ -67,6 +83,7 @@ public sealed record DomainCertificatePolicy(
             MonitoringFreshness < TimeSpan.FromHours(1) ||
             MonitoringFreshness > TimeSpan.FromDays(30) ||
             MinimumMonitoredTrustScore is < 0 or > 100 ||
+            MinimumCertifiedTrustScore is < 0 or > 100 ||
             MaximumVerificationAttempts is < 1 or > 20)
         {
             throw new InvalidOperationException("HIP domain certificate policy values are outside safety bounds.");

@@ -1,6 +1,7 @@
 using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Domain.Certificates;
+using HIP.Domain.Domains;
 
 namespace HIP.Application.Certificates;
 
@@ -41,7 +42,14 @@ public sealed record DomainCertificateEvidenceSnapshot(
     bool ContinuousMonitoringEnabled = false,
     bool CertificateActive = false,
     int? CurrentTrustScore = null,
-    DateTimeOffset? LastMonitoringAtUtc = null);
+    DateTimeOffset? LastMonitoringAtUtc = null,
+    DomainDnssecStatus DnssecStatus = DomainDnssecStatus.Unknown,
+    int UnresolvedHighRiskFindings = 0,
+    bool OrganizationIdentityVerified = false,
+    int? DomainTrustScore = null,
+    int? PageTrustScore = null,
+    int? ContentRiskScore = null,
+    string? ScanId = null);
 
 /// <summary>Signals that prevent automatic issuance and require an authorized human decision.</summary>
 public sealed record DomainCertificateReviewSignals(
@@ -96,13 +104,17 @@ public sealed class DomainCertificatePolicyEvaluator(DomainCertificatePolicy pol
             IsCurrentEvidence(request.Evidence.DomainControlVerifiedAtUtc, request.EvaluatedAtUtc),
             "Domain control evidence is present.", "Domain control has not been verified.");
 
-        if (request.RequestedLevel is DomainCertificateLevel.Verified or DomainCertificateLevel.Monitored)
+        if (request.RequestedLevel is DomainCertificateLevel.Verified or DomainCertificateLevel.Monitored or DomainCertificateLevel.Certified)
         {
             AddVerifiedRequirements(requirements, request);
         }
         if (request.RequestedLevel == DomainCertificateLevel.Monitored)
         {
             AddMonitoredRequirements(requirements, request);
+        }
+        if (request.RequestedLevel == DomainCertificateLevel.Certified)
+        {
+            AddCertifiedRequirements(requirements, request);
         }
 
         AddReviewSignals(requirements, request.ReviewSignals);
@@ -143,6 +155,41 @@ public sealed class DomainCertificatePolicyEvaluator(DomainCertificatePolicy pol
             "The TLS certificate check passed.", "The TLS certificate check did not pass.");
         AddRequirement(requirements, "policy.required", evidence.RequiredPoliciesPassed,
             "Required HIP verification policies passed.", "One or more required HIP verification policies did not pass.");
+        if (certificatePolicy.RequireDnssecForVerified)
+        {
+            AddRequirement(requirements, "dnssec.valid", evidence.DnssecStatus == DomainDnssecStatus.Valid,
+                "DNSSEC validation passed.", "A valid DNSSEC chain is required by this policy.");
+        }
+    }
+
+    private void AddCertifiedRequirements(
+        ICollection<DomainCertificateRequirementResult> requirements,
+        DomainCertificatePolicyEvaluationRequest request)
+    {
+        var evidence = request.Evidence;
+        if (certificatePolicy.RequireDnssecForCertified &&
+            requirements.All(item => item.Code != "dnssec.valid"))
+        {
+            AddRequirement(requirements, "dnssec.valid", evidence.DnssecStatus == DomainDnssecStatus.Valid,
+                "DNSSEC validation passed.", "Certified domains require a valid DNSSEC chain.");
+        }
+        AddRequirement(requirements, "security.no-high-risk-findings", evidence.UnresolvedHighRiskFindings == 0,
+            "No unresolved high-risk findings are present.", "Resolve high-risk findings before Certified issuance.");
+        if (certificatePolicy.RequireIdentityForCertified)
+        {
+            AddRequirement(requirements, "identity.organization", evidence.OrganizationIdentityVerified,
+                "The organization or registrant identity is verified.", "Certified issuance requires verified organization or registrant identity.");
+        }
+        AddRequirement(requirements, "score.certified-minimum",
+            evidence.CurrentTrustScore is not null && evidence.CurrentTrustScore >= certificatePolicy.MinimumCertifiedTrustScore,
+            "The HIP score meets the Certified policy threshold.", "The HIP score is below the Certified policy threshold.");
+        if (certificatePolicy.RequireManualReviewForCertified && !request.ReviewSignals.PolicyRequiresManualReview)
+        {
+            requirements.Add(new DomainCertificateRequirementResult(
+                "review.certified",
+                DomainCertificateRequirementStatus.ReviewRequired,
+                "Certified issuance requires authorized manual review."));
+        }
     }
 
     private void AddMonitoredRequirements(
@@ -216,6 +263,7 @@ public sealed class DomainCertificatePolicyEvaluator(DomainCertificatePolicy pol
         DomainCertificateLevel.Registered => "Domain control has been verified by HIP.",
         DomainCertificateLevel.Verified => "This domain completed HIP identity and baseline security verification.",
         DomainCertificateLevel.Monitored => "This domain is verified and continuously monitored by HIP.",
+        DomainCertificateLevel.Certified => "This domain passed HIP's stronger certification requirements and required review.",
         _ => throw new ArgumentOutOfRangeException(nameof(level))
     };
 
@@ -231,7 +279,13 @@ public sealed class DomainCertificatePolicyEvaluator(DomainCertificatePolicy pol
         }
         if (request.EvaluatedAtUtc.Offset != TimeSpan.Zero ||
             request.Evidence.UnresolvedCriticalFindings < 0 ||
-            request.Evidence.CurrentTrustScore is < 0 or > 100)
+            request.Evidence.UnresolvedHighRiskFindings < 0 ||
+            request.Evidence.CurrentTrustScore is < 0 or > 100 ||
+            request.Evidence.DomainTrustScore is < 0 or > 100 ||
+            request.Evidence.PageTrustScore is < 0 or > 100 ||
+            request.Evidence.ContentRiskScore is < 0 or > 100 ||
+            request.Evidence.ScanId is { Length: > 220 } ||
+            request.Evidence.ScanId?.Any(char.IsControl) == true)
         {
             throw new ArgumentException("Certificate evidence snapshot values are invalid.", nameof(request));
         }
