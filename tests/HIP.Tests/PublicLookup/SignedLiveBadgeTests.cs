@@ -176,6 +176,31 @@ public sealed class SignedLiveBadgeTests
             Assert.That(result.BadgeText, Does.Contain("Certificate: Active"));
         });
     }
+
+    [Test]
+    public async Task Certified_certificate_gets_certified_variant_and_meaning()
+    {
+        var signing = new StubBadgeSigningService(
+            new HipLiveBadgeSigningResult(HipLiveBadgeSignatureStatus.SignerUnavailable));
+        var original = CertificateTestData.SignedCertificate();
+        var certificate = original with { Payload = original.Payload with { Level = DomainCertificateLevel.Certified } };
+        var publicCertificate = new PublicDomainCertificateResponse(
+            PublicDomainCertificateService.SchemaVersion, certificate, DomainCertificateStatus.Active,
+            PublicDomainCertificateSignatureStatus.Verified, PublicDomainCertificateValidityStatus.Current,
+            true, Now, certificate.Payload.RevocationStatusUrl, certificate.Payload.PublicCertificateUrl);
+        var service = new TrustBadgeService(
+            new StubLookupService(), signing,
+            new StubPublicCertificateService(new PublicDomainCertificateLookupResult(
+                PublicDomainCertificateLookupStatus.Found, publicCertificate)));
+
+        var result = await service.GetDomainBadgeAsync("example.com", default);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.BadgeVariant, Is.EqualTo("certified"));
+            Assert.That(result.VerifiedMeaning, Does.Contain("authorized manual review"));
+        });
+    }
     [Test]
     public void Live_badge_rejects_available_score_without_sufficient_evidence()
     {

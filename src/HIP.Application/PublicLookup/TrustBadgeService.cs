@@ -105,6 +105,7 @@ public sealed class TrustBadgeService(
         DomainCertificateLevel.Registered => "Domain control has been verified by HIP. This does not mean the site is safe.",
         DomainCertificateLevel.Verified => "This domain completed HIP identity and baseline security verification.",
         DomainCertificateLevel.Monitored => "This domain is verified and continuously monitored by HIP.",
+        DomainCertificateLevel.Certified => "This domain passed HIP's stronger certification requirements and authorized manual review.",
         _ => "HIP could not verify a current certificate level for this domain."
     };
 }
