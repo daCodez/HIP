@@ -1053,7 +1053,8 @@ public sealed class EfDomainCertificateRepository(
             promotion.Certificate.EnrollmentId != record.EnrollmentId ||
             promotion.Certificate.OwnerId != record.OwnerId ||
             payload.Domain != record.Domain ||
-            record.ExpectedStatus != DomainEnrollmentStatus.Verified ||
+            record.ExpectedStatus is not DomainEnrollmentStatus.Verified and
+                not DomainEnrollmentStatus.Monitored ||
             record.TargetStatus != DomainEnrollmentStatus.Monitored ||
             record.CurrentScore is < 0 or > 100 || record.UnresolvedCriticalFindings != 0 ||
             record.CheckedAtUtc.Offset != TimeSpan.Zero || record.NextCheckAtUtc <= record.CheckedAtUtc ||

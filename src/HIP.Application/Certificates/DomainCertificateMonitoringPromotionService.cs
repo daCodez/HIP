@@ -49,8 +49,10 @@ public sealed class DomainCertificateMonitoringPromotionService(
             return Result(DomainCertificateMonitoringPromotionStatus.Conflict);
         }
 
+        var origin = ValidatedPublicOrigin(endpointOptions.PublicOrigin);
         if (current!.Certificate.Payload.Level == DomainCertificateLevel.Monitored &&
-            IsSignedByAuthorizedAuthority(current.Certificate, signingAuthorityPolicy))
+            IsSignedByAuthorizedAuthority(current.Certificate, signingAuthorityPolicy) &&
+            HasCurrentPublicEndpoints(current.Certificate.Payload, origin))
         {
             var refresh = await monitoringRepository.TryApplyCheckAsync(check, cancellationToken)
                 .ConfigureAwait(false);
@@ -63,7 +65,6 @@ public sealed class DomainCertificateMonitoringPromotionService(
 
         var payload = current.Certificate.Payload;
         var certificateId = NextCertificateId(state.EnrollmentId, state.Domain, payload.CertificateVersion + 1);
-        var origin = ValidatedPublicOrigin(endpointOptions.PublicOrigin);
         var draft = new DomainCertificateSigningDraft(
             certificateId,
             payload.CertificateVersion + 1,
@@ -187,6 +188,10 @@ public sealed class DomainCertificateMonitoringPromotionService(
         signingAuthorityPolicy.IsAuthorized(
             certificate.Signature.AuthorityId,
             certificate.Signature.KeyId);
+
+    private static bool HasCurrentPublicEndpoints(DomainTrustCertificatePayload payload, string origin) =>
+        payload.RevocationStatusUrl == $"{origin}/api/v1/certificates/{payload.CertificateId}/status" &&
+        payload.PublicCertificateUrl == $"{origin}/certificate/{payload.CertificateId}";
 
     private static string NextCertificateId(string enrollmentId, string domain, int version)
     {

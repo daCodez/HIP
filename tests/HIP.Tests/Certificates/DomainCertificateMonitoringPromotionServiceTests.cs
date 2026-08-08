@@ -83,6 +83,49 @@ public sealed class DomainCertificateMonitoringPromotionServiceTests
         });
     }
 
+    [Test]
+    public async Task Eligible_monitoring_reissues_authorized_certificate_with_obsolete_public_origin()
+    {
+        var legacy = LegacyMonitoredCertificate();
+        var certificate = legacy.Certificate with
+        {
+            Signature = legacy.Certificate.Signature with
+            {
+                AuthorityId = "hip:service:domain-certificate-authority",
+                KeyId = "certificate-key-1"
+            }
+        };
+        var current = legacy with
+        {
+            Certificate = certificate,
+            SignedCertificateJson = DomainTrustCertificateJson.Serialize(certificate)
+        };
+        var persistence = new RecordingMonitoringRepository();
+        var signer = new RecordingSigner();
+        var service = new DomainCertificateMonitoringPromotionService(
+            new FixedCertificateRepository(current),
+            persistence,
+            signer,
+            new Rfc8785CanonicalJsonService(),
+            DomainCertificatePublicEndpointOptions.Default,
+            ProductionAuthorityPolicy());
+        var state = Enrollment() with
+        {
+            EnrollmentStatus = DomainEnrollmentStatus.Monitored,
+            CertificateLevel = DomainCertificateLevel.Monitored
+        };
+        var check = Check() with { ExpectedStatus = DomainEnrollmentStatus.Monitored };
+
+        var result = await service.PromoteAsync(state, ScanResult(), check, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateMonitoringPromotionStatus.Promoted));
+            Assert.That(signer.Draft?.PublicCertificateUrl, Does.StartWith("https://guardwithhip.com/"));
+            Assert.That(signer.Draft?.RevocationStatusUrl, Does.StartWith("https://guardwithhip.com/"));
+        });
+    }
+
     private static DomainMonitoringEnrollmentState Enrollment() => new(
         "enrollment-1",
         "owner-1",
