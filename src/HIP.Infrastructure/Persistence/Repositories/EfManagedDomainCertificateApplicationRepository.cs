@@ -23,6 +23,13 @@ public sealed class EfManagedDomainCertificateApplicationRepository(HipDbContext
             .OrderBy(item => item.CreatedAtUtc)
             .ToListAsync(cancellationToken)).Select(FromEntityRequired).ToArray();
 
+    public async Task<IReadOnlyCollection<ManagedDomainCertificateApplication>> ListPendingReviewAsync(CancellationToken cancellationToken) =>
+        (await dbContext.ManagedDomainCertificateApplications.AsNoTracking()
+            .Where(item => item.Status == HIP.Domain.Certificates.DomainCertificateApplicationStatus.PendingReview)
+            .OrderBy(item => item.SubmittedAtUtc)
+            .ThenBy(item => item.ApplicationId)
+            .ToListAsync(cancellationToken)).Select(FromEntityRequired).ToArray();
+
     public async Task AddAsync(ManagedDomainCertificateApplication application, CancellationToken cancellationToken)
     {
         dbContext.ManagedDomainCertificateApplications.Add(ToEntity(application));

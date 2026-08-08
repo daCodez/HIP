@@ -44,6 +44,7 @@ public interface IManagedDomainCertificateApplicationRepository
 {
     Task<ManagedDomainCertificateApplication?> GetAsync(string applicationId, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<ManagedDomainCertificateApplication>> ListByDomainAsync(string domainId, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<ManagedDomainCertificateApplication>> ListPendingReviewAsync(CancellationToken cancellationToken);
     Task AddAsync(ManagedDomainCertificateApplication application, CancellationToken cancellationToken);
     Task UpdateAsync(ManagedDomainCertificateApplication application, long expectedVersion, CancellationToken cancellationToken);
 }
@@ -56,6 +57,10 @@ public sealed class ManagedDomainCertificateApplicationService(
     IDomainCertificatePolicyEvaluator eligibilityEvaluator,
     TimeProvider timeProvider)
 {
+    /// <summary>Lists pending applications for a separately authorized administrative review endpoint.</summary>
+    public Task<IReadOnlyCollection<ManagedDomainCertificateApplication>> ListPendingReviewAsync(
+        CancellationToken cancellationToken) => repository.ListPendingReviewAsync(cancellationToken);
+
     /// <summary>Gets one application only when its domain is visible to the actor.</summary>
     public Task<ManagedDomainCertificateApplication> GetAsync(
         string actorId,
@@ -238,6 +243,10 @@ public sealed class InMemoryManagedDomainCertificateApplicationRepository : IMan
     public Task<IReadOnlyCollection<ManagedDomainCertificateApplication>> ListByDomainAsync(string domainId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<ManagedDomainCertificateApplication>>(
             applications.Values.Where(item => item.DomainId == domainId).OrderBy(item => item.CreatedAtUtc).ToArray());
+    public Task<IReadOnlyCollection<ManagedDomainCertificateApplication>> ListPendingReviewAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<ManagedDomainCertificateApplication>>(
+            applications.Values.Where(item => item.Status == DomainCertificateApplicationStatus.PendingReview)
+                .OrderBy(item => item.SubmittedAtUtc).ThenBy(item => item.ApplicationId, StringComparer.Ordinal).ToArray());
     public Task AddAsync(ManagedDomainCertificateApplication application, CancellationToken cancellationToken)
     {
         if (!applications.TryAdd(application.ApplicationId, application)) throw new InvalidOperationException("Application already exists.");

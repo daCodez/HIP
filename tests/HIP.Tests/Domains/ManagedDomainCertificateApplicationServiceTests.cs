@@ -86,6 +86,20 @@ public sealed class ManagedDomainCertificateApplicationServiceTests
     }
 
     [Test]
+    public async Task Administrative_review_queue_returns_only_pending_applications()
+    {
+        var fixture = await Fixture.CreateAsync();
+        var certified = await fixture.Service.CreateDraftAsync("owner", fixture.DomainId, DomainCertificateLevel.Certified, default);
+        var registered = await fixture.Service.CreateDraftAsync("owner", fixture.DomainId, DomainCertificateLevel.Registered, default);
+        await fixture.Service.SubmitAsync("owner", certified.ApplicationId, default);
+        await fixture.Service.SubmitAsync("owner", registered.ApplicationId, default);
+
+        var pending = await fixture.Service.ListPendingReviewAsync(default);
+
+        Assert.That(pending.Select(item => item.ApplicationId), Is.EqualTo(new[] { certified.ApplicationId }));
+    }
+
+    [Test]
     public async Task Withdrawn_application_retains_its_record_and_cannot_be_resubmitted()
     {
         var fixture = await Fixture.CreateAsync();

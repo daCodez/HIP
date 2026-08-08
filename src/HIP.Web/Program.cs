@@ -2400,6 +2400,13 @@ static void MapConsumerDomainApis(RouteGroupBuilder domainsApi)
 /// <summary>Maps privileged review decisions for managed-domain certificate applications.</summary>
 static void MapAdminManagedDomainApplicationApis(RouteGroupBuilder applicationsApi)
 {
+    applicationsApi.MapGet("/pending", async (
+        ManagedDomainCertificateApplicationService applications,
+        CancellationToken token) =>
+        Results.Ok(await applications.ListPendingReviewAsync(token)))
+        .RequireAuthorization(AdminPolicies.CanViewReviews)
+        .WithName("ListPendingManagedDomainCertificateApplications");
+
     applicationsApi.MapPost("/{applicationId}/review", async (
         string applicationId,
         ManagedDomainCertificateReviewRequest request,
