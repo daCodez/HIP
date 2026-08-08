@@ -97,7 +97,13 @@
 
     if (message?.type === "HIP_XRAY_GET_STATE") {
       xraySession ??= createXraySession();
-      sendResponse({ ok: true, result: contentMessageContracts.safeSummary(xraySession.getState(message)) });
+      sendResponse({
+        ok: true,
+        result: {
+          ...contentMessageContracts.safeSummary(xraySession.getState(message)),
+          pageHost: safePageHostname()
+        }
+      });
       return false;
     }
 
@@ -153,6 +159,11 @@
   });
 
   runScan().catch(handleInitializationError);
+
+  /** Exposes only the hostname needed to keep the side panel on the selected tab. */
+  function safePageHostname() {
+    return String(globalThis.location?.hostname || "").toLowerCase().slice(0, 253);
+  }
 
   function createXraySession() {
     if (!globalThis.HipXrayRules || !globalThis.HipXrayRenderer || !globalThis.HipXrayController) {

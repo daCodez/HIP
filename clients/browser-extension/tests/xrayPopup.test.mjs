@@ -10,7 +10,7 @@ const [html, script, contracts, content] = await Promise.all([
 ]);
 
 test("side panel provides explicit accessible X-ray actions and status", () => {
-  assert.match(html, /id="startXray"[^>]*>Scan this page</);
+  assert.match(html, /id="startXray"[^>]*>X-ray this page</);
   assert.match(html, /id="scanProgress"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(script, /HIP_XRAY_START/);
   assert.match(script, /HIP_XRAY_GET_STATE/);
@@ -25,4 +25,10 @@ test("content script no longer installs a page-level launcher", () => {
 test("content message contract allow-lists bounded X-ray commands", () => {
   for (const type of ["HIP_XRAY_START", "HIP_XRAY_GET_STATE", "HIP_XRAY_RESCAN", "HIP_XRAY_SELECT_FINDING", "HIP_XRAY_SET_MARKERS"]) assert.match(contracts, new RegExp(type));
   assert.match(contracts, /MAX_FINDING_ID_LENGTH/);
+});
+
+test("X-ray state identifies only the current page hostname for side-panel synchronization", () => {
+  assert.match(content, /pageHost:\s*safePageHostname\(\)/);
+  assert.match(content, /location\?\.hostname/);
+  assert.doesNotMatch(content, /pageHost:\s*location\.href/);
 });

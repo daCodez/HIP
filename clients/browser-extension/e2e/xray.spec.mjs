@@ -49,7 +49,7 @@ test("persistent Page panel links findings to pointer-transparent page markers",
 
     await expect(panel.locator("#activeDomain")).toHaveText("Unsupported browser page");
     await expect(panel.locator(".panel-header h1")).toHaveText("Website Trust");
-    await expect(panel.locator("#pluginVersion")).toContainText("v0.1.32");
+    await expect(panel.locator("#pluginVersion")).toContainText("v0.1.33");
     const headerBox = await panel.locator(".panel-header").boundingBox();
     const tabsBox = await panel.locator(".tabs").boundingBox();
     expect(headerBox.y).toBeLessThan(tabsBox.y);
@@ -129,6 +129,37 @@ test("side-panel tabs are keyboard accessible in a narrow reduced-motion view", 
     await panel.emulateMedia({ reducedMotion: "reduce" });
     await panel.setViewportSize({ width: 320, height: 700 });
     await panel.screenshot({ path: testInfo.outputPath("reduced-motion-empty-state.png"), fullPage: true });
+  } finally {
+    await runtime.context.close();
+    await rm(runtime.profilePath, { recursive: true, force: true });
+  }
+});
+
+test("side panel follows the exact selected tab across different host permissions", async () => {
+  const runtime = await launchExtension();
+  try {
+    const guardPage = await runtime.context.newPage();
+    await guardPage.route("https://guardwithhip.com/**", route => route.fulfill({ contentType: "text/html", body: fixture }));
+    await guardPage.goto("https://guardwithhip.com/hip-tab-sync-test");
+
+    const zeroPage = await runtime.context.newPage();
+    await zeroPage.route("https://zerotoherobudgeting.com/**", route => route.fulfill({ contentType: "text/html", body: fixture }));
+    await zeroPage.goto("https://zerotoherobudgeting.com/hip-tab-sync-test");
+
+    const panel = await openPanelDocument(runtime);
+    await guardPage.bringToFront();
+    const guardTabId = await runtime.worker.evaluate(async () => (await chrome.tabs.query({ active: true }))[0]?.id ?? null);
+    const guardState = await panel.evaluate(id => chrome.tabs.sendMessage(id, { type: "HIP_XRAY_GET_STATE", inventoryOffset: 0, inventoryLimit: 1, findingOffset: 0, findingLimit: 1 }), guardTabId);
+    expect(guardState.ok).toBe(true);
+    expect(guardState.result.pageHost).toBe("guardwithhip.com");
+    await expect(panel.locator("#activeDomain")).toHaveText("guardwithhip.com");
+
+    await zeroPage.bringToFront();
+    await expect(panel.locator("#activeDomain")).toHaveText("zerotoherobudgeting.com");
+    await expect(panel.getByRole("button", { name: "X-ray this page" })).toBeEnabled();
+
+    await guardPage.bringToFront();
+    await expect(panel.locator("#activeDomain")).toHaveText("guardwithhip.com");
   } finally {
     await runtime.context.close();
     await rm(runtime.profilePath, { recursive: true, force: true });

@@ -5,6 +5,7 @@ import {
   formatScoreImpact,
   inventoryPage,
   isSupportedPageUrl,
+  pickActiveTab,
   pickInspectableTab,
   statusPresentation,
   storagePresentation
@@ -22,6 +23,15 @@ test("inspectable tab selection recovers the latest web page when an extension s
     { id: 20, active: false, lastAccessed: 200, url: "https://guardwithhip.com/methodology" },
     { id: 10, active: false, lastAccessed: 100, url: "https://older.example/" }
   ]);
+
+  assert.equal(selected.id, 20);
+});
+
+test("activated tab ID wins even when only the previous HIP tab exposes its URL", () => {
+  const selected = pickActiveTab([
+    { id: 10, active: false, url: "https://guardwithhip.com/methodology" },
+    { id: 20, active: true }
+  ], 20);
 
   assert.equal(selected.id, 20);
 });
@@ -58,6 +68,22 @@ test("unsupported pages are cleared and never loaded", async () => {
   assert.equal(cleared[0].supported, false);
   assert.equal(isSupportedPageUrl("https://example.test/a"), true);
   assert.equal(isSupportedPageUrl("file:///secret.txt"), false);
+});
+
+test("active tabs with hidden URLs are probed through their content script", async () => {
+  let loadedTabId = null;
+  const coordinator = createActiveTabCoordinator({
+    clear: () => {},
+    load: async tab => {
+      loadedTabId = tab.id;
+      return { tabId: tab.id, hostname: "zerotoherobudgeting.com" };
+    },
+    commit: () => {}
+  });
+
+  const result = await coordinator.activate({ id: 20, active: true });
+  assert.equal(result.committed, true);
+  assert.equal(loadedTabId, 20);
 });
 
 test("inventory is delivered in bounded batches with honest truncation", () => {

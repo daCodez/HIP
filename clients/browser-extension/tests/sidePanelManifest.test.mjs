@@ -12,7 +12,7 @@ const shellCss = await readFile(new URL("src/sidepanel-shell.css", root), "utf8"
 const sidePanelScript = await readFile(new URL("src/sidepanel.js", root), "utf8");
 
 test("manifest opens the persistent side panel from the toolbar", () => {
-  assert.equal(manifest.version, "0.1.32");
+  assert.equal(manifest.version, "0.1.33");
   assert.ok(manifest.permissions.includes("sidePanel"));
   assert.equal(manifest.side_panel.default_path, "src/sidepanel.html");
   assert.equal("default_popup" in manifest.action, false);
@@ -35,6 +35,9 @@ test("side panel provides accessible Page, Site, and Settings tabs", () => {
   assert.match(shellCss, /\.tabs\s*\{[^}]*top:\s*97px/s);
   assert.match(sidePanelScript, /className\s*=\s*"finding-dot"/);
   assert.match(sidePanelScript, /className\s*=\s*"score-impact"/);
+  assert.match(sidePanelScript, /onActivated\.addListener\(\(\{\s*tabId\s*\}\)\s*=>\s*refreshActiveTab\(tabId\)\)/);
+  assert.match(sidePanelScript, /chrome\.tabs\.query\(\{\s*active:\s*true,\s*currentWindow:\s*true\s*\}\)/);
+  assert.match(sidePanelScript, /changeInfo\.status\s*===\s*"complete"/);
   assert.match(sidePanelScript, /chrome\.runtime\.getManifest\(\)\.version/);
   assert.match(html, /<button id="startXray"[^>]*>X-ray this page<\/button>/);
   assert.doesNotMatch(html, /class="brand-mark"[^>]*>\s*HIP\s*</);

@@ -40,6 +40,14 @@ export function pickInspectableTab(tabs = []) {
     .sort((left, right) => Number(Boolean(right.active)) - Number(Boolean(left.active)) || (Number(right.lastAccessed) || 0) - (Number(left.lastAccessed) || 0))[0] || null;
 }
 
+/** Returns the exact activated tab without requiring permission to read its URL. */
+export function pickActiveTab(tabs = [], preferredTabId = null) {
+  if (Number.isInteger(preferredTabId)) {
+    return tabs.find(tab => tab?.id === preferredTabId) || null;
+  }
+  return tabs.find(tab => tab?.active === true && Number.isInteger(tab.id)) || null;
+}
+
 export function inventoryPage(items, offset = 0, limit = 50, coverage = {}) {
   const source = Array.isArray(items) ? items.slice(0, 2500) : [];
   const safeOffset = Math.max(0, Math.min(Number(offset) || 0, source.length));
@@ -60,7 +68,7 @@ export function createActiveTabCoordinator({ clear, load, commit }) {
     async activate(tab = {}) {
       const requestGeneration = ++generation;
       activeTabId = Number.isInteger(tab.id) ? tab.id : null;
-      const supported = activeTabId !== null && isSupportedPageUrl(tab.url);
+      const supported = activeTabId !== null && (tab.url == null || isSupportedPageUrl(tab.url));
       clear({ tabId: activeTabId, generation: requestGeneration, supported });
       if (!supported) return { committed: false, reason: "unsupported" };
       try {

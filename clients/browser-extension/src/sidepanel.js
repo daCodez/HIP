@@ -1,4 +1,4 @@
-import { createActiveTabCoordinator, formatScoreImpact, pickInspectableTab, statusPresentation, storagePresentation } from "./sidePanelState.js";
+import { createActiveTabCoordinator, formatScoreImpact, pickActiveTab, statusPresentation, storagePresentation } from "./sidePanelState.js";
 import { isTrustedEmbeddedMessage } from "./embeddedPanelBridge.js";
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
@@ -46,9 +46,9 @@ page.markers.addEventListener("click", async () => {
 page.loadMore.addEventListener("click", () => loadMoreInventory());
 page.loadMoreFindings.addEventListener("click", () => loadMoreFindings());
 
-chrome.tabs.onActivated.addListener(() => refreshActiveTab());
+chrome.tabs.onActivated.addListener(({ tabId }) => refreshActiveTab(tabId));
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (tabId === coordinator.current().tabId && (changeInfo.status === "loading" || changeInfo.url)) coordinator.activate(tab);
+  if (tabId === coordinator.current().tabId && (changeInfo.status === "loading" || changeInfo.status === "complete" || changeInfo.url)) void refreshActiveTab(tab.id);
 });
 chrome.tabs.onRemoved.addListener(tabId => { if (tabId === coordinator.current().tabId) coordinator.invalidate(); });
 chrome.runtime.onMessage.addListener((message, sender) => {
@@ -81,8 +81,16 @@ function activateTab(next, focus) {
   void chrome.storage.local.set({ hipSidePanelTab: next.id });
 }
 
-async function refreshActiveTab() {
-  const tab = pickInspectableTab(await chrome.tabs.query({}));
+async function refreshActiveTab(preferredTabId = null) {
+  let candidates = [];
+  try {
+    candidates = Number.isInteger(preferredTabId)
+      ? [await chrome.tabs.get(preferredTabId)]
+      : await chrome.tabs.query({ active: true, currentWindow: true });
+  } catch {
+    candidates = [];
+  }
+  const tab = pickActiveTab(candidates, preferredTabId);
   await coordinator.activate(tab || {});
 }
 
@@ -101,18 +109,27 @@ function clearForTab({ tabId, supported }) {
 }
 
 async function loadTabState(tab) {
-  const hostname = new URL(tab.url).hostname;
   let response;
   try {
     response = await chrome.tabs.sendMessage(tab.id, { type: "HIP_XRAY_GET_STATE", inventoryOffset: 0, inventoryLimit: 50, findingOffset: 0, findingLimit: 50 });
   } catch {
     response = null;
   }
-  return { tabId: tab.id, hostname, xray: response?.ok ? response.result : null };
+  if (!response?.ok) throw new Error("HIP can inspect only HTTP and HTTPS pages.");
+  const hostname = response.result.pageHost || hostnameFromUrl(tab.url) || "Current browser tab";
+  return { tabId: tab.id, hostname, xray: response.result };
+}
+
+function hostnameFromUrl(value) {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return "";
+  }
 }
 
 function renderTabState(state) {
-  page.domain.textContent = state.hostname;
+  page.domain.textContent = state.hostname || "Unsupported browser page";
   page.siteFrame.src = `popup.html?embedded=1&tab=${state.tabId}&generation=${Date.now()}`;
   if (state.error) {
     page.message.textContent = state.error;
