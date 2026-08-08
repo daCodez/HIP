@@ -2196,6 +2196,18 @@ static void MapConsumerApis(RouteGroupBuilder consumerApi)
 /// <summary>Maps authenticated, membership-authorized domain-management endpoints.</summary>
 static void MapConsumerDomainApis(RouteGroupBuilder domainsApi)
 {
+    domainsApi.MapGet("/dashboard", async (
+        string? search,
+        HIP.Domain.Domains.ManagedDomainStatus? status,
+        string? organizationId,
+        bool descending,
+        HttpContext context,
+        ManagedDomainDashboardService dashboard,
+        CancellationToken token) =>
+        Results.Ok(await dashboard.ListAsync(
+            ConsumerId(context), new ManagedDomainQuery(search, status, organizationId, descending), token)))
+        .WithName("ListManagedDomainDashboard");
+
     domainsApi.MapGet("/", async (HttpContext context, IDomainManagementService domains, CancellationToken token) =>
         Results.Ok(await domains.ListAsync(ConsumerId(context), new ManagedDomainQuery(), token)))
         .WithName("ListManagedDomains");
