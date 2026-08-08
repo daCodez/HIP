@@ -1,5 +1,7 @@
 namespace HIP.Domain.Domains;
 
+using HIP.Domain.Identity;
+
 /// <summary>Lifecycle status of a domain registered in the HIP owner portal.</summary>
 public enum ManagedDomainStatus
 {
@@ -17,6 +19,16 @@ public enum DomainDnssecStatus
     Valid,
     Invalid,
     Misconfigured
+}
+
+/// <summary>Current ownership/control verification state for a managed domain.</summary>
+public enum ManagedDomainVerificationStatus
+{
+    Unverified,
+    Pending,
+    Verified,
+    Expired,
+    Revoked
 }
 
 /// <summary>Domain and organization access roles ordered from least to most privileged.</summary>
@@ -40,7 +52,10 @@ public sealed record ManagedDomain(
     string? DnssecDiagnostic,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,
-    long Version);
+    long Version,
+    ManagedDomainVerificationStatus VerificationStatus = ManagedDomainVerificationStatus.Unverified,
+    VerificationMethod? VerificationMethod = null,
+    DateTimeOffset? OwnershipVerifiedAtUtc = null);
 
 /// <summary>An optional organization that groups domains and authorized users.</summary>
 public sealed record DomainOrganization(
@@ -65,4 +80,3 @@ public sealed record ManagedDomainAccessGrant(
     DomainAccessRole Role,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc);
-

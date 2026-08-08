@@ -29,6 +29,11 @@ internal static class ManagedDomainModelConfiguration
             entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(32);
             entity.Property(item => item.DnssecStatus).HasConversion<string>().HasMaxLength(32);
             entity.Property(item => item.DnssecDiagnostic).HasMaxLength(500);
+            entity.Property(item => item.VerificationStatus)
+                .HasConversion<string>()
+                .HasMaxLength(32)
+                .HasDefaultValue(HIP.Domain.Domains.ManagedDomainVerificationStatus.Unverified);
+            entity.Property(item => item.VerificationMethod).HasConversion<string>().HasMaxLength(32);
             entity.Property(item => item.Version).IsConcurrencyToken();
             entity.HasIndex(item => item.DomainName).IsUnique();
             entity.HasIndex(item => item.OwnerId);
@@ -38,6 +43,23 @@ internal static class ManagedDomainModelConfiguration
                 .WithMany()
                 .HasForeignKey(item => item.OrganizationId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<HipManagedDomainVerificationEventEntity>(entity =>
+        {
+            entity.ToTable("hip_managed_domain_verification_events");
+            entity.HasKey(item => item.EventId);
+            entity.Property(item => item.EventId).HasMaxLength(128);
+            entity.Property(item => item.DomainId).HasMaxLength(256).IsRequired();
+            entity.Property(item => item.Method).HasConversion<string>().HasMaxLength(32);
+            entity.Property(item => item.EventType).HasMaxLength(64).IsRequired();
+            entity.Property(item => item.Outcome).HasConversion<string>().HasMaxLength(32);
+            entity.Property(item => item.TokenDigest).HasMaxLength(71).IsRequired();
+            entity.HasIndex(item => new { item.DomainId, item.OccurredAtUtc });
+            entity.HasOne<HipManagedDomainEntity>()
+                .WithMany()
+                .HasForeignKey(item => item.DomainId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<HipOrganizationMembershipEntity>(entity =>

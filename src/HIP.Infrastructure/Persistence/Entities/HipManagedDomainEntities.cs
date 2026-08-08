@@ -1,4 +1,5 @@
 using HIP.Domain.Domains;
+using HIP.Domain.Identity;
 
 namespace HIP.Infrastructure.Persistence.Entities;
 
@@ -12,9 +13,26 @@ public sealed class HipManagedDomainEntity
     public ManagedDomainStatus Status { get; set; }
     public DomainDnssecStatus DnssecStatus { get; set; }
     public string? DnssecDiagnostic { get; set; }
+    public ManagedDomainVerificationStatus VerificationStatus { get; set; }
+    public VerificationMethod? VerificationMethod { get; set; }
+    public DateTimeOffset? OwnershipVerifiedAtUtc { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
     public long Version { get; set; }
+}
+
+/// <summary>Append-only privacy-safe managed-domain verification history.</summary>
+public sealed class HipManagedDomainVerificationEventEntity
+{
+    public required string EventId { get; set; }
+    public required string DomainId { get; set; }
+    public VerificationMethod Method { get; set; }
+    public required string EventType { get; set; }
+    public DomainVerificationAttemptOutcome Outcome { get; set; }
+    public required string TokenDigest { get; set; }
+    public int ChallengeVersion { get; set; }
+    public DateTimeOffset OccurredAtUtc { get; set; }
+    public DateTimeOffset? ChallengeExpiresAtUtc { get; set; }
 }
 
 /// <summary>Organization that can group managed domains and memberships.</summary>

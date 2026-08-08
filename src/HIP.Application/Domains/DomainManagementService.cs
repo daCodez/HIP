@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using HIP.Application.Certificates;
 using HIP.Domain.Domains;
+using HIP.Domain.Identity;
 
 namespace HIP.Application.Domains;
 
@@ -26,7 +27,10 @@ public sealed record ManagedDomainAccessView(
     DomainAccessRole AccessRole,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,
-    long Version);
+    long Version,
+    ManagedDomainVerificationStatus VerificationStatus = ManagedDomainVerificationStatus.Unverified,
+    VerificationMethod? VerificationMethod = null,
+    DateTimeOffset? OwnershipVerifiedAtUtc = null);
 
 /// <summary>Raised when an authenticated actor lacks the required domain or organization permission.</summary>
 public sealed class DomainAccessDeniedException : InvalidOperationException
@@ -80,6 +84,14 @@ public interface IDomainManagementService
     Task<ManagedDomainAccessView> AssignOrganizationAsync(string actorId, string domainId, string? organizationId, CancellationToken cancellationToken);
     /// <summary>Updates the domain's DNSSEC security profile.</summary>
     Task<ManagedDomainAccessView> UpdateDnssecAsync(string actorId, string domainId, DomainDnssecStatus status, string? diagnostic, CancellationToken cancellationToken);
+    /// <summary>Updates ownership verification state after an authorized verification workflow step.</summary>
+    Task<ManagedDomainAccessView> UpdateVerificationAsync(
+        string actorId,
+        string domainId,
+        ManagedDomainVerificationStatus status,
+        VerificationMethod method,
+        DateTimeOffset? verifiedAtUtc,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>Centralized role-to-permission mapping for domain and organization operations.</summary>
@@ -280,6 +292,35 @@ public sealed class DomainManagementService(
         return View(updated, role);
     }
 
+    /// <inheritdoc />
+    public async Task<ManagedDomainAccessView> UpdateVerificationAsync(
+        string actorId,
+        string domainId,
+        ManagedDomainVerificationStatus status,
+        VerificationMethod method,
+        DateTimeOffset? verifiedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        if (!Enum.IsDefined(status) || !Enum.IsDefined(method) ||
+            status == ManagedDomainVerificationStatus.Verified != (verifiedAtUtc is not null))
+        {
+            throw new ArgumentException("Managed-domain verification state is invalid.");
+        }
+        var domain = await RequireDomainAsync(actorId, domainId, ManagedDomainAccessPolicy.CanManageSecurity, cancellationToken)
+            .ConfigureAwait(false);
+        var role = (await ResolveRoleAsync(actorId, domain, cancellationToken).ConfigureAwait(false))!.Value;
+        var updated = domain with
+        {
+            VerificationStatus = status,
+            VerificationMethod = method,
+            OwnershipVerifiedAtUtc = verifiedAtUtc,
+            UpdatedAtUtc = timeProvider.GetUtcNow(),
+            Version = domain.Version + 1
+        };
+        await repository.UpdateDomainAsync(updated, domain.Version, cancellationToken).ConfigureAwait(false);
+        return View(updated, role);
+    }
+
     private async Task<ManagedDomain> RequireDomainAsync(
         string actorId,
         string domainId,
@@ -329,7 +370,8 @@ public sealed class DomainManagementService(
     private static DomainAccessRole Higher(DomainAccessRole left, DomainAccessRole right) => left >= right ? left : right;
     private static ManagedDomainAccessView View(ManagedDomain domain, DomainAccessRole role) => new(
         domain.DomainId, domain.DomainName, domain.OwnerId, domain.OrganizationId, domain.Status,
-        domain.DnssecStatus, domain.DnssecDiagnostic, role, domain.CreatedAtUtc, domain.UpdatedAtUtc, domain.Version);
+        domain.DnssecStatus, domain.DnssecDiagnostic, role, domain.CreatedAtUtc, domain.UpdatedAtUtc, domain.Version,
+        domain.VerificationStatus, domain.VerificationMethod, domain.OwnershipVerifiedAtUtc);
     private static string NewId(string prefix) => $"{prefix}_{Guid.NewGuid():N}";
 
     private static string NormalizeId(string value, string parameter)

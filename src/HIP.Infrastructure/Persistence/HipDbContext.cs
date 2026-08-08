@@ -53,6 +53,9 @@ public sealed class HipDbContext(DbContextOptions<HipDbContext> options) : DbCon
     /// <summary>Gets direct per-domain access grants.</summary>
     public DbSet<HipManagedDomainAccessEntity> ManagedDomainAccess => Set<HipManagedDomainAccessEntity>();
 
+    /// <summary>Gets append-only managed-domain verification history.</summary>
+    public DbSet<HipManagedDomainVerificationEventEntity> ManagedDomainVerificationEvents => Set<HipManagedDomainVerificationEventEntity>();
+
     /// <summary>
     /// Configures table names, keys, lengths, and indexes for HIP persistence.
     /// </summary>

@@ -109,7 +109,8 @@ public sealed class EfManagedDomainRepository(HipDbContext dbContext) : IManaged
     private static ManagedDomain? ToDomain(HipManagedDomainEntity? entity) => entity is null ? null : ToDomainRequired(entity);
     private static ManagedDomain ToDomainRequired(HipManagedDomainEntity entity) => new(
         entity.DomainId, entity.DomainName, entity.OwnerId, entity.OrganizationId, entity.Status,
-        entity.DnssecStatus, entity.DnssecDiagnostic, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.Version);
+        entity.DnssecStatus, entity.DnssecDiagnostic, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.Version,
+        entity.VerificationStatus, entity.VerificationMethod, entity.OwnershipVerifiedAtUtc);
     private static DomainOrganization? ToOrganization(HipDomainOrganizationEntity? entity) => entity is null ? null : new(
         entity.OrganizationId, entity.Name, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.Version);
     private static HipManagedDomainEntity ToEntity(ManagedDomain domain) => new()
@@ -117,6 +118,8 @@ public sealed class EfManagedDomainRepository(HipDbContext dbContext) : IManaged
         DomainId = domain.DomainId, DomainName = domain.DomainName, OwnerId = domain.OwnerId,
         OrganizationId = domain.OrganizationId, Status = domain.Status, DnssecStatus = domain.DnssecStatus,
         DnssecDiagnostic = domain.DnssecDiagnostic, CreatedAtUtc = domain.CreatedAtUtc,
-        UpdatedAtUtc = domain.UpdatedAtUtc, Version = domain.Version
+        UpdatedAtUtc = domain.UpdatedAtUtc, Version = domain.Version,
+        VerificationStatus = domain.VerificationStatus, VerificationMethod = domain.VerificationMethod,
+        OwnershipVerifiedAtUtc = domain.OwnershipVerifiedAtUtc
     };
 }
