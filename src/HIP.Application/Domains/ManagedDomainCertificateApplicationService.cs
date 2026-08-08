@@ -164,13 +164,50 @@ public sealed class ManagedDomainCertificateApplicationService(
         return updated;
     }
 
+    /// <summary>Records an authorized administrative decision for an application awaiting review.</summary>
+    public async Task<ManagedDomainCertificateApplication> ReviewAsync(
+        string reviewerId,
+        string applicationId,
+        bool approve,
+        string? reviewerNotes,
+        CancellationToken cancellationToken)
+    {
+        ValidateIdentifier(reviewerId, 256, nameof(reviewerId));
+        ValidateIdentifier(applicationId, 128, nameof(applicationId));
+        if (reviewerNotes is not null &&
+            (string.IsNullOrWhiteSpace(reviewerNotes) || reviewerNotes.Length > 2_000 || reviewerNotes.Any(char.IsControl)))
+        {
+            throw new ArgumentException("Reviewer notes are invalid.", nameof(reviewerNotes));
+        }
+
+        var application = await repository.GetAsync(applicationId, cancellationToken).ConfigureAwait(false)
+            ?? throw new DomainAccessDeniedException();
+        if (application.Status != DomainCertificateApplicationStatus.PendingReview ||
+            application.Eligibility?.Decision != DomainCertificatePolicyDecision.RequiresReview)
+        {
+            throw new InvalidOperationException("Only an application awaiting manual review can receive a review decision.");
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var updated = application with
+        {
+            Status = approve ? DomainCertificateApplicationStatus.Approved : DomainCertificateApplicationStatus.Rejected,
+            ReviewerId = reviewerId,
+            ReviewerNotes = reviewerNotes,
+            Decision = approve ? "Approved after authorized manual review." : "Rejected after authorized manual review.",
+            DecisionAtUtc = now,
+            Version = application.Version + 1
+        };
+        await repository.UpdateAsync(updated, application.Version, cancellationToken).ConfigureAwait(false);
+        return updated;
+    }
+
     private async Task<ManagedDomainCertificateApplication> RequireApplicationAsync(
         string actorId,
         string applicationId,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(applicationId) || applicationId.Length > 128 || applicationId.Any(char.IsControl))
-            throw new ArgumentException("A valid application identifier is required.", nameof(applicationId));
+        ValidateIdentifier(applicationId, 128, nameof(applicationId));
         var application = await repository.GetAsync(applicationId, cancellationToken).ConfigureAwait(false);
         if (application is null) throw new DomainAccessDeniedException();
         _ = await RequireDomainAsync(actorId, application.DomainId, cancellationToken).ConfigureAwait(false);
@@ -183,6 +220,12 @@ public sealed class ManagedDomainCertificateApplicationService(
         if (domain is null || !ManagedDomainAccessPolicy.CanManageSecurity(domain.AccessRole))
             throw new DomainAccessDeniedException();
         return domain;
+    }
+
+    private static void ValidateIdentifier(string value, int maximumLength, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > maximumLength || value.Any(char.IsControl))
+            throw new ArgumentException("A valid identifier is required.", parameterName);
     }
 }
 

@@ -51,6 +51,24 @@ public sealed class DomainCertificateApplicationPageTests
         });
     }
 
+    [Test]
+    public void Managed_application_review_api_uses_authenticated_actor_and_step_up_policy()
+    {
+        var program = Read("src", "HIP.Web", "Program.cs");
+        var routeStart = program.IndexOf("static void MapAdminManagedDomainApplicationApis", StringComparison.Ordinal);
+        var routeEnd = program.IndexOf("static void MapConsumerDeviceApis", routeStart, StringComparison.Ordinal);
+        var route = program[routeStart..routeEnd];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(route, Does.Contain("ResolveAdminActor(context)"));
+            Assert.That(route, Does.Contain("ValidateConsumerDeviceAntiforgeryAsync"));
+            Assert.That(route, Does.Contain("AdminPolicies.CanManageDomainVerifications"));
+            Assert.That(route, Does.Contain("AdminPolicies.RecentPrivilegedAuthentication"));
+            Assert.That(route, Does.Not.Contain("request.ActorId"));
+        });
+    }
+
     private static string Read(params string[] segments) =>
         File.ReadAllText(Path.Combine(FindRepositoryRoot(), Path.Combine(segments)));
 

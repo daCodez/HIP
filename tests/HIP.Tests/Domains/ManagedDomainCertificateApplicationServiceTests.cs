@@ -55,6 +55,37 @@ public sealed class ManagedDomainCertificateApplicationServiceTests
     }
 
     [Test]
+    public async Task Authorized_reviewer_can_approve_a_pending_certified_application()
+    {
+        var fixture = await Fixture.CreateAsync();
+        var draft = await fixture.Service.CreateDraftAsync("owner", fixture.DomainId, DomainCertificateLevel.Certified, default);
+        var submitted = await fixture.Service.SubmitAsync("owner", draft.ApplicationId, default);
+
+        var reviewed = await fixture.Service.ReviewAsync(
+            "admin-reviewer", submitted.ApplicationId, approve: true, "Evidence independently confirmed.", default);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(reviewed.Status, Is.EqualTo(DomainCertificateApplicationStatus.Approved));
+            Assert.That(reviewed.ReviewerId, Is.EqualTo("admin-reviewer"));
+            Assert.That(reviewed.ReviewerNotes, Is.EqualTo("Evidence independently confirmed."));
+            Assert.That(reviewed.DecisionAtUtc, Is.EqualTo(Now));
+            Assert.That(reviewed.Eligibility?.Decision, Is.EqualTo(DomainCertificatePolicyDecision.RequiresReview));
+        });
+    }
+
+    [Test]
+    public async Task Review_decision_is_rejected_outside_pending_review()
+    {
+        var fixture = await Fixture.CreateAsync();
+        var draft = await fixture.Service.CreateDraftAsync("owner", fixture.DomainId, DomainCertificateLevel.Registered, default);
+
+        Assert.That(
+            async () => await fixture.Service.ReviewAsync("admin-reviewer", draft.ApplicationId, true, null, default),
+            Throws.TypeOf<InvalidOperationException>());
+    }
+
+    [Test]
     public async Task Withdrawn_application_retains_its_record_and_cannot_be_resubmitted()
     {
         var fixture = await Fixture.CreateAsync();

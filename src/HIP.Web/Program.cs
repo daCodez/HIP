@@ -250,6 +250,7 @@ MapReputationOverrideApis(app.MapGroup($"{ApiRoutes.Admin}/reputation-overrides"
 MapReputationApis(app.MapGroup($"{ApiRoutes.Admin}/reputation").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapDashboardApis(app.MapGroup($"{ApiRoutes.Admin}/dashboard").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 MapAdminScanApis(app.MapGroup($"{ApiRoutes.Admin}/scans").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
+MapAdminManagedDomainApplicationApis(app.MapGroup($"{ApiRoutes.Admin}/domain-certificate-applications"));
 MapPlatformConnectionApis(app.MapGroup($"{ApiRoutes.Admin}/platforms").RequireAuthorization(AdminPolicies.CanViewAdminDashboard));
 ServiceClientManagementEndpoints.Map(app.MapGroup($"{ApiRoutes.Admin}/service-clients"));
 MapConsumerApis(app.MapGroup(ApiRoutes.Consumer).RequireAuthorization(ConsumerPolicies.CanUseConsumerPortal));
@@ -2331,6 +2332,33 @@ static void MapConsumerDomainApis(RouteGroupBuilder domainsApi)
     }).WithName("WithdrawManagedDomainCertificateApplication");
 }
 
+/// <summary>Maps privileged review decisions for managed-domain certificate applications.</summary>
+static void MapAdminManagedDomainApplicationApis(RouteGroupBuilder applicationsApi)
+{
+    applicationsApi.MapPost("/{applicationId}/review", async (
+        string applicationId,
+        ManagedDomainCertificateReviewRequest request,
+        HttpContext context,
+        IAntiforgery antiforgery,
+        ManagedDomainCertificateApplicationService applications,
+        CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try
+        {
+            return Results.Ok(await applications.ReviewAsync(
+                ResolveAdminActor(context), applicationId, request.Approve, request.ReviewerNotes, token));
+        }
+        catch (ArgumentException exception) { return Results.BadRequest(new ApiErrorResponse(exception.Message)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+        catch (InvalidOperationException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
+    })
+        .RequireAuthorization(AdminPolicies.CanManageDomainVerifications)
+        .RequireAuthorization(AdminPolicies.RecentPrivilegedAuthentication)
+        .WithName("ReviewManagedDomainCertificateApplication");
+}
+
 /// <summary>Maps consumer-owned device registration, listing, and revocation endpoints.</summary>
 static void MapConsumerDeviceApis(RouteGroupBuilder deviceApi)
 {
@@ -3599,6 +3627,9 @@ public sealed record ManagedDomainVerificationStartRequest(HIP.Domain.Identity.V
 
 /// <summary>Requested certification level for a new managed-domain application.</summary>
 public sealed record ManagedDomainCertificateApplicationRequest(HIP.Domain.Certificates.DomainCertificateLevel RequestedLevel);
+
+/// <summary>Administrative approval or rejection of a pending managed-domain certificate application.</summary>
+public sealed record ManagedDomainCertificateReviewRequest(bool Approve, string? ReviewerNotes);
 
 /// <summary>
 /// Carries a review status decision. <paramref name="ActorId"/> is compatibility-only and never trusted for attribution.
