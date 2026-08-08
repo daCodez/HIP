@@ -76,7 +76,7 @@ public sealed class DomainCertificateMonitoringPromotionService(
             payload.CompletedVerificationMethods,
             scan.PublicRiskClassification,
             scan.PublicFindingCodes ?? [],
-            $"{origin}/api/v1/certificates/{certificateId}",
+            $"{origin}/api/v1/public/certificates/{certificateId}",
             $"{origin}/certificate/{certificateId}",
             payload.LastVerificationAtUtc,
             check.CheckedAtUtc,
@@ -190,7 +190,7 @@ public sealed class DomainCertificateMonitoringPromotionService(
             certificate.Signature.KeyId);
 
     private static bool HasCurrentPublicEndpoints(DomainTrustCertificatePayload payload, string origin) =>
-        payload.RevocationStatusUrl == $"{origin}/api/v1/certificates/{payload.CertificateId}/status" &&
+        payload.RevocationStatusUrl == $"{origin}/api/v1/public/certificates/{payload.CertificateId}" &&
         payload.PublicCertificateUrl == $"{origin}/certificate/{payload.CertificateId}";
 
     private static string NextCertificateId(string enrollmentId, string domain, int version)

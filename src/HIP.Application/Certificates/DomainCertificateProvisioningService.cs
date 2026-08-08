@@ -147,7 +147,7 @@ public sealed class DomainCertificateProvisioningService(
             [VerificationMethod.DnsTxt, VerificationMethod.WellKnownHipJson],
             scan.PublicRiskClassification,
             scan.PublicFindingCodes ?? [],
-            $"{origin}/api/v1/certificates/{certificateId}",
+            $"{origin}/api/v1/public/certificates/{certificateId}",
             $"{origin}/certificate/{certificateId}",
             enrollment.WebsiteVerifiedAtUtc.Value,
             LastMonitoringAtUtc: null,
