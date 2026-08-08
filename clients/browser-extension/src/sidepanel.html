@@ -9,16 +9,16 @@
 </head>
 <body>
   <main class="panel-shell">
+    <header class="panel-header">
+      <img class="brand-shield" src="../assets/hip-logo.png" width="54" height="64" alt="HIP shield">
+      <div><h1>Website Trust</h1><p id="activeDomain">Choose an eligible page</p><small id="pluginVersion">HIP Plugin loading</small></div>
+    </header>
+
     <div class="tabs" role="tablist" aria-label="HIP side panel">
       <button id="pageTab" role="tab" aria-selected="true" aria-controls="pagePanel" type="button">Page</button>
       <button id="siteTab" role="tab" aria-selected="false" aria-controls="sitePanel" tabindex="-1" type="button">Site</button>
       <button id="settingsTab" role="tab" aria-selected="false" aria-controls="settingsPanel" tabindex="-1" type="button">Settings</button>
     </div>
-
-    <header class="panel-header">
-      <img class="brand-shield" src="../assets/hip-logo.png" width="54" height="64" alt="HIP shield">
-      <div><h1>Website Trust</h1><p id="activeDomain">Choose an eligible page</p><small id="pluginVersion">HIP Plugin loading</small></div>
-    </header>
 
     <section id="pagePanel" role="tabpanel" aria-labelledby="pageTab">
       <div id="pageEmpty" class="empty-state">

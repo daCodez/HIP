@@ -6,6 +6,7 @@
   const ROUTE_POLL_MS = 500;
   const SESSION_VERSION = 3;
   const SESSION_KEY = "__hipXrayControllerSession";
+  const SCORE_PENALTIES = Object.freeze({ Critical: 30, High: 18, Medium: 9, Low: 4, Info: 0 });
 
   function create(options = {}) {
     const documentObject = options.document || global.document;
@@ -266,13 +267,16 @@
 
   function safeFinding(finding = {}, inventory = []) {
     const inspected = inventory.find(item => item.elementRefKey === finding.elementRefKey);
+    const severity = ["Info", "Low", "Medium", "High", "Critical"].includes(finding.severity) ? finding.severity : "Info";
+    const penalty = SCORE_PENALTIES[severity] || 0;
     return {
       findingId: safeText(finding.id, 240),
       ruleId: safeText(finding.ruleId, 160),
       ruleVersion: safeText(finding.ruleVersion, 80),
       source: safeText(finding.source, 40),
       category: safeText(finding.category, 80),
-      severity: ["Info", "Low", "Medium", "High", "Critical"].includes(finding.severity) ? finding.severity : "Info",
+      severity,
+      scoreImpact: penalty ? -penalty : 0,
       title: safeText(finding.title, 160),
       plainExplanation: safeText(finding.plainExplanation, 600),
       technicalExplanation: safeText(finding.technicalExplanation, 800),
@@ -313,8 +317,7 @@
   }
 
   function scoreFor(items) {
-    const penalties = { Critical: 30, High: 18, Medium: 9, Low: 4, Info: 0 };
-    return Math.max(0, Math.min(100, 100 - items.reduce((total, item) => total + (penalties[item.severity] || 0), 0)));
+    return Math.max(0, Math.min(100, 100 - items.reduce((total, item) => total + (SCORE_PENALTIES[item.severity] || 0), 0)));
   }
 
   /**

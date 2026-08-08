@@ -49,7 +49,10 @@ test("persistent Page panel links findings to pointer-transparent page markers",
 
     await expect(panel.locator("#activeDomain")).toHaveText("Unsupported browser page");
     await expect(panel.locator(".panel-header h1")).toHaveText("Website Trust");
-    await expect(panel.locator("#pluginVersion")).toContainText("v0.1.31");
+    await expect(panel.locator("#pluginVersion")).toContainText("v0.1.32");
+    const headerBox = await panel.locator(".panel-header").boundingBox();
+    const tabsBox = await panel.locator(".tabs").boundingBox();
+    expect(headerBox.y).toBeLessThan(tabsBox.y);
     await expect(panel.getByRole("tab", { name: "Page" })).toHaveAttribute("aria-selected", "true");
     await expect(panel.getByRole("button", { name: "X-ray this page" })).toBeVisible();
     const started = await panel.evaluate(id => chrome.tabs.sendMessage(id, { type: "HIP_XRAY_START" }), tabId);

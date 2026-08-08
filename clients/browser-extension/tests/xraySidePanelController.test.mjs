@@ -53,6 +53,7 @@ test("serialized Page state excludes DOM references and private inventory fields
   harness.controller.start();
   const state = harness.controller.getState({ inventoryOffset: 0, inventoryLimit: 50 });
   assert.equal(state.findings[0].findingId, "rule:ref");
+  assert.equal(state.findings[0].scoreImpact, -18);
   assert.equal("elementRefKey" in state.findings[0], false);
   assert.deepEqual(Object.keys(state.inventory.items[0]), ["id", "elementKind", "status"]);
   assert.equal(JSON.stringify(state).includes("privateValue"), false);

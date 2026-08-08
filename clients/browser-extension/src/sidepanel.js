@@ -1,4 +1,4 @@
-import { createActiveTabCoordinator, pickInspectableTab, statusPresentation, storagePresentation } from "./sidePanelState.js";
+import { createActiveTabCoordinator, formatScoreImpact, pickInspectableTab, statusPresentation, storagePresentation } from "./sidePanelState.js";
 import { isTrustedEmbeddedMessage } from "./embeddedPanelBridge.js";
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
@@ -179,7 +179,7 @@ function renderFindings() {
     (page.severity.value === "all" || item.severity === page.severity.value) &&
     (page.category.value === "all" || item.category === page.category.value) &&
     (page.kind.value === "all" || item.elementKind === page.kind.value));
-  page.findings.replaceChildren(...visible.map((finding, index) => findingCard(finding, index)));
+  page.findings.replaceChildren(...visible.map(finding => findingCard(finding)));
   page.visibleCount.textContent = `${visible.length} loaded of ${currentState.findingCount || 0}`;
   if (!visible.length) {
     const empty = document.createElement("li");
@@ -189,7 +189,7 @@ function renderFindings() {
   }
 }
 
-function findingCard(finding, index) {
+function findingCard(finding) {
   const item = document.createElement("li");
   const button = document.createElement("button");
   const presentation = statusPresentation(finding.severity);
@@ -198,23 +198,35 @@ function findingCard(finding, index) {
   button.dataset.findingId = finding.findingId;
   button.style.setProperty("--tone", presentation.color);
   button.setAttribute("aria-pressed", String(finding.findingId === currentState.selectedFindingId));
+  const dot = document.createElement("span");
+  dot.className = "finding-dot";
+  dot.setAttribute("aria-hidden", "true");
+  const content = document.createElement("span");
+  content.className = "finding-content";
   const title = document.createElement("span");
   title.className = "finding-title";
-  const number = document.createElement("span");
-  number.className = "finding-number";
-  number.textContent = String(index + 1).padStart(2, "0");
+  const severity = document.createElement("span");
+  severity.className = "sr-only finding-severity";
+  severity.textContent = `${presentation.label}: `;
   const strong = document.createElement("strong");
-  strong.textContent = `${presentation.label} · ${finding.title}`;
-  title.append(number, strong);
+  strong.textContent = finding.title;
+  title.append(severity, strong);
   const copy = document.createElement("span");
   copy.className = "finding-copy";
   copy.textContent = finding.plainExplanation;
-  button.append(title, copy);
+  content.append(title, copy);
+  const impact = document.createElement("span");
+  impact.className = "score-impact";
+  impact.textContent = formatScoreImpact(finding.scoreImpact);
+  impact.dataset.impact = finding.scoreImpact > 0 ? "positive" : finding.scoreImpact < 0 ? "negative" : "neutral";
+  const impactWords = finding.scoreImpact > 0 ? `plus ${finding.scoreImpact}` : finding.scoreImpact < 0 ? `minus ${Math.abs(finding.scoreImpact)}` : "zero";
+  impact.setAttribute("aria-label", `Score impact ${impactWords} points`);
+  button.append(dot, content, impact);
   if (finding.findingId === currentState.selectedFindingId) {
     const details = document.createElement("span");
     details.className = "finding-details";
     details.textContent = `Evidence: ${finding.evidence || "No additional evidence."} What to do: ${finding.remediation || "Review this element."}`;
-    button.append(details);
+    content.append(details);
   }
   button.addEventListener("click", () => selectFinding(finding.findingId));
   item.append(button);

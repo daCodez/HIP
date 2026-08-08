@@ -11,6 +11,13 @@ export function statusPresentation(value) {
   return STATUS_PRESENTATIONS[value] || STATUS_PRESENTATIONS.Info;
 }
 
+export function formatScoreImpact(value) {
+  const impact = Math.round(Math.max(-100, Math.min(100, Number(value) || 0)));
+  if (impact > 0) return `+${impact}`;
+  if (impact < 0) return `−${Math.abs(impact)}`;
+  return "0";
+}
+
 export function storagePresentation(value) {
   if (value === "Success" || value === "DuplicateSuppressed") return { key: "recorded", label: "Summary recorded" };
   if (value === "Failed" || value === "Error") return { key: "failed", label: "Not stored" };

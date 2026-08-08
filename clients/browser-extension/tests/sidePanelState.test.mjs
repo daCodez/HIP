@@ -2,12 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createActiveTabCoordinator,
+  formatScoreImpact,
   inventoryPage,
   isSupportedPageUrl,
   pickInspectableTab,
   statusPresentation,
   storagePresentation
 } from "../src/sidePanelState.js";
+
+test("score impacts use compact signed labels", () => {
+  assert.equal(formatScoreImpact(-18), "−18");
+  assert.equal(formatScoreImpact(8), "+8");
+  assert.equal(formatScoreImpact(0), "0");
+});
 
 test("inspectable tab selection recovers the latest web page when an extension surface is active", () => {
   const selected = pickInspectableTab([

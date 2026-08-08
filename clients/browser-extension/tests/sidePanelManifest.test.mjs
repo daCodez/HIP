@@ -12,7 +12,7 @@ const shellCss = await readFile(new URL("src/sidepanel-shell.css", root), "utf8"
 const sidePanelScript = await readFile(new URL("src/sidepanel.js", root), "utf8");
 
 test("manifest opens the persistent side panel from the toolbar", () => {
-  assert.equal(manifest.version, "0.1.31");
+  assert.equal(manifest.version, "0.1.32");
   assert.ok(manifest.permissions.includes("sidePanel"));
   assert.equal(manifest.side_panel.default_path, "src/sidepanel.html");
   assert.equal("default_popup" in manifest.action, false);
@@ -27,11 +27,14 @@ test("side panel provides accessible Page, Site, and Settings tabs", () => {
   }
   assert.match(html, /role="tabpanel"/);
   assert.match(html, /<img[^>]+class="brand-shield"[^>]+src="\.\.\/assets\/hip-logo\.png"/);
-  assert.ok(html.indexOf('class="tabs"') < html.indexOf('class="panel-header"'));
+  assert.ok(html.indexOf('class="panel-header"') < html.indexOf('class="tabs"'));
   assert.match(html, /<h1>Website Trust<\/h1>/);
   assert.match(html, /id="pluginVersion"/);
   assert.match(html, /href="sidepanel-shell\.css"/);
-  assert.match(shellCss, /\.panel-header\s*\{[^}]*position:\s*sticky[^}]*top:\s*43px/s);
+  assert.match(shellCss, /\.panel-header\s*\{[^}]*position:\s*sticky[^}]*top:\s*0/s);
+  assert.match(shellCss, /\.tabs\s*\{[^}]*top:\s*97px/s);
+  assert.match(sidePanelScript, /className\s*=\s*"finding-dot"/);
+  assert.match(sidePanelScript, /className\s*=\s*"score-impact"/);
   assert.match(sidePanelScript, /chrome\.runtime\.getManifest\(\)\.version/);
   assert.match(html, /<button id="startXray"[^>]*>X-ray this page<\/button>/);
   assert.doesNotMatch(html, /class="brand-mark"[^>]*>\s*HIP\s*</);
