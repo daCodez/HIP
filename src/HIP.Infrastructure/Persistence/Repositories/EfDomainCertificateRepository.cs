@@ -1544,7 +1544,9 @@ public sealed class EfDomainCertificateRepository(
             stored.IssuanceEvent.EventType != "CertificateIssued" ||
             stored.IssuanceEvent.PreviousStatus is not null ||
             stored.IssuanceEvent.CurrentStatus != HIP.Domain.Certificates.DomainCertificateStatus.Active ||
-            stored.IssuanceEvent.OccurredAtUtc != stored.Certificate.Payload.IssuedAtUtc)
+            !SameDatabaseTimestamp(
+                stored.IssuanceEvent.OccurredAtUtc,
+                stored.Certificate.Payload.IssuedAtUtc))
         {
             throw new ArgumentException("Stored domain certificate issuance data is inconsistent.", nameof(stored));
         }
@@ -1575,10 +1577,10 @@ public sealed class EfDomainCertificateRepository(
             entity.Status != stored.CurrentStatus ||
             entity.PolicyVersion != payload.PolicyVersion ||
             entity.CertificateVersion != payload.CertificateVersion ||
-            entity.IssuedAtUtc != payload.IssuedAtUtc ||
-            entity.ExpiresAtUtc != payload.ExpiresAtUtc ||
-            entity.LastVerificationAtUtc != payload.LastVerificationAtUtc ||
-            entity.LastMonitoringAtUtc != payload.LastMonitoringAtUtc ||
+            !SameDatabaseTimestamp(entity.IssuedAtUtc, payload.IssuedAtUtc) ||
+            !SameDatabaseTimestamp(entity.ExpiresAtUtc, payload.ExpiresAtUtc) ||
+            !SameDatabaseTimestamp(entity.LastVerificationAtUtc, payload.LastVerificationAtUtc) ||
+            !SameDatabaseTimestamp(entity.LastMonitoringAtUtc, payload.LastMonitoringAtUtc) ||
             entity.PublicDisplayName != payload.PublicDisplayName ||
             entity.PublicOrganizationName != payload.PublicOrganizationName ||
             entity.RegistrantPublicKeyId != payload.RegistrantPublicKeyId ||
@@ -1618,6 +1620,12 @@ public sealed class EfDomainCertificateRepository(
         value.Length == 71 &&
         value.StartsWith("sha256:", StringComparison.Ordinal) &&
         value.AsSpan(7).IndexOfAnyExcept("0123456789abcdef") < 0;
+
+    // PostgreSQL timestamps retain microseconds while DateTimeOffset and signed JSON retain 100-nanosecond ticks.
+    private static bool SameDatabaseTimestamp(DateTimeOffset? databaseValue, DateTimeOffset? signedValue) =>
+        databaseValue is null || signedValue is null
+            ? databaseValue is null && signedValue is null
+            : Math.Abs(databaseValue.Value.UtcTicks - signedValue.Value.UtcTicks) < TimeSpan.TicksPerMicrosecond;
 
     private static void ValidateIdentifier(string value, int maximumLength)
     {
