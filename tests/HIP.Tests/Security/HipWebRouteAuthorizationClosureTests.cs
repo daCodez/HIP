@@ -21,7 +21,7 @@ namespace HIP.Tests.Security;
 [TestFixture]
 public sealed class HipWebRouteAuthorizationClosureTests
 {
-    private const int ExpectedProtectedRouteCount = 123;
+    private const int ExpectedProtectedRouteCount = 132;
 
     private static readonly PrincipalKind[] HumanPrincipals = Enum.GetValues<PrincipalKind>();
 
@@ -218,7 +218,7 @@ public sealed class HipWebRouteAuthorizationClosureTests
         Route(HttpMethods.Post, "/api/v1/admin/service-clients/{clientId}/credentials/rotate", AdminPolicies.CanManageServiceClients, AdminPolicies.RecentPrivilegedAuthentication),
         Route(HttpMethods.Post, "/api/v1/admin/service-clients/{clientId}/revoke", AdminPolicies.CanManageServiceClients, AdminPolicies.RecentPrivilegedAuthentication),
 
-        // Consumer portal APIs: 11 (103 cumulative).
+        // Consumer portal APIs: 20 (112 cumulative).
         Route(HttpMethods.Get, "/api/v1/consumer/status", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Get, "/api/v1/consumer/scans", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Get, "/api/v1/consumer/reports", ConsumerPolicies.CanUseConsumerPortal),
@@ -229,7 +229,16 @@ public sealed class HipWebRouteAuthorizationClosureTests
         Route(HttpMethods.Post, "/api/v1/consumer/devices/registration-challenges", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Post, "/api/v1/consumer/devices/registration-challenges/{challengeId}/responses", ConsumerPolicies.CanUseConsumerPortal),
         Route(HttpMethods.Get, "/api/v1/consumer/devices", ConsumerPolicies.CanUseConsumerPortal),
-        Route(HttpMethods.Post, "/api/v1/consumer/devices/{deviceId}/revoke", ConsumerPolicies.CanUseConsumerPortal)
+        Route(HttpMethods.Post, "/api/v1/consumer/devices/{deviceId}/revoke", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Get, "/api/v1/consumer/domains", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Get, "/api/v1/consumer/domains/{domainId}", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Post, "/api/v1/consumer/domains", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Patch, "/api/v1/consumer/domains/{domainId}", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Delete, "/api/v1/consumer/domains/{domainId}", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Post, "/api/v1/consumer/domains/{domainId}/transfer", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Post, "/api/v1/consumer/domains/{domainId}/verification", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Post, "/api/v1/consumer/domains/{domainId}/verification/check", ConsumerPolicies.CanUseConsumerPortal),
+        Route(HttpMethods.Get, "/api/v1/consumer/domains/{domainId}/verification/history", ConsumerPolicies.CanUseConsumerPortal)
     ];
 
     /// <summary>

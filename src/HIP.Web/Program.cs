@@ -14,6 +14,7 @@ using HIP.Application.Certificates;
 using HIP.Application.Consumer;
 using HIP.Application.Dashboard;
 using HIP.Application.Devices;
+using HIP.Application.Domains;
 using HIP.Application.Identity;
 using HIP.Application.PublicLookup;
 using HIP.Application.Performance;
@@ -2188,6 +2189,102 @@ static void MapConsumerApis(RouteGroupBuilder consumerApi)
     });
 
     MapConsumerDeviceApis(consumerApi.MapGroup("/devices"));
+    MapConsumerDomainApis(consumerApi.MapGroup("/domains"));
+}
+
+/// <summary>Maps authenticated, membership-authorized domain-management endpoints.</summary>
+static void MapConsumerDomainApis(RouteGroupBuilder domainsApi)
+{
+    domainsApi.MapGet("/", async (HttpContext context, IDomainManagementService domains, CancellationToken token) =>
+        Results.Ok(await domains.ListAsync(ConsumerId(context), new ManagedDomainQuery(), token)))
+        .WithName("ListManagedDomains");
+
+    domainsApi.MapGet("/{domainId}", async (string domainId, HttpContext context, IDomainManagementService domains, CancellationToken token) =>
+    {
+        var domain = await domains.GetAsync(ConsumerId(context), domainId, token);
+        return domain is null ? Results.NotFound() : Results.Ok(domain);
+    }).WithName("GetManagedDomain");
+
+    domainsApi.MapPost("/", async (RegisterManagedDomainRequest request, HttpContext context, IAntiforgery antiforgery, IDomainManagementService domains, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try
+        {
+            var created = await domains.RegisterAsync(ConsumerId(context), request, token);
+            return Results.Created($"{ApiRoutes.Consumer}/domains/{Uri.EscapeDataString(created.DomainId)}", created);
+        }
+        catch (ArgumentException exception) { return Results.BadRequest(new ApiErrorResponse(exception.Message)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+        catch (InvalidOperationException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
+    }).WithName("RegisterManagedDomain");
+
+    domainsApi.MapPatch("/{domainId}", async (string domainId, ManagedDomainPatchRequest request, HttpContext context, IAntiforgery antiforgery, IDomainManagementService domains, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try
+        {
+            var actor = ConsumerId(context);
+            if (request.UpdateOrganization)
+                return Results.Ok(await domains.AssignOrganizationAsync(actor, domainId, request.OrganizationId, token));
+            if (request.DnssecStatus is { } dnssec)
+                return Results.Ok(await domains.UpdateDnssecAsync(actor, domainId, dnssec, request.DnssecDiagnostic, token));
+            return Results.BadRequest(new ApiErrorResponse("A supported domain change is required."));
+        }
+        catch (ArgumentException exception) { return Results.BadRequest(new ApiErrorResponse(exception.Message)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+    }).WithName("UpdateManagedDomain");
+
+    domainsApi.MapDelete("/{domainId}", async (string domainId, HttpContext context, IAntiforgery antiforgery, IDomainManagementService domains, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try
+        {
+            await domains.RemoveAsync(ConsumerId(context), domainId, token);
+            return Results.NoContent();
+        }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+    }).WithName("RemoveManagedDomain");
+
+    domainsApi.MapPost("/{domainId}/transfer", async (string domainId, ManagedDomainTransferRequest request, HttpContext context, IAntiforgery antiforgery, IDomainManagementService domains, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try
+        {
+            return Results.Ok(await domains.TransferOwnershipAsync(ConsumerId(context), domainId, request.NewOwnerId, token));
+        }
+        catch (ArgumentException exception) { return Results.BadRequest(new ApiErrorResponse(exception.Message)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+    }).WithName("TransferManagedDomain");
+
+    domainsApi.MapPost("/{domainId}/verification", async (string domainId, ManagedDomainVerificationStartRequest request, HttpContext context, IAntiforgery antiforgery, ManagedDomainVerificationService verification, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try { return Results.Ok(await verification.StartAsync(ConsumerId(context), domainId, request.Method, token)); }
+        catch (ArgumentException exception) { return Results.BadRequest(new ApiErrorResponse(exception.Message)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+        catch (InvalidOperationException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
+    }).WithName("StartManagedDomainVerification");
+
+    domainsApi.MapPost("/{domainId}/verification/check", async (string domainId, ManagedDomainVerificationStartRequest request, HttpContext context, IAntiforgery antiforgery, ManagedDomainVerificationService verification, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try { return Results.Ok(await verification.CheckAsync(ConsumerId(context), domainId, request.Method, token)); }
+        catch (ArgumentException exception) { return Results.BadRequest(new ApiErrorResponse(exception.Message)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+        catch (InvalidOperationException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
+    }).WithName("CheckManagedDomainVerification");
+
+    domainsApi.MapGet("/{domainId}/verification/history", async (string domainId, HttpContext context, ManagedDomainVerificationService verification, CancellationToken token) =>
+    {
+        try { return Results.Ok(await verification.ListHistoryAsync(ConsumerId(context), domainId, token)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+    }).WithName("ListManagedDomainVerificationHistory");
 }
 
 /// <summary>Maps consumer-owned device registration, listing, and revocation endpoints.</summary>
@@ -3442,6 +3539,19 @@ public sealed record AdminRuleSimulationRequest(
 /// HIP binds attribution to the unique authenticated actor claim.
 /// </summary>
 public sealed record AdminDecisionRequest(string ActorId, string Reason);
+
+/// <summary>Bounded partial update for managed-domain organization or DNSSEC state.</summary>
+public sealed record ManagedDomainPatchRequest(
+    bool UpdateOrganization,
+    string? OrganizationId,
+    HIP.Domain.Domains.DomainDnssecStatus? DnssecStatus,
+    string? DnssecDiagnostic);
+
+/// <summary>Permanent ownership transfer target. The actor is derived from authentication.</summary>
+public sealed record ManagedDomainTransferRequest(string NewOwnerId);
+
+/// <summary>Requested managed-domain ownership verification method.</summary>
+public sealed record ManagedDomainVerificationStartRequest(HIP.Domain.Identity.VerificationMethod Method);
 
 /// <summary>
 /// Carries a review status decision. <paramref name="ActorId"/> is compatibility-only and never trusted for attribution.

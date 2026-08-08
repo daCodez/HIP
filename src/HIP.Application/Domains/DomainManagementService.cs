@@ -82,6 +82,8 @@ public interface IDomainManagementService
     Task<ManagedDomainAccessView> TransferOwnershipAsync(string actorId, string domainId, string newOwnerId, CancellationToken cancellationToken);
     /// <summary>Assigns or removes a domain from an organization when both boundaries authorize the actor.</summary>
     Task<ManagedDomainAccessView> AssignOrganizationAsync(string actorId, string domainId, string? organizationId, CancellationToken cancellationToken);
+    /// <summary>Soft-removes a domain from active account views while retaining its history.</summary>
+    Task RemoveAsync(string actorId, string domainId, CancellationToken cancellationToken);
     /// <summary>Updates the domain's DNSSEC security profile.</summary>
     Task<ManagedDomainAccessView> UpdateDnssecAsync(string actorId, string domainId, DomainDnssecStatus status, string? diagnostic, CancellationToken cancellationToken);
     /// <summary>Updates ownership verification state after an authorized verification workflow step.</summary>
@@ -264,6 +266,20 @@ public sealed class DomainManagementService(
         var updated = domain with { OrganizationId = normalizedOrganizationId, UpdatedAtUtc = timeProvider.GetUtcNow(), Version = domain.Version + 1 };
         await repository.UpdateDomainAsync(updated, domain.Version, cancellationToken).ConfigureAwait(false);
         return View(updated, (await ResolveRoleAsync(actor, updated, cancellationToken).ConfigureAwait(false)) ?? DomainAccessRole.Owner);
+    }
+
+    /// <inheritdoc />
+    public async Task RemoveAsync(string actorId, string domainId, CancellationToken cancellationToken)
+    {
+        var domain = await RequireDomainAsync(actorId, domainId, ManagedDomainAccessPolicy.CanManageDomain, cancellationToken)
+            .ConfigureAwait(false);
+        var updated = domain with
+        {
+            Status = ManagedDomainStatus.Removed,
+            UpdatedAtUtc = timeProvider.GetUtcNow(),
+            Version = domain.Version + 1
+        };
+        await repository.UpdateDomainAsync(updated, domain.Version, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

@@ -47,6 +47,16 @@ public sealed class ManagedDomainVerificationService(
     IManagedDomainVerificationAuditRepository auditRepository,
     TimeProvider timeProvider)
 {
+    /// <summary>Returns privacy-safe verification history only after checking domain access.</summary>
+    public async Task<IReadOnlyCollection<ManagedDomainVerificationAuditEvent>> ListHistoryAsync(
+        string actorId,
+        string domainId,
+        CancellationToken cancellationToken)
+    {
+        _ = await RequireManageableAsync(actorId, domainId, cancellationToken).ConfigureAwait(false);
+        return await auditRepository.ListAsync(domainId, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Starts a challenge after confirming the actor can manage the stable domain record.</summary>
     public async Task<ManagedDomainVerificationChallengeView> StartAsync(
         string actorId,
