@@ -2330,6 +2330,21 @@ static void MapConsumerDomainApis(RouteGroupBuilder domainsApi)
         catch (DomainAccessDeniedException) { return Results.NotFound(); }
         catch (InvalidOperationException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
     }).WithName("WithdrawManagedDomainCertificateApplication");
+
+    domainsApi.MapPost("/certificate-applications/{applicationId}/issue", async (string applicationId, HttpContext context, IAntiforgery antiforgery, ManagedDomainCertificateIssuanceService issuance, CancellationToken token) =>
+    {
+        var invalid = await ValidateConsumerDeviceAntiforgeryAsync(context, antiforgery);
+        if (invalid is not null) return invalid;
+        try
+        {
+            var result = await issuance.IssueAsync(ConsumerId(context), applicationId, token);
+            return result.Status is ManagedDomainCertificateIssuanceStatus.Issued or ManagedDomainCertificateIssuanceStatus.Existing
+                ? Results.Ok(result)
+                : Results.Conflict(result);
+        }
+        catch (ArgumentException exception) { return Results.BadRequest(new ApiErrorResponse(exception.Message)); }
+        catch (DomainAccessDeniedException) { return Results.NotFound(); }
+    }).WithName("IssueManagedDomainCertificateApplication");
 }
 
 /// <summary>Maps privileged review decisions for managed-domain certificate applications.</summary>
