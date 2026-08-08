@@ -13,12 +13,15 @@ public sealed class DnsDomainVerificationService(
     ILogger<DnsDomainVerificationService> logger,
     DomainVerificationLifecycleOptions? lifecycleOptions = null,
     TimeProvider? timeProvider = null,
-    IWellKnownHipDocumentVerifier? wellKnownVerifier = null) : IDomainVerificationService
+    IWellKnownHipDocumentVerifier? wellKnownVerifier = null,
+    IHtmlDomainVerificationEvidenceProvider? htmlEvidenceProvider = null) : IDomainVerificationService
 {
     private const string VerificationPrefix = "hip-site-verification=";
     private readonly DomainVerificationLifecycleOptions lifecycle =
         (lifecycleOptions ?? DomainVerificationLifecycleOptions.Default).Validate();
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
+    private readonly IHtmlDomainVerificationEvidenceProvider htmlVerifier =
+        htmlEvidenceProvider ?? new UnavailableHtmlDomainVerificationEvidenceProvider();
 
     /// <summary>
     /// Creates a domain verification challenge token for DNS TXT or .well-known based verification.
@@ -29,9 +32,9 @@ public sealed class DnsDomainVerificationService(
     /// <returns>The created verification request.</returns>
     public async Task<DomainVerificationRequest> StartAsync(string domain, VerificationMethod method, CancellationToken cancellationToken)
     {
-        if (method is not (VerificationMethod.DnsTxt or VerificationMethod.WellKnownHipJson))
+        if (!IsSupportedMethod(method))
         {
-            throw new ArgumentException("MVP verification supports DNS TXT and .well-known/hip.json only.", nameof(method));
+            throw new ArgumentException("Unsupported domain verification method.", nameof(method));
         }
 
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
@@ -60,9 +63,9 @@ public sealed class DnsDomainVerificationService(
         VerificationMethod method,
         CancellationToken cancellationToken)
     {
-        if (method is not (VerificationMethod.DnsTxt or VerificationMethod.WellKnownHipJson))
+        if (!IsSupportedMethod(method))
         {
-            throw new ArgumentException("MVP verification supports DNS TXT and .well-known/hip.json only.", nameof(method));
+            throw new ArgumentException("Unsupported domain verification method.", nameof(method));
         }
 
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
@@ -177,9 +180,24 @@ public sealed class DnsDomainVerificationService(
                 message = result.Message;
             }
         }
+        else if (method is VerificationMethod.HtmlFile or VerificationMethod.MetaTag)
+        {
+            if (!TokensMatch(request.Token, token))
+            {
+                status = VerificationStatus.Unverified;
+                message = "The supplied verification challenge does not match the active domain claim.";
+            }
+            else
+            {
+                var check = await htmlVerifier.CheckAsync(normalized, method, request.Token, cancellationToken)
+                    .ConfigureAwait(false);
+                status = MapDnsCheckStatus(check.Status);
+                message = check.Message;
+            }
+        }
         else
         {
-            throw new ArgumentException("MVP verification supports DNS TXT and .well-known/hip.json only.", nameof(method));
+            throw new ArgumentException("Unsupported domain verification method.", nameof(method));
         }
 
         var checkedAtUtc = clock.GetUtcNow();
@@ -213,9 +231,9 @@ public sealed class DnsDomainVerificationService(
         VerificationMethod method,
         CancellationToken cancellationToken)
     {
-        if (method is not (VerificationMethod.DnsTxt or VerificationMethod.WellKnownHipJson))
+        if (!IsSupportedMethod(method))
         {
-            throw new InvalidOperationException("Automated retry supports DNS TXT and signed well-known verification only.");
+            throw new InvalidOperationException("Automated retry does not support this verification method.");
         }
 
         var normalized = DomainInputValidator.ValidateAndNormalize(domain);
@@ -239,9 +257,14 @@ public sealed class DnsDomainVerificationService(
                     "The verification challenge expired. Issue a new challenge before checking DNS again."));
         }
 
-        var check = method == VerificationMethod.DnsTxt
-            ? await CheckDnsTxtAsync(normalized, request.Token, cancellationToken).ConfigureAwait(false)
-            : await CheckWellKnownAsync(request, cancellationToken).ConfigureAwait(false);
+        var check = method switch
+        {
+            VerificationMethod.DnsTxt => await CheckDnsTxtAsync(normalized, request.Token, cancellationToken).ConfigureAwait(false),
+            VerificationMethod.WellKnownHipJson => await CheckWellKnownAsync(request, cancellationToken).ConfigureAwait(false),
+            VerificationMethod.HtmlFile or VerificationMethod.MetaTag =>
+                await htmlVerifier.CheckAsync(normalized, method, request.Token, cancellationToken).ConfigureAwait(false),
+            _ => throw new InvalidOperationException("Automated retry does not support this verification method.")
+        };
         var status = MapDnsCheckStatus(check.Status);
         var updated = request with
         {
@@ -565,6 +588,10 @@ public sealed class DnsDomainVerificationService(
     /// <returns>True when the tokens match exactly.</returns>
     private static bool TokensMatch(string left, string right) =>
         DomainVerificationChallengeToken.Matches(left, right);
+
+    private static bool IsSupportedMethod(VerificationMethod method) => method is
+        VerificationMethod.DnsTxt or VerificationMethod.WellKnownHipJson or
+        VerificationMethod.HtmlFile or VerificationMethod.MetaTag;
 
     /// <summary>
     /// Builds a plain-English status message that avoids exposing verification tokens.

@@ -10,6 +10,32 @@ namespace HIP.Tests.Identity;
 /// </summary>
 public sealed class DnsDomainVerificationServiceTests
 {
+    [TestCase(VerificationMethod.HtmlFile, "https://example.test/hip-verification.txt")]
+    [TestCase(VerificationMethod.MetaTag, "https://example.test/")]
+    public async Task Html_verification_methods_use_the_bounded_evidence_provider(
+        VerificationMethod method,
+        string expectedLocation)
+    {
+        var repository = new TestDomainVerificationRequestRepository();
+        var provider = new StubHtmlEvidenceProvider(DomainVerificationCheckStatus.Verified);
+        var service = new DnsDomainVerificationService(
+            new StubDnsTxtRecordResolver(_ => Task.FromResult<IReadOnlyCollection<string>>([])),
+            repository,
+            new CapturingLogger<DnsDomainVerificationService>(),
+            timeProvider: TimeProvider.System,
+            htmlEvidenceProvider: provider);
+        var challenge = await service.StartAsync("example.test", method, default);
+
+        var result = await service.VerifyAsync("example.test", method, challenge.Token, default);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(VerificationStatus.Verified));
+            Assert.That(result.VerifiedAtUtc, Is.Not.Null);
+            Assert.That(provider.Location, Is.EqualTo(expectedLocation));
+            Assert.That(provider.ExpectedToken, Is.EqualTo(challenge.Token));
+        });
+    }
     /// <summary>
     /// Verifies that an exact HIP TXT value proves domain control for the requested token.
     /// </summary>
@@ -499,6 +525,27 @@ public sealed class DnsDomainVerificationServiceTests
         /// <returns>Fake TXT records.</returns>
         public Task<IReadOnlyCollection<string>> ResolveTxtRecordsAsync(string recordName, CancellationToken cancellationToken) =>
             resolve(recordName);
+    }
+
+    private sealed class StubHtmlEvidenceProvider(DomainVerificationCheckStatus status)
+        : IHtmlDomainVerificationEvidenceProvider
+    {
+        public string? Location { get; private set; }
+        public string? ExpectedToken { get; private set; }
+
+        public Task<DomainVerificationCheckResult> CheckAsync(
+            string domain,
+            VerificationMethod method,
+            string expectedToken,
+            CancellationToken cancellationToken)
+        {
+            ExpectedToken = expectedToken;
+            Location = method == VerificationMethod.HtmlFile
+                ? $"https://{domain}/hip-verification.txt"
+                : $"https://{domain}/";
+            return Task.FromResult(new DomainVerificationCheckResult(
+                domain, Location, status, DateTimeOffset.UtcNow, "Test result."));
+        }
     }
 
     /// <summary>

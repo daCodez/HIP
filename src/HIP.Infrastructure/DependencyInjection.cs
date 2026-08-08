@@ -87,6 +87,7 @@ public static class DependencyInjection
         services.AddSingleton<IPublicSuffixResolver, PublicSuffixListResolver>();
         services.AddSingleton(WellKnownHipDocumentFetchOptions.Default);
         services.AddSingleton<IWellKnownHipDocumentFetcher, SafeWellKnownHipDocumentFetcher>();
+        services.AddSingleton<IHtmlDomainVerificationEvidenceProvider, SafeHtmlDomainVerificationEvidenceProvider>();
         services.AddSingleton<IWellKnownHostAddressResolver, SystemWellKnownHostAddressResolver>();
         services.AddSingleton<IWellKnownHttpMessageHandlerFactory, PinnedWellKnownHttpMessageHandlerFactory>();
 

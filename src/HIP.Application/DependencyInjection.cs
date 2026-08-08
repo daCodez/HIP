@@ -236,6 +236,7 @@ public static class DependencyInjection
         services.AddScoped<IDomainVerificationLifecycleCoordinator, DomainVerificationLifecycleCoordinator>();
         services.TryAddSingleton<IDnsTxtRecordResolver, NoOpDnsTxtRecordResolver>();
         services.TryAddSingleton<IWellKnownHipDocumentFetcher, UnavailableWellKnownHipDocumentFetcher>();
+        services.TryAddSingleton<IHtmlDomainVerificationEvidenceProvider, UnavailableHtmlDomainVerificationEvidenceProvider>();
         services.AddScoped<IWellKnownHipDocumentVerifier, WellKnownHipDocumentVerifier>();
         services.AddScoped<IDomainVerificationService, DnsDomainVerificationService>();
         // Runtime setup-code licenses are supplied by HIP.Infrastructure so HUD activation state survives restarts.
