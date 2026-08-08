@@ -1119,7 +1119,8 @@ public sealed class EfDomainCertificateRepository(
                 if (enrollment.MonitoringEnabledAtUtc is null ||
                     enrollment.Status != record.ExpectedStatus ||
                     current.Status != DomainCertificateStatus.Active ||
-                    current.Level != DomainCertificateLevel.Verified ||
+                    current.Level is not DomainCertificateLevel.Verified and
+                        not DomainCertificateLevel.Monitored ||
                     current.CertificateVersion != promotion.ExpectedCertificateVersion)
                 {
                     if (transaction is not null)
