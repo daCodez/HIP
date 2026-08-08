@@ -6,6 +6,24 @@ namespace HIP.Tests.Certificates;
 public sealed class DomainCertificateLifecycleServiceTests
 {
     [Test]
+    public async Task Active_certificate_can_be_marked_action_required_with_audited_reason()
+    {
+        var lifecycleRepository = new FakeLifecycleRepository();
+        var service = Service(Stored(DomainCertificateStatus.Active), lifecycleRepository);
+
+        var result = await service.ChangeStatusAsync(new(
+            "hip-domain-cert-0001", DomainCertificateStatus.ActionRequired,
+            "Resolve the newly detected critical finding.", "operation-action", "admin"), default);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(DomainCertificateLifecycleChangeStatus.Changed));
+            Assert.That(lifecycleRepository.Transition?.TargetStatus, Is.EqualTo(DomainCertificateStatus.ActionRequired));
+            Assert.That(lifecycleRepository.Transition?.ReasonCode, Is.EqualTo("action-required"));
+        });
+    }
+
+    [Test]
     public async Task Authorized_suspend_records_reasoned_transition()
     {
         var lifecycleRepository = new FakeLifecycleRepository();

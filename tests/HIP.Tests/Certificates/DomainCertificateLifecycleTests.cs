@@ -36,9 +36,12 @@ public sealed class DomainCertificateLifecycleTests
     [TestCase(DomainCertificateStatus.PendingVerification, DomainCertificateStatus.Active)]
     [TestCase(DomainCertificateStatus.PendingReview, DomainCertificateStatus.Active)]
     [TestCase(DomainCertificateStatus.Active, DomainCertificateStatus.Suspended)]
+    [TestCase(DomainCertificateStatus.Active, DomainCertificateStatus.ActionRequired)]
     [TestCase(DomainCertificateStatus.Active, DomainCertificateStatus.RenewalRequired)]
     [TestCase(DomainCertificateStatus.Active, DomainCertificateStatus.Expired)]
     [TestCase(DomainCertificateStatus.Suspended, DomainCertificateStatus.Active)]
+    [TestCase(DomainCertificateStatus.ActionRequired, DomainCertificateStatus.Active)]
+    [TestCase(DomainCertificateStatus.ActionRequired, DomainCertificateStatus.Suspended)]
     [TestCase(DomainCertificateStatus.RenewalRequired, DomainCertificateStatus.PendingVerification)]
     public void Certificate_allows_defined_lifecycle_transitions(
         DomainCertificateStatus current,

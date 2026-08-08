@@ -79,7 +79,7 @@ public sealed class DomainCertificateLifecycleService(
             ValidateIdentifier(request.OperationId, 128);
             reason = request.Reason?.Trim() ?? string.Empty;
             if (reason.Length is < 5 or > 500 || reason.Any(char.IsControl) ||
-                request.TargetStatus is not (DomainCertificateStatus.Suspended or DomainCertificateStatus.Active or DomainCertificateStatus.Revoked))
+                request.TargetStatus is not (DomainCertificateStatus.ActionRequired or DomainCertificateStatus.Suspended or DomainCertificateStatus.Active or DomainCertificateStatus.Revoked))
             {
                 return Result(DomainCertificateLifecycleChangeStatus.InvalidRequest);
             }
@@ -155,6 +155,7 @@ public sealed class DomainCertificateLifecycleService(
     {
         DomainCertificateStatus.Suspended => "manual-suspension",
         DomainCertificateStatus.Revoked => "manual-revocation",
+        DomainCertificateStatus.ActionRequired => "action-required",
         _ => "manual-reinstatement"
     };
 

@@ -29,6 +29,7 @@ public enum DomainCertificateStatus
     PendingVerification,
     PendingReview,
     Active,
+    ActionRequired,
     Suspended,
     Revoked,
     Expired,
@@ -137,10 +138,15 @@ public static class DomainCertificateLifecycle
             (DomainCertificateStatus.PendingVerification, DomainCertificateStatus.Active),
             (DomainCertificateStatus.PendingReview, DomainCertificateStatus.Active),
             (DomainCertificateStatus.Active, DomainCertificateStatus.Suspended),
+            (DomainCertificateStatus.Active, DomainCertificateStatus.ActionRequired),
             (DomainCertificateStatus.Active, DomainCertificateStatus.Expired),
             (DomainCertificateStatus.Active, DomainCertificateStatus.RenewalRequired),
             (DomainCertificateStatus.Suspended, DomainCertificateStatus.Active),
             (DomainCertificateStatus.Suspended, DomainCertificateStatus.RenewalRequired),
+            (DomainCertificateStatus.ActionRequired, DomainCertificateStatus.Active),
+            (DomainCertificateStatus.ActionRequired, DomainCertificateStatus.Suspended),
+            (DomainCertificateStatus.ActionRequired, DomainCertificateStatus.RenewalRequired),
+            (DomainCertificateStatus.ActionRequired, DomainCertificateStatus.Expired),
             (DomainCertificateStatus.RenewalRequired, DomainCertificateStatus.PendingVerification),
             (DomainCertificateStatus.RenewalRequired, DomainCertificateStatus.Expired),
             (DomainCertificateStatus.Expired, DomainCertificateStatus.PendingVerification)
@@ -163,10 +169,10 @@ public static class DomainCertificateLifecycle
     /// <summary>Requires a non-secret audit reason for manual suspension or revocation.</summary>
     public static void RequireReason(DomainCertificateStatus target, string? reason)
     {
-        if (target is DomainCertificateStatus.Suspended or DomainCertificateStatus.Revoked &&
+        if (target is DomainCertificateStatus.ActionRequired or DomainCertificateStatus.Suspended or DomainCertificateStatus.Revoked &&
             string.IsNullOrWhiteSpace(reason))
         {
-            throw new ArgumentException("A reason is required to suspend or revoke a HIP Domain Trust Certificate.", nameof(reason));
+            throw new ArgumentException("A reason is required for this HIP Domain Trust Certificate status change.", nameof(reason));
         }
     }
 }
