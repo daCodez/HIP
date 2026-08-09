@@ -19,6 +19,10 @@ A high score does not issue a certificate. A valid signature proves HIP origin a
 
 Certificate eligibility fails closed when a required provider is unavailable, evidence is older than the policy freshness window, a scan came from a browser client instead of the HIP-owned certificate-review path, or required signal metadata is missing. Completing a public identity profile does not by itself prove organization identity.
 
+The V1 freshness windows are 30 days for domain-control and identity evidence, seven days for the server-owned security review, and 24 hours for DNSSEC validation. Account contact verification is taken from the authenticated identity provider's verified-email claim at submission and issuance time. Certified decisions query the configured recursive DNS resolver for a current DNSSEC result rather than trusting a manually stored status. An authorized reviewer must separately attest that organization or registrant identity was verified before approving a Certified application, and HIP records that attestation time.
+
+Required security-provider coverage consists of SSL Labs TLS evidence, Google Web Risk threat-list evidence, and VirusTotal URL-reputation evidence. The Google and VirusTotal adapters use their official REST APIs and store only normalized findings, not raw provider responses. Their API keys must come from deployment secrets. Both adapters submit only the public origin, never a page path, query string, fragment, form value, or page content. If a provider is disabled, lacks credentials, times out, fails, or returns unreadable evidence, certificate eligibility remains blocked.
+
 The implemented policy identifier is `hip-domain-certificate-v1`. Policy values live in the strongly typed `DomainCertificatePolicy` model rather than UI or badge code.
 
 ## Owner enrollment
@@ -30,8 +34,8 @@ The owner portal is `/consumer/certificates`.
 3. Ask HIP to check DNS. Successful ownership verification is persisted with an audit event.
 4. Publish the exact HTTPS control document at `https://<domain>/.well-known/hip.json` when the website-verification step is requested. HIP does not fetch arbitrary owner-supplied paths.
 5. Complete the permitted public identity fields. Private contacts, internal notes, raw scans, provider payloads, and challenge values do not belong in the public certificate.
-6. Submit the application from the authenticated owner account. HIP binds the fixed authority and accuracy declarations to the enrollment, verified domain, selected identity fields, policy version, and a SHA-256 attestation digest.
-7. An authorized HIP reviewer approves, requests changes, or denies the application with a required privacy-safe reason. The reviewer identity, decision, attestation digest, and timestamp are permanently audited.
+6. Submit the application from the authenticated owner account. HIP requires a current verified-email identity claim and binds the fixed authority and accuracy declarations to the enrollment, verified domain, selected identity fields, policy version, and a SHA-256 attestation digest.
+7. An authorized HIP reviewer approves, requests changes, or denies the application with a required privacy-safe reason. Certified approval also requires an explicit organization or registrant identity-verification attestation. The reviewer identity, decision, attestation digest, identity-verification timestamp, and decision timestamp are permanently audited.
 8. Only an approved application may run the server-owned security review. When the evidence is eligible, HIP signs, self-verifies, and atomically stores the certificate and issuance event. Review-required and ineligible decisions remain non-issued.
 
 The HTTPS fetcher uses HTTPS only, bounded redirects, safe ports, response limits, strict timeouts, registrable-domain redirect checks, and address validation before and after connection to resist SSRF and DNS rebinding.
