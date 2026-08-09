@@ -13,8 +13,11 @@ A high score does not issue a certificate. A valid signature proves HIP origin a
 ## Levels
 
 - **HIP Registered** means HIP verified domain control. It makes no site-safety claim.
-- **HIP Verified** requires DNS control, HTTPS website control, identity or organization details, an initial security review, no unresolved critical findings, and the versioned certificate policy to pass.
+- **HIP Verified** requires DNS control, HTTPS website control, identity details, a fresh server-owned security review, valid TLS evidence, completed TLS, threat-intelligence, and URL-reputation provider coverage, no unresolved critical findings, and the versioned certificate policy to pass.
 - **HIP Monitored** requires Verified conditions to remain satisfied, an active certificate, current monitoring evidence, the configured minimum score, and no unresolved critical findings.
+- **HIP Certified** requires Verified conditions, valid DNSSEC, independently verified organization or registrant identity, no unresolved high-risk findings, the configured Certified score threshold, and authorized manual review.
+
+Certificate eligibility fails closed when a required provider is unavailable, evidence is older than the policy freshness window, a scan came from a browser client instead of the HIP-owned certificate-review path, or required signal metadata is missing. Completing a public identity profile does not by itself prove organization identity.
 
 The implemented policy identifier is `hip-domain-certificate-v1`. Policy values live in the strongly typed `DomainCertificatePolicy` model rather than UI or badge code.
 

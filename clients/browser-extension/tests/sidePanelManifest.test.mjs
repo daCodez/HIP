@@ -8,11 +8,12 @@ const background = await readFile(new URL("src/background.js", root), "utf8");
 const html = await readFile(new URL("src/sidepanel.html", root), "utf8");
 const popupHtml = await readFile(new URL("src/popup.html", root), "utf8");
 const popupCss = await readFile(new URL("src/popup.css", root), "utf8");
+const siteCss = await readFile(new URL("src/sidepanel-site.css", root), "utf8");
 const shellCss = await readFile(new URL("src/sidepanel-shell.css", root), "utf8").catch(() => "");
 const sidePanelScript = await readFile(new URL("src/sidepanel.js", root), "utf8");
 
 test("manifest opens the persistent side panel from the toolbar", () => {
-  assert.equal(manifest.version, "0.1.33");
+  assert.equal(manifest.version, "0.1.34");
   assert.ok(manifest.permissions.includes("sidePanel"));
   assert.equal(manifest.side_panel.default_path, "src/sidepanel.html");
   assert.equal("default_popup" in manifest.action, false);
@@ -45,4 +46,8 @@ test("side panel provides accessible Page, Site, and Settings tabs", () => {
   assert.doesNotMatch(sidePanelScript, /page\.start\.hidden\s*=\s*!supported/);
   assert.match(popupHtml, /<img[^>]+class="brand-shield"[^>]+src="\.\.\/assets\/hip-logo\.png"/);
   assert.match(popupCss, /body\.embedded\s+\.popup-header\s*\{[^}]*display:\s*none/);
+  assert.match(popupHtml, /href="sidepanel-site\.css"/);
+  assert.match(siteCss, /body\.embedded \.score-panel,[\s\S]*border-radius:\s*14px/);
+  assert.match(siteCss, /body\.embedded\s+\.reasons-panel li::before/);
+  assert.match(siteCss, /body\.embedded\s+\.button-row button/);
 });
