@@ -109,15 +109,24 @@ function clearForTab({ tabId, supported }) {
 }
 
 async function loadTabState(tab) {
-  let response;
-  try {
-    response = await chrome.tabs.sendMessage(tab.id, { type: "HIP_XRAY_GET_STATE", inventoryOffset: 0, inventoryLimit: 50, findingOffset: 0, findingLimit: 50 });
-  } catch {
-    response = null;
-  }
+  const response = await loadXrayStateWithRetry(tab.id);
   if (!response?.ok) throw new Error("HIP can inspect only HTTP and HTTPS pages.");
   const hostname = response.result.pageHost || hostnameFromUrl(tab.url) || "Current browser tab";
   return { tabId: tab.id, tabUrl: tab.url || "", hostname, xray: response.result };
+}
+
+async function loadXrayStateWithRetry(tabId) {
+  const request = { type: "HIP_XRAY_GET_STATE", inventoryOffset: 0, inventoryLimit: 50, findingOffset: 0, findingLimit: 50 };
+  for (const delayMs of [0, 100, 250]) {
+    if (delayMs) await new Promise(resolve => setTimeout(resolve, delayMs));
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, request);
+      if (response?.ok) return response;
+    } catch {
+      // A newly activated tab can briefly precede its content-script connection.
+    }
+  }
+  return null;
 }
 
 function hostnameFromUrl(value) {
