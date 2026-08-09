@@ -117,7 +117,7 @@ async function loadTabState(tab) {
   }
   if (!response?.ok) throw new Error("HIP can inspect only HTTP and HTTPS pages.");
   const hostname = response.result.pageHost || hostnameFromUrl(tab.url) || "Current browser tab";
-  return { tabId: tab.id, hostname, xray: response.result };
+  return { tabId: tab.id, tabUrl: tab.url || "", hostname, xray: response.result };
 }
 
 function hostnameFromUrl(value) {
@@ -130,7 +130,7 @@ function hostnameFromUrl(value) {
 
 function renderTabState(state) {
   page.domain.textContent = state.hostname || "Unsupported browser page";
-  page.siteFrame.src = `popup.html?embedded=1&tab=${state.tabId}&generation=${Date.now()}`;
+  syncSiteFrame(state);
   if (state.error) {
     page.message.textContent = state.error;
     return;
@@ -153,6 +153,13 @@ function renderTabState(state) {
   page.inventory.replaceChildren();
   appendInventory(currentState.inventory?.items || []);
   renderInventoryControls();
+}
+
+function syncSiteFrame(state) {
+  const frameKey = `${state.tabId}:${state.tabUrl}`;
+  if (page.siteFrame.dataset.frameKey === frameKey) return;
+  page.siteFrame.dataset.frameKey = frameKey;
+  page.siteFrame.src = `popup.html?embedded=1&tab=${state.tabId}&page=${encodeURIComponent(state.tabUrl)}`;
 }
 
 function renderPageSummary() {

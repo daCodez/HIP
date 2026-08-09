@@ -1,10 +1,11 @@
 import { expect, test, chromium } from "@playwright/test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
 
 async function launchExtension() {
   const profilePath = await mkdtemp(path.join(tmpdir(), "hip-side-panel-e2e-"));
@@ -49,7 +50,7 @@ test("persistent Page panel links findings to pointer-transparent page markers",
 
     await expect(panel.locator("#activeDomain")).toHaveText("Unsupported browser page");
     await expect(panel.locator(".panel-header h1")).toHaveText("Website Trust");
-    await expect(panel.locator("#pluginVersion")).toContainText("v0.1.33");
+    await expect(panel.locator("#pluginVersion")).toContainText(`v${manifest.version}`);
     const headerBox = await panel.locator(".panel-header").boundingBox();
     const tabsBox = await panel.locator(".tabs").boundingBox();
     expect(headerBox.y).toBeLessThan(tabsBox.y);

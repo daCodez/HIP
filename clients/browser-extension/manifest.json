@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HIP Browser Protection",
-  "description": "Human Identity Protocol website and link trust checks.",
+  "description": "Human Interactive Protocol website and link trust checks.",
   "version": "0.1.34",
   "action": {
     "default_title": "Open HIP side panel"
