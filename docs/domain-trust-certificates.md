@@ -38,6 +38,8 @@ The owner portal is `/consumer/certificates`.
 7. An authorized HIP reviewer approves, requests changes, or denies the application with a required privacy-safe reason. Certified approval also requires an explicit organization or registrant identity-verification attestation. The reviewer identity, decision, attestation digest, identity-verification timestamp, and decision timestamp are permanently audited.
 8. Only an approved application may run the server-owned security review. When the evidence is eligible, HIP signs, self-verifies, and atomically stores the certificate and issuance event. Review-required and ineligible decisions remain non-issued.
 
+When an already verified managed domain is transferred to another HIP account, the certificate bridge reconciles the one current enrollment and current certificate with the authorized managed-domain owner before collecting application evidence. The reconciliation is atomic, idempotent, and permanently audited. It changes private management ownership only; it does not alter the signed public certificate payload, bypass verification policy, or turn missing Certified evidence into a pass.
+
 The HTTPS fetcher uses HTTPS only, bounded redirects, safe ports, response limits, strict timeouts, registrable-domain redirect checks, and address validation before and after connection to resist SSRF and DNS rebinding.
 
 ## Monitoring and score progression
