@@ -27,3 +27,9 @@ Signed-document callers can submit dependency-free protocol metadata and
 interpret fail-closed verification outcomes. HIP's adapter retains control of
 authoritative identity lookup, managed public-key history, canonicalization,
 provider selection, replay policy, and all hosted verification state.
+
+The public wire-envelope surface preserves HIP's version-one JSON property
+names, protocol-text enum values, strict parsing, and bounded payload rules.
+It exposes only interchange data and serialization. Domain validation,
+canonical signing-payload construction, replay decisions, signing authority,
+provider selection, and reputation interpretation remain outside this assembly.
