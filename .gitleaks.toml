@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Historical synthetic credentials from the original test-fixture commit"
+commits = ["4bd78118dd720bc2c0c449d0523258432b55a24a"]
