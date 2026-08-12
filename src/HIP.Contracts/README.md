@@ -17,3 +17,8 @@ The plugin SDK surface is limited to privacy-safe manifests, runtime status,
 feature metadata, and provider declaration interfaces. HIP retains control of
 plugin discovery, validation, configuration, secrets, plan evaluation, billing,
 provider selection, scoring, evidence collection, and certificate issuance.
+
+The protocol surface exposes verification-only signature capabilities and
+public-key fingerprinting. It deliberately excludes private-key inputs,
+signing operations, provider factories, runtime allowlists, managed-key
+lifecycle, certificate issuance, and hosted identity policy.
