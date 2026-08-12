@@ -1,6 +1,6 @@
-# HIP: Human Identity Protocol
+# HIP: Human Interactive Protocol
 
-> **HIP (Human Identity Protocol)** is an application-layer trust and interaction protocol for verifying digital origin, integrity, and risk evidence across web and virtual-world clients.
+> **HIP (Human Interactive Protocol)** is an application-layer trust and interaction protocol for verifying digital origin, integrity, and risk evidence across web and virtual-world clients.
 
 [![Protocol](https://img.shields.io/badge/Protocol-Human%20Identity%20Protocol-2d7ff9)](#what-is-hip)
 [![Security](https://img.shields.io/badge/Security-Trust%20%2B%20Identity%20Evidence-0a7f5a)](#security-model)
