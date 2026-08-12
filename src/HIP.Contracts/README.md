@@ -12,3 +12,8 @@ publication.
 Public contracts may describe stored results and evidence already approved for
 disclosure. Implementations that calculate scores, select providers, apply
 private thresholds, or issue certificates must remain outside this assembly.
+
+The plugin SDK surface is limited to privacy-safe manifests, runtime status,
+feature metadata, and provider declaration interfaces. HIP retains control of
+plugin discovery, validation, configuration, secrets, plan evaluation, billing,
+provider selection, scoring, evidence collection, and certificate issuance.
