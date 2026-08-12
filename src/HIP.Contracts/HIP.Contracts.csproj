@@ -14,8 +14,8 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/daCodez/HIP</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageRequireLicenseAcceptance Condition="Exists('LICENSE.txt')">true</PackageRequireLicenseAcceptance>
-    <PackageLicenseFile Condition="Exists('LICENSE.txt')">LICENSE.txt</PackageLicenseFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -26,12 +26,14 @@
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
     <None Include="PUBLIC-API.md" Pack="true" PackagePath="\" />
-    <None Include="LICENSE.txt" Pack="true" PackagePath="\" Condition="Exists('LICENSE.txt')" />
+    <None Include="LICENSE.txt" Pack="true" PackagePath="\" />
+    <None Include="NOTICE.txt" Pack="true" PackagePath="\" />
+    <None Include="TRADEMARKS.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <Target Name="RequireApprovedHipContractsLicense" BeforeTargets="GenerateNuspec;_IntermediatePack;Pack"
-          Condition="'$(HipContractsLicenseApproved)' == 'true' and !Exists('LICENSE.txt')">
-    <Error Text="HIP.Contracts cannot be packaged until an approved LICENSE.txt is present." />
+          Condition="'$(HipContractsLicenseApproved)' == 'true' and (!Exists('LICENSE.txt') or !Exists('NOTICE.txt') or !Exists('TRADEMARKS.md'))">
+    <Error Text="HIP.Contracts cannot be packaged unless LICENSE.txt, NOTICE.txt, and TRADEMARKS.md are present." />
   </Target>
 
 </Project>

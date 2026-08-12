@@ -1,0 +1,10 @@
+Human Interactive Protocol Contracts
+Copyright 2026 Eric Beck
+
+This product includes software developed for the Human Interactive Protocol
+(HIP) project.
+
+HIP names, logos, badges, and other brand assets are not licensed by the
+Apache License 2.0 except for reasonable and customary use in describing the
+origin of this software. This notice is informational and does not modify the
+Apache License 2.0.
