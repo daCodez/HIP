@@ -5,7 +5,33 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <PackageId>HumanInteractiveProtocol.Contracts</PackageId>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <Authors>HIP Project</Authors>
+    <Title>Human Interactive Protocol Contracts</Title>
     <Description>Candidate public interoperability contracts for the Human Interactive Protocol.</Description>
+    <PackageTags>hip;human-interactive-protocol;trust;verification;protocol</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/daCodez/HIP</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageRequireLicenseAcceptance Condition="Exists('LICENSE.txt')">true</PackageRequireLicenseAcceptance>
+    <PackageLicenseFile Condition="Exists('LICENSE.txt')">LICENSE.txt</PackageLicenseFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <IsPackable Condition="'$(HipContractsLicenseApproved)' == 'true'">true</IsPackable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="PUBLIC-API.md" Pack="true" PackagePath="\" />
+    <None Include="LICENSE.txt" Pack="true" PackagePath="\" Condition="Exists('LICENSE.txt')" />
+  </ItemGroup>
+
+  <Target Name="RequireApprovedHipContractsLicense" BeforeTargets="GenerateNuspec;_IntermediatePack;Pack"
+          Condition="'$(HipContractsLicenseApproved)' == 'true' and !Exists('LICENSE.txt')">
+    <Error Text="HIP.Contracts cannot be packaged until an approved LICENSE.txt is present." />
+  </Target>
 
 </Project>

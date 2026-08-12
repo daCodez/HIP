@@ -9,6 +9,11 @@ does not grant a license or make it an independently published package. A
 specific license and distribution mechanism must be approved before external
 publication.
 
+The candidate NuGet identity is `HumanInteractiveProtocol.Contracts` version
+`0.1.0`. Packaging remains disabled unless an explicit license-approval build
+property is supplied, and an approved `LICENSE.txt` is required even then.
+See `PUBLIC-API.md` for the reviewed compatibility surface.
+
 Public contracts may describe stored results and evidence already approved for
 disclosure. Implementations that calculate scores, select providers, apply
 private thresholds, or issue certificates must remain outside this assembly.

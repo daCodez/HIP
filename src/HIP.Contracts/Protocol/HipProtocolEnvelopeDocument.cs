@@ -41,6 +41,7 @@ public sealed record HipProtocolEnvelopeSignature(
     [property: JsonPropertyName("canonicalization"), JsonPropertyOrder(4)] string Canonicalization,
     [property: JsonPropertyName("value"), JsonPropertyOrder(5)] string Value)
 {
+    /// <summary>Always false because signature evidence does not establish safety or reputation.</summary>
     [JsonIgnore]
     public bool EstablishesSafetyOrReputation => false;
 }
@@ -48,14 +49,19 @@ public sealed record HipProtocolEnvelopeSignature(
 /// <summary>Strict, bounded JSON codec for the public HIP envelope representation.</summary>
 public static class HipProtocolEnvelopeDocumentJson
 {
+    /// <summary>Maximum encoded envelope size.</summary>
     public const int MaximumEnvelopeBytes = 65_536;
+    /// <summary>Maximum number of public claims.</summary>
     public const int MaximumClaims = 32;
+    /// <summary>Maximum claim-name length.</summary>
     public const int MaximumClaimNameLength = 64;
+    /// <summary>Maximum encoded size of one claim value.</summary>
     public const int MaximumClaimValueBytes = 4_096;
     private const int MaximumJsonDepth = 16;
     private const int MaximumClaimValueDepth = 8;
     private static readonly JsonSerializerOptions Options = CreateOptions();
 
+    /// <summary>Serializes a validated public envelope using the version-one wire format.</summary>
     public static string Serialize(HipProtocolEnvelopeDocument envelope)
     {
         ArgumentNullException.ThrowIfNull(envelope);
@@ -69,6 +75,7 @@ public static class HipProtocolEnvelopeDocumentJson
         return Encoding.UTF8.GetString(json);
     }
 
+    /// <summary>Deserializes a bounded UTF-16 JSON string into a public envelope.</summary>
     public static HipProtocolEnvelopeDocument Deserialize(string json)
     {
         ArgumentNullException.ThrowIfNull(json);
@@ -85,6 +92,7 @@ public static class HipProtocolEnvelopeDocumentJson
         return envelope;
     }
 
+    /// <summary>Deserializes bounded UTF-8 JSON into a public envelope.</summary>
     public static HipProtocolEnvelopeDocument Deserialize(ReadOnlySpan<byte> utf8Json)
     {
         if (utf8Json.IsEmpty || utf8Json.Length > MaximumEnvelopeBytes)
