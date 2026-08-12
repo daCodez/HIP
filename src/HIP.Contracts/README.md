@@ -22,3 +22,8 @@ The protocol surface exposes verification-only signature capabilities and
 public-key fingerprinting. It deliberately excludes private-key inputs,
 signing operations, provider factories, runtime allowlists, managed-key
 lifecycle, certificate issuance, and hosted identity policy.
+
+Signed-document callers can submit dependency-free protocol metadata and
+interpret fail-closed verification outcomes. HIP's adapter retains control of
+authoritative identity lookup, managed public-key history, canonicalization,
+provider selection, replay policy, and all hosted verification state.
