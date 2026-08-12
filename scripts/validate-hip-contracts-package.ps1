@@ -5,10 +5,12 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $packageOutput = Join-Path $repositoryRoot 'artifacts/hip-contracts-package'
 $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("hip-contracts-consumer-" + [Guid]::NewGuid().ToString('N'))
+$originalNugetPackages = $env:NUGET_PACKAGES
 
 try {
     New-Item -ItemType Directory -Force -Path $packageOutput | Out-Null
     New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
+    $env:NUGET_PACKAGES = Join-Path $temporaryRoot '.packages'
 
     dotnet pack (Join-Path $repositoryRoot 'src/HIP.Contracts/HIP.Contracts.csproj') `
         -c Release `
@@ -63,6 +65,7 @@ Console.WriteLine("HIP.Contracts package consumer validation passed.");
     Write-Output "Validated package: $($package.FullName)"
 }
 finally {
+    $env:NUGET_PACKAGES = $originalNugetPackages
     $resolvedTemporaryRoot = [System.IO.Path]::GetFullPath($temporaryRoot)
     $resolvedSystemTemp = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
     if ($resolvedTemporaryRoot.StartsWith($resolvedSystemTemp, [StringComparison]::OrdinalIgnoreCase) -and
