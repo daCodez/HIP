@@ -25,6 +25,26 @@ async function openPanelDocument(runtime) {
   return panel;
 }
 
+/**
+ * Bounds extension messaging so a lost MV3 response fails at the responsible
+ * phase instead of consuming the complete Playwright test timeout.
+ */
+async function sendTabMessage(panel, tabId, message, phase) {
+  return await Promise.race([
+    panel.evaluate(({ id, payload }) => chrome.tabs.sendMessage(id, payload), { id: tabId, payload: message }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${phase} did not receive an extension response within 10 seconds.`)), 10_000))
+  ]);
+}
+
+/** Closes an isolated extension profile without allowing Chromium cleanup to hide the tested result. */
+async function closeRuntime(runtime) {
+  await Promise.race([
+    runtime.context.close(),
+    new Promise(resolve => setTimeout(resolve, 10_000))
+  ]);
+  await rm(runtime.profilePath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+}
+
 const fixture = `<!doctype html><html><body style="min-height:2200px">
   <button id="host-button" type="button">Host action</button><output id="host-output">0</output>
   <div style="height:1100px"></div>
@@ -56,7 +76,7 @@ test("persistent Page panel links findings to pointer-transparent page markers",
     expect(headerBox.y).toBeLessThan(tabsBox.y);
     await expect(panel.getByRole("tab", { name: "Page" })).toHaveAttribute("aria-selected", "true");
     await expect(panel.getByRole("button", { name: "X-ray this page" })).toBeVisible();
-    const started = await panel.evaluate(id => chrome.tabs.sendMessage(id, { type: "HIP_XRAY_START" }), tabId);
+    const started = await sendTabMessage(panel, tabId, { type: "HIP_XRAY_START" }, "Starting Page X-ray");
     expect(started.ok).toBe(true);
     expect(started.result.findingCount).toBeGreaterThan(0);
     await expect.poll(() => target.evaluate(() => document.querySelectorAll("[data-hip-xray-owned='true']").length)).toBe(1);
@@ -78,16 +98,16 @@ test("persistent Page panel links findings to pointer-transparent page markers",
     await target.locator("#host-button").click();
     await expect(target.locator("#host-output")).toHaveText("1");
 
-    const state = await panel.evaluate(id => chrome.tabs.sendMessage(id, { type: "HIP_XRAY_GET_STATE", findingOffset: 0, findingLimit: 50 }), tabId);
+    const state = await sendTabMessage(panel, tabId, { type: "HIP_XRAY_GET_STATE", findingOffset: 0, findingLimit: 50 }, "Reading Page X-ray state");
     const findingId = state.result.findings[0].findingId;
-    const selection = await panel.evaluate(({ id, findingId: selected }) => chrome.tabs.sendMessage(id, { type: "HIP_XRAY_SELECT_FINDING", findingId: selected }), { id: tabId, findingId });
+    const selection = await sendTabMessage(panel, tabId, { type: "HIP_XRAY_SELECT_FINDING", findingId }, "Selecting a Page X-ray finding");
     expect(selection.result.status).toBe("selected");
     await expect.poll(() => target.evaluate(() => window.scrollY)).toBeGreaterThan(0);
     await expect(overlay.locator(".marker[data-selected='true']").first()).toBeVisible();
 
-    await panel.evaluate(id => chrome.tabs.sendMessage(id, { type: "HIP_XRAY_SET_MARKERS", visible: false }), tabId);
+    await sendTabMessage(panel, tabId, { type: "HIP_XRAY_SET_MARKERS", visible: false }, "Hiding Page X-ray markers");
     await expect(overlay.locator(".marker-layer")).toBeHidden();
-    await panel.evaluate(id => chrome.tabs.sendMessage(id, { type: "HIP_XRAY_SET_MARKERS", visible: true }), tabId);
+    await sendTabMessage(panel, tabId, { type: "HIP_XRAY_SET_MARKERS", visible: true }, "Showing Page X-ray markers");
 
     await panel.screenshot({ path: testInfo.outputPath("side-panel-shell.png"), fullPage: true });
     await target.screenshot({ path: testInfo.outputPath("selected-page-marker.png"), fullPage: false });
@@ -95,8 +115,7 @@ test("persistent Page panel links findings to pointer-transparent page markers",
     await panel.screenshot({ path: testInfo.outputPath("narrow-page-panel.png"), fullPage: true });
     expect(consoleErrors).toEqual([]);
   } finally {
-    await runtime.context.close();
-    await rm(runtime.profilePath, { recursive: true, force: true });
+    await closeRuntime(runtime);
   }
 });
 
