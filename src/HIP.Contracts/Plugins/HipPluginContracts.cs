@@ -3,16 +3,22 @@ namespace HIP.Application.Entitlements;
 /// <summary>Declares whether an installed plugin needs administrator configuration.</summary>
 public enum HipPluginConfigurationRequirement
 {
+    /// <summary>No administrator configuration is needed.</summary>
     None = 0,
+    /// <summary>Administrator configuration is supported but not required.</summary>
     Optional = 1,
+    /// <summary>Administrator configuration is required before the plugin can operate.</summary>
     Required = 2
 }
 
 /// <summary>Runtime state reported by an installed plugin without exposing credentials or configuration values.</summary>
 public enum HipPluginState
 {
+    /// <summary>The plugin is ready for use.</summary>
     Ready = 0,
+    /// <summary>The plugin is installed but requires configuration.</summary>
     NeedsConfiguration = 1,
+    /// <summary>The plugin is currently unavailable.</summary>
     Unavailable = 2
 }
 
@@ -28,14 +34,17 @@ public sealed record HipPluginManifest(
 /// <summary>Allows a provider to declare its installed plugin manifest separately from plan feature grants.</summary>
 public interface IHipPluginManifestProvider
 {
+    /// <summary>Gets the provider's privacy-safe public manifest.</summary>
     HipPluginManifest Manifest { get; }
 }
 
 /// <summary>Privacy-safe operational status supplied by a plugin. Implementations must never return secret values.</summary>
 public interface IHipPluginStatusProvider
 {
+    /// <summary>Gets the provider's privacy-safe public manifest.</summary>
     HipPluginManifest Manifest { get; }
 
+    /// <summary>Gets the current privacy-safe runtime status.</summary>
     Task<HipPluginRuntimeStatus> GetStatusAsync(CancellationToken cancellationToken);
 }
 
@@ -56,5 +65,6 @@ public sealed record HipFeatureDescriptor(
 /// </summary>
 public interface IHipPlanFeatureProvider
 {
+    /// <summary>Gets the features declared by this provider.</summary>
     IReadOnlyCollection<HipFeatureDescriptor> Features { get; }
 }
