@@ -2,7 +2,7 @@
 
 > **HIP (Human Interactive Protocol)** is an application-layer trust and interaction protocol for verifying digital origin, integrity, and risk evidence across web and virtual-world clients.
 
-[![Protocol](https://img.shields.io/badge/Protocol-Human%20Identity%20Protocol-2d7ff9)](#what-is-hip)
+[![Protocol](https://img.shields.io/badge/Protocol-Human%20Interactive%20Protocol-2d7ff9)](#what-is-hip)
 [![Security](https://img.shields.io/badge/Security-Trust%20%2B%20Identity%20Evidence-0a7f5a)](#security-model)
 [![Status](https://img.shields.io/badge/Status-Active%20Development-f39c12)](#project-status)
 
@@ -10,7 +10,7 @@
 
 ## What is HIP?
 
-HIP stands for Human Identity Protocol.
+HIP stands for Human Interactive Protocol.
 
 HIP helps users, communities, and platforms answer a core question:
 
@@ -226,7 +226,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development workflow and submission
 
 Suggested repository topics:
 
-`human-identity-protocol` `identity` `trust` `trust-and-safety` `reputation` `provenance` `integrity` `cryptography` `digital-signatures` `security` `privacy` `protocol` `browser-extension` `second-life` `virtual-worlds` `risk-analysis` `origin-verification` `open-source`
+`human-interactive-protocol` `identity` `trust` `trust-and-safety` `reputation` `provenance` `integrity` `cryptography` `digital-signatures` `security` `privacy` `protocol` `browser-extension` `second-life` `virtual-worlds` `risk-analysis` `origin-verification` `open-source`
 
 ---
 
