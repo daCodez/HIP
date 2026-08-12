@@ -1,10 +1,6 @@
 [extend]
 useDefault = true
 
-[allowlist]
-description = "Historical synthetic test credentials retained in repository history"
-fingerprints = [
-  "4bd78118dd720bc2c0c449d0523258432b55a24a:tests/HIP.Tests/Persistence/PersistenceRepositoryTests.cs:generic-api-key:259",
-  "4bd78118dd720bc2c0c449d0523258432b55a24a:tests/HIP.Tests/ServiceClients/ServiceClientLifecycleServiceTests.cs:generic-api-key:155",
-  "4bd78118dd720bc2c0c449d0523258432b55a24a:tests/HIP.Tests/ServiceClients/ServiceClientLifecycleServiceTests.cs:generic-api-key:200",
-]
+[[allowlists]]
+description = "Historical synthetic credentials from the original test-fixture commit"
+commits = ["4bd78118dd720bc2c0c449d0523258432b55a24a"]
