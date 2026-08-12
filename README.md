@@ -1,5 +1,10 @@
 # HIP: Human Interactive Protocol
 
+> **Licensing status:** This repository does not currently grant an open-source or commercial software license.
+> HIP is separating public interoperability components from hosted product and operational code before applying
+> component-specific terms. See [ADR-015](docs/decisions/ADR-015-licensing-and-distribution-boundaries.md) and the
+> machine-readable [licensing boundary inventory](docs/licensing-boundaries.json). The inventory is not a license grant.
+
 > **HIP (Human Interactive Protocol)** is an application-layer trust and interaction protocol for verifying digital origin, integrity, and risk evidence across web and virtual-world clients.
 
 [![Protocol](https://img.shields.io/badge/Protocol-Human%20Interactive%20Protocol-2d7ff9)](#what-is-hip)
