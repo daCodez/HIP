@@ -22,7 +22,13 @@ try {
     if ($packages.Count -ne 1) { throw 'Exactly one expected HIP.Contracts package must be created.' }
     $package = $packages[0]
 
-    $archiveEntries = tar -tf $package.FullName
+    $packageArchive = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
+    try {
+        $archiveEntries = @($packageArchive.Entries | ForEach-Object FullName)
+    }
+    finally {
+        $packageArchive.Dispose()
+    }
     foreach ($requiredEntry in @(
         'LICENSE.txt',
         'NOTICE.txt',
