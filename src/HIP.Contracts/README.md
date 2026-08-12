@@ -4,15 +4,16 @@
 share without exposing proprietary scoring, detection, entitlement, or
 certificate-issuance logic.
 
-This project is a licensing-boundary candidate. Its presence in the repository
-does not grant a license or make it an independently published package. A
-specific license and distribution mechanism must be approved before external
-publication.
+This component is licensed under Apache License 2.0. That license applies only
+to the contents of `HIP.Contracts`; it does not apply to the rest of the HIP
+repository, hosted services, clients, badge artwork, or brand assets. The
+component has not yet been published to a package registry.
 
 The candidate NuGet identity is `HumanInteractiveProtocol.Contracts` version
-`0.1.0`. Packaging remains disabled unless an explicit license-approval build
-property is supplied, and an approved `LICENSE.txt` is required even then.
-See `PUBLIC-API.md` for the reviewed compatibility surface.
+`0.1.0`. Packaging remains disabled unless the explicit
+`HipContractsLicenseApproved=true` build property is supplied. See
+`PUBLIC-API.md` for the reviewed compatibility surface and `TRADEMARKS.md` for
+the separate brand boundary.
 
 Public contracts may describe stored results and evidence already approved for
 disclosure. Implementations that calculate scores, select providers, apply
