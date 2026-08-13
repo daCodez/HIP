@@ -40,10 +40,12 @@ test("content script summary includes scan stage and update timestamps", () => {
 test("content script runs Site Safety during automatic page scan", () => {
   const collectIndex = contentSource.indexOf('markScanStage("CollectingPageSignals")');
   const siteSafetyIndex = contentSource.indexOf('markScanStage("CheckingSiteSafety")');
-  const persistIndex = contentSource.indexOf("await persistScanResult(currentLookup)");
+  const mergeIndex = contentSource.indexOf("mergeSiteSafetyAssessment(currentLookup, siteSafety)");
+  const persistIndex = contentSource.indexOf("await persistScanResult(finalLookup)");
 
   assert.equal(siteSafetyIndex > collectIndex, true);
-  assert.equal(persistIndex > siteSafetyIndex, true);
+  assert.equal(mergeIndex > siteSafetyIndex, true);
+  assert.equal(persistIndex > mergeIndex, true);
   assert.equal(contentSource.includes('type: "HIP_SCAN_SITE_SAFETY"'), true);
   assert.equal(contentSource.includes("buildSiteSafetyRequest()"), true);
 });
@@ -161,6 +163,8 @@ test("popup fallback injection includes every content script dependency", () => 
 test("popup skips site safety scan for ineligible local HIP pages", () => {
   assert.equal(popupSource.includes("isSiteSafetyScanEligibleUrl"), true);
   assert.equal(popupSource.includes("!activeTabUrl || !isSiteSafetyScanEligibleUrl(activeTabUrl, settings)"), true);
+  assert.equal(popupSource.includes("renderSiteSafetyNotRun"), true);
+  assert.equal(popupSource.includes('elements.siteSafetyStatus.textContent = "Not run"'), true);
 });
 
 test("popup handles optional site safety failures without extension warning noise", () => {
@@ -169,19 +173,41 @@ test("popup handles optional site safety failures without extension warning nois
 });
 
 test("popup renders completed lookup fields before waiting for optional site safety", () => {
-  const summaryIndex = popupSource.indexOf("activeSummary = summary;");
-  const lookupIndex = popupSource.indexOf("renderLookup(lookup, summary);", summaryIndex);
+  const lookupReadyIndex = popupSource.indexOf("activeLookup = lookup;");
+  const initialLookupIndex = popupSource.indexOf("renderLookup(lookup, {});", lookupReadyIndex);
+  const summaryIndex = popupSource.indexOf("activeSummary = summary;", initialLookupIndex);
   const safetyIndex = popupSource.indexOf("await renderSiteSafety(summary)", summaryIndex);
 
-  assert.equal(summaryIndex > -1, true);
-  assert.equal(lookupIndex > summaryIndex, true);
-  assert.equal(safetyIndex > lookupIndex, true);
+  assert.equal(initialLookupIndex > lookupReadyIndex, true);
+  assert.equal(summaryIndex > initialLookupIndex, true);
+  assert.equal(safetyIndex > summaryIndex, true);
+});
+
+test("popup starts Site Safety independently and never overwrites its terminal state with loading copy", () => {
+  const safetyPromiseIndex = popupSource.indexOf("const safetyPromise = renderSiteSafety({}).catch(handleSiteSafetyUnavailable);");
+  const summaryWaitIndex = popupSource.indexOf("const summary = await waitForScanSummary();", safetyPromiseIndex);
+
+  assert.equal(safetyPromiseIndex > -1, true);
+  assert.equal(summaryWaitIndex > safetyPromiseIndex, true);
+  assert.equal(popupSource.includes("if (!siteSafetyTerminal)"), true);
+  assert.equal(popupSource.match(/siteSafetyTerminal = true;/g).length >= 3, true);
 });
 
 test("HIP API client uses a shared fetch timeout wrapper", () => {
   assert.equal(HIP_FETCH_TIMEOUT_MS, 8000);
   assert.equal(apiClientSource.includes("export async function fetchWithTimeout"), true);
   assert.equal(apiClientSource.match(/await fetchWithTimeout/g).length >= 8, true);
+});
+
+test("popup scan messaging has deadlines and terminalizes pending results", () => {
+  assert.match(popupSource, /withDeadline\(getScanSummary\(\), extensionMessageDeadlineMs, \{\}\)/);
+  assert.match(popupSource, /withDeadline\(startContentScanIfNeeded\(\), extensionMessageDeadlineMs, false\)/);
+  assert.match(popupSource, /function settlePendingResults\(\)/);
+  assert.match(popupSource, /if \(\/checking\|scanning\/i\.test/);
+  assert.match(popupSource, /settlePendingResults\(\);/);
+  const loadingRenderer = popupSource.slice(popupSource.indexOf("function renderLoadingSummary"), popupSource.indexOf("function renderSummary"));
+  assert.match(loadingRenderer, /if \(!siteSafetyTerminal\)[\s\S]*malwareRisk\.textContent = "Checking\.\.\."/);
+  assert.doesNotMatch(loadingRenderer, /}\s*elements\.malwareRisk\.textContent = "Checking\.\.\."/);
 });
 
 test("fetch timeout wrapper aborts slow API calls", async () => {

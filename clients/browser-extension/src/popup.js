@@ -5,6 +5,7 @@ import {
   feedbackCopy,
   isTerminalScanSummary,
   loadingSummaryViewModel,
+  mergeSiteSafetyAssessment,
   unavailableMessage
 } from "./popupViewModel.js";
 import { embeddedTabIdFromLocation, isEmbeddedPanel, notifyPanelHost } from "./embeddedPanelBridge.js";
@@ -17,12 +18,14 @@ let activeLookup = null;
 let activeCertificate = null;
 let activeSummary = {};
 let activeSiteSafety = null;
+let siteSafetyTerminal = false;
 let popupStartedContentScan = false;
 let badgeObservationPromise = null;
 
 const summaryPollAttempts = 24;
 if (isEmbeddedPanel()) document.body.classList.add("embedded");
 const summaryPollDelayMs = 500;
+const extensionMessageDeadlineMs = 2000;
 
 const elements = {
   domain: document.getElementById("domain"),
@@ -137,11 +140,13 @@ async function initialize() {
 
   const lookup = await client.scoreSite({ url: currentUrl.toString(), domain });
   activeLookup = lookup;
+  renderLookup(lookup, {});
   renderLoadingSummary("Checking page scan");
+  const safetyPromise = renderSiteSafety({}).catch(handleSiteSafetyUnavailable);
   const summary = await waitForScanSummary();
   activeSummary = summary;
   renderLookup(lookup, summary);
-  await renderSiteSafety(summary).catch(handleSiteSafetyUnavailable);
+  await safetyPromise;
 }
 
 async function loadDomainCertificate(domain) {
@@ -234,22 +239,24 @@ function renderLoadingSummary(stage = "Checking") {
   elements.lastScan.textContent = viewModel.lastScanText;
   elements.lastSubmitted.textContent = viewModel.lastSubmittedText;
   elements.dataSource.textContent = viewModel.dataSourceText;
-  elements.siteSafetyPanel.hidden = false;
-  elements.siteSafetyStatus.textContent = "Checking...";
-  elements.siteSafetyStatus.dataset.status = "Unknown";
-  elements.siteSafetyConfidence.textContent = "Checking...";
-  elements.siteSafetySummary.textContent = "HIP is checking page safety signals.";
-  elements.hipScoringPanel.hidden = true;
-  elements.hipScoringReasonsPanel.hidden = true;
-  elements.hipScoringReasons.replaceChildren();
-  elements.malwareRisk.textContent = "Checking...";
-  elements.phishingRisk.textContent = "Checking...";
-  elements.redirectRisk.textContent = "Checking...";
-  elements.downloadRisk.textContent = "Checking...";
-  elements.scriptRisk.textContent = "Checking...";
-  elements.externalEvidencePanel.hidden = true;
-  elements.externalEvidence.replaceChildren();
-  renderWarnings([]);
+  if (!siteSafetyTerminal) {
+    elements.siteSafetyPanel.hidden = false;
+    elements.siteSafetyStatus.textContent = "Checking...";
+    elements.siteSafetyStatus.dataset.status = "Unknown";
+    elements.siteSafetyConfidence.textContent = "Checking...";
+    elements.siteSafetySummary.textContent = "HIP is checking page safety signals.";
+    elements.hipScoringPanel.hidden = true;
+    elements.hipScoringReasonsPanel.hidden = true;
+    elements.hipScoringReasons.replaceChildren();
+    elements.malwareRisk.textContent = "Checking...";
+    elements.phishingRisk.textContent = "Checking...";
+    elements.redirectRisk.textContent = "Checking...";
+    elements.downloadRisk.textContent = "Checking...";
+    elements.scriptRisk.textContent = "Checking...";
+    elements.externalEvidencePanel.hidden = true;
+    elements.externalEvidence.replaceChildren();
+    renderWarnings([]);
+  }
 }
 
 /**
@@ -276,14 +283,14 @@ function renderSummary(summary = {}) {
  */
 async function waitForScanSummary() {
   for (let attempt = 0; attempt < summaryPollAttempts; attempt++) {
-    const summary = await getScanSummary();
+    const summary = await withDeadline(getScanSummary(), extensionMessageDeadlineMs, {});
     if (isUsefulSummary(summary)) {
       renderSummary(summary);
       return summary;
     }
 
     if (attempt === 0) {
-      await startContentScanIfNeeded();
+      await withDeadline(startContentScanIfNeeded(), extensionMessageDeadlineMs, false);
     }
 
     if (isCompleteSiteSafetySummary(summary)) {
@@ -294,7 +301,7 @@ async function waitForScanSummary() {
     await delay(summaryPollDelayMs);
   }
 
-  const fallback = await getScanSummary();
+  const fallback = await withDeadline(getScanSummary(), extensionMessageDeadlineMs, {});
   renderSummary(fallback);
   return fallback;
 }
@@ -309,9 +316,9 @@ async function getScanSummary() {
 
   badgeObservationPromise ??= observeHipBadgeInActiveTab(activeTabId);
   const [response, contentSummary, badgeObservation] = await Promise.all([
-    chrome.runtime.sendMessage({ type: "HIP_GET_SCAN_SUMMARY", tabId: activeTabId }),
-    getContentScriptSummary(activeTabId),
-    badgeObservationPromise
+    withDeadline(chrome.runtime.sendMessage({ type: "HIP_GET_SCAN_SUMMARY", tabId: activeTabId }), extensionMessageDeadlineMs, null),
+    withDeadline(getContentScriptSummary(activeTabId), extensionMessageDeadlineMs, null),
+    withDeadline(badgeObservationPromise, extensionMessageDeadlineMs, null)
   ]);
   const summary = contentSummary || response?.result || {};
   return badgeObservation
@@ -463,6 +470,7 @@ function isCompleteSiteSafetySummary(summary = {}) {
  */
 async function renderSiteSafety(summary = {}) {
   if (!activeTabUrl || !isSiteSafetyScanEligibleUrl(activeTabUrl, settings)) {
+    renderSiteSafetyNotRun();
     return null;
   }
 
@@ -484,6 +492,8 @@ async function renderSiteSafety(summary = {}) {
  */
 function renderSiteSafetyResult(result) {
   activeSiteSafety = result;
+  siteSafetyTerminal = true;
+  activeLookup = mergeSiteSafetyAssessment(activeLookup, result);
   const viewModel = buildSiteSafetyViewModel(result);
   elements.siteSafetyPanel.hidden = false;
   elements.siteSafetyStatus.textContent = viewModel.statusLabel;
@@ -508,7 +518,27 @@ function renderSiteSafetyResult(result) {
   elements.scriptRisk.textContent = viewModel.scriptRiskText;
   renderExternalEvidence(viewModel.externalEvidence);
   renderWarnings(viewModel.warnings);
+  renderLookup(activeLookup, activeSummary);
   return result;
+}
+
+function renderSiteSafetyNotRun() {
+  activeSiteSafety = null;
+  siteSafetyTerminal = true;
+  elements.siteSafetyPanel.hidden = false;
+  elements.siteSafetyStatus.textContent = "Not run";
+  elements.siteSafetyStatus.dataset.status = "Unknown";
+  elements.siteSafetyConfidence.textContent = "Not applicable";
+  elements.siteSafetySummary.textContent = "HIP does not run page safety scans on HIP-owned pages.";
+  elements.hipScoringPanel.hidden = true;
+  renderHipScoringReasons([]);
+  elements.malwareRisk.textContent = "Not run";
+  elements.phishingRisk.textContent = "Not run";
+  elements.redirectRisk.textContent = "Not run";
+  elements.downloadRisk.textContent = "Not run";
+  elements.scriptRisk.textContent = "Not run";
+  renderExternalEvidence([]);
+  renderWarnings([]);
 }
 
 /**
@@ -755,6 +785,7 @@ async function startInjectedXray(tabId, launcherPosition) {
  */
 function handleSiteSafetyUnavailable(_error) {
   activeSiteSafety = null;
+  siteSafetyTerminal = true;
   elements.siteSafetyPanel.hidden = false;
   elements.siteSafetyStatus.textContent = "Unavailable";
   elements.siteSafetyStatus.dataset.status = "Unknown";
@@ -778,11 +809,35 @@ function delay(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
+/** Returns a safe fallback when an extension API fails to answer promptly. */
+function withDeadline(promise, milliseconds, fallback) {
+  return Promise.race([
+    Promise.resolve(promise).catch(() => fallback),
+    delay(milliseconds).then(() => fallback)
+  ]);
+}
+
+/** Ensures an initialization failure never leaves permanent loading copy behind. */
+function settlePendingResults() {
+  const pending = [
+    elements.evidenceCoverage, elements.evidenceConfidence, elements.certificateApplication,
+    elements.monitoringStatus, elements.certificateStatus, elements.certificateLevel,
+    elements.apiStatus, elements.linksScanned, elements.riskyLinks, elements.unknownLinks,
+    elements.downloadCandidates, elements.loginForms, elements.hipBadge, elements.lastScan,
+    elements.siteSafetyStatus, elements.siteSafetyConfidence, elements.malwareRisk,
+    elements.phishingRisk, elements.redirectRisk, elements.downloadRisk, elements.scriptRisk
+  ];
+  for (const element of pending) {
+    if (/checking|scanning/i.test(element?.textContent || "")) element.textContent = "Unavailable";
+  }
+}
+
 /**
  * Displays a safe unavailable state when the HIP API or extension messaging fails.
  */
 function showUnavailable(error) {
   console.warn("HIP popup unavailable.", error);
+  settlePendingResults();
   elements.state.textContent = unavailableMessage();
   elements.state.className = "state unavailable";
   elements.feedbackPanel.hidden = true;

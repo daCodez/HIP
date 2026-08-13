@@ -48,7 +48,9 @@ page.loadMoreFindings.addEventListener("click", () => loadMoreFindings());
 
 chrome.tabs.onActivated.addListener(({ tabId }) => refreshActiveTab(tabId));
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (tabId === coordinator.current().tabId && (changeInfo.status === "loading" || changeInfo.status === "complete" || changeInfo.url)) void refreshActiveTab(tab.id);
+  if (tabId === coordinator.current().tabId && (changeInfo.status === "loading" || changeInfo.status === "complete" || changeInfo.url)) {
+    void refreshActiveTab(tab.id, changeInfo.status === "complete" || Boolean(changeInfo.url));
+  }
 });
 chrome.tabs.onRemoved.addListener(tabId => { if (tabId === coordinator.current().tabId) coordinator.invalidate(); });
 chrome.runtime.onMessage.addListener((message, sender) => {
@@ -81,7 +83,7 @@ function activateTab(next, focus) {
   void chrome.storage.local.set({ hipSidePanelTab: next.id });
 }
 
-async function refreshActiveTab(preferredTabId = null) {
+async function refreshActiveTab(preferredTabId = null, forceSiteRefresh = false) {
   let candidates = [];
   try {
     candidates = Number.isInteger(preferredTabId)
@@ -91,6 +93,7 @@ async function refreshActiveTab(preferredTabId = null) {
     candidates = [];
   }
   const tab = pickActiveTab(candidates, preferredTabId);
+  syncSiteFrame(tab, forceSiteRefresh);
   await coordinator.activate(tab || {});
 }
 
@@ -126,7 +129,31 @@ async function loadXrayStateWithRetry(tabId) {
       // A newly activated tab can briefly precede its content-script connection.
     }
   }
+  try {
+    await injectContentScanner(tabId);
+    return await chrome.tabs.sendMessage(tabId, request);
+  } catch {
+    // Browser-protected pages and pages without extension access cannot be repaired.
+  }
   return null;
+}
+
+async function injectContentScanner(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: [
+      "src/riskBadgeRenderer.js",
+      "src/safetyPageRouter.js",
+      "src/browserPrivacyGuards.js",
+      "src/browserScanAssessment.js",
+      "src/formalScoring.js",
+      "src/contentMessageContracts.js",
+      "src/xrayRules.js",
+      "src/xrayRenderer.js",
+      "src/xrayController.js",
+      "src/content.js"
+    ]
+  });
 }
 
 function hostnameFromUrl(value) {
@@ -139,7 +166,6 @@ function hostnameFromUrl(value) {
 
 function renderTabState(state) {
   page.domain.textContent = state.hostname || "Unsupported browser page";
-  syncSiteFrame(state);
   if (state.error) {
     page.message.textContent = state.error;
     return;
@@ -164,11 +190,14 @@ function renderTabState(state) {
   renderInventoryControls();
 }
 
-function syncSiteFrame(state) {
-  const frameKey = `${state.tabId}:${state.tabUrl}`;
-  if (page.siteFrame.dataset.frameKey === frameKey) return;
+function syncSiteFrame(tab, force = false) {
+  const version = chrome.runtime.getManifest().version;
+  const tabId = Number.isInteger(tab?.id) ? tab.id : "";
+  const tabUrl = typeof tab?.url === "string" ? tab.url : "";
+  const frameKey = `${version}:${tabId}:${tabUrl}`;
+  if (!force && page.siteFrame.dataset.frameKey === frameKey) return;
   page.siteFrame.dataset.frameKey = frameKey;
-  page.siteFrame.src = `popup.html?embedded=1&tab=${state.tabId}&page=${encodeURIComponent(state.tabUrl)}`;
+  page.siteFrame.src = `popup.html?embedded=1&tab=${tabId}&page=${encodeURIComponent(tabUrl)}&v=${version}`;
 }
 
 function renderPageSummary() {
