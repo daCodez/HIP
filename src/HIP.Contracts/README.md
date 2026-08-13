@@ -39,3 +39,10 @@ names, protocol-text enum values, strict parsing, and bounded payload rules.
 It exposes only interchange data and serialization. Domain validation,
 canonical signing-payload construction, replay decisions, signing authority,
 provider selection, and reputation interpretation remain outside this assembly.
+
+The shared protocol vocabulary includes content type, identity subject type,
+verification method, verification status, and public risk status. These enums
+retain their existing `HIP.Domain` CLR namespaces and numeric values for source
+and wire compatibility. The rest of `HIP.Domain`, including mappings,
+aggregates, lifecycle state, scoring, and operational policy, is not licensed
+or distributed by this package.
