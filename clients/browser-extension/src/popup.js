@@ -140,8 +140,8 @@ async function initialize() {
   renderLoadingSummary("Checking page scan");
   const summary = await waitForScanSummary();
   activeSummary = summary;
-  await renderSiteSafety(summary).catch(handleSiteSafetyUnavailable);
   renderLookup(lookup, summary);
+  await renderSiteSafety(summary).catch(handleSiteSafetyUnavailable);
 }
 
 async function loadDomainCertificate(domain) {

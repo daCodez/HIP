@@ -168,6 +168,16 @@ test("popup handles optional site safety failures without extension warning nois
   assert.equal(popupSource.includes("console.warn(\"HIP Site Safety Scan unavailable."), false);
 });
 
+test("popup renders completed lookup fields before waiting for optional site safety", () => {
+  const summaryIndex = popupSource.indexOf("activeSummary = summary;");
+  const lookupIndex = popupSource.indexOf("renderLookup(lookup, summary);", summaryIndex);
+  const safetyIndex = popupSource.indexOf("await renderSiteSafety(summary)", summaryIndex);
+
+  assert.equal(summaryIndex > -1, true);
+  assert.equal(lookupIndex > summaryIndex, true);
+  assert.equal(safetyIndex > lookupIndex, true);
+});
+
 test("HIP API client uses a shared fetch timeout wrapper", () => {
   assert.equal(HIP_FETCH_TIMEOUT_MS, 8000);
   assert.equal(apiClientSource.includes("export async function fetchWithTimeout"), true);
