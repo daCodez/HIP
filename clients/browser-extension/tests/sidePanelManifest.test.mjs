@@ -18,8 +18,8 @@ test("manifest opens the persistent side panel from the toolbar", () => {
   assert.ok(manifest.permissions.includes("sidePanel"));
   assert.equal(manifest.side_panel.default_path, "src/sidepanel.html");
   assert.equal("default_popup" in manifest.action, false);
-  assert.ok(manifest.host_permissions.includes("https://*/*"));
-  assert.equal(manifest.optional_host_permissions?.includes("https://*/*") ?? false, false);
+  assert.equal(manifest.host_permissions.includes("https://*/*"), false);
+  assert.ok(manifest.optional_host_permissions.includes("https://*/*"));
   assert.match(background, /setPanelBehavior\(\{\s*openPanelOnActionClick:\s*true\s*\}\)/);
   assert.match(manifest.content_security_policy.extension_pages, /frame-ancestors 'self'/);
 });
