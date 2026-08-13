@@ -6,6 +6,7 @@ import {
   externalEvidenceFor,
   buildSiteSafetyViewModel,
   buildPopupViewModel,
+  mergeSiteSafetyAssessment,
   buildPublicLookupUrl,
   feedbackCopy,
   loadingSummaryViewModel,
@@ -15,6 +16,45 @@ import {
   statusFromScore,
   unavailableMessage
 } from "../src/popupViewModel.js";
+
+test("completed site safety assessment replaces an unscored public lookup", () => {
+  const merged = mergeSiteSafetyAssessment(
+    { domain: "example.com", status: "Unknown", scorePresentation: "Unavailable", identityStatus: "Verified" },
+    {
+      finalHipScore: 88,
+      domainTrustScore: 82,
+      pageTrustScore: 82,
+      contentRiskScore: 0,
+      confidenceLevel: "High",
+      scannedAtUtc: "2026-08-13T04:34:31Z",
+      reasons: ["HTTPS is present."],
+      scoring: { presentationStatus: "Trusted", confidence: "High", evidenceFreshness: "Fresh" }
+    });
+
+  assert.equal(merged.displayScore, 88);
+  assert.equal(merged.scorePresentation, "Available");
+  assert.equal(merged.status, "Trusted");
+  assert.equal(merged.identityStatus, "Verified");
+  assert.equal(merged.evidenceCoverage, "Sufficient");
+  assert.equal(merged.evidenceConfidence, "High");
+});
+
+test("available presentation falls back to the protocol score when displayScore is omitted", () => {
+  const viewModel = buildPopupViewModel({
+    domain: "example.com",
+    scorePresentation: "Available",
+    score: 89,
+    finalHipScore: 89,
+    status: "Trusted",
+    evidenceCoverage: "Sufficient",
+    evidenceConfidence: "Medium"
+  }, {}, { webBaseUrl: "https://hip.local" }, "https://example.com");
+
+  assert.equal(viewModel.scoreText, "89/100");
+  assert.equal(viewModel.statusLabel, "Trusted");
+  assert.equal(viewModel.evidenceCoverageText, "Sufficient");
+  assert.equal(viewModel.evidenceConfidenceText, "Medium");
+});
 
 test("score band maps to correct status", () => {
   assert.equal(statusFromScore(91), "Trusted");

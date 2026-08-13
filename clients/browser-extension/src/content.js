@@ -1,9 +1,10 @@
 (function runHipContentScript() {
-  if (window.__hipContentScriptLoaded) {
+  const contentScriptVersion = chrome.runtime.getManifest().version;
+  if (window.__hipContentScriptLoaded === contentScriptVersion) {
     return;
   }
 
-  window.__hipContentScriptLoaded = true;
+  window.__hipContentScriptLoaded = contentScriptVersion;
 
   const riskyStatuses = new Set(["Suspicious", "HighRisk", "Dangerous", "Critical"]);
   const attentionStatuses = new Set(["Unknown", "LimitedTrustData", "Caution", "Suspicious", "HighRisk", "Dangerous", "Critical"]);
@@ -268,6 +269,7 @@
    */
   async function initialize() {
     settings = await loadSettings();
+    window.HipRiskBadgeRenderer.removeTrustBanner();
     xraySession?.setPreferences({ markersVisible: settings.showXrayMarkers !== false });
     pluginVersion = await loadPluginVersion();
     lastSummary = emptySummary();
@@ -311,15 +313,19 @@
     publishSummary();
     markScanStage("CheckingSiteSafety");
     publishSummary();
-    await scanSiteSafety().catch(error => {
+    const siteSafety = await scanSiteSafety().catch(error => {
       lastSummary.siteSafetyStatus = "Unavailable";
       lastSummary.siteSafetyError = error?.message || "HIP Site Safety unavailable.";
+      return null;
     });
+    const finalLookup = mergeSiteSafetyAssessment(currentLookup, siteSafety);
+    lastSummary.website = compactLookup(finalLookup);
     markScanStage("RenderingWarnings");
-    await renderPageBannerIfNeeded(currentLookup);
+    window.HipSafetyPageRouter.renderCurrentPageInterstitial(finalLookup, siteSafety, settings);
+    await renderPageBannerIfNeeded(finalLookup);
     markScanStage("SubmittingSummary");
     publishSummary();
-    await persistScanResult(currentLookup).catch(error => console.warn("HIP scan result persistence failed safely.", error));
+    await persistScanResult(finalLookup).catch(error => console.warn("HIP scan result persistence failed safely.", error));
     markScanStage("Complete");
     publishSummary();
   }
@@ -1094,6 +1100,30 @@
       identityVerificationStatus: lookup.identityVerificationStatus,
       lastCheckedUtc: lookup.lastCheckedUtc,
       publicLookupUrl: lookup.publicLookupUrl
+    };
+  }
+
+  /** Keeps injected and side-panel presentation on the same final Site Safety assessment. */
+  function mergeSiteSafetyAssessment(lookup, siteSafety) {
+    if (!lookup || !siteSafety) return lookup;
+    const scoring = siteSafety.scoring || siteSafety.Scoring || {};
+    const finalHipScore = scoring.finalHipScore ?? scoring.FinalHipScore ?? siteSafety.finalHipScore;
+    if (!Number.isFinite(Number(finalHipScore))) return lookup;
+
+    return {
+      ...lookup,
+      displayScore: Number(finalHipScore),
+      score: Number(finalHipScore),
+      finalHipScore: Number(finalHipScore),
+      scorePresentation: "Available",
+      status: scoring.presentationStatus || scoring.PresentationStatus ||
+        scoring.finalStatus || scoring.FinalStatus || siteSafety.status || lookup.status,
+      domainTrustScore: scoring.domainTrustScore ?? scoring.DomainTrustScore ?? siteSafety.domainTrustScore ?? lookup.domainTrustScore,
+      pageTrustScore: scoring.pageTrustScore ?? scoring.PageTrustScore ?? siteSafety.pageTrustScore ?? lookup.pageTrustScore,
+      contentRiskScore: scoring.contentRiskScore ?? scoring.ContentRiskScore ?? siteSafety.contentRiskScore ?? lookup.contentRiskScore,
+      evidenceCoverage: "Sufficient",
+      evidenceConfidence: scoring.confidence || scoring.Confidence || siteSafety.confidenceLevel || lookup.evidenceConfidence,
+      lastCheckedUtc: siteSafety.scannedAtUtc || lookup.lastCheckedUtc
     };
   }
 

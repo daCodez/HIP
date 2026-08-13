@@ -152,7 +152,7 @@ export class HipApiClient {
 
     const certificate = await certificateResponse.json();
     const payload = certificate?.signedCertificate?.payload;
-    const payloadLevel = certificateEnumName(payload?.level, ["Registered", "Verified", "Monitored"]);
+    const payloadLevel = certificateEnumName(payload?.level, ["Registered", "Verified", "Monitored", "Certified"]);
     const payloadStatus = certificateEnumName(
       payload?.status,
       ["Draft", "PendingVerification", "PendingReview", "Active", "Suspended", "Revoked", "Expired", "RenewalRequired"]);

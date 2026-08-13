@@ -72,6 +72,55 @@ test("extension verifies signed badge state then retrieves the certificate direc
   }
 });
 
+test("extension recognizes the certified certificate level returned by production", async () => {
+  const originalFetch = globalThis.fetch;
+  const certificateState = {
+    certificateId: "hip-domain-cert-certified",
+    domain: "example.com",
+    level: "Certified",
+    status: "Active",
+    signatureStatus: "Verified",
+    expiresAtUtc: "2027-08-11T00:00:00Z",
+    publicCertificateUrl: "https://guardwithhip.com/certificate/hip-domain-cert-certified",
+    isActive: true
+  };
+  globalThis.fetch = async url => {
+    if (url.endsWith("/badge/domain/example.com")) {
+      return response({
+        domain: "example.com",
+        signedBadge: { payload: { domain: "example.com", certificate: certificateState }, signature: { value: "signed" } },
+        certificate: certificateState
+      });
+    }
+    if (url.endsWith("/badge/verify")) return response({ isVerified: true, status: "Verified" });
+    return response({
+      signedCertificate: {
+        payload: {
+          certificateId: certificateState.certificateId,
+          domain: certificateState.domain,
+          level: 3,
+          status: 3,
+          expiresAtUtc: certificateState.expiresAtUtc,
+          publicCertificateUrl: certificateState.publicCertificateUrl
+        }
+      },
+      currentStatus: 3,
+      signatureStatus: 0,
+      validityStatus: 0,
+      isActive: true
+    });
+  };
+
+  try {
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
+    const result = await client.verifyDomainCertificate("example.com");
+    assert.equal(result.level, "Certified");
+    assert.equal(result.isActive, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("extension rejects certificate presentation fields that differ from the signed badge", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => response({

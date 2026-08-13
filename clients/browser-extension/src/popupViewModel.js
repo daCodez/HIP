@@ -186,11 +186,45 @@ export function reasonsFor(lookup) {
 }
 
 /**
+ * Promotes a completed, privacy-safe Site Safety response into the main popup assessment.
+ * Public lookup identity fields remain authoritative while fresh scan scores fill previously unavailable safety data.
+ */
+export function mergeSiteSafetyAssessment(lookup = {}, siteSafety = null) {
+  const scoring = siteSafety?.scoring || {};
+  const finalHipScore = scoring.finalHipScore ?? siteSafety?.finalHipScore;
+  if (!Number.isFinite(Number(finalHipScore))) return lookup;
+
+  return {
+    ...lookup,
+    displayScore: Number(finalHipScore),
+    score: Number(finalHipScore),
+    finalHipScore: Number(finalHipScore),
+    scorePresentation: "Available",
+    status: scoring.presentationStatus || scoring.finalStatus || siteSafety.status || lookup.status,
+    domainTrustScore: scoring.domainTrustScore ?? siteSafety.domainTrustScore ?? lookup.domainTrustScore,
+    pageTrustScore: scoring.pageTrustScore ?? siteSafety.pageTrustScore ?? lookup.pageTrustScore,
+    contentRiskScore: scoring.contentRiskScore ?? siteSafety.contentRiskScore ?? lookup.contentRiskScore,
+    evidenceCoverage: "Sufficient",
+    evidenceConfidence: scoring.confidence || siteSafety.confidenceLevel || lookup.evidenceConfidence,
+    lastCheckedUtc: siteSafety.scannedAtUtc || lookup.lastCheckedUtc,
+    reasons: Array.isArray(scoring.reasons) && scoring.reasons.length
+      ? scoring.reasons
+      : Array.isArray(siteSafety.reasons) && siteSafety.reasons.length
+        ? siteSafety.reasons
+        : lookup.reasons
+  };
+}
+
+/**
  * Builds the primary popup model from public-safe lookup data and content-script scan counts.
  */
 export function buildPopupViewModel(lookup, summary, settings, currentUrl, certificate = null) {
   const hasPresentationContract = typeof lookup?.scorePresentation === "string";
-  const score = hasPresentationContract ? lookup?.displayScore ?? null : lookup?.score ?? lookup?.finalHipScore ?? null;
+  const score = hasPresentationContract
+    ? lookup?.scorePresentation === "Available"
+      ? lookup?.displayScore ?? lookup?.score ?? lookup?.finalHipScore ?? null
+      : null
+    : lookup?.score ?? lookup?.finalHipScore ?? null;
   const scoreAvailable = score !== null && score !== undefined && Number.isFinite(Number(score)) &&
     (!hasPresentationContract || lookup.scorePresentation === "Available");
   const evidenceWithheld = hasPresentationContract && !scoreAvailable;

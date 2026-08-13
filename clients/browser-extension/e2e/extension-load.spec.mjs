@@ -125,11 +125,12 @@ test("renders a meaningful-risk banner and submits privacy-safe feedback", async
   const feedbackRequests = [];
 
   try {
-    await runtime.context.route("http://localhost:4173/**", route => route.fulfill({
+    await runtime.context.route("https://score-sync.test/**", route => route.fulfill({
       status: 200,
       contentType: "text/html",
       body: `<!doctype html>
         <title>Untrusted test page</title>
+        <div id="hip-trust-banner">HIP Trust Score: 56/100 HIP Plugin v0.1.34-dev</div>
         <main>private-page-marker-must-not-leave</main>
         <form><input type="password" value="private-password-marker"></form>`
     }));
@@ -152,14 +153,14 @@ test("renders a meaningful-risk banner and submits privacy-safe feedback", async
           contentType: "application/json",
           headers: corsHeaders,
           body: JSON.stringify({
-            domain: "localhost",
-            finalHipScore: 31,
+            domain: "score-sync.test",
+            finalHipScore: 56,
             status: "Suspicious",
             verificationStatus: "Unverified",
             identityVerificationStatus: "NoSignedIdentityFound",
             knownRisks: ["Suspicious redirect evidence."],
             explanations: ["Suspicious redirect evidence."],
-            publicLookupUrl: "http://localhost:5123/lookup/domain/localhost"
+            publicLookupUrl: "http://localhost:5123/lookup/domain/score-sync.test"
           })
         });
         return;
@@ -177,7 +178,7 @@ test("renders a meaningful-risk banner and submits privacy-safe feedback", async
             domainTrustScore: 45,
             pageTrustScore: 30,
             contentRiskScore: 70,
-            finalHipScore: 31,
+            finalHipScore: 69,
             warnings: ["Suspicious redirect evidence."],
             providerEvidence: [],
             scannedAtUtc: "2026-07-21T12:00:00Z"
@@ -210,10 +211,15 @@ test("renders a meaningful-risk banner and submits privacy-safe feedback", async
       await route.fulfill({ status: 404, contentType: "application/json", headers: corsHeaders, body: "{}" });
     });
 
-    await page.goto("http://localhost:4173/account?token=private-url-marker");
+    await page.goto("https://score-sync.test/account?token=private-url-marker");
     const banner = page.locator("#hip-trust-banner");
     await expect(banner).toBeVisible({ timeout: 20_000 });
+    await expect(banner).toHaveCount(1);
     await expect(banner).toContainText("Suspicious");
+    await expect(banner).toContainText("69/100");
+    await expect(banner).toContainText(expectedPluginVersion);
+    await expect(banner).not.toContainText("56/100");
+    await expect(banner).not.toContainText("v0.1.34-dev");
     await banner.getByRole("button", { name: "Looks Suspicious" }).click();
     await expect.poll(() => feedbackRequests.length).toBe(1);
 
@@ -222,8 +228,83 @@ test("renders a meaningful-risk banner and submits privacy-safe feedback", async
     expect(serializedFeedback).not.toContain("private-password-marker");
     expect(serializedFeedback).not.toContain("private-url-marker");
     expect(feedbackRequests[0].platform).toBe("Web");
-    expect(feedbackRequests[0].targetId).toBe("localhost");
+    expect(feedbackRequests[0].targetId).toBe("score-sync.test");
     expect(feedbackRequests[0].eventType).toBe(2);
+  } finally {
+    await runtime.context.close();
+    await rm(runtime.profilePath, { recursive: true, force: true });
+  }
+});
+
+test("shows a critical interstitial and preserves the host page after explicit continuation", async () => {
+  const runtime = await launchHipExtension({ useLocalServices: true });
+  const page = await runtime.context.newPage();
+
+  try {
+    await runtime.context.route("https://critical-warning.test/**", route => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: `<!doctype html><title>Critical warning fixture</title>
+        <main>Host page remains intact</main>
+        <form><label>Private field <input id="private-field" value="preserve-me"></label></form>`
+    }));
+    await runtime.context.route("http://localhost:5099/**", async route => {
+      const request = route.request();
+      const pathname = new URL(request.url()).pathname;
+      const headers = {
+        "access-control-allow-origin": "*",
+        "access-control-allow-headers": "content-type,x-hip-instance-id,x-hip-device-id,x-hip-device-timestamp,x-hip-device-nonce,x-hip-device-body-sha256,x-hip-device-signature",
+        "access-control-allow-methods": "GET,POST,OPTIONS"
+      };
+      if (request.method() === "OPTIONS") {
+        await route.fulfill({ status: 204, headers });
+        return;
+      }
+
+      let body = {};
+      if (pathname === "/api/v1/browser/score-site") {
+        body = {
+          domain: "critical-warning.test",
+          finalHipScore: 14,
+          status: "Dangerous",
+          verificationStatus: "Unverified",
+          identityVerificationStatus: "NoSignedIdentityFound",
+          knownRisks: ["Critical phishing evidence."],
+          publicLookupUrl: "http://localhost:5123/lookup/domain/critical-warning.test"
+        };
+      } else if (pathname === "/api/v1/site-safety/scan") {
+        body = {
+          status: "Critical",
+          summary: "HIP found critical phishing evidence.",
+          confidenceLevel: "High",
+          finalHipScore: 4,
+          domainTrustScore: 10,
+          pageTrustScore: 2,
+          contentRiskScore: 98,
+          blockingDisposition: "Block",
+          warnings: ["Critical phishing evidence."],
+          providerEvidence: [],
+          scannedAtUtc: "2026-08-13T12:00:00Z"
+        };
+      } else if (pathname === "/api/v1/browser/scan-links") {
+        body = { results: [] };
+      } else if (pathname === "/api/v1/browser/scan-results") {
+        body = { saved: true };
+      }
+
+      await route.fulfill({ status: 200, contentType: "application/json", headers, body: JSON.stringify(body) });
+    });
+
+    await page.goto("https://critical-warning.test/account");
+    const interstitial = page.locator("#hip-current-page-interstitial");
+    await expect(interstitial).toBeVisible({ timeout: 20_000 });
+    await expect(interstitial.getByRole("heading", { name: "HIP recommends leaving this page" })).toBeVisible();
+    await expect(interstitial.getByRole("button", { name: "Leave this page" })).toBeFocused();
+
+    await interstitial.getByRole("button", { name: "Continue anyway" }).click();
+    await expect(interstitial).toHaveCount(0);
+    await expect(page.locator("#private-field")).toHaveValue("preserve-me");
+    await expect(page.locator("main")).toContainText("Host page remains intact");
   } finally {
     await runtime.context.close();
     await rm(runtime.profilePath, { recursive: true, force: true });
@@ -328,6 +409,128 @@ test("keeps routine trust in the popup and shows a safe API-failure state", asyn
     await expect(popup.locator("#state")).toHaveText(
       "HIP API unavailable. Unable to score this site right now.",
       { timeout: 20_000 });
+  } finally {
+    await runtime.context.close();
+    await rm(runtime.profilePath, { recursive: true, force: true });
+  }
+});
+
+test("embedded Site view replaces every loading placeholder with terminal Zero to Hero results", async () => {
+  const runtime = await launchHipExtension({ useLocalServices: true });
+  const targetPage = await runtime.context.newPage();
+
+  try {
+    await runtime.context.route("http://localhost:4176/**", route => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<!doctype html><title>Zero to Hero fixture</title><main><a href='/about'>About</a></main>"
+    }));
+    await runtime.context.route("http://localhost:5099/**", async route => {
+      const request = route.request();
+      const pathname = new URL(request.url()).pathname;
+      const headers = {
+        "access-control-allow-origin": "*",
+        "access-control-allow-headers": "content-type,x-hip-instance-id,x-hip-device-id,x-hip-device-timestamp,x-hip-device-nonce,x-hip-device-body-sha256,x-hip-device-signature",
+        "access-control-allow-methods": "GET,POST,OPTIONS"
+      };
+      if (request.method() === "OPTIONS") {
+        await route.fulfill({ status: 204, headers });
+        return;
+      }
+
+      if (pathname === "/api/v1/browser/score-site") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          headers,
+          body: JSON.stringify({
+            domain: "score-sync.test",
+            score: 89,
+            finalHipScore: 89,
+            domainTrustScore: 85,
+            pageTrustScore: 82,
+            contentRiskScore: 100,
+            status: "Trusted",
+            verificationStatus: "Verified",
+            identityStatus: "Verified",
+            identityVerificationStatus: "DomainVerified",
+            scorePresentation: "Available",
+            evidenceCoverage: "Sufficient",
+            evidenceConfidence: "Medium",
+            certificateApplicationStatus: "Approved",
+            certificateProgressStatus: "Certificate active",
+            monitoringStatus: "Retry scheduled",
+            knownRisks: [],
+            explanations: ["HIP found strong trust signals."],
+            publicLookupUrl: "http://localhost:5123/lookup/domain/score-sync.test"
+          })
+        });
+        return;
+      }
+      if (pathname === "/api/v1/site-safety/scan") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          headers,
+          body: JSON.stringify({
+            status: "Trusted",
+            summary: "No elevated structural risks found.",
+            confidenceLevel: "High",
+            domainTrustScore: 85,
+            pageTrustScore: 82,
+            contentRiskScore: 100,
+            finalHipScore: 88,
+            malwareRiskScore: 0,
+            phishingRiskScore: 0,
+            redirectRiskScore: 0,
+            downloadRiskScore: 0,
+            scriptRiskScore: 0,
+            warnings: [],
+            providerEvidence: [],
+            scannedAtUtc: "2026-08-13T04:29:00Z"
+          })
+        });
+        return;
+      }
+      if (pathname === "/api/v1/browser/scan-results") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          headers,
+          body: JSON.stringify({ saved: true, domain: "localhost", lastCheckedUtc: "2026-08-13T04:29:00Z" })
+        });
+        return;
+      }
+
+      await route.fulfill({ status: 404, contentType: "application/json", headers, body: "{}" });
+    });
+
+    const serviceWorker = runtime.context.serviceWorkers()[0];
+    await targetPage.goto("http://localhost:4176/");
+    const targetTab = await serviceWorker.evaluate(async () => {
+      const tabs = await chrome.tabs.query({});
+      return tabs.find(tab => tab.url?.startsWith("http://localhost:4176/"));
+    });
+    expect(targetTab?.id).toBeTruthy();
+
+    const siteView = await runtime.context.newPage();
+    await siteView.goto(
+      `chrome-extension://${runtime.extensionId}/src/popup.html?embedded=1&tab=${targetTab.id}&page=${encodeURIComponent(targetTab.url)}`);
+
+    await expect(siteView.locator("#score")).toHaveText("89/100", { timeout: 20_000 });
+    await expect(siteView.locator("#status")).toHaveText("Trusted");
+    await expect(siteView.locator("#evidenceCoverage")).toHaveText("Sufficient");
+    await expect(siteView.locator("#evidenceConfidence")).toHaveText("Medium");
+    await expect(siteView.locator("#certificateApplication")).toHaveText("Certificate active");
+    await expect(siteView.locator("#monitoringStatus")).toHaveText("Retry scheduled");
+    await expect(siteView.locator("#siteSafetyStatus")).toHaveText("Not run");
+    await expect(siteView.locator("#siteSafetyConfidence")).toHaveText("Not applicable");
+    await expect(siteView.locator("#malwareRisk")).not.toHaveText("Checking...");
+    await expect(siteView.locator("#phishingRisk")).not.toHaveText("Checking...");
+    await expect(siteView.locator("#redirectRisk")).not.toHaveText("Checking...");
+    await expect(siteView.locator("#downloadRisk")).not.toHaveText("Checking...");
+    await expect(siteView.locator("#scriptRisk")).not.toHaveText("Checking...");
+    await expect(siteView.locator("body")).not.toContainText("Checking...");
   } finally {
     await runtime.context.close();
     await rm(runtime.profilePath, { recursive: true, force: true });

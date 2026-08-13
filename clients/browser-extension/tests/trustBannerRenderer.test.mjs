@@ -27,6 +27,15 @@ test("trust banner renders safe and suspicious feedback buttons", () => {
   assert.equal(rendererSource.includes("data-hip-feedback=\"LooksSuspicious\""), true);
 });
 
+test("trust banner replaces stale injected markup and uses the final Site Safety assessment", () => {
+  assert.equal(rendererSource.includes("removeTrustBanner();"), true);
+  assert.equal(rendererSource.includes('document.getElementById("hip-trust-banner")?.remove()'), true);
+  assert.equal(contentSource.includes("window.HipRiskBadgeRenderer.removeTrustBanner();"), true);
+  assert.equal(contentSource.includes("const finalLookup = mergeSiteSafetyAssessment(currentLookup, siteSafety);"), true);
+  assert.equal(contentSource.includes("await renderPageBannerIfNeeded(finalLookup);"), true);
+  assert.equal(contentSource.includes("await persistScanResult(finalLookup)"), true);
+});
+
 test("trust banner labels feedback instead of voting", () => {
   assert.equal(rendererSource.includes("trust feedback"), true);
   assert.equal(rendererSource.toLowerCase().includes("vote"), false);

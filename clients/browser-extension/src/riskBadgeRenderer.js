@@ -17,6 +17,7 @@
     ensureStyles,
     renderLinkBadge,
     renderTrustBanner,
+    removeTrustBanner,
     renderWarningBanner,
     renderFormIndicator
   };
@@ -51,10 +52,7 @@
    */
   function renderTrustBanner(lookup, pluginVersion = "HIP Plugin vunknown-dev", options = {}) {
     ensureStyles();
-
-    if (document.getElementById("hip-trust-banner")) {
-      return;
-    }
+    removeTrustBanner();
 
     const status = lookup?.status || "Unknown";
     const statusClass = status.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -94,6 +92,11 @@
     }
 
     document.documentElement.prepend(banner);
+  }
+
+  /** Removes a banner left by an earlier scan or unpacked-extension version. */
+  function removeTrustBanner() {
+    document.getElementById("hip-trust-banner")?.remove();
   }
 
   /**

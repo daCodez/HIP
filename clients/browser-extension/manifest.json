@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "HIP Browser Protection",
   "description": "Human Interactive Protocol website and link trust checks.",
-  "version": "0.1.35",
+  "version": "0.1.43",
   "action": {
     "default_title": "Open HIP side panel"
   },
@@ -35,11 +35,9 @@
   "host_permissions": [
     "https://api.guardwithhip.com/*",
     "https://guardwithhip.com/*",
+    "https://*/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
-  ],
-  "optional_host_permissions": [
-    "https://*/*"
   ],
   "permissions": [
     "activeTab",
