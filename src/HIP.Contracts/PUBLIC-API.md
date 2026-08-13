@@ -51,6 +51,7 @@ been approved.
 - `DevicePlatformType`
 - `ReportPlatform`
 - `SourceClient`
+- `ReportType`
 
 The shared vocabulary retains its existing `HIP.Domain` CLR namespaces for compatibility; this does not license or
 publish the `HIP.Domain` assembly. The baseline excludes hosted scoring and detection, entitlement evaluation,
