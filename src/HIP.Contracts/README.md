@@ -41,7 +41,8 @@ canonical signing-payload construction, replay decisions, signing authority,
 provider selection, and reputation interpretation remain outside this assembly.
 
 The shared protocol vocabulary includes content type, identity subject type,
-verification method, verification status, and public risk status. These enums
+verification method, verification status, public risk status, device platform,
+report platform, and source client. These enums
 retain their existing `HIP.Domain` CLR namespaces and numeric values for source
 and wire compatibility. The rest of `HIP.Domain`, including mappings,
 aggregates, lifecycle state, scoring, and operational policy, is not licensed
