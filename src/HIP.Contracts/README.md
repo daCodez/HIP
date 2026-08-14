@@ -28,6 +28,10 @@ The DNS provider surface supports only bounded public A and AAAA lookups, public
 DNSSEC validation state. HIP-aware trust enrichment, wire parsing, caching, rate limiting, resolver configuration,
 authoritative DNS management, query history, scoring, and provider selection remain outside this assembly.
 
+The browser surface contains privacy-safe score and link-classification request and response shapes plus stable public
+evidence-presentation values. URL validation, scoring, evidence interpretation, safety routing, persistence, provenance,
+submission authorization, and browser service implementations remain outside this assembly.
+
 The protocol surface exposes verification-only signature capabilities and
 public-key fingerprinting. It deliberately excludes private-key inputs,
 signing operations, provider factories, runtime allowlists, managed-key
