@@ -82,9 +82,11 @@ been approved.
 - `CompleteDeviceRegistrationRequest`
 - `DeviceRegistrationChallengeResponse`
 - `DeviceRegistrationDeviceResponse`
+- `DeviceRequestProof`
+- `DeviceRequestProofCanonicalizer`
 
 The shared vocabulary retains its existing `HIP.Domain` CLR namespaces for compatibility; this does not license or
 publish the `HIP.Domain` assembly. The baseline excludes hosted scoring and detection, entitlement evaluation,
 subscription and billing behavior, provider selection, secrets, private-key
-operations, signing, replay policy, authoritative identity state, certificate
+operations, proof acceptance policy, replay state, authoritative identity state, certificate
 issuance, persistence, administration, UI, and deployment infrastructure.
