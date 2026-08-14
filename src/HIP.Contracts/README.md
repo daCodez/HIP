@@ -24,6 +24,10 @@ feature metadata, and provider declaration interfaces. HIP retains control of
 plugin discovery, validation, configuration, secrets, plan evaluation, billing,
 provider selection, scoring, evidence collection, and certificate issuance.
 
+The DNS provider surface supports only bounded public A and AAAA lookups, public answers, and resolver-reported
+DNSSEC validation state. HIP-aware trust enrichment, wire parsing, caching, rate limiting, resolver configuration,
+authoritative DNS management, query history, scoring, and provider selection remain outside this assembly.
+
 The protocol surface exposes verification-only signature capabilities and
 public-key fingerprinting. It deliberately excludes private-key inputs,
 signing operations, provider factories, runtime allowlists, managed-key
