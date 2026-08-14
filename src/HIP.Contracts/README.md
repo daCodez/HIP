@@ -32,6 +32,12 @@ The browser surface contains privacy-safe score and link-classification request 
 evidence-presentation values. URL validation, scoring, evidence interpretation, safety routing, persistence, provenance,
 submission authorization, and browser service implementations remain outside this assembly.
 
+The device-registration surface contains only bounded registration inputs, the server-issued canonical challenge,
+the public-safe registered-device projection, and its cryptographic assurance state. It accepts public verification
+material but never private keys. Challenge construction, proof validation, key processing, registration limits, owner
+binding, persistence, authorization, revocation commands, audit transitions, and replay protection remain outside this
+assembly.
+
 The protocol surface exposes verification-only signature capabilities and
 public-key fingerprinting. It deliberately excludes private-key inputs,
 signing operations, provider factories, runtime allowlists, managed-key
