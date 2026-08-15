@@ -47,6 +47,7 @@ been approved.
 - `IdentitySubjectType`
 - `VerificationMethod`
 - `VerificationStatus`
+- `SignatureAlgorithmFamily`
 - `RiskStatus`
 - `DevicePlatformType`
 - `ReportPlatform`
@@ -75,6 +76,17 @@ been approved.
 
 - `PublicDomainLookupResponse`
 - `ScoreBreakdownItem`
+
+## Public identity discovery
+
+- `HipWellKnownDocument`
+- `SigningKey`
+- `HipProtocolSignature`
+
+## Privacy-safe reporting response
+
+- `ReportStatus`
+- `PrivacySafeReportResponse`
 
 ## Browser scoring and link classification
 
