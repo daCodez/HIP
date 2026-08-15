@@ -65,6 +65,16 @@ been approved.
 - `DnssecValidationStatus`
 - `DnsProviderLookupResult`
 - `IDnsLookupProvider`
+- `DnsJsonQuestion`
+- `DnsJsonAnswer`
+- `DnssecValidationSummary`
+- `HipDnsTrustSummary`
+- `HipAwareDnsLookupResponse`
+
+## Public domain lookup
+
+- `PublicDomainLookupResponse`
+- `ScoreBreakdownItem`
 
 ## Browser scoring and link classification
 
@@ -84,6 +94,15 @@ been approved.
 - `DeviceRegistrationDeviceResponse`
 - `DeviceRequestProof`
 - `DeviceRequestProofCanonicalizer`
+
+## Second Life HUD client
+
+- `SecondLifeHudActivationRequest`
+- `SecondLifeHudActivationResponse`
+- `SecondLifeHudClientConfig`
+- `SecondLifeHudSettings`
+- `SecondLifeHudSettingsResponse`
+- `SecondLifeHudScanResponse`
 
 The shared vocabulary retains its existing `HIP.Domain` CLR namespaces for compatibility; this does not license or
 publish the `HIP.Domain` assembly. The baseline excludes hosted scoring and detection, entitlement evaluation,
