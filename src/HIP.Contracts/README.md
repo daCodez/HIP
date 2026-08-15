@@ -28,15 +28,26 @@ The DNS provider surface supports only bounded public A and AAAA lookups, public
 DNSSEC validation state. HIP-aware trust enrichment, wire parsing, caching, rate limiting, resolver configuration,
 authoritative DNS management, query history, scoring, and provider selection remain outside this assembly.
 
+The DNS response surface also exposes DNS-JSON fields and already-approved HIP trust presentation alongside resolver
+evidence. It does not expose resolver selection, query processing, authoritative publication, or score calculation.
+
 The browser surface contains privacy-safe score and link-classification request and response shapes plus stable public
 evidence-presentation values. URL validation, scoring, evidence interpretation, safety routing, persistence, provenance,
 submission authorization, and browser service implementations remain outside this assembly.
+
+The public lookup surface contains the public domain result and score-breakdown shapes. Evidence collection, scoring,
+provider assistance, certificate decisions, caching, and lookup orchestration remain outside this assembly.
 
 The device surface contains bounded registration inputs, the server-issued canonical challenge, the public-safe
 registered-device projection, its cryptographic assurance state, and the version-one registered-device request-proof
 wire recipe. It accepts public verification material but never private keys. Challenge construction, proof acceptance,
 timestamp tolerance, device lookup, signature verification, replay-state storage, registration limits, owner binding,
 persistence, authorization, revocation commands, and audit transitions remain outside this assembly.
+
+The Second Life HUD surface is limited to activation, public client configuration, settings, and hosted scan outcomes.
+Raw message text, raw URLs, sender evidence, report submissions, setup-code and device-credential policy, licensing,
+authorization, simulation, persistence, and routing remain outside this assembly. Callers must treat returned device
+credentials as secrets and must not log or redistribute them.
 
 The protocol surface exposes verification-only signature capabilities and
 public-key fingerprinting. It deliberately excludes private-key inputs,
