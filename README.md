@@ -36,6 +36,8 @@ Packaging remains explicit so an accidental build cannot publish a release:
 .\scripts\validate-hip-contracts-package.ps1
 ```
 
+Tagged `contracts-v*` releases publish `HumanInteractiveProtocol.Contracts` as a NuGet package with a SHA-256 checksum manifest. Release assets can be downloaded without registry credentials. Package creation remains gated by the component licence files and the clean-consumer validation above.
+
 ## License
 
 The source in this repository is licensed under the [Apache License 2.0](LICENSE). HIP names, logos, badges, certification marks, and other brand assets are subject to the separate [trademark policy](TRADEMARKS.md). The license does not imply that a product or website is verified, certified, sponsored, or endorsed by HIP.
