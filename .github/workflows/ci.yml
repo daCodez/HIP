@@ -1,0 +1,36 @@
+name: Public CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore HIP.slnx
+      - run: dotnet build HIP.slnx -c Release --no-restore -warnaserror
+
+  browser-extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/browser-extension
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: clients/browser-extension/package-lock.json
+      - run: npm ci
+      - run: npm test

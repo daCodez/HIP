@@ -20,7 +20,6 @@ test("generates a non-exportable P-256 private key and canonical public SPKI", a
     /not extractable/i
   );
 });
-
 test("creates the 64-byte WebCrypto proof format accepted by HIP", async () => {
   const generated = await generateInstallationKeyMaterial(webcrypto);
   const payload = new TextEncoder().encode("HIP device-registration challenge bytes");
@@ -76,9 +75,3 @@ test("keeps extension private keys out of sync/local storage and messages", asyn
   assert.doesNotMatch(background, /exportKey\(["']pkcs8/);
 });
 
-test("consumer portal bridge falls back to its existing local key flow", async () => {
-  const portalModule = await readFile(new URL("../../../src/HIP.Web/wwwroot/js/hip-device-registration.js", import.meta.url), "utf8");
-  assert.match(portalModule, /requestExtension\("prepare"/);
-  assert.match(portalModule, /generateKey/);
-  assert.match(portalModule, /extensionHandlePrefix/);
-});

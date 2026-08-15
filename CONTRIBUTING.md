@@ -1,95 +1,26 @@
 # Contributing to HIP
 
-Thanks for your interest in **HIP (Human Identity Protocol)**.
-We welcome contributors who care about security, privacy, protocol quality, and practical trust tooling.
+Thank you for contributing to the Human Interactive Protocol.
 
-## What HIP needs most
+## Scope
 
-- Protocol and architecture improvements
-- Security hardening and validation
-- Test coverage (unit/integration/e2e)
-- Documentation clarity
-- Client integration quality (browser extension, virtual-world client)
+This repository accepts changes to public contracts, protocol documentation, verification boundaries, public plug-in contracts, examples, and the browser extension. Hosted scoring policy, certificate issuance, private keys, infrastructure, billing, and administrative controls are not developed here.
 
-## Ground rules
+## Expectations
 
-1. Be respectful and constructive.
-2. Keep changes focused and reviewable.
-3. Prefer small pull requests over large “everything” PRs.
-4. Include tests for behavior changes whenever possible.
-5. Document security/privacy implications for trust-related changes.
+1. Keep changes focused and backward compatible.
+2. Add tests for behavior changes.
+3. Treat all external data as untrusted.
+4. Do not collect or submit passwords, tokens, cookies, private messages, form values, or unrelated browsing history.
+5. Explain security, privacy, and compatibility effects in the pull request.
 
-## Before you start
-
-- Read `README.md`
-- Review docs under `docs/`
-- Check existing issues/PRs to avoid duplication
-- Open an issue/discussion first for major design changes
-
-## Development setup
+## Validation
 
 ```powershell
-dotnet restore HIP.slnx
-dotnet build HIP.slnx
-dotnet test HIP.slnx
+dotnet build HIP.slnx -c Release
+cd clients/browser-extension
+npm ci
+npm test
 ```
 
-Run local orchestration via AppHost (recommended):
-
-```powershell
-dotnet run --project src/HIP.AppHost/HIP.AppHost.csproj --launch-profile http
-```
-
-## Branch and commit guidance
-
-- Branch naming:
-  - `feat/<short-name>`
-  - `fix/<short-name>`
-  - `docs/<short-name>`
-  - `test/<short-name>`
-- Commit style (recommended Conventional Commits):
-  - `feat: ...`
-  - `fix: ...`
-  - `docs: ...`
-  - `test: ...`
-  - `refactor: ...`
-  - `chore: ...`
-
-## Pull request checklist
-
-Please include:
-
-- Clear problem statement
-- Summary of your approach
-- Screenshots/UI notes (if relevant)
-- Test evidence (what you ran)
-- Security/privacy notes
-- Backward-compatibility impact
-
-## Security and privacy expectations
-
-HIP is trust/security-sensitive. Treat all external input as untrusted.
-
-- Validate and normalize inputs
-- Avoid collecting unnecessary sensitive data
-- Keep secrets/tokens out of source, logs, and test fixtures
-- Do not submit raw private user content in sample payloads
-
-If you discover a vulnerability, use responsible disclosure (see `SECURITY.md` if available).
-
-## Good first contributions
-
-- Docs cleanup and examples
-- Test additions for risk/status mapping
-- Input validation improvements
-- Safer defaults in client settings
-- Better error messages and operator visibility
-
-## Questions?
-
-Open a GitHub Discussion or Issue with:
-
-- context,
-- expected behavior,
-- current behavior,
-- and proposed direction.
+Use responsible disclosure rather than a public issue for suspected vulnerabilities.

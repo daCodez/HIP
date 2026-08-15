@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HIP.Contracts/HIP.Contracts.csproj" />
+  </Folder>
+</Solution>
