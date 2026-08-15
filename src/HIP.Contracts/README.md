@@ -67,8 +67,13 @@ provider selection, and reputation interpretation remain outside this assembly.
 
 The shared protocol vocabulary includes content type, identity subject type,
 verification method, verification status, public risk status, device platform and revocation status,
-report platform, source client, privacy-safe report intent, observed DNSSEC status, and public certificate level and status. These enums
+report platform, source client, privacy-safe report intent and lifecycle status, signature algorithm family, observed DNSSEC status, and public certificate level and status. These enums
 retain their existing `HIP.Domain` CLR namespaces and numeric values for source
 and wire compatibility. The rest of `HIP.Domain`, including mappings,
 aggregates, lifecycle state, scoring, and operational policy, is not licensed
 or distributed by this package.
+
+The public identity surface also contains the signed well-known HIP identity document, its advertised public keys, and
+bounded origin-and-integrity signature metadata. The public reporting surface contains only the privacy-safe submission
+acknowledgement. Managed keys, signing authority, report payloads, evidence facts, retention, and review routing remain
+outside this assembly.

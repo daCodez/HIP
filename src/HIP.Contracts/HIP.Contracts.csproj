@@ -9,7 +9,7 @@
     <VersionPrefix>0.1.0</VersionPrefix>
     <Authors>HIP Project</Authors>
     <Title>Human Interactive Protocol Contracts</Title>
-    <Description>Candidate public interoperability contracts for the Human Interactive Protocol.</Description>
+    <Description>Public interoperability contracts for the Human Interactive Protocol.</Description>
     <PackageTags>hip;human-interactive-protocol;trust;verification;protocol</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/daCodez/HIP</RepositoryUrl>
