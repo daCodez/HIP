@@ -148,6 +148,7 @@ async function injectContentScanner(tabId) {
       "src/browserScanAssessment.js",
       "src/formalScoring.js",
       "src/contentMessageContracts.js",
+      "src/siteBadgePlacement.js",
       "src/xrayRules.js",
       "src/xrayRenderer.js",
       "src/xrayController.js",

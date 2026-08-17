@@ -54,3 +54,14 @@ test("accepts only bounded side-panel X-ray payloads", () => {
   assert.equal(contracts.validate({ type: "HIP_XRAY_GET_STATE", inventoryLimit: 101 }, popupSender, runtimeId).ok, false);
   assert.equal(contracts.validate({ type: "HIP_XRAY_GET_STATE", pageText: "private" }, popupSender, runtimeId).ok, false);
 });
+
+test("accepts only supported website badge positions", () => {
+  for (const position of ["bottom-left", "bottom-right", "top-left", "top-right"]) {
+    const result = contracts.validate({ type: "HIP_SET_SITE_BADGE_POSITION", position }, popupSender, runtimeId);
+    assert.equal(result.ok, true);
+    assert.equal(result.message.position, position);
+  }
+
+  assert.equal(contracts.validate({ type: "HIP_SET_SITE_BADGE_POSITION", position: "center" }, popupSender, runtimeId).ok, false);
+  assert.equal(contracts.validate({ type: "HIP_SET_SITE_BADGE_POSITION", position: "top-left", pageText: "private" }, popupSender, runtimeId).ok, false);
+});

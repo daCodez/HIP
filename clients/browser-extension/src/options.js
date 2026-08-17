@@ -134,7 +134,10 @@ async function applyActiveTabSettings(settings) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!Number.isInteger(tab?.id)) return;
   try {
-    await chrome.tabs.sendMessage(tab.id, { type: "HIP_XRAY_SET_MARKERS", visible: settings.showXrayMarkers !== false });
+    await Promise.all([
+      chrome.tabs.sendMessage(tab.id, { type: "HIP_XRAY_SET_MARKERS", visible: settings.showXrayMarkers !== false }),
+      chrome.tabs.sendMessage(tab.id, { type: "HIP_SET_SITE_BADGE_POSITION", position: settings.badgePosition })
+    ]);
   } catch {
     // Restricted tabs and pages without a content script simply apply on next eligible load.
   }

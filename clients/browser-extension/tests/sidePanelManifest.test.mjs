@@ -14,7 +14,7 @@ const sidePanelScript = await readFile(new URL("src/sidepanel.js", root), "utf8"
 const contentScript = await readFile(new URL("src/content.js", root), "utf8");
 
 test("manifest opens the persistent side panel from the toolbar", () => {
-  assert.equal(manifest.version, "0.1.43");
+  assert.equal(manifest.version, "0.1.45");
   assert.ok(manifest.permissions.includes("sidePanel"));
   assert.equal(manifest.side_panel.default_path, "src/sidepanel.html");
   assert.equal("default_popup" in manifest.action, false);

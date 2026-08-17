@@ -9,10 +9,12 @@ import {
   normalizeHipSettings
 } from "../src/hipApiClient.js";
 
-const [optionsHtml, optionsScript, rendererSource] = await Promise.all([
+const [optionsHtml, optionsScript, rendererSource, contentSource, manifestSource] = await Promise.all([
   readFile(new URL("../src/options.html", import.meta.url), "utf8"),
   readFile(new URL("../src/options.js", import.meta.url), "utf8"),
-  readFile(new URL("../src/xrayRenderer.js", import.meta.url), "utf8")
+  readFile(new URL("../src/xrayRenderer.js", import.meta.url), "utf8"),
+  readFile(new URL("../src/content.js", import.meta.url), "utf8"),
+  readFile(new URL("../manifest.json", import.meta.url), "utf8")
 ]);
 
 test("new installs use the production HIP services", () => {
@@ -39,14 +41,18 @@ test("the exact legacy localhost defaults migrate without replacing custom devel
   assert.equal(custom.webBaseUrl, "http://localhost:6002");
 });
 
-test("legacy placement is normalized while X-ray results move to the side panel", () => {
+test("website badge placement is normalized and applied independently of side-panel X-ray results", () => {
   for (const position of ["bottom-left", "bottom-right", "top-left", "top-right"]) {
     assert.equal(normalizeBadgePosition(position), position);
     assert.match(optionsHtml, new RegExp(`value="${position}"`));
   }
   assert.equal(normalizeBadgePosition("center"), "bottom-left");
   assert.equal(normalizeHipSettings({ badgePosition: "top-right" }).badgePosition, "top-right");
-  assert.match(optionsScript, /badgePosition/);
+  assert.match(optionsHtml, /Website badge position/);
+  assert.match(optionsScript, /HIP_SET_SITE_BADGE_POSITION/);
+  assert.match(contentSource, /applySiteBadgePosition\(settings\.badgePosition\)/);
+  assert.match(contentSource, /remainingAttempts = 20/);
+  assert.match(manifestSource, /src\/siteBadgePlacement\.js/);
   assert.doesNotMatch(rendererSource, /launcher\[data-position/);
   assert.match(rendererSource, /return "side-panel"/);
 });

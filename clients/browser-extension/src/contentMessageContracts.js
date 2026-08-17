@@ -4,7 +4,7 @@
   const payloadFreeTypes = new Set([
     "HIP_REFRESH_SCAN", "HIP_GET_CONTENT_SUMMARY", "HIP_XRAY_START", "HIP_XRAY_RESCAN", "HIP_XRAY_STOP"
   ]);
-  const allowedTypes = new Set([...payloadFreeTypes, "HIP_XRAY_GET_STATE", "HIP_XRAY_SELECT_FINDING", "HIP_XRAY_SET_MARKERS"]);
+  const allowedTypes = new Set([...payloadFreeTypes, "HIP_XRAY_GET_STATE", "HIP_XRAY_SELECT_FINDING", "HIP_XRAY_SET_MARKERS", "HIP_SET_SITE_BADGE_POSITION"]);
   const MAX_FINDING_ID_LENGTH = 240;
 
   /**
@@ -43,6 +43,14 @@
         return { ok: false, error: "X-ray marker preference is invalid." };
       }
       return { ok: true, message: { type: message.type, visible: message.visible } };
+    }
+
+    if (message.type === "HIP_SET_SITE_BADGE_POSITION") {
+      const allowedPositions = new Set(["bottom-left", "bottom-right", "top-left", "top-right"]);
+      if (!hasExactKeys(keys, ["type", "position"]) || !allowedPositions.has(message.position)) {
+        return { ok: false, error: "HIP website badge position is invalid." };
+      }
+      return { ok: true, message: { type: message.type, position: message.position } };
     }
 
     if (message.type === "HIP_XRAY_GET_STATE") {

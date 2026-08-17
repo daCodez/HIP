@@ -30,10 +30,12 @@
   const pendingScanSubmissions = new Set();
   let activeScanPromise = null;
   let xraySession = null;
+  let badgePlacementRetry = null;
   const privacyGuards = window.HipBrowserPrivacyGuards;
   const scanAssessment = window.HipBrowserScanAssessment;
   const formalScoring = globalThis.HipFormalScoring;
   const contentMessageContracts = globalThis.HipContentMessageContracts;
+  const siteBadgePlacement = globalThis.HipSiteBadgePlacement;
 
   if (!privacyGuards) {
     throw new Error("HIP browser privacy guard module did not load.");
@@ -67,6 +69,10 @@
 
   if (!contentMessageContracts) {
     throw new Error("HIP content message contract module did not load.");
+  }
+
+  if (!siteBadgePlacement) {
+    throw new Error("HIP website badge placement module did not load.");
   }
 
   const {
@@ -128,6 +134,12 @@
     if (message?.type === "HIP_XRAY_SET_MARKERS") {
       xraySession ??= createXraySession();
       sendResponse({ ok: true, result: contentMessageContracts.safeSummary(xraySession.setMarkersVisible(message.visible)) });
+      return false;
+    }
+
+    if (message?.type === "HIP_SET_SITE_BADGE_POSITION") {
+      const updated = applySiteBadgePosition(message.position);
+      sendResponse({ ok: true, result: { position: message.position, updated } });
       return false;
     }
 
@@ -269,6 +281,7 @@
    */
   async function initialize() {
     settings = await loadSettings();
+    applySiteBadgePosition(settings.badgePosition);
     window.HipRiskBadgeRenderer.removeTrustBanner();
     xraySession?.setPreferences({ markersVisible: settings.showXrayMarkers !== false });
     pluginVersion = await loadPluginVersion();
@@ -328,6 +341,23 @@
     await persistScanResult(finalLookup).catch(error => console.warn("HIP scan result persistence failed safely.", error));
     markScanStage("Complete");
     publishSummary();
+  }
+
+  /** Gives asynchronously loaded website badges a short, bounded window to appear. */
+  function applySiteBadgePosition(position, remainingAttempts = 20) {
+    if (badgePlacementRetry !== null) {
+      clearTimeout(badgePlacementRetry);
+      badgePlacementRetry = null;
+    }
+
+    const updated = siteBadgePlacement.apply(document, position);
+    if (updated === 0 && remainingAttempts > 0) {
+      badgePlacementRetry = setTimeout(() => {
+        badgePlacementRetry = null;
+        applySiteBadgePosition(position, remainingAttempts - 1);
+      }, 250);
+    }
+    return updated;
   }
 
   /**
@@ -895,7 +925,8 @@
       enableSafetyPageRouting: true,
       submitScanResults: true,
       bannerDisplayMode: "WarningsOnly",
-      scanMode: "Normal"
+      scanMode: "Normal",
+      badgePosition: "bottom-left"
     };
   }
 

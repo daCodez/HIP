@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "HIP Browser Protection",
   "description": "Human Interactive Protocol website and link trust checks.",
-  "version": "0.1.43",
+  "version": "0.1.45",
   "action": {
     "default_title": "Open HIP side panel"
   },
@@ -24,6 +24,7 @@
         "src/browserScanAssessment.js",
         "src/formalScoring.js",
         "src/contentMessageContracts.js",
+        "src/siteBadgePlacement.js",
         "src/xrayRules.js",
         "src/xrayRenderer.js",
         "src/xrayController.js",
