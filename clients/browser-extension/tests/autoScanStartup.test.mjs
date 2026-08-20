@@ -7,6 +7,7 @@ const contentSource = await readFile(new URL("../src/content.js", import.meta.ur
 const browserPrivacyGuardsSource = await readFile(new URL("../src/browserPrivacyGuards.js", import.meta.url), "utf8");
 const browserScanAssessmentSource = await readFile(new URL("../src/browserScanAssessment.js", import.meta.url), "utf8");
 const popupSource = await readFile(new URL("../src/popup.js", import.meta.url), "utf8");
+const popupCssSource = await readFile(new URL("../src/popup.css", import.meta.url), "utf8");
 const apiClientSource = await readFile(new URL("../src/hipApiClient.js", import.meta.url), "utf8");
 const backgroundSource = await readFile(new URL("../src/background.js", import.meta.url), "utf8");
 const manifestSource = await readFile(new URL("../manifest.json", import.meta.url), "utf8");
@@ -200,6 +201,7 @@ test("HIP API client uses a shared fetch timeout wrapper", () => {
 });
 
 test("popup scan messaging has deadlines and terminalizes pending results", () => {
+  assert.match(popupSource, /withDeadline\(loadHipSettings\(\), extensionMessageDeadlineMs, DEFAULT_HIP_SETTINGS\)/);
   assert.match(popupSource, /withDeadline\(getScanSummary\(\), extensionMessageDeadlineMs, \{\}\)/);
   assert.match(popupSource, /withDeadline\(startContentScanIfNeeded\(\), extensionMessageDeadlineMs, false\)/);
   assert.match(popupSource, /function settlePendingResults\(\)/);
@@ -208,6 +210,21 @@ test("popup scan messaging has deadlines and terminalizes pending results", () =
   const loadingRenderer = popupSource.slice(popupSource.indexOf("function renderLoadingSummary"), popupSource.indexOf("function renderSummary"));
   assert.match(loadingRenderer, /if \(!siteSafetyTerminal\)[\s\S]*malwareRisk\.textContent = "Checking\.\.\."/);
   assert.doesNotMatch(loadingRenderer, /}\s*elements\.malwareRisk\.textContent = "Checking\.\.\."/);
+});
+
+test("popup startup does not depend on the background worker for its version", () => {
+  const versionLoader = popupSource.slice(popupSource.indexOf("function loadPluginVersion"));
+  assert.match(versionLoader, /chrome\.runtime\?\.getManifest\?\.\(\)\.version/);
+  assert.doesNotMatch(versionLoader, /sendMessage/);
+});
+
+test("embedded Site view falls back to the active tab when its supplied tab is stale", () => {
+  assert.match(popupSource, /let tab = embeddedTabId \? await chrome\.tabs\.get\(embeddedTabId\)\.catch\(\(\) => null\) : null;/);
+  assert.match(popupSource, /if \(!tab\) \{[\s\S]*chrome\.tabs\.query\(\{ active: true, currentWindow: true \}\)/);
+});
+
+test("popup does not reveal placeholder score fields while startup is pending", () => {
+  assert.match(popupCssSource, /\[hidden\]\s*\{\s*display:\s*none\s*!important;/);
 });
 
 test("fetch timeout wrapper aborts slow API calls", async () => {

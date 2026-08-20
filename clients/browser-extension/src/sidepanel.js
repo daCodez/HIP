@@ -65,10 +65,13 @@ window.addEventListener("message", event => {
   if (event.data.action === "settings") activateTab(document.getElementById("settingsTab"), true);
 });
 
-void restoreSelectedTab().then(refreshActiveTab);
+// Resolve the active page immediately. Restoring a UI preference must never
+// prevent the Site view from receiving its browser tab.
+void refreshActiveTab();
+void restoreSelectedTab();
 
 async function restoreSelectedTab() {
-  const stored = await chrome.storage.local.get({ hipSidePanelTab: "pageTab" });
+  const stored = await chrome.storage.local.get({ hipSidePanelTab: "pageTab" }).catch(() => ({ hipSidePanelTab: "pageTab" }));
   activateTab(document.getElementById(stored.hipSidePanelTab) || tabs[0], false);
 }
 

@@ -118,11 +118,14 @@ initialize().catch(error => showUnavailable(error));
  * Initializes the popup with the active tab URL and current HIP score.
  */
 async function initialize() {
-  settings = await loadHipSettings();
-  elements.pluginVersion.textContent = await loadPluginVersion();
+  settings = await withDeadline(loadHipSettings(), extensionMessageDeadlineMs, DEFAULT_HIP_SETTINGS);
+  elements.pluginVersion.textContent = loadPluginVersion();
   client = new HipApiClient({ apiBaseUrl: settings.apiBaseUrl, webBaseUrl: settings.webBaseUrl, instanceId: settings.instanceId });
   const embeddedTabId = embeddedTabIdFromLocation();
-  const tab = embeddedTabId ? await chrome.tabs.get(embeddedTabId).catch(() => null) : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+  let tab = embeddedTabId ? await chrome.tabs.get(embeddedTabId).catch(() => null) : null;
+  if (!tab) {
+    tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0] || null;
+  }
   activeTabId = tab?.id ?? null;
   const currentUrl = tab?.url ? new URL(tab.url) : null;
   activeTabUrl = currentUrl?.toString() || null;
@@ -845,9 +848,9 @@ function showUnavailable(error) {
 }
 
 /**
- * Loads the extension version from the background worker so the popup reflects manifest.json.
+ * Reads the installed manifest version without waiting for the background worker.
  */
-async function loadPluginVersion() {
-  const response = await chrome.runtime.sendMessage({ type: "HIP_GET_PLUGIN_VERSION" });
-  return response?.ok ? response.result : "HIP Plugin vunknown-dev";
+function loadPluginVersion() {
+  const version = chrome.runtime?.getManifest?.().version;
+  return version ? `HIP Plugin v${version}-dev` : "HIP Plugin vunknown-dev";
 }

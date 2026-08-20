@@ -47,10 +47,9 @@ test("the page keeps only scan sweep, markers, highlights, and announcements", (
   assert.doesNotMatch(renderer, /results-pill|finding-row|className = "hud"|X-ray this page/);
 });
 
-test("manifest adds only the reviewed side-panel runtime permission", () => {
+test("manifest adds only the reviewed persistent side-panel runtime permissions", () => {
   const manifest = JSON.parse(manifestText);
-  assert.deepEqual(manifest.permissions, ["activeTab", "scripting", "storage", "sidePanel"]);
-  assert.equal(manifest.permissions.includes("tabs"), false);
+  assert.deepEqual(manifest.permissions, ["activeTab", "scripting", "storage", "sidePanel", "tabs"]);
   assert.equal(manifest.permissions.includes("debugger"), false);
 });
 

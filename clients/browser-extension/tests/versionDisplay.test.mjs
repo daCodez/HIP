@@ -26,7 +26,7 @@ test("popup displays plugin version in dev MVP mode", () => {
   const popupScript = read("src/popup.js");
 
   assert.match(popupHtml, /id="pluginVersion"/);
-  assert.match(popupScript, /HIP_GET_PLUGIN_VERSION/);
+  assert.match(popupScript, /chrome\.runtime\?\.getManifest\?\.\(\)\.version/);
 });
 
 test("version comes from manifest through background and shared formatter", () => {

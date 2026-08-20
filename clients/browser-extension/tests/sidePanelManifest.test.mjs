@@ -14,8 +14,9 @@ const sidePanelScript = await readFile(new URL("src/sidepanel.js", root), "utf8"
 const contentScript = await readFile(new URL("src/content.js", root), "utf8");
 
 test("manifest opens the persistent side panel from the toolbar", () => {
-  assert.equal(manifest.version, "0.1.45");
+  assert.equal(manifest.version, "0.1.48");
   assert.ok(manifest.permissions.includes("sidePanel"));
+  assert.ok(manifest.permissions.includes("tabs"), "persistent side panels must be able to resolve the selected tab URL");
   assert.equal(manifest.side_panel.default_path, "src/sidepanel.html");
   assert.equal("default_popup" in manifest.action, false);
   assert.equal(manifest.host_permissions.includes("https://*/*"), false);
@@ -48,6 +49,8 @@ test("side panel provides accessible Page, Site, and Settings tabs", () => {
   assert.match(contentScript, /__hipContentScriptLoaded\s*===\s*contentScriptVersion/);
   assert.match(sidePanelScript, /chrome\.runtime\.getManifest\(\)\.version/);
   assert.match(sidePanelScript, /syncSiteFrame\(tab, forceSiteRefresh\)/);
+  assert.match(sidePanelScript, /void refreshActiveTab\(\);\s*void restoreSelectedTab\(\);/);
+  assert.doesNotMatch(sidePanelScript, /restoreSelectedTab\(\)\.then\(refreshActiveTab\)/);
   assert.ok(sidePanelScript.indexOf("syncSiteFrame(tab, forceSiteRefresh)") < sidePanelScript.indexOf("await coordinator.activate(tab || {})"));
   assert.match(sidePanelScript, /&v=\$\{version\}/);
   assert.match(html, /<button id="startXray"[^>]*>X-ray this page<\/button>/);

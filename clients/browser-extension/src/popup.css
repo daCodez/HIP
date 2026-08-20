@@ -3,6 +3,11 @@
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+/* Keep startup placeholders out of view until real lookup data is rendered. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   width: 370px;
