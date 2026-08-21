@@ -14,7 +14,7 @@ const sidePanelScript = await readFile(new URL("src/sidepanel.js", root), "utf8"
 const contentScript = await readFile(new URL("src/content.js", root), "utf8");
 
 test("manifest opens the persistent side panel from the toolbar", () => {
-  assert.equal(manifest.version, "0.1.48");
+  assert.equal(manifest.version, "0.1.49");
   assert.ok(manifest.permissions.includes("sidePanel"));
   assert.ok(manifest.permissions.includes("tabs"), "persistent side panels must be able to resolve the selected tab URL");
   assert.equal(manifest.side_panel.default_path, "src/sidepanel.html");
@@ -41,7 +41,8 @@ test("side panel provides accessible Page, Site, and Settings tabs", () => {
   assert.match(sidePanelScript, /className\s*=\s*"finding-dot"/);
   assert.match(sidePanelScript, /className\s*=\s*"score-impact"/);
   assert.match(sidePanelScript, /onActivated\.addListener\(\(\{\s*tabId\s*\}\)\s*=>\s*refreshActiveTab\(tabId\)\)/);
-  assert.match(sidePanelScript, /chrome\.tabs\.query\(\{\s*active:\s*true,\s*currentWindow:\s*true\s*\}\)/);
+  assert.match(sidePanelScript, /chrome\.tabs\.query\(\{\s*currentWindow:\s*true\s*\}\)/);
+  assert.match(sidePanelScript, /pickInspectableTab\(candidates\)/);
   assert.match(sidePanelScript, /changeInfo\.status\s*===\s*"complete"/);
   assert.match(sidePanelScript, /chrome\.scripting\.executeScript/);
   assert.match(sidePanelScript, /"src\/content\.js"/);

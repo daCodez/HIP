@@ -1,4 +1,4 @@
-import { createActiveTabCoordinator, formatScoreImpact, pickActiveTab, statusPresentation, storagePresentation } from "./sidePanelState.js";
+import { createActiveTabCoordinator, formatScoreImpact, pickActiveTab, pickInspectableTab, statusPresentation, storagePresentation } from "./sidePanelState.js";
 import { isTrustedEmbeddedMessage } from "./embeddedPanelBridge.js";
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
@@ -91,11 +91,13 @@ async function refreshActiveTab(preferredTabId = null, forceSiteRefresh = false)
   try {
     candidates = Number.isInteger(preferredTabId)
       ? [await chrome.tabs.get(preferredTabId)]
-      : await chrome.tabs.query({ active: true, currentWindow: true });
+      : await chrome.tabs.query({ currentWindow: true });
   } catch {
     candidates = [];
   }
-  const tab = pickActiveTab(candidates, preferredTabId);
+  const tab = Number.isInteger(preferredTabId)
+    ? pickActiveTab(candidates, preferredTabId)
+    : pickInspectableTab(candidates);
   syncSiteFrame(tab, forceSiteRefresh);
   await coordinator.activate(tab || {});
 }
