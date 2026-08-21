@@ -248,24 +248,44 @@ export class HipApiClient {
       observedSignals: request?.observedSignals || null,
       pluginVersion: request?.pluginVersion || null
     };
-    const apiUrl = `${this.config.apiBaseUrl}/api/v1/site-safety/scan`;
-    const apiResponse = await this.postJson(apiUrl, payload);
+    const apiAttempt = await this.startAndPollFreshScan(this.config.apiBaseUrl, payload);
+    if (apiAttempt.ok) return apiAttempt.result;
 
-    if (apiResponse.ok) {
-      return apiResponse.json();
+    if (apiAttempt.status === 404 && normalizeHost(this.config.webBaseUrl) !== normalizeHost(this.config.apiBaseUrl)) {
+      const webAttempt = await this.startAndPollFreshScan(this.config.webBaseUrl, payload);
+      if (webAttempt.ok) return webAttempt.result;
+      throw new Error(`HIP fresh site scan failed with API status ${apiAttempt.status} and Web status ${webAttempt.status}.`);
     }
 
-    const webUrl = `${this.config.webBaseUrl}/api/v1/site-safety/scan`;
-    if (apiResponse.status === 404 && normalizeHost(this.config.webBaseUrl) !== normalizeHost(this.config.apiBaseUrl)) {
-      const webResponse = await this.postJson(webUrl, payload);
-      if (webResponse.ok) {
-        return webResponse.json();
-      }
+    throw new Error(`HIP fresh site scan failed with status ${apiAttempt.status}.`);
+  }
 
-      throw new Error(`HIP site safety scan failed with API status ${apiResponse.status} and Web status ${webResponse.status}.`);
+  /** Uses the same server-owned isolated lookup workflow as the public website checker. */
+  async startAndPollFreshScan(baseUrl, payload) {
+    const startUrl = `${baseUrl}/api/v1/site-safety/fresh-scan`;
+    const started = await this.postJson(startUrl, payload);
+    if (!started.ok) return { ok: false, status: started.status };
+
+    const receipt = await started.json();
+    const requestId = String(receipt?.requestId || "");
+    if (!/^fresh-site-[a-z0-9-]{20,80}$/i.test(requestId))
+      throw new Error("HIP fresh site scan returned an invalid receipt.");
+
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const state = freshScanStatus(receipt.status);
+      if (state === "Completed" && receipt.result) return { ok: true, status: 200, result: receipt.result };
+      if (state === "DeadLettered" || state === "Cancelled")
+        throw new Error(receipt.error || "HIP could not safely complete the fresh site scan.");
+
+      await delay(500);
+      const response = await fetchWithTimeout(
+        `${baseUrl}/api/v1/site-safety/fresh-scan/${encodeURIComponent(requestId)}`,
+        { method: "GET", headers: { "Accept": "application/json", ...this.instanceHeaders() } });
+      if (!response.ok) return { ok: false, status: response.status };
+      Object.assign(receipt, await response.json());
     }
 
-    throw new Error(`HIP site safety scan failed with status ${apiResponse.status}.`);
+    throw new Error("HIP fresh site scan is still pending.");
   }
 
   /**
@@ -1108,6 +1128,15 @@ function browserScanReasons({ linksScanned, riskyLinks, suspiciousLinks, dangero
  */
 function lower(value) {
   return String(value || "").toLowerCase();
+}
+
+function freshScanStatus(value) {
+  const names = ["Pending", "Processing", "RetryScheduled", "Completed", "DeadLettered", "Cancelled"];
+  return typeof value === "string" ? value : names[Number(value)] || "Unknown";
+}
+
+function delay(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
 /**

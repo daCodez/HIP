@@ -30,14 +30,19 @@ test("site safety request includes privacy-safe scan facts", () => {
   assert.equal("formValues" in request.observedSignals, false);
 });
 
-test("scan site safety calls versioned API route", async () => {
+test("scan site safety uses the shared fresh lookup route", async () => {
   const calls = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
     calls.push({ url, options });
     return {
       ok: true,
-      json: async () => ({ status: "LimitedData" })
+      status: 202,
+      json: async () => ({
+        requestId: "fresh-site-0123456789abcdef0123456789abcdef",
+        status: "Completed",
+        result: { status: "LimitedData" }
+      })
     };
   };
 
@@ -49,7 +54,7 @@ test("scan site safety calls versioned API route", async () => {
   }
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "http://localhost:5099/api/v1/site-safety/scan");
+  assert.equal(calls[0].url, "http://localhost:5099/api/v1/site-safety/fresh-scan");
   assert.equal(calls[0].options.method, "POST");
   assert.equal(calls[0].options.headers["X-HIP-Instance-Id"], "test-instance");
   assert.equal(JSON.parse(calls[0].options.body).pluginVersion, "HIP Plugin v0.1.0-dev");
@@ -164,7 +169,7 @@ test("scan site safety falls back to web host when API host route is missing", a
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
     calls.push({ url, options });
-    if (url === "http://localhost:5099/api/v1/site-safety/scan") {
+    if (url === "http://localhost:5099/api/v1/site-safety/fresh-scan") {
       return {
         ok: false,
         status: 404,
@@ -174,8 +179,12 @@ test("scan site safety falls back to web host when API host route is missing", a
 
     return {
       ok: true,
-      status: 200,
-      json: async () => ({ status: "LimitedData", source: "web-fallback" })
+      status: 202,
+      json: async () => ({
+        requestId: "fresh-site-fedcba9876543210fedcba9876543210",
+        status: "Completed",
+        result: { status: "LimitedData", source: "web-fallback" }
+      })
     };
   };
 
@@ -188,9 +197,50 @@ test("scan site safety falls back to web host when API host route is missing", a
   }
 
   assert.equal(calls.length, 2);
-  assert.equal(calls[0].url, "http://localhost:5099/api/v1/site-safety/scan");
-  assert.equal(calls[1].url, "http://localhost:5123/api/v1/site-safety/scan");
+  assert.equal(calls[0].url, "http://localhost:5099/api/v1/site-safety/fresh-scan");
+  assert.equal(calls[1].url, "http://localhost:5123/api/v1/site-safety/fresh-scan");
   assert.equal(result.source, "web-fallback");
+});
+
+test("scan site safety polls the shared lookup until the worker completes", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    if (options.method === "POST") {
+      return {
+        ok: true,
+        status: 202,
+        json: async () => ({
+          requestId: "fresh-site-11111111111111111111111111111111",
+          status: "Pending"
+        })
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        requestId: "fresh-site-11111111111111111111111111111111",
+        status: "Completed",
+        result: { status: "Clean", finalHipScore: 94 }
+      })
+    };
+  };
+
+  let result;
+  try {
+    const client = new HipApiClient({ apiBaseUrl: "http://localhost:5099", webBaseUrl: "http://localhost:5123" });
+    result = await client.scanSiteSafety(client.buildSiteSafetyRequest("https://example.com", {}));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[1].options.method, "GET");
+  assert.match(calls[1].url, /fresh-scan\/fresh-site-1111/);
+  assert.equal(result.finalHipScore, 94);
 });
 
 test("provider toggles default to SSL Labs enabled only", () => {
